@@ -15,7 +15,7 @@ import { isChapterTestRun } from '../systems/ChapterProgress';
  * - 军医（medic）1-1 打完开放，1-1 后的行营乡里郎中来投、简雍介绍，初诊不收粮（at 'camp'，CampRestUI）。
  * - 开放前一律隐藏（页签、按钮、建筑不出现），不再灰掉。
  */
-export type MechId = 'squad' | 'atlas' | 'jinnang' | 'medic' | 'gear' | 'merchant' | 'fortune' | 'lieutenant' | 'attributes' | 'siege' | 'parley' | 'branch' | 'combo';
+export type MechId = 'squad' | 'atlas' | 'jinnang' | 'medic' | 'gear' | 'merchant' | 'fortune' | 'lieutenant' | 'attributes' | 'siege' | 'parley' | 'branch' | 'combo' | 'formation' | 'f_snake' | 'f_crane' | 'f_geese';
 export interface MechLine { who: string; id?: string; text: string }
 export interface MechDef {
   /** 第几章第几关；when = 'start' 该关开打即开放，'after' 该章通关后开放。 */
@@ -55,6 +55,15 @@ export const MECHANICS: Readonly<Record<MechId, MechDef>> = {
     lines: [{ who: '简雍', id: 'jianyong', text: '李傕反复小人，势穷必肯低头——不妨劝他一劝。' }], tip: '首领残血时出现劝降窗；有的首领宁死不降' },
   branch: { chapter: 3, stage: 1, when: 'start', pre: 'hidden', name: '兵器专职',
     lines: [{ who: '涿郡良匠', text: '将军这兵器，还能再往深里打——两条路，只能选一条。' }], tip: '本命兵器 Lv5 时选专职；选定后要行营「重整构筑」才能换' },
+  // 军阵（formation-design.md，用户 11-20「全按推荐」）：第四章通关后徐庶在新野来投，授方圆、锋矢；之后按剧情学长蛇（5-1 后）、鹤翼（5-2 后）、雁行（黄忠来投，第六章后）
+  formation: { chapter: 4, stage: 3, when: 'after', pre: 'hidden', name: '军阵',
+    lines: [{ who: '徐庶', id: 'xushu', text: '主公用兵，胜在人和，失在无阵。庶有二阵相赠——守则方圆，攻则锋矢。' }], tip: '行营「布阵」选主阵 / 备阵；战斗中按 X 变阵；护阵（E）时阵势生效，出击时各阵有各自的打法' },
+  f_snake: { chapter: 5, stage: 2, when: 'start', pre: 'hidden', name: '长蛇阵',
+    lines: [{ who: '赵云', id: 'zhaoyun', text: '七进七出，靠的是阵随人走、首尾相应。' }], tip: '学会长蛇阵：行营「布阵」可选' },
+  f_crane: { chapter: 5, stage: 3, when: 'start', pre: 'hidden', name: '鹤翼阵',
+    lines: [{ who: '周瑜', id: 'zhouyu', text: '两翼齐张，敌入其中，如鹤敛翅。' }], tip: '学会鹤翼阵：行营「布阵」可选' },
+  f_geese: { chapter: 6, stage: 3, when: 'after', pre: 'hidden', name: '雁行阵',
+    lines: [{ who: '黄忠', id: 'huangzhong', text: '老夫弓手一字排开，箭如雁阵。' }], tip: '学会雁行阵：行营「布阵」可选' },
   combo: { chapter: 3, stage: 2, when: 'start', pre: 'hidden', name: '合击',
     lines: [{ who: '诸葛亮', id: 'zhuge', text: '兵法相济：两派各得其二，便成合击。' }], tip: '两个流派各到 2 势，触发合击' },
 };

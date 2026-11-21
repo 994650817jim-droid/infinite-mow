@@ -321,8 +321,10 @@ export class CharacterPassives {
   areaMul = 1;
   /** 守城登城（systems/DefenseBattle）：站在城头带里武器范围加成；平时 1。 */
   rampartMul = 1;
+  /** 军阵（雁行）主将武器范围加成（FormationRuntime 每帧设）；平时 1。 */
+  formationRangeMul = 1;
   rangeMultiplier(weapon: WeaponId): number {
-    return (!this.stopped && this.character === 'guanyu' && weapon === 'guandao' ? 1 + this.stacks * R.guandaoRangePerStack : 1) * this.areaMul * this.rampartMul;
+    return (!this.stopped && this.character === 'guanyu' && weapon === 'guandao' ? 1 + this.stacks * R.guandaoRangePerStack : 1) * this.areaMul * this.rampartMul * this.formationRangeMul;
   }
   beginCast(weapon: WeaponId): PassiveCast {
     const c: PassiveCast = { owner: this.character, generation: this.generation, weapon, empowered: false, radiusMul: this.rangeMultiplier(weapon), damageMul: 1, extraSpear: false, spearLengthMul: 1, roar: false, dash: false, heal: 0, rally: 0, fan: false, whoDares: false, formation: false, maids: false, moonDance: false, bridge: false, charge: false, hits: new Set(), awarded: false };

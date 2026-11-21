@@ -24,6 +24,8 @@ export class Ally {
   private aimLeft = false;
   ai = createTacticState();
   slot = 0; simDebt = 0; deathsReported = false;
+  /** 军阵移速倍率（FormationRuntime 每帧设；方圆 ×0.9、长蛇 ×1.25）。 */
+  formSpeed = 1;
   private px: number; private py: number; private walked = 0;
   private moving = false;
   private dir: 'down' | 'up' | 'left' | 'right' = 'down';

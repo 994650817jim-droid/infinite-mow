@@ -1,6 +1,7 @@
+import { drawFormationPanel } from './FormationPanel';
 import { MECHANICS, mechLockText, mechOpen, mechShown, takeMechIntros, type MechId } from '../data/mechanicUnlocks';
 /** 行营页签 → 玩法：未开放的页签不出现（11-20「开放前隐藏而不是灰掉」），其余往左挤。军需商人第二章、将帅帐四维 2-3、军医 1-1 打完。 */
-const CAMP_TAB_MECH: Record<number, MechId | undefined> = { 2: 'merchant', 3: 'attributes', 4: 'medic' };
+const CAMP_TAB_MECH: Record<number, MechId | undefined> = { 2: 'merchant', 3: 'attributes', 4: 'medic', 5: 'formation' };
 /** 行营引子（mechanicUnlocks at 'camp'）落在哪个页签。 */
 const CAMP_INTRO_TAB: Partial<Record<MechId, number>> = { merchant: 2, medic: 4 };
 import Phaser from 'phaser';import {ItemTooltip} from './ItemTooltip';import {drawBuildOverview} from './BuildOverview';import {wornTokens} from '../systems/CharmEffects';import {tokenSlots} from '../systems/ItemStore';import {GAME_WIDTH as W,GAME_HEIGHT as H,IS_DESKTOP as D,FONT,HEADING_FONT,DEPTH,screenPoint} from '../config';import type {Player} from '../entities/Player';import type {Legion} from '../systems/Legion';import {campOption,type CampOffer} from '../systems/CampMarket';import {merchantStockForVisit,saveMerchantStock,type MerchantStock} from '../systems/MerchantStock';import {MerchantShop} from './MerchantShop';import {MEDIC_FIGURE,drawCampFigure,type FigurePlace} from './CampFigure';import {CAMP_TRAINING,type CampTrainingId,type CampGroup} from '../data/camp';import {INITIAL_TROOPS,TROOPS,type TroopKind} from '../data/legion';import {TREASURES,type TacticId,type TreasureId,type BuildTag} from '../data/builds';import {getCharacter} from '../data/characters';import {WEAPON_META} from '../data/upgrades';import {ATTRIBUTE_INFO,MARTIALS,type AttributeId,type MasteryId} from '../systems/RunGrowth';import type {ItemInstance} from '../data/items';import {troopBadge} from './TroopBadge';import {loadTroopPortraits} from '../systems/TroopPortraits';
@@ -90,7 +91,7 @@ export class CampRestUI {
   // 用户 2026-11-17「休整的时候练兵营就不需要了」：去掉「练兵营」页签（本局体魄 / 兵刃 / 甲胄训练）。营寨军营的「练兵」是另一套永久加成，保留。
   // 其余页签保留原编号（0 招兵营 / 2 军需商人 / 3 将帅帐），对象名 camp-tab-<编号> 不变。
   // 2026-11-18 用户：受的伤跨关继承，休整加「军医」（编号 4，对象名 camp-tab-4）
-  const TABS:Array<[number,string,string]>=[[0,'招兵营','icon_shu_swordsman'],[2,'军需商人','build_icon_return_drum'],[3,'将帅帐','growth_icon_points'],[4,'军医','potion_jar']];
+  const TABS:Array<[number,string,string]>=[[0,'招兵营','icon_shu_swordsman'],[2,'军需商人','build_icon_return_drum'],[3,'将帅帐','growth_icon_points'],[4,'军医','potion_jar'],[5,'布阵','build_icon_school_formation']]; // 军阵（formation-design.md）：第四章通关后开放
   const tabW=D?172:(W-48)/TABS.length,tabY=D?96:155;this.tabW=tabW;
   TABS.forEach(([i,label,icon],slot)=>{const x=D?40+slot*180:24+slot*tabW;const frame=scene.add.image(x+(tabW-6)/2,tabY+23,warPanelTexture(scene,tabW-6,46)).setScrollFactor(0).setVisible(!this.ink);this.tabFrames.push(frame);this.root.add(frame);
    this.tabInk.push(null);
@@ -157,7 +158,7 @@ export class CampRestUI {
    if(on){const to={x:t.x+18,w:w-36};if(!this.lineTo){this.tabLine.setX(to.x);this.tabLine.width=to.w;}this.lineTo=to;}});
   this.resources.setText('随军粮 '+this.army.food+' · 兵力 '+this.army.count);this.next.setText('下一关 · '+this.destination);this.detail.setText(this.notice);
   {const side=D&&(this.tab===2||this.tab===4),l=CampRestUI.STATION_LEFT;this.detail.setX(side?l+(W-40-l)/2:D?W/2:28).setWordWrapWidth(side?W-40-l-16:W-(D?120:56),true);}
-  if(this.tab===0)this.renderRecruit();if(this.tab===2)this.renderMarket();if(this.tab===3)this.renderBuild(D?154:229);if(this.tab===4)this.renderMedic();
+  if(this.tab===0)this.renderRecruit();if(this.tab===2)this.renderMarket();if(this.tab===3)this.renderBuild(D?154:229);if(this.tab===4)this.renderMedic();if(this.tab===5)this.renderFormation();
  }
  // ---------- 军医（data/campMedic.ts）----------
  /** 第几章（定价用），GameScene 打开休整前设置。 */
@@ -184,6 +185,13 @@ export class CampRestUI {
   this.sound('medic_heal');
   this.notice=kind==='army'?'军医为全军疗伤 · 部曲与随行伤兵皆已痊愈':'军医施治 · 主将生命 '+Math.ceil(p.hp)+' / '+p.maxHp;
   this.onHealed?.();this.render();this.playMedicFx();return true;
+ }
+ /** 布阵（ui/FormationPanel）：主阵 / 备阵、说明、站位示意。改了就让战斗里的军阵重读。 */
+ private renderFormation(){
+  const sc=this.scene as unknown as {followers?:{members:Array<{recruit:{hero?:string}}>}|null;formationRt?:{refresh():void}},g=this.player.growth,fm=sc.followers?.members??[];
+  drawFormationPanel({scene:this.scene,root:this.body,player:this.player,units:this.army.units,hero:g.character??'liubei',followerHeroes:fm.map(m=>m.recruit.hero).filter((x):x is string=>!!x),followers:fm.length,
+   majors:g.build.majors(),command:g.pts('command'),changed:()=>{sc.formationRt?.refresh();this.render();}},D?40:24,D?158:229,D?W-80:W-48,D?330:420);
+  if(!this.notice)this.detail.setText('布阵只在这里改；出征后按 X 在主阵、备阵之间变阵。');
  }
  private renderMedic(){
   const st=this.medicState(),p=this.player,name=this.player.growth.character?(getCharacter(this.player.growth.character)?.name??'主将'):'主将';

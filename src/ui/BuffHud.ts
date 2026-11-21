@@ -79,6 +79,8 @@ export class BuffHud {
  update(player:Player,now:number,visible:boolean,progressOf?:BuffProgressSource):void{
   this.now=now;if(!visible){this.root.setVisible(false);this.hideTip();return;}
   const g=player.growth,entries:BuffEntry[]=[];
+  // 军阵（FormationRuntime.info）：当前阵、护阵生效 / 出击散阵 / 成阵中，进度条走变阵冷却
+  {const fi=player.formationInfo?.();if(fi)entries.push({id:'formation',icon:'build_icon_school_formation',name:fi.name,desc:fi.desc,kind:fi.kind,badge:fi.mark,mark:fi.mark});}
   // 觉醒（6 势）：每关最多 AWAKEN.perStage 次、有冷却，图标下方进度条走冷却
   {const t=g.build.tags();for(const sc of SCHOOL_IDS)if(t[sc]>=6){const d=SCHOOLS[sc];entries.push({id:'awakening_'+sc,icon:d.icon,name:'觉醒 · '+d.tiers[6].name,desc:d.tiers[6].desc.replace(/^觉醒：/,'')+'\n身边敌人聚多了自动释放；每关最多 '+AWAKEN.perStage+' 次，两次之间至少 '+AWAKEN.cooldownMs/1000+' 秒。',kind:'觉醒 · '+d.name+' 6 势',badge:'醒',mark:d.short,rare:true});}}
   // 流派档位（2026-11-19 流派重做）：到 2 / 4 势的派各一个图标，角标写势

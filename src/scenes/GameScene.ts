@@ -1,3 +1,4 @@
+import { FormationRuntime } from '../systems/FormationRuntime';
 import { playMenuMusic, stopMenuMusic } from '../systems/Music';
 import { startCityAmbient } from '../systems/ContentSfx';
 import { SCHOOLS, SCHOOL_TIER, SHI_SOURCES, FOLLOWER_SCHOOL, heroAffinity, type SchoolId } from '../data/schools';
@@ -605,7 +606,10 @@ export class GameScene extends Phaser.Scene {
   /** 战法「以战养战」：每击杀 12/10/8 名敌人（含部下击杀）回复最大生命 2/2.5/3%。 */
   private warfeedCount=0;
   /** 增益图标的触发进度（BuffHud 读，见 ui/BuffProgress）：战法 / 宝物 / 觉醒 / 遗物里的「每 N 次 / 每 N 秒 / 攒满」计数。 */
+  /** 军阵（systems/FormationRuntime）：当前阵、变阵冷却。 */
+  formationRt?:FormationRuntime;
   private buffProgress(id:string,now:number):BuffProgress|null{
+    if(id==='formation')return this.formationRt?.progress(now)??null;
     if(id.startsWith('awakening_'))return this.synergy?.progress(id,now)??null;
     if(id==='tactic_warfeed'){const l=this.player.growth.build.level('warfeed');if(!l)return null;const n=[12,10,8][Math.min(3,l)-1];return countProgress(this.warfeedCount,n,'再击杀 1 名回血','名');}
     if(id==='relic_heaven_ember')return timerProgress(this.relicFireAt,CHARM_LEGEND.charm_heaven_ember.cd[this.player.growth.charmLegend.heaven_ember??1],now,'下一击留残火','冷却');
@@ -974,6 +978,15 @@ export class GameScene extends Phaser.Scene {
         onUpdate:o.follow?img=>img.setPosition(pl.x+ox,pl.y+oy):mv?(img,t)=>img.setPosition(x+mv.dx*t,y+mv.dy*t):undefined});}});
     this.legion.awakeningDefense={incoming:(_u,n)=>(this.synergy?.allyIncoming(n)??1)*(this.player.growth.build.tier('formation')>=2?1-SCHOOL_TIER.formation.allyTaken:1),onAllyHurt:()=>{}};
     this.events.once('shutdown',()=>{this.synergy?.clear();this.synergy=undefined;});
+    // 军阵（formation-design.md）：开局按主线进度读学会的阵与布阵；?formation=off 关掉（只测别的系统时用）
+    this.formationRt=undefined;this.player.formationInfo=()=>this.formationRt?.info()??null;
+    if(new URLSearchParams(location.search).get('formation')!=='off'){this.formationRt=new FormationRuntime({player:this.player,legion:this.legion,hero:this.runConfig.character,
+      followerHeroes:()=>(this.followers?.members??[]).map(f=>f.recruit.hero).filter((x):x is NonNullable<typeof x>=>!!x).map(String),
+      followers:()=>this.followers as unknown as {formation?:import('../systems/FormationRuntime').FormationFollowerHooks|null}|null,
+      majors:()=>this.player.growth.build.majors(),command:()=>this.player.growth.pts('command'),
+      enemiesNear:(x,y,r)=>this.grid.query(x,y,r),stun:(e,ms,n)=>this.buildCombat.stun(e,ms,n),hit:(e,d)=>this.hitEnemy(e,d,this.combatNow,'melee',true),
+      banner:(t,s)=>this.showWaveBanner(t,false,s),sfx:k=>this.sfx.play(k)});
+     this.events.once('shutdown',()=>{this.formationRt?.clear();this.formationRt=undefined;});}
     this.buildCombat.setOrigin(()=>({x:this.player.x,y:this.player.y}));this.statusFx=new StatusFx(this,this.buildCombat);this.jinnangFx=new JinnangFx(this,()=>({x:this.player.x,y:this.player.y}));   // 敌人身上的灼烧 / 迟滞 / 眩晕 / 破甲标记（手绘序列帧）
     this.buildCombat.onFlank=targets=>this.flankBladeFx().strike(targets);
     this.buildCombat.onWindstep=e=>this.windstepFx().burst(e.x,e.y);
@@ -1206,7 +1219,7 @@ export class GameScene extends Phaser.Scene {
     const hotkeyHost = {
       scene: this as Phaser.Scene, mode: () => this.mode as string, over: () => this.over,
       togglePause: () => this.togglePause(), usePotion: () => this.usePotion(), useJinnang: () => this.useJinnang(),
-      order: () => this.legion.order, cycleOrder: () => this.legion.cycleOrder(),
+      order: () => this.legion.order, cycleOrder: () => this.legion.cycleOrder(), switchFormation: () => this.formationRt?.switch(this.combatNow) ?? false,
       openBag: () => this.openBattleBag(), canAttributes: () => this.player.growth.unallocated > 0 && mechOpen('attributes'),
       openAttributes: (from: 'none' | 'pause') => { this.attributeReturn = from; this.renderAttributePanel(); this.setMode('attributes'); },
       openBuild: () => this.openBuildPanel(), chooseUpgrade: (i: number) => this.chooseUpgrade(i), chooseBranch: (i: number) => this.chooseBranch(i),
@@ -1347,6 +1360,7 @@ export class GameScene extends Phaser.Scene {
     if(time>=this.navigationAt){this.navigationAt=time+250;const boxes=[...(this.sishuiObstacles?.footprints??[]),...(this.terrain?(this.terrain.stats.burnt?(this.terrainNav=this.terrain.navBoxes()):this.terrainNav):[])];this.supplies?.appendNavigationBoxes(boxes);this.legion.navigation.setBoxes(boxes);}
     this.legion.update(dt, time, this.enemies, this.grid, (enemy, amount) => this.hitEnemy(enemy, amount, this.combatNow, 'melee', true));
     this.followers?.update(dt, this.combatNow);
+    this.formationRt?.update(dt, this.combatNow);
     if (this.over) return;
     this.rebuildGrid();
     this.separateEnemies();

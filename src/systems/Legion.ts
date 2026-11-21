@@ -32,6 +32,12 @@ export class Legion {
   campTarget?:(u:Ally)=>Enemy|null;
   /** 第八章夺高地：占着山头时远程射程、部曲伤害倍率（HanzhongHills）。 */
   rangeMul=1;damageMul=1;
+  /** 军阵（systems/FormationRuntime）：入阵士兵的伤害 / 受伤 / 射程倍率；没有 = 1。 */
+  fm?:{dmg(u:Ally,e:Enemy):number;taken(u:Ally):number;range(u:Ally):number};
+  /** 护阵 / 出击切换后（军阵的出击打法）。 */
+  onOrder?:(o:Order)=>void;
+  /** 军阵齐射（雁行出击）：借部曲的箭矢。 */
+  volley(u:Ally,e:Enemy,amount:number,due:number):void{this.projectiles.fire(u,e,amount,due);}
   readonly command:CommandBuild;
   readonly formation:LegionFormation;
   readonly navigation=new LegionNavigation();
@@ -81,7 +87,7 @@ export class Legion {
     this.formation=new LegionFormation(player);this.artEffects=new ArtEffects(scene);
     this.command=new CommandBuild(scene,player.growth.build,units,player,(u,now)=>this.fx(u,u.x,u.y,now,true));
     this.gfx = scene.add.graphics().setDepth(DEPTH.fx);
-    this.projectiles = new LegionProjectiles(scene); this.tactics = new LegionTactics(player,u=>this.command.target(u)??(this.focus?.active&&this.focus.spawnId===this.focusLife?this.focus:null)??this.campTarget?.(u)??null,u=>this.formation.position(u),()=>this.formation.extent,(u,x,y,now)=>this.navigation.steer(u.id,u.x,u.y,x,y,u.radius,now));
+    this.projectiles = new LegionProjectiles(scene); this.tactics = new LegionTactics(player,u=>this.command.target(u)??(this.focus?.active&&this.focus.spawnId===this.focusLife?this.focus:null)??this.campTarget?.(u)??null,u=>this.formation.position(u),o=>this.formation.extent+(o==='guard'?this.formation.leashAdj:0),(u,x,y,now)=>this.navigation.steer(u.id,u.x,u.y,x,y,u.radius,now));
   }
   get count(): number { let n = 0; for (const u of this.units) if (u.active) n++; return n; }
   recover(): void { for (const u of this.units) if (u.active) u.hp = u.maxHp; }
@@ -119,7 +125,7 @@ export class Legion {
     return true;
   }
   /** 护阵 / 出击。切回护阵：士兵进入收回状态（RECALL，按行走速度 ×1.2 跑回阵位，正在出手的打完再走）。 */
-  cycleOrder(): void { this.order = this.order === 'guard' ? 'sortie' : 'guard'; const back = this.order === 'guard'; for (const u of this.units) { u.ai.nextThink = 0; u.ai.recall = back; u.ai.recallAt = 0; } }
+  cycleOrder(): void { this.order = this.order === 'guard' ? 'sortie' : 'guard'; const back = this.order === 'guard'; for (const u of this.units) { u.ai.nextThink = 0; u.ai.recall = back; u.ai.recallAt = 0; } this.onOrder?.(this.order); }
   private regroup(): void {
     this.squads.clear();
     for (const k of TROOP_KINDS) {
@@ -141,7 +147,7 @@ export class Legion {
   hurt(u: Ally, raw: number, now: number, source?: { x: number; y: number; normal: boolean }, floor = 0, ignoreHurtGap = false): boolean {
     if (!u.active || (!ignoreHurtGap && now < u.hurtUntil)) return false;
     const armor = u.def.armor + (u.kind === 'guardian' && u.level === 3 ? 5 : 0);
-    let mitigation = Math.min(this.command.incoming(u,now),this.defense?.incoming(u,now)??1,this.awakeningDefense?.incoming(u,now)??1);
+    let mitigation = Math.min(this.command.incoming(u,now),this.defense?.incoming(u,now)??1,this.awakeningDefense?.incoming(u,now)??1)*(this.fm?.taken(u)??1);
     if (source?.normal) {
       const dx = source.x - u.x, dy = source.y - u.y, d = Math.hypot(dx, dy) || 1;
       const frontal = (dx * u.facingX + dy * u.facingY) / d >= .25;
@@ -243,7 +249,7 @@ export class Legion {
       this.combatClock = 0;
       for (const u of this.units) {
         if (!u.active || u.cooldown > 0 || u.kind === 'rider' && u.ai.mode === 'return' || u.ai.recall || this.arriving.has(u)) continue;
-        const range = u.def.range * (u.def.ranged ? stats.range : u.kind === 'halberdier' && u.level === 3 ? 1.25 : 1);
+        const range = u.def.range * (u.def.ranged ? stats.range : u.kind === 'halberdier' && u.level === 3 ? 1.25 : 1) * (this.fm?.range(u) ?? 1);
         if (u.kind === 'medic') {
           const wounded = this.grid.query(u.x, u.y, range, this.friends).filter(a => a.active && a.hp < a.maxHp && Math.hypot(a.x - u.x, a.y - u.y) <= range).sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp);
           for (const friend of wounded.slice(0, u.level === 3 ? 3 : 1)) { u.act(friend.x, friend.y, now, 480); this.heals.push({ owner: u, life: u.lifeId, target: friend, targetLife: friend.lifeId, amount: u.def.damage * (1 + .35 * (u.level - 1)) * this.healingMultiplier * this.drillMultiplier, due: now + 240 }); }
@@ -252,7 +258,7 @@ export class Legion {
         }
         const defensive = !this.tactics.canAttack(u);
         const seekRange = defensive && !u.def.ranged ? Math.min(range, 55) : range;
-        const target = this.tactics.select(u, enemyGrid, seekRange, defensive ? Infinity : this.order === 'guard' ? TACTICS.guardLeash+this.formation.extent : TACTICS.sortieLeash+this.formation.extent);
+        const target = this.tactics.select(u, enemyGrid, seekRange, defensive ? Infinity : this.order === 'guard' ? TACTICS.guardLeash+this.formation.extent+this.formation.leashAdj : TACTICS.sortieLeash+this.formation.extent);
         if (!target) continue;
         const candidates = enemyGrid.query(u.x, u.y, seekRange, this.near).filter(e => e.active && !e.invulnerable && Math.hypot(e.x - u.x, e.y - u.y) <= seekRange);
         candidates.sort((a, b) => a === target ? -1 : b === target ? 1 : (a.x - u.x) ** 2 + (a.y - u.y) ** 2 - (b.x - u.x) ** 2 - (b.y - u.y) ** 2);
@@ -263,7 +269,7 @@ export class Legion {
             if (u.ai.chargeHits.has(e.spawnId) || u.ai.chargeHits.size >= (u.level === 3 ? 3 : 1)) continue;
             u.ai.chargeHits.add(e.spawnId);
           }
-          const amount = u.def.damage * this.drillMultiplier * (1+CAMP_TRAINING.attack.perLevel*this.training.attack) * (1 + .25 * (u.level - 1)) * stats.melee * (u.kind === 'spearman' && e.kind === 'cavalry' && u.level === 3 ? 2 : 1);
+          const amount = u.def.damage * this.drillMultiplier * (1+CAMP_TRAINING.attack.perLevel*this.training.attack) * (1 + .25 * (u.level - 1)) * stats.melee * (u.kind === 'spearman' && e.kind === 'cavalry' && u.level === 3 ? 2 : 1) * (this.fm?.dmg(u, e) ?? 1);
           if (u.def.ranged) { if (u.kind === 'crossbowman') { const total = Math.max(1, Math.round(amount)), first = u.level === 3 ? total : Math.ceil(total / 2), second = u.level === 3 ? total : Math.floor(total / 2); this.projectiles.fire(u, e, first, now + 180); if (second) this.projectiles.fire(u, e, second, now + 260); } else this.projectiles.fire(u, e, amount, now + 180); }
           else if(u.kind==='spearman'){this.strikes.push({owner:u,life:u.lifeId,target:e,spawn:e.spawnId,due:now+120,amount});}
           else { this.fx(u, e.x, e.y, now, false); this.knock(u, e, u.kind==='rider'?5:3, now); damage(e, amount); }

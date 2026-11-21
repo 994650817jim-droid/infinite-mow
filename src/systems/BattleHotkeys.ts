@@ -25,6 +25,8 @@ export interface HotkeyHost {
   useJinnang?(): boolean;
   order(): 'guard' | 'sortie';
   cycleOrder(): void;
+  /** 军阵：变阵（X）。没开放 / 冷却中返回 false。 */
+  switchFormation?(): boolean;
   openBag(): void;
   canAttributes(): boolean;
   openAttributes(from: 'none' | 'pause'): void;
@@ -119,6 +121,7 @@ export class BattleHotkeys {
         case 'reroll': return h.useJinnang?.() ?? false;
         case 'order': h.cycleOrder(); return true;
         case 'sortie': if (h.order() === 'guard') h.cycleOrder(); return true;
+        case 'formation': return h.switchFormation?.() ?? false;
         case 'bag': h.openBag(); return true;
         case 'attributes': if (!h.canAttributes()) return false; h.openAttributes('none'); return true;
         case 'build': h.togglePause(); h.openBuild(); this.buildFromBattle = true; return true;

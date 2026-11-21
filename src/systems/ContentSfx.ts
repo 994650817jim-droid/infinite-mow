@@ -187,6 +187,8 @@ Object.assign(CONTENT_SFX_CONFIG, {
   amb_horn: A(1.8), amb_drum: A(1.2), amb_flag: A(.9),
 });
 Object.assign(CONTENT_SFX, <Record<string, Recipe>>{
+  // 军阵变阵：三通鼓 + 一声低号（formation-design.md）
+  formation_switch: (v, t, p) => { drum(v, t, .09, 96 * p); drum(v, t + .16, .08, 92 * p); drum(v, t + .3, .1, 84 * p); v.swell(t + .2, .6, 'lowpass', 160, 700, .04, .8, .2); return .9; },
   bossPhase: (v, t, p) => { bell(v, t, 110 * p, .05, 1.4); for (let i = 0; i < 4; i++) drum(v, t + .12 + i * .1, .07 + i * .01, 95); v.swell(t, 1.2, 'lowpass', 120, 900, .05, .8, .5); return 1.4; },
   bossFall: (v, t, p) => { thud(v, t, 42 * p, .12, 1.4); drum(v, t, .1, 70); drum(v, t + .28, .09, 65); bell(v, t + .05, 98 * p, .06, 2.3); v.swell(t, 2, 'lowpass', 900, 120, .05, .6, .02); return 2.4; },
   killBurst: (v, t, p) => { thud(v, t, 88 * p, .06, .3); v.noise(t, .08, 'bandpass', 1300 * p, .05, 500, 1.1); crackle(v, t + .02, 3, .12, .025); return .45; },
@@ -211,6 +213,7 @@ Object.assign(CONTENT_SFX_CONFIG, {
   heal_spring: F(.8, 1200, 1, 0, .06), kneel: F(1, 1500, 1, 2, 0),
   tutorial_tip: F(.5, 800, 1, 2, 0), scroll_open: F(.6, 400, 1, 2, .03), uiPage: F(.25, 120, 1, 1, .05),
   bossbar_open: F(.7, 1500, 1, 2, 0), bossbar_shatter: F(.9, 1500, 1, 2, 0),
+  formation_switch: F(.9, 800, 1, 2, .03),
 });
 Object.assign(CONTENT_SFX, <Record<string, Recipe>>{
   // 营寨半血起火 + 伏兵：号角急吹两声 + 火「呼」（原来借 chargeWarn 的电子警报）

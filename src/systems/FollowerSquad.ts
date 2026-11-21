@@ -1,3 +1,4 @@
+import type { FormationFollowerHooks } from './FormationRuntime';
 import Phaser from 'phaser';
 import { heroAttrs, heroLevel, type HeroKey } from './HeroProgress';
 import { BALANCE, DEPTH, FONT } from '../config';
@@ -240,7 +241,10 @@ export class FollowerSquad {
   }
   /** 阵位相对主公后方的角度偏移：1 人正后；2 人左后 / 右后；3 人左后 / 右后 / 正后。 */
   private static readonly OFFSETS: readonly (readonly number[])[] = [[0], [0], [-.8, .8], [-1, 1, 0]];
+  /** 军阵（FormationRuntime.followerHooks）：阵位、伤害、受伤；常阵 / 未开放时 null。 */
+  formation: FormationFollowerHooks | null = null;
   private slotPos(i: number, n: number): { x: number; y: number } {
+    const fm = this.formation?.slot(i, n); if (fm) return fm;
     const offs = FollowerSquad.OFFSETS[Math.min(3, Math.max(1, n))], a = this.heading + Math.PI + (offs[i] ?? 0), r = FOLLOW.slotRadius * (offs[i] === 0 && n === 3 ? 1.15 : 1);
     return { x: this.player.x + Math.cos(a) * r, y: this.player.y + Math.sin(a) * r };
   }
@@ -282,7 +286,7 @@ export class FollowerSquad {
       // 攻击
       f.cooldown -= dt * (1 + (rally.get(f) ?? 0)); // 谋「鼓舞」：攻速提高
       if (f.target && f.cooldown <= 0) {
-        f.cooldown = t.cooldown / 1000 / f.haste; this.attack(f, f.target, now, f.damage * dmgShare); f.faceUntil = now + 320;
+        f.cooldown = t.cooldown / 1000 / f.haste; this.attack(f, f.target, now, f.damage * dmgShare * (this.formation?.dmg(f.template) ?? 1)); f.faceUntil = now + 320;
         if (f.template === 'spear' || f.template === 'blade') { const a = Math.atan2(f.target.y - f.y, f.target.x - f.x); f.lx = Math.cos(a) * FOLLOW.lunge; f.ly = Math.sin(a) * FOLLOW.lunge; }
       }
       }
@@ -310,6 +314,7 @@ export class FollowerSquad {
   /** 外部伤害（首领技能等）。 */
   hurt(f: Follower, damage: number, now: number): void {
     if (f.downed) return; // 倒地期间不被追打补刀
+    damage *= this.formation?.taken() ?? 1;
     if (f.passive) { if (f.passive.isInvulnerable(now)) return; const m = f.passive.damageTakenMultiplier(now); damage *= 1 - (1 - m) * FOLLOW.passiveScale; f.passive.onDamage(now); }
     if (!f.recruit.hero && f.template === 'blade' && this.rand() < blockChance(this.picks(f).p)) { this.skillStats.block++; this.fx.push({ kind: 'block', x: f.x, y: f.y, tx: 0, ty: 0, angle: 0, at: now, until: now + 180 }); return; } // 刀「格挡」
     f.hp -= damage * Math.max(0, 1 - f.gear.reduce); f.hurtUntil = now + 140;

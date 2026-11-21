@@ -61,6 +61,11 @@ export function flagMatches(cond: string): boolean {
   const [name, value] = cond.split('='), v = storyFlag(name);
   return value === undefined ? !!v : String(v) === value;
 }
+/** 卷轴标题：按主公取 titleVariants（取法同 variants），没有就用 node.title。 */
+export function nodeTitle(node: StoryNode, lord: string): string {
+  const t = node.titleVariants; if (!t) return node.title ?? '';
+  return t[lord as CharacterId] ?? (node.baseLords && !node.baseLords.includes(lord as CharacterId) ? t.other : undefined) ?? node.title ?? '';
+}
 /** 按主公与条件取出要说的句子（{lord} 已替换）。 */
 export function resolveLines(node: StoryNode, ctx: StoryCtx): StoryLine[] {
   const v = node.variants?.[ctx.lord] ?? (node.baseLords && !node.baseLords.includes(ctx.lord) ? node.variants?.other : undefined);
@@ -90,7 +95,7 @@ export function playStoryScroll(scene: Phaser.Scene, node: StoryNode, lines: Sto
   loadPortraits(scene, all, () => {
     if (scene.sys.settings.status >= Phaser.Scenes.SHUTDOWN) return; // 场景已关（create 期间 isActive 仍为 false，不能用它判断）
     const finish = (): void => { markStorySeen(node.id); done(); };
-    storyScroll(scene, GAME_WIDTH, GAME_HEIGHT, IS_DESKTOP, { name: 'story-' + node.id.replace(/\./g, '-'), confirmName: 'story-confirm', kicker: node.kicker ?? '', title: node.title ?? '',
+    storyScroll(scene, GAME_WIDTH, GAME_HEIGHT, IS_DESKTOP, { name: 'story-' + node.id.replace(/\./g, '-'), confirmName: 'story-confirm', kicker: node.kicker ?? '', title: nodeTitle(node, ctx.lord),
       lines: all, reward: '', confirm, background: 'rest_camp', illustration: nodeIllustration(node), onDone: finish, skip: finish, translucent: opts?.translucent, dialogue: node.type === 'stageBrief' });
   }, nodeIllustration(node));
 }
@@ -291,7 +296,7 @@ export class StoryDirector {
         const reply = this.applyChoice(node, k, true); if (skipped || !reply.length) { next(); return; }
         playStoryScroll(this.h.scene, { id: node.id + '.reply', type: 'interlude', kicker: node.kicker, title: choices[k].label, lines: [] }, reply, ctx, '继续', next);
       };
-      storyScroll(this.h.scene, GAME_WIDTH, GAME_HEIGHT, IS_DESKTOP, { name: 'story-' + node.id.replace(/\./g, '-'), confirmName: 'story-confirm', kicker: node.kicker ?? '', title: node.title ?? '',
+      storyScroll(this.h.scene, GAME_WIDTH, GAME_HEIGHT, IS_DESKTOP, { name: 'story-' + node.id.replace(/\./g, '-'), confirmName: 'story-confirm', kicker: node.kicker ?? '', title: nodeTitle(node, this.h.ctx.lord),
         lines, reward: '', confirm: '', background: 'rest_camp', illustration: nodeIllustration(node), onDone: () => after(0, false), skip: () => after(0, true),
         choices: choices.map(c => c.label), onChoice: k => after(k, false) });
     }, nodeIllustration(node));

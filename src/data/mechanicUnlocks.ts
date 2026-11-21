@@ -32,13 +32,13 @@ export interface MechDef {
 
 export const MECHANICS: Readonly<Record<MechId, MechDef>> = {
   squad: { chapter: 1, stage: 2, when: 'start', pre: 'hidden', name: '部曲',
-    lines: [{ who: '简雍', id: 'jianyong', text: '乡勇五百已编成部曲，听主公号令！' }], tip: '战斗支援：选一队兵随行；E 部曲出击 / 护阵' },
+    lines: [{ who: '简雍', id: 'jianyong', text: '乡勇五百已编成部曲，听将军号令！' }], tip: '战斗支援：选一队兵随行；E 部曲出击 / 护阵' },
   atlas: { chapter: 1, stage: 2, when: 'start', pre: 'hidden', name: '舆图',
     lines: [{ who: '简雍', id: 'jianyong', text: '下曲阳地形复杂，看看舆图再走。' }], tip: '按 M 展开舆图（战斗暂停）' },
   jinnang: { chapter: 1, stage: 3, when: 'after', pre: 'hidden', name: '锦囊',
     lines: [{ who: '诸葛亮', id: 'zhuge', text: '另附锦囊三枚，危急时拆看。' }], tip: '三选一里出现锦囊；按 R 拆开锦囊' },
   medic: { chapter: 1, stage: 2, when: 'start', pre: 'hidden', name: '军医', at: 'camp',
-    lines: [{ who: '乡里郎中', text: '在下略通岐黄，愿随军效力。' }, { who: '简雍', id: 'jianyong', text: '主公，这一仗受的伤会带到下一仗——休整时请先生看看。' }], tip: '血量跨关继承，休整时找军医治伤；初诊不收粮' },
+    lines: [{ who: '乡里郎中', text: '在下略通岐黄，愿随军效力。' }, { who: '简雍', id: 'jianyong', text: '将军，这一仗受的伤会带到下一仗——休整时请先生看看。' }], tip: '血量跨关继承，休整时找军医治伤；初诊不收粮' },
   gear: { chapter: 1, stage: 1, when: 'start', pre: 'hidden', name: '行囊', at: 'event',
     lines: [{ who: '张飞', id: 'zhangfei', text: '大哥，缴来的甲胄先穿上！' }], tip: '按 B 打开行囊，点兵装穿上；首领宝箱会掉兵装' },
   merchant: { chapter: 1, stage: 3, when: 'after', pre: 'hidden', name: '军需商人', at: 'camp',
@@ -57,7 +57,7 @@ export const MECHANICS: Readonly<Record<MechId, MechDef>> = {
     lines: [{ who: '涿郡良匠', text: '将军这兵器，还能再往深里打——两条路，只能选一条。' }], tip: '本命兵器 Lv5 时选专职；选定后要行营「重整构筑」才能换' },
   // 军阵（formation-design.md，用户 11-20「全按推荐」）：第四章通关后徐庶在新野来投，授方圆、锋矢；之后按剧情学长蛇（5-1 后）、鹤翼（5-2 后）、雁行（黄忠来投，第六章后）
   formation: { chapter: 4, stage: 3, when: 'after', pre: 'hidden', name: '军阵',
-    lines: [{ who: '徐庶', id: 'xushu', text: '主公用兵，胜在人和，失在无阵。庶有二阵相赠——守则方圆，攻则锋矢。' }], tip: '行营「布阵」选主阵 / 备阵；战斗中按 X 变阵；护阵（E）时阵势生效，出击时各阵有各自的打法' },
+    lines: [{ who: '徐庶', id: 'xushu', text: '将军用兵，胜在人和，失在无阵。庶有二阵相赠——守则方圆，攻则锋矢。' }], tip: '行营「布阵」选主阵 / 备阵；战斗中按 X 变阵；护阵（E）时阵势生效，出击时各阵有各自的打法' },
   f_snake: { chapter: 5, stage: 2, when: 'start', pre: 'hidden', name: '长蛇阵',
     lines: [{ who: '赵云', id: 'zhaoyun', text: '七进七出，靠的是阵随人走、首尾相应。' }], tip: '学会长蛇阵：行营「布阵」可选' },
   f_crane: { chapter: 5, stage: 3, when: 'start', pre: 'hidden', name: '鹤翼阵',

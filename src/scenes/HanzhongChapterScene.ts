@@ -69,7 +69,7 @@ export class HanzhongChapterScene extends Phaser.Scene {
  openStory(){const lord=CHARACTERS.find(c=>c.id===this.hero)?.name??'主公';
   storyScroll(this,W,H,IS_DESKTOP,{name:'story-hanzhong-open',confirmName:'story-hanzhong-open-confirm',kicker:'第八章 · 汉中之战',title:'北取汉中',
    lines:[{text:'建安二十三年，益州既定。北面汉中为曹操所据，夏侯渊、张郃屯兵阳平关，扼住益州咽喉。'},
-    {who:'法正',text:'主公，曹操留夏侯渊、张郃守汉中，自引大军回邺，此天以汉中与我也。只要抢住山头，居高临下，必能破之。'},
+    {who:'法正',text:(this.hero==='liubei'?'主公':'将军')+'，曹操留夏侯渊、张郃守汉中，自引大军回邺，此天以汉中与我也。只要抢住山头，居高临下，必能破之。'},
     {text:'本章「夺高地」：站上山头读条占领，伤害、射程提高；敌军会来反夺。定军山上，若老将黄忠随军，夏侯渊难逃一刀。'},
     {who:lord,text:'先破阳平关，再上定军山。'}],
    reward:'本章玩法：夺高地',confirm:'出征汉中',background:'rest_camp',onDone:()=>{try{localStorage.setItem(OPEN_KEY,'1');}catch{}}});}

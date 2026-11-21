@@ -4,7 +4,11 @@
  */
 import type { CharacterId } from '../characters';
 
-/** 一句台词。who：武将 id / '{lord}'（主公自己）/ STORY_CAST 里的人物键；不写为旁白。tip：本关玩法提示（卷轴里以提示样式显示）。 */
+/**
+ * 一句台词。who：武将 id / '{lord}'（玩家选的出战主将）/ STORY_CAST 里的人物键；不写为旁白。tip：本关玩法提示（卷轴里以提示样式显示）。
+ * 称谓规则（11-21）：刘备始终是义军之主（白帝城之前），剧中「主公」指刘备；玩家是「出战主将」，旁人称其「将军」。
+ * {lord} 只说主将的话（请战、阵前号令自己的部曲、对同袍的话）；被称「主公」后的作答、受献、任免、定大计、刘备的名句一律写 who: 'liubei'。
+ */
 export interface StoryLine {
   who?: string; text: string; tip?: boolean;
   /** 条件：某武将在队（主公或随行）/ 已招募（名册里有）/ 存档旗标（'name' 为真、'name=value' 等于、'!name' 未设）/ 主公是其中之一 */
@@ -22,6 +26,8 @@ export interface StoryNode {
   /** 全局唯一，记「已看过」用，如 'huangjin.open'、'huangjin-1.brief' */
   id: string; type: StoryNodeType; lines: readonly StoryLine[];
   /** 主公改写：baseLords 之外的主公改用 variants.other；也可直接按主公 id 给整段 */
+  /** 标题改写（同 variants 的取法）：如第一章章头，桃园三兄弟之外的主将看到「涿郡投军」而不是「桃园结义」 */
+  titleVariants?: Partial<Record<CharacterId | 'other', string>>;
   baseLords?: readonly CharacterId[]; variants?: Partial<Record<CharacterId | 'other', readonly StoryLine[]>>;
   /** 卷轴标题 / 小标题 / 插画（缺图退回通用横幅） */
   kicker?: string; title?: string; illustration?: string;

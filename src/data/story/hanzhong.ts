@@ -58,7 +58,7 @@ export const HANZHONG_STORY: StoryChapter = {
     ] },
     { id: 'hanzhong.camp2', type: 'campTalk', lines: [
       { who: 'zhaoyun', text: '汉水营里，曹军一见空营便退——原来是疑兵之计。', ifFollower: 'zhaoyun', ifNotLord: ['zhaoyun'] },
-      { who: '{lord}', text: '子龙一身是胆也。', ifFollower: 'zhaoyun', ifNotLord: ['zhaoyun'] },
+      { who: 'liubei', text: '子龙一身是胆也。', ifFollower: 'zhaoyun', ifNotLord: ['zhaoyun'] },
     ] },
     { id: 'hanzhong.camp3', type: 'campTalk', lines: [
       { who: 'weiyan', text: '汉中若交某镇守：曹操举天下而来，某为大王拒之；偏将十万之众至，某为大王吞之！', ifFollower: 'weiyan', ifNotLord: ['weiyan'] },

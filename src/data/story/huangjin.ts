@@ -7,7 +7,7 @@ export const HUANGJIN_STORY: StoryChapter = {
   chapter: 'huangjin',
   open: {
     id: 'huangjin.open', type: 'chapterOpen', kicker: '第一章 · 黄巾之乱', title: '桃园结义', illustration: 'story_taoyuan',
-    baseLords: BROTHERS,
+    baseLords: BROTHERS, titleVariants: { other: '涿郡投军' }, // 三兄弟之外的主将：桃园结义是刘关张的事，主将是来投的
     lines: [
       { text: '中平元年，张角以「苍天已死，黄天当立」聚众三十六方，烽火遍于八州。' },
       { text: '幽州涿郡贴出榜文，招募义勇，共讨黄巾。' },
@@ -36,6 +36,7 @@ export const HUANGJIN_STORY: StoryChapter = {
       brief: { id: 'huangjin-1.brief', type: 'stageBrief', kicker: '1-1 · 军情', title: '广宗外围', lines: [
         { who: 'luzhi', text: '玄德来得正好。广宗城外黄巾营帐连绵，先替我扫清外围。' },
         { who: 'liubei', text: '学生领命！' },
+        { who: '{lord}', text: '某愿为前驱，替玄德公扫清营帐。', ifNotLord: BROTHERS },
         { tip: true, text: '打碎营帐与军旗可削弱黄巾士气。' },
       ] },
       bossIntro: { id: 'huangjin-1.bossIntro', type: 'bossIntro', lines: [{ who: 'zhangliang', text: '人公将军在此！苍天已死，黄天当立！' }] },
@@ -70,7 +71,7 @@ export const HUANGJIN_STORY: StoryChapter = {
   },
   camp: [
     { id: 'huangjin.camp1', type: 'campTalk', lines: [{ who: 'zhangfei', text: '二哥，你那大刀八十二斤，夜里睡觉压不压得着？' }, { who: 'guanyu', text: '……翼德，去巡营。' }] },
-    { id: 'huangjin.camp2', type: 'campTalk', lines: [{ who: 'jianyong', text: '营里米缸见底了，主公。' }, { who: '{lord}', text: '多打几场，自有黄巾辎重。' }] },
+    { id: 'huangjin.camp2', type: 'campTalk', lines: [{ who: 'jianyong', text: '营里米缸见底了，主公。' }, { who: 'liubei', text: '多打几场，自有黄巾辎重。' }] },
     { id: 'huangjin.camp3', type: 'campTalk', lines: [{ who: 'zhaoyun', text: '常山赵子龙，久闻诸位义名，今日得见。', ifFollower: 'zhaoyun' }, { who: 'liubei', text: '子龙来得正好！', ifFollower: 'zhaoyun' }] },
   ],
   bonds: [

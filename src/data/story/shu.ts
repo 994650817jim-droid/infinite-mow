@@ -28,7 +28,7 @@ export const SHU_STORY: StoryChapter = {
         { who: 'pangtong', text: '刘季玉暗弱，城中人心早散了。主公只需一鼓作气。', ifFlag: '!luofeng=fell', ifNotLord: ['pangtong'] },
         { who: 'zhuge', text: '士元的仇，就在这城里。', ifFlag: 'luofeng=fell' },
         { who: 'scout', text: '报！西凉马超弃张鲁来投，已屯兵城北！城中闻之，无不震恐！' },
-        { who: '{lord}', text: '天助我也！传令：冲车上前，先破城门！' },
+        { who: 'liubei', text: '天助我也！传令：冲车上前，先破城门！' },
         { tip: true, text: '冲车撞开城门 → 巷战 → 州府。副将刘循压阵时先清他身边的亲军，刘璋才会出州府。' },
       ] },
       bossIntro: { id: 'shu-3.bossIntro', type: 'bossIntro', lines: [{ who: 'liuzhang', text: '我父子在蜀二十余年……今日，还要叫百姓再流血么？' }] },

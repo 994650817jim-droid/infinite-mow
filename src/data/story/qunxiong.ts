@@ -145,7 +145,7 @@ export const QUNXIONG_STORY: StoryChapter = {
       { who: 'guanyu', text: '嗯。往后军中禁酒。', ifFollower: 'zhangfei' },
       { who: 'zhangfei', text: '禁……禁多久？', ifFollower: 'zhangfei' },
     ] },
-    { id: 'qunxiong.camp2', type: 'campTalk', lines: [{ who: 'mizhu', text: '下邳虽失，糜家尚有僮客两千、金银若干，尽献军中。' }, { who: '{lord}', text: '子仲高义，全军记下了。' }] },
+    { id: 'qunxiong.camp2', type: 'campTalk', lines: [{ who: 'mizhu', text: '下邳虽失，糜家尚有僮客两千、金银若干，尽献军中。' }, { who: 'liubei', text: '子仲高义，全军记下了。' }] },
     { id: 'qunxiong.camp3', type: 'campTalk', lines: [{ who: 'diaochan', text: '吕布射戟那一箭，倒是真心想罢兵。', ifFollower: 'diaochan' }, { who: 'diaochan', text: '可惜他的真心，从来留不长。', ifFollower: 'diaochan' }] },
     { id: 'qunxiong.camp4', type: 'campTalk', lines: [{ who: 'zhaoyun', text: '公孙将军那边战事吃紧……云还是想跟着玄德公。', ifFollower: 'zhaoyun' }, { who: 'liubei', text: '子龙，来日方长。', ifFollower: 'zhaoyun' }] },
     { id: 'qunxiong.camp5', type: 'campTalk', lines: [

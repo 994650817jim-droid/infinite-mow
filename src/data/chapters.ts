@@ -9,6 +9,8 @@ import type { EnemyKind } from '../types';
 import { tuneStage } from './stageTuning';
 import { CH1_TRIAL, CH1V6 } from './ch1Trial';
 const T1 = CH1V6.stage1Spawn, M2 = CH1V6.stage2Mix;
+/** 第一章试验数值 ch1v6：1-2、1-3 弓手伤害 × archerDamage（只改弓手，齐射间隔不动）。 */
+function ch1TrialArchers(c: ChapterDef): ChapterDef { const a = c.enemies.archer; return CH1_TRIAL && (c.stage ?? 3) >= 2 && a && CH1V6.archerDamage !== 1 ? { ...c, enemies: { ...c.enemies, archer: { ...a, damage: a.damage * CH1V6.archerDamage } } } : c; }
 import { meleeReach } from './bossReach';
 import { isV2Texture } from '../systems/ArtStyle';
 
@@ -127,7 +129,7 @@ function xiliangCavalry(c:ChapterDef):ChapterDef{return {...c,enemies:{...c.enem
 /** 主线第一、二章的关卡（已套用 stageTuning 的节奏与小怪成长）。 */
 export function getBattleChapter(id?:string, stage:YellowStage=1,westStage:YellowStage=3):ChapterDef {
  const c=rawBattleChapter(id,stage,westStage);
- return c.id==='hulao'?tuneStage(c,'hulao',c.westStage??3):tuneStage(c,'huangjin',c.stage??3);
+ return c.id==='hulao'?tuneStage(c,'hulao',c.westStage??3):ch1TrialArchers(tuneStage(c,'huangjin',c.stage??3));
 }
 function rawBattleChapter(id?:string, stage:YellowStage=1,westStage:YellowStage=3):ChapterDef {
  const base=getChapter(id);if(base.id==='hulao'){const n=DONGZHUO_STAGES.find(s=>s.stage===westStage)?.stage??3;return xiliangCavalry(n===1?{...getSishuiEncounter(),westStage:1,victoryText:'汜水关告捷 · 荥阳之战已解锁'}:n===2?{...getXingyangEncounter(),westStage:2,victoryText:'荥阳破围 · 虎牢关已解锁'}:{...getLuoyangChapter(),westStage:3});}
@@ -142,7 +144,7 @@ function rawBattleChapter(id?:string, stage:YellowStage=1,westStage:YellowStage=
  return {...base,stage,name:`1-${stage} ${info.name}`,ground:`yellow_ground_${stage}`,bossName:info.boss,bossStyle:boss,
  waves:names.map((name,i)=>({name,start:i*45})),recruitWaves:[1,2],
  // 1-1、1-2 按用户反馈都是普通推波：打完 3 波首领登场（不设歼敌 / 祭坛目标；目标系统代码保留在 StageObjectives 供以后复用）
- enemies:{...ENEMY_DEFS,...(CH1_TRIAL&&stage===2&&CH1V6.stage2ArcherDamage!==1?{archer:{...ENEMY_DEFS.archer,damage:ENEMY_DEFS.archer.damage*CH1V6.stage2ArcherDamage}}:{}),boss:{...ENEMY_DEFS.boss,texture:`yellow_${boss}_walk`,walkVisual:{texture:`yellow_${boss}_walk`,scale:1.35,groundY:91/96},attackVisual:`yellow_${boss}_${stage===1?'attack':'cast'}`,hp:stage===1?1100:1700,speed:stage===1?54:35,damage:stage===1?12:14}},
+ enemies:{...ENEMY_DEFS,boss:{...ENEMY_DEFS.boss,texture:`yellow_${boss}_walk`,walkVisual:{texture:`yellow_${boss}_walk`,scale:1.35,groundY:91/96},attackVisual:`yellow_${boss}_${stage===1?'attack':'cast'}`,hp:stage===1?1100:1700,speed:stage===1?54:35,damage:stage===1?12:14}},
  hpScale:t=>1+t/600,spawnInterval:t=>CH1_TRIAL&&stage===1?(t<T1.at[0]?T1.interval[0]:t<T1.at[1]?T1.interval[1]:T1.interval[2]):t<60?.8:.6,spawnBurst:t=>CH1_TRIAL&&stage===1?T1.burst:t<60?1:2,
  ...(CH1_TRIAL?{enemyCap:CH1V6.enemyCap[stage-1],...(stage===1?{bossCapBase:CH1V6.bossCapBase1}:{})}:{}), // 第一章试验数值 ch1v6
  pickEnemy:t=>{

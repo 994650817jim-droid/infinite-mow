@@ -1,5 +1,6 @@
 import { BOSS_CLEAR, pickWithdraw, withdrawXp } from '../data/bossClear';
 import { BOSS_STALL, GRANT_FULL, enrageMul, enrageStacks, killGrant, rageTint, stallFor, type KillGrant } from '../data/bossStall';
+import { FRONTLINE, frontlineBreather } from '../data/frontline';
 import { EnemyFormations } from '../systems/EnemyFormations';
 import { safeWorldPoint } from '../ui/SafeLabel';
 import { SIGIL_LABEL, formationSigil, setFormationSigil, type FormationSigil } from '../systems/BattleSettings';
@@ -20,7 +21,7 @@ import { MOUNT_VISUAL, isHorseCavalry } from '../data/mounts';
 import { buildSettingsPanel, type SettingSpec } from '../ui/SettingsPanel';
 import {FollowerSquad,type Follower} from '../systems/FollowerSquad';
 import {showBarkCard} from '../ui/StoryBarkCard';
-import { DEFEAT, DEFEAT_TIPS, defeatLines } from '../data/defeatFlow';
+import { DEFEAT, buildCarryNote, defeatTip, defeatLines } from '../data/defeatFlow';
 import { battlePoint, retreatTarget, type RetreatTarget } from '../world/DefeatRetreat';
 import { patchCampaignDefeat } from '../systems/Campaign';
 import { loseProvisionsPct } from '../world/WorldStore';
@@ -1363,7 +1364,7 @@ export class GameScene extends Phaser.Scene {
     if (this.player.growth.respecPending > 0) { const n = this.player.growth.respecPending; this.player.growth.respecPending = 0; this.pendingLevels += n; this.showGrowthNotice(`重整构筑 · 补选 ${n} 次强化`); }
     if (this.pendingLevels > 0 && this.pickGapOk()) this.openUpgrade();
 
-    if(this.battleStage()<3&&!this.runConfig.encounter&&this.boss?.active&&this.firstBossAt>=0&&this.combatNow>=this.firstBossAt+90000)this.advanceFrontline();
+    if(this.frontlineBoss()&&this.boss?.active&&this.firstBossAt>=0&&this.combatNow>=this.firstBossAt+FRONTLINE.bossMs)this.advanceFrontline(); // 战线推进（data/frontline.ts）
     this.elapsed += dt;
     this.combatNow += dt * 1000;
     this.hitFeel.endFrame(); this.bossStagger.decay(dt);
@@ -1408,6 +1409,7 @@ export class GameScene extends Phaser.Scene {
     this.followers?.update(dt, this.combatNow);
     this.formationRt?.update(dt, this.combatNow); this.formationFx?.update(dt, this.combatNow); this.enemyForms?.update(dt, this.combatNow);
     this.updateBossRage(dt);
+    this.holdVictory(); // 末位首领倒下后：主将无敌、残兵溃退，直到捡宝箱结算
     // 鸣金让道撤完：撤走的兵经验折半一次性给，出「敌军溃退」
     { const c = this.bossClearPending; if (c && this.combatNow >= c.at && !this.over) { this.bossClearPending = null; const gained = c.xp > 0 ? this.player.gainXp(this.player.growth.scaleXp(c.xp, this.heroXpRate())) : 0; if (gained > 0) this.onHeroLevelUp(gained); this.showWaveBanner('敌军溃退', false, `${c.n} 名残兵撤走 · 经验 +${c.xp}`); } }
     if (this.over) return;
@@ -1684,6 +1686,14 @@ export class GameScene extends Phaser.Scene {
     return this.spawnEnemy(kind, x, y, undefined, force);
   }
 
+  /** 收尾：末位首领已倒、没有追兵首领还在、还没结算（总制作人新存档试玩 11-20：1-1 张梁倒下 2 秒后主将被围死，结算成「张梁 已击败 · 阵亡 · 败走」）。 */
+  protected get victoryHold(): boolean { return this.bossKilled && this.chasingBosses.length === 0 && !this.over; }
+  /** 收尾保护：主将无敌（Player.victoryGuard），场上残兵溃退（往外跑、不出手），直到捡完宝箱结算；各章场景都走 GameScene.update，一并生效。 */
+  protected holdVictory(): void {
+    const hold = this.victoryHold; this.player.victoryGuard = hold; if (!hold) return;
+    const until = this.combatNow + 800;
+    for (const e of this.enemies) if (e.active && e.kind !== 'boss' && !e.isSupplySlot && e.def.behavior !== 'wall') { e.routUntil = Math.max(e.routUntil, until); e.contactCd = Math.max(e.contactCd, .5); }
+  }
   /** 首领阶段的钟（毫秒）：本关首领可交战累计；双首领两人同一个钟，取在场两人里较短的（从第二名首领出场起算）。 */
   protected bossClockMs(): number {
     const duo = (this.dual?.alive ?? []).filter(x => x.enemy.active).map(x => x.enemy.engagedMs);
@@ -1692,13 +1702,12 @@ export class GameScene extends Phaser.Scene {
   /**
    * 首领震怒（data/bossStall.ts）：首领可交战（不无敌、不在城头 / 过场）累计满本关起点秒数还没打倒，每 30 秒一层、最多 5 层；
    * 每层首领移速按比例加（def.speed，与狂怒等其他改速叠乘）、身体染红、辉光转朱红（BossPresence）；主将受到的伤害倍率取在场首领里最高的一层。
-   * 双首领用 bossClockMs（同一个钟），追兵首领各算各的。
+   * 双首领用 bossClockMs（同一个钟）。战线推进关（1-1、1-2、2-1、2-2）的首领与追兵首领不震怒：那几关首领 90 秒没打倒就推进（data/frontline.ts）。
    */
   protected updateBossRage(dt: number): void {
     const list: Enemy[] = [], duo = (this.dual?.alive ?? []).map(x => x.enemy).filter(e => e.active);
-    if (this.boss?.active) list.push(this.boss);
+    if (this.boss?.active && !this.frontlineBoss()) list.push(this.boss);
     for (const e of duo) if (!list.includes(e)) list.push(e);
-    for (const t of this.chasingBosses) if (t.enemy.active && t.enemy.spawnId === t.life && !list.includes(t.enemy)) list.push(t.enemy);
     for (const e of list) if (!e.invulnerable && !this.cutscene?.active && !(e === this.boss && this.dzLubu?.hidesBossBar)) e.engagedMs += dt * 1000;
     const duoMs = this.bossClockMs();
     let top = 0;
@@ -1722,7 +1731,7 @@ export class GameScene extends Phaser.Scene {
     this.spawnTimer -= dt;
     // 首领在场：杂兵上限减半、刷兵间隔加倍、每次数量减半（BALANCE.bossSpawn）
     const bossOn = !!this.boss?.active, B = BALANCE.bossSpawn;
-    const spent = bossOn && this.bossClockMs() / 1000 >= this.bossStallCfg.quotaSec, S = BOSS_STALL.spent; // 首领阶段收益额度用完：刷兵再降一档（data/bossStall.ts）
+    const spent = bossOn && !this.frontlineBoss() && this.bossClockMs() / 1000 >= this.bossStallCfg.quotaSec, S = BOSS_STALL.spent; // 首领阶段收益额度用完：刷兵再降一档（data/bossStall.ts）
     const cap = bossOn ? Math.round(BALANCE.enemyCap * B.capMul * (spent ? S.capMul : 1)) : BALANCE.enemyCap;
     if (this.spawnTimer <= 0 && this.activeEnemyCount() < cap && this.combatNow >= this.bossQuietUntil) { /* 首领登场静场（BOSS_CLEAR.quietMs）期间不刷 */
       // 刷怪时间轴按关卡节奏加速（stageTuning.pace）：原来第 N 波的刷怪强度在新的第 N 波出现
@@ -2756,7 +2765,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.persuadeKill && this.dual?.preventKill(enemy)) return; // 双首领：每人一个招降窗
     if (!enemy.active) return;
     // 首领阶段收益额度（data/bossStall.ts）：首领可交战 quotaSec 秒内照常给，之后刷出来的杂兵 / 精锐粮、兵装 / 残卷、战功都不给，经验 ×0.25；首领、副将不管
-    const grant = this.boss?.active && !enemy.isSupplySlot && enemy.def.behavior !== 'wall' ? killGrant(enemy.kind, this.bossClockMs() / 1000, this.bossStallCfg.quotaSec, !!this.phaseRunner?.isLieutenant(enemy)) : GRANT_FULL; this.killGrant = grant;
+    const grant = this.boss?.active && !this.frontlineBoss() && !enemy.isSupplySlot && enemy.def.behavior !== 'wall' ? killGrant(enemy.kind, this.bossClockMs() / 1000, this.bossStallCfg.quotaSec, !!this.phaseRunner?.isLieutenant(enemy)) : GRANT_FULL; this.killGrant = grant;
     if (this.phasePlan) this.onStageCardKill(enemy);
     this.branchRt?.onKill(enemy);
     this.traits?.onKilled(enemy); // 纵火兵爆燃、驯兽师倒下猛兽狂暴
@@ -3934,6 +3943,8 @@ export class GameScene extends Phaser.Scene {
   /** 测试 / 调试：直接打开所有等待中的首领宝箱。 */
   collectBossChests():void{for(const c of [...this.bossChests])c.collectNow();}
   private battleStage():number{return this.chapter.stage??this.chapter.westStage??3;}
+  /** 战线推进关（1-1、1-2、2-1、2-2）：首领出场 90 秒没打倒就推进下一关（data/frontline.ts）；首领阶段额度 / 震怒不管这几关，免得两套计时打架（data/bossStall.ts）。 */
+  protected frontlineBoss():boolean{return this.battleStage()<3&&!this.runConfig.encounter;}
   private recordFrontlineVictory(stage:number):void{
     this.frontlineVictories.set(stage,{elapsed:Math.max(0,(this.combatNow-(this.frontlineStarts.get(stage)??0))/1000)});
     // Settle only a contiguous defeated prefix. The current stage remains owned by finish().
@@ -3943,6 +3954,8 @@ export class GameScene extends Phaser.Scene {
       this.frontlineVictories.delete(stage);this.frontlineNextSettlement++;
     }
   }
+  /** 战线推进时给了几次喘息（测试读）。 */
+  frontlineBreaths=0;
   private clearChasingBosses():void{for(const t of this.chasingBosses){t.battle?.clear();t.huaxiong?.clear();t.xurong?.clear();t.label.destroy();}this.chasingBosses=[];}
   private advanceFrontline():void{
     const boss=this.boss,stage=this.battleStage();if(!boss?.active||stage>=3||this.runConfig.encounter)return;
@@ -3956,7 +3969,10 @@ export class GameScene extends Phaser.Scene {
     // 战线推进与新一关第 1 波合成一条提示（原先“战线推进”下一帧就被第 1 波提示顶掉）
     const waves=this.chapter.waves,first=waves[0];
     this.hudTexts.wave.setText(`第 1/${waves.length} 波 · ${first.name}`);
-    this.showWaveBanner(`第 1/${waves.length} 波 · ${first.name}`,true,`战线推进 · ${this.chapter.name} · 第 1/${waves.length} 波`);
+    // 第一章给一次喘息（总制作人新存档试玩 11-20：1-1 首领 90 秒没打死直接进 1-2，血不回、追兵跟着，新手基本必死）：回血 + 短暂无敌，横幅写「某某追来」
+    const br=frontlineBreather(CHAPTER_INDEX[this.hardKey()]??0);
+    if(br){this.player.heal(this.player.maxHp*br.heal);this.player.invulnUntil=Math.max(this.player.invulnUntil,this.combatNow+br.invulnMs);this.frontlineBreaths++;this.showWaveBanner(name+'追来',true,`战线推进 · ${this.chapter.name} · 回复 ${Math.round(br.heal*100)}% 生命、${br.invulnMs/1000} 秒无敌`);}
+    else this.showWaveBanner(`第 1/${waves.length} 波 · ${first.name}`,true,`战线推进 · ${this.chapter.name} · 第 1/${waves.length} 波`);
     const march=this.add.graphics().setScrollFactor(0).setDepth(DEPTH.overlay-12);this.tweens.addCounter({from:0,to:1,duration:1100,onUpdate:t=>{const p=t.getValue()??0;march.clear().lineStyle(2,0xd5ae6b,Math.sin(p*Math.PI)*.45);for(let i=0;i<5;i++){const x=(p*GAME_WIDTH+i*GAME_WIDTH/5)%GAME_WIDTH;march.lineBetween(x-10,GAME_HEIGHT*.3,x,GAME_HEIGHT*.3+8).lineBetween(x,GAME_HEIGHT*.3+8,x-10,GAME_HEIGHT*.3+16);}},onComplete:()=>march.destroy()});
   }
   protected checkEnd(): void {
@@ -4347,7 +4363,8 @@ export class GameScene extends Phaser.Scene {
       const g = loseProvisionsPct(DEFEAT.grainPct, DEFEAT.grainCap); if (g) notes.push('营寨军粮 −' + g);
     }
     this.defeatNotes = notes;
-    if (!worldUnlocked()) { const tip = DEFEAT_TIPS[Math.floor(Math.random() * DEFEAT_TIPS.length)]; this.resultTexts.body.setText(this.resultTexts.body.text + '\n小贴士  ' + tip); } // 第一章：不扣东西，给一条小贴士
+    if (!worldUnlocked()) { const tip = defeatTip(stage, id => mechOpen(id)); this.resultTexts.body.setText(this.resultTexts.body.text + '\n小贴士  ' + tip); } // 第一章：不扣东西，给一条小贴士（只说已开放的玩法、本关见得到的东西）
+    if (!this.campaignReplay) this.resultTexts.body.setText(this.resultTexts.body.text + '\n' + buildCarryNote(!!loadCampaignBuild(this.runConfig.character))); // 主线没打过的关：写明征程构筑打输不存
     if (notes.length) this.resultTexts.body.setText(this.resultTexts.body.text + '\n战败惩罚  ' + notes.join(' · '));
     // 演出：慢动作 + 压暗 + 左下角电影感对话卡（部将护主突围）；结算面板晚 resultDelayMs 出
     this.devTimeScale = DEFEAT.slowMul; window.setTimeout(() => { if (this.sys?.isActive()) this.devTimeScale = 1; }, DEFEAT.slowMs);

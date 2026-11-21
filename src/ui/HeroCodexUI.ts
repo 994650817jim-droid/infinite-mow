@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { inkSkin } from './HomeCommand';
+import { homeCommand, inkSkin } from './HomeCommand';
 import { DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, IS_DESKTOP } from '../config';
 import { CHARACTERS, type CharacterId } from '../data/characters';
 import { TACTICS, TAG_NAMES, type BuildTag, type TacticId } from '../data/builds';
@@ -10,7 +10,7 @@ import { ATTRIBUTE_INFO, attributeCap, attributeIcon, type AttributeId } from '.
 import { allocateHeroAttr, heroAttrs, heroFreePoints, heroInfo, takeAttrNotice, type HeroKey } from '../systems/HeroProgress';
 import { heroFreeStars, heroStarGate, heroStars, lightHeroStar } from '../systems/HeroProgress';
 import { starMapOn } from '../data/starMap';
-import { StarMapDevPanel } from './StarMapDevPanel';
+import { StarMapUI } from './StarMapUI';
 import { primaryAttribute, PRIMARY_PERK_INFO, PRIMARY_TIERS } from '../data/attributes';
 import { scaleFor, statMultiplier, statSource } from '../data/heroStats';
 import { gearFor, gearSummary } from '../systems/ItemEffects';
@@ -88,7 +88,7 @@ export class HeroCodexUI {
     // 右：分页
     const rx = D ? x0 + 200 : x0 + 24, rw = D ? pw - 224 : pw - 48, ry = D ? top : top + Math.ceil(owners.length / 4) * 40 + 10;
     const tw = (rw - (TABS.length - 1) * 8) / TABS.length;
-    TABS.forEach(([id, label], i) => this.button(rx + tw / 2 + i * (tw + 8), ry, label, 'codex-tab-' + id, () => { this.tab = id; this.render(); }, { active: this.tab === id, w: tw - 24, size: 15 }));
+    TABS.forEach(([id, label], i) => this.button(rx + tw / 2 + i * (tw + 8), ry, label, 'codex-tab-' + id, () => { this.starAuto = id === 'attrs'; this.tab = id; this.render(); }, { active: this.tab === id, w: tw - 24, size: 15 }));
     const cy = ry + 34;
     if (this.tab === 'overview') this.renderOverview(rx, cy, rw);
     else if (this.tab === 'attrs') this.renderAttrs(rx, cy, rw);
@@ -230,7 +230,7 @@ export class HeroCodexUI {
 
     // 页签栏
     const ty = top + 56, gap = 6, tw = (rw - gap * (TABS.length - 1)) / TABS.length;
-    TABS.forEach(([id, label], i) => this.plate(rx + tw / 2 + i * (tw + gap), ty, tw, 30, label, 'codex-tab-' + id, this.tab === id, () => { this.tab = id; this.render(); }));
+    TABS.forEach(([id, label], i) => this.plate(rx + tw / 2 + i * (tw + gap), ty, tw, 30, label, 'codex-tab-' + id, this.tab === id, () => { this.starAuto = id === 'attrs'; this.tab = id; this.render(); }));
     { const g = this.add(this.scene.add.graphics()); g.lineStyle(1, LQ.gold, .5).lineBetween(rx, ty + 21, rx + rw, ty + 21); }
     const cy = ty + 32;
     if (this.tab === 'overview') this.deskOverview(rx, cy, rw, bottom);
@@ -425,14 +425,25 @@ export class HeroCodexUI {
     this.text(x, y + 184, gear.length ? gear.join('　') : '尚未穿戴兵装', 13, '#d8ccb0').setWordWrapWidth(tw).setLineSpacing(4);
   }
 
-  /** 星图 · 临时界面（程序占位，ui/StarMapDevPanel）：开关 starMapOn() 打开时顶替属性页的加点区；每次 render 随 body 重建。 */
-  private starPanel(x: number, y: number, w: number, h: number): void {
+  /** 星图（开关 starMapOn() 打开时）：属性页只留一行星数与「打开星图」，点进属性页时自动打开整屏星图（ui/StarMapUI）；星图「返回」回到这一页。 */
+  private starUI?: StarMapUI;
+  private starAuto = false;
+  private starPanel(x: number, y: number, _w: number, _h: number): void {
+    const hero = this.hero;
+    this.text(x + 4, y + 18, `星图 · 可用 ${heroFreeStars(hero)} 颗 · 已点亮 ${heroStars(hero).length} 颗`, 15, '#f3d48a').setOrigin(0, .5).setName('codex-star-summary');
+    const b = homeCommand(this.scene, x + 90, y + 64, 170, 40, '打开星图', false, true, 15);
+    for (const o of [b.g, b.hit, b.caption]) this.add(o as Phaser.GameObjects.Image); b.hit.setName('codex-open-star-map').on('pointerup', () => this.openStarMap());
+    if (this.starAuto && !this.starUI) { this.starAuto = false; this.openStarMap(); }
+  }
+  private openStarMap(): void {
+    if (this.starUI?.root.active) return;
     const hero = this.hero, owner = gearOwners().find(o => o.id === hero);
-    const p = new StarMapDevPanel(this.scene, { x, y, w, h,
-      state: () => ({ heroName: owner?.name ?? hero, level: heroInfo(hero).level, gate: heroStarGate(hero), lit: heroStars(hero), free: heroFreeStars(hero) }),
+    this.starUI = new StarMapUI(this.scene, { depth: this.root.depth + 5,
+      state: () => ({ hero, heroName: owner?.name ?? hero, level: heroInfo(hero).level, gate: heroStarGate(hero), lit: heroStars(hero), free: heroFreeStars(hero) }),
       onLight: id => lightHeroStar(hero, id),
-      respec: { label: () => { const cost = respecCost(hero); return cost ? `洗点 · 军粮 ${cost}` : '洗点 · 本章首次免费'; }, act: () => respec(hero).message } });
-    this.body.add(p.root);
+      respec: { label: () => { const cost = respecCost(hero); return cost ? `洗点 · 军粮 ${cost}` : '洗点 · 本章首次免费'; }, act: () => respec(hero).message },
+      close: { label: () => '返回', act: () => { this.starUI?.destroy(); this.starUI = undefined; if (this.root.active) this.render(); } } });
+    this.root.once('destroy', () => this.starUI?.destroy());
   }
   private renderAttrs(x: number, y: number, w: number): void {
     if (starMapOn()) { this.starPanel(x, y, w, Math.min(520, GAME_HEIGHT - y - 70)); return; } // 星图（开关默认关）

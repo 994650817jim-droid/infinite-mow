@@ -67,6 +67,21 @@ export function patchCampaignDefeat(hero: CharacterId, o: { hpFrac: number; foll
 export function patchCampaignBuild(hero: CharacterId, build: BuildSnapshot, food: number): void {
   try { const v = JSON.parse(localStorage.getItem(CAMPAIGN_KEY) ?? 'null'); const s = v?.heroes?.[hero]; if (!s?.player || !s.army) return; s.player.build = { ...(s.player.build ?? {}), ...build }; s.army.food = food; localStorage.setItem(CAMPAIGN_KEY, JSON.stringify(v)); } catch { /* 存储不可用 */ }
 }
+/**
+ * 只读继承征程构筑的出征（攻城 / 守城 / 军情 / 支线攻城关）前的整军（GameScene.saveMusterDelta）：只把整军里的增减写回存档点——
+ * 扣掉花掉的随军粮、加上新招的兵（满血，读档时按上限截）、主将 / 随行血量按整军后写。开局按营寨效果加的援军 / 后备、城池特产加成不写回。
+ * 没有存档点返回 false。
+ */
+export function patchCampaignMuster(hero: CharacterId, o: { foodSpent: number; recruits: Partial<Record<string, number>>; hpFrac: number; followerHp?: Record<string, number> }): boolean {
+  try {
+    const v = JSON.parse(localStorage.getItem(CAMPAIGN_KEY) ?? 'null'); const s = v?.heroes?.[hero]; if (!s?.player || !s.army) return false;
+    s.army.food = Math.max(0, Math.round((s.army.food ?? 0) - Math.max(0, o.foodSpent)));
+    if (!Array.isArray(s.army.soldiers)) s.army.soldiers = [];
+    for (const [kind, n] of Object.entries(o.recruits)) for (let i = 0; i < (n ?? 0); i++) { s.army.soldiers.push({ kind, hp: 99999 }); s.army.recruited = (s.army.recruited ?? 0) + 1; }
+    s.player.hpFrac = Math.max(0, Math.min(1, o.hpFrac)); if (o.followerHp) s.player.followerHp = { ...(s.player.followerHp ?? {}), ...o.followerHp };
+    localStorage.setItem(CAMPAIGN_KEY, JSON.stringify(v)); return true;
+  } catch { return false; }
+}
 export function patchCampaignTactics(hero: CharacterId, tactics: Record<string, number>, food: number, manuals?: readonly string[]): void {
   try { const v = JSON.parse(localStorage.getItem(CAMPAIGN_KEY) ?? 'null'); const s = v?.heroes?.[hero]; if (!s?.player || !s.army) return; s.player.build = { ...(s.player.build ?? {}), tactics: { ...tactics }, ...(manuals ? { manuals: [...manuals] } : {}) }; s.army.food = food; localStorage.setItem(CAMPAIGN_KEY, JSON.stringify(v)); } catch { /* 存储不可用 */ }
 }

@@ -11,6 +11,11 @@
 export type FortKind = 'pass' | 'city' | 'camp' | 'clear';
 /** ends：场地边界画法（SishuiPass.ends）。不填按 kind：pass 山崖、camp 林带、city 角楼 + 林带（城墙专项检查 W4：平原城池两端不接蜀道山崖）。 */
 export interface ArcFort { kind: FortKind; gate?: readonly [string, string]; ends?: 'cliff' | 'tower' | 'woods' }
+/**
+ * 支线关（data/sideRoutes.ts）没在 ARC_FORTS 列出时按关的类型补（总制作人第五轮：小沛只有一座孤城门 + 两座箭楼、两边没墙，像布景没摆完）：
+ * 攻城关（siege）是城池——城墙 + 城门，首领出阵时城门洞开；野战 / 终局去掉孤城门（clear）。
+ */
+export function sideFort(kind: string | undefined): ArcFort | undefined { return kind === 'siege' ? { kind: 'city' } : kind ? { kind: 'clear' } : undefined; }
 export const ARC_FORTS: Record<string, ArcFort> = {
   // 场景 1（孤城门）
   'qunxiong.1': { kind: 'city', gate: ['长安城门洞开', '李傕率亲卫杀出城来'] },

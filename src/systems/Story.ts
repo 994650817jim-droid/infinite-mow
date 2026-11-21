@@ -12,6 +12,7 @@
  * - 首领登场 / 倒下、bark：大字台词。武将台词系统 HeroBark（平衡会话在改成马超 / 魏延同款战吼大字）合进来后，
  *   场景上有 heroBark.sayLine 就走它；没有时用这里的同款大字（storyBark）——只是过渡，不另起一套样式。
  */
+import { speakerArt } from '../data/story/speakers';
 import Phaser from 'phaser';
 import { DEPTH, FONT, HEADING_FONT, GAME_WIDTH, GAME_HEIGHT, IS_DESKTOP } from '../config';
 import { CHARACTERS, HOME_ART_HEROES, type CharacterId } from '../data/characters';
@@ -51,9 +52,7 @@ const heroName = (id: string): string | undefined => CHARACTERS.find(c => c.id =
 /** 说话人显示名 / 立绘贴图键 / 名字章。 */
 export function speaker(who: string | undefined, ctx: StoryCtx): { name?: string; portrait?: string; seal?: string } {
   if (!who) return {};
-  const id = who === '{lord}' ? ctx.lord : who, hero = heroName(id);
-  if (hero) return { name: hero, portrait: HOME_ART_HEROES.includes(id) ? 'ink_hero_' + id : undefined, seal: hero };
-  const c = STORY_CAST[id]; return c ? { name: c.name, portrait: c.portrait, seal: c.name } : { name: id, seal: id };
+  const s = speakerArt(who, { lord: ctx.lord }); return { name: s.name, portrait: s.portrait, seal: s.seal }; // 统一入口（data/story/speakers.ts）：id / 中文名都认
 }
 /** 旗标条件：'name' 为真 / 'name=value' 等于 / '!…' 取反。 */
 export function flagMatches(cond: string): boolean {

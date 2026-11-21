@@ -1,3 +1,5 @@
+import { storyArtFile } from '../data/story/art';
+import { portraitOf } from '../data/story/speakers';
 import Phaser from 'phaser';
 import { getCharacter, type CharacterId } from '../data/characters';
 import { HERO_JOIN } from '../data/heroUnlocks';
@@ -28,8 +30,8 @@ export function showPendingJoins(scene: Phaser.Scene, done?: () => void): void {
 
 export function showHeroJoin(scene: Phaser.Scene, id: CharacterId, onClose: () => void): void {
   if (scene.children.getByName('hero-join-reveal')) { onClose(); return; }
-  const art = 'ink_hero_' + id, need: Array<[string, string]> = [];
-  if (!scene.textures.exists(art)) need.push([art, `assets/ink-scroll/${id}.webp`]);
+  const art = portraitOf(id) ?? 'ink_hero_' + id, need: Array<[string, string]> = []; // 统一入口（data/story/speakers.ts）
+  if (!scene.textures.exists(art)) need.push([art, storyArtFile(art) ?? `assets/ink-scroll/${id}.webp`]);
   if (!scene.textures.exists('barkui_seal')) need.push(['barkui_seal', 'assets/camp/seal.webp']);
   let built = false; const go = (): void => { if (built) return; built = true; build(scene, id, onClose); };
   if (!need.length) { go(); return; }
@@ -48,7 +50,7 @@ function build(scene: Phaser.Scene, id: CharacterId, onClose: () => void): void 
   root.add(txt(W / 2, D ? 34 : 70, info?.kicker ?? '', D ? 15 : 16, '#c9b48a', HEADING_FONT).setOrigin(.5).setName('hero-join-kicker'));
   root.add(txt(W / 2, D ? 66 : 108, '新武将 · 来投', D ? 32 : 30, GOLD, TITLE_FONT).setOrigin(.5).setLetterSpacing(4).setName('hero-join-title'));
   // 立轴：电脑在左、手机在上
-  const art = 'ink_hero_' + id, px = D ? W * .31 : W / 2, pBottom = D ? H - 22 : 560, pH = D ? 410 : 400;
+  const art = portraitOf(id) ?? 'ink_hero_' + id, px = D ? W * .31 : W / 2, pBottom = D ? H - 22 : 560, pH = D ? 410 : 400;
   let portrait: Phaser.GameObjects.Image | null = null;
   if (scene.textures.exists(art)) {
     portrait = scene.add.image(px, pBottom, art).setOrigin(.5, 1).setScrollFactor(0).setAlpha(0).setName('hero-join-portrait');

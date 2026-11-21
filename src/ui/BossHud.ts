@@ -1,3 +1,5 @@
+import { storyArtFile } from '../data/story/art';
+import { portraitOf, speakerId } from '../data/story/speakers';
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT, HEADING_FONT, FONT } from '../config';
 import { LQ, lqDiamond } from './LacquerKit';
@@ -88,13 +90,15 @@ export class BossHud {
   }
   /** 水墨立绘头像（按需加载、裁成圆形头肩）；还没好 / 没有返回 null。 */
   private inkMedal(id: string): string | null {
-    const s = this.scene, key = 'bosshud_medal_' + id, src = 'ink_cast_' + id;
+    // 说话人统一入口（data/story/speakers.ts，11-21）：首领 / 降将 id 或中文名 → 立绘（可玩武将用立轴、其余用 ink_cast）；查不到的不载
+    const s = this.scene, key = 'bosshud_medal_' + id, pid = speakerId(id), src = pid ? portraitOf(pid) : undefined;
     if (s.textures.exists(key)) return key;
+    if (!src) return null;
     if (!s.textures.exists(src)) {
-      // 只载剧情人物表里登记过水墨立绘的（攻城 / 守城的通用首领 id 'siege' 等没有图：原来每场都去请求 ink_cast_siege，控制台报错、头像圈空着；2026-11-20 守城排查）
-      if (!/^[a-z]+$/.test(id) || STORY_CAST[id]?.portrait !== src || s.registry.get('bosshud_try_' + id)) return null;
+      // 只载登记过立绘的（攻城 / 守城的通用首领 id 'siege' 等没有图：原来每场都去请求 ink_cast_siege，控制台报错、头像圈空着；2026-11-20 守城排查）
+      const file = storyArtFile(src); if (!file || s.registry.get('bosshud_try_' + id)) return null;
       s.registry.set('bosshud_try_' + id, true);
-      s.load.image(src, 'assets/ink-cast/' + id + '.webp'); s.load.start();
+      s.load.image(src, file); s.load.start();
       return null;
     }
     const img = s.textures.get(src).getSourceImage() as HTMLImageElement, S = 128, c = document.createElement('canvas'); c.width = c.height = S;

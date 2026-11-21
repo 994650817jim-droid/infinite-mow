@@ -8,6 +8,7 @@
  * - 用真实时钟（performance.now）推进，不受战斗暂停影响；不暂停战斗、不吃点击。
  * - 没有立绘时画一枚朱文名字章代替（与剧情卷轴一致）。
  */
+import { speakerArt } from '../data/story/speakers';
 import Phaser from 'phaser';
 import { DEPTH, HEADING_FONT, GAME_WIDTH, IS_DESKTOP } from '../config';
 import { LQ, lqPanel, lqDiamond } from './LacquerKit';
@@ -31,6 +32,7 @@ interface CardState { queue: BarkCardLine[]; busy: boolean }
 
 /** 排进队列；空闲时立刻出。返回这张卡的名字（测试用：story-bark-card）。 */
 export function showBarkCard(scene: Phaser.Scene, line: BarkCardLine): void {
+  if (!line.portrait) { const a = speakerArt(line.name, { id: line.id }); if (a.portrait) line = { ...line, portrait: a.portrait }; } // 统一入口（data/story/speakers.ts）
   const st = (scene.data.get(STATE_KEY) as CardState | undefined) ?? { queue: [], busy: false };
   scene.data.set(STATE_KEY, st);
   st.queue.push(line);

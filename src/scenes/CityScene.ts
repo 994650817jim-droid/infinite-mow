@@ -37,6 +37,7 @@ import {chaptersOpen,heroFreePoints} from '../systems/HeroProgress';
 import {pointsHint} from '../data/pointsHint';
 import {PANO_ZOOM,CAMP_BARS,CAMP_PAN,PANO_W,PANO_H,CITY_SLOTS,LEVEL_SCALE,CITY_BG_SIZES,CITY_ART_LEVELS,ART_ALIAS} from '../town/CityLayout';
 import {cityById,TIER_NAME} from '../world/WorldCities';
+import {retreatToast,takeRetreatReturn} from '../world/DefeatRetreat';
 import {CampLife,loadCampLife,CAMP_ART_IDS} from '../town/CampLife';
 import {MountGuide} from '../systems/MountGuide';
 import {campTalkStrip} from '../systems/Story';
@@ -111,7 +112,8 @@ export class CityScene extends Phaser.Scene {
   this.sizeText=txt(this,this.vr.x+12,this.vr.y+(D?CAMP_BARS.top+8:10),'',D?15:14,'#f6e2ae',HEADING_FONT).setDepth(5).setShadow(0,1,'#000',4,true,true).setBackgroundColor('#1a120bcc').setPadding(8,4,8,4);
   this.hint=txt(this,D?190:24,D?28:94,'',D?13:12,'#b9d2a8').setOrigin(0,.5).setName('city-hint');
   // 底栏：只有「天下地图」（出征也从天下地图选章节）；功能都在建筑里
-  const mapBtn=homeCommand(this,W/2,D?H-28:H-72,D?260:W-60,D?40:52,'天下地图 · 出征',true,true,D?16:17);mapBtn.hit.setName('city-map').on('pointerdown',()=>this.scene.start('WorldMapScene'));
+  const mapBtn=homeCommand(this,W/2,D?H-28:H-72,D?260:W-60,D?40:52,'天下地图 · 出征',true,true,D?16:17);mapBtn.hit.setName('city-map').on('pointerdown',()=>{takeRetreatReturn(this.registry);this.scene.start('WorldMapScene');}); /* 战败退守营寨的：回地图选中那一仗 */
+  {const r=this.registry.get('retreatReturn') as Parameters<typeof retreatToast>[0]|undefined;if(r)this.time.delayedCall(500,()=>this.toast(retreatToast(r),6000));}
   addMainMenuButton(this,D?24+46:W-62,D?H-28:120,30); // 「主菜单」：电脑左下角、手机右上，直接回主页，快捷键 M。层级 30：在全景与页眉之上、弹窗（≥600）之下——默认的 DEPTH.hud+20 会让 anyModal() 一直为真，拖动 / 滚轮平移全景失效、坐骑引导一直等
   // 2026-11-17 UI 审查 K：底栏提示去掉（建筑上已有名牌，点了就进）
   // 营中闲话（剧情 campTalk）：底栏「天下地图」右侧，不挡建筑与出征按钮；按当前章节取一段没看过的
@@ -333,10 +335,10 @@ export class CityScene extends Phaser.Scene {
   this.pano.add(c);return c;
  }
  private toastText?:Phaser.GameObjects.Text;
- private toast(v:string){
+ private toast(v:string,ms=2600){
   const warn=storageUnavailable?(incompatibleSave?'存档版本较新，本次修改不会保存':'存储不可用，修改仅保留本次会话'):'';const msg=[v,warn].filter(Boolean).join('\n');if(!msg)return;
   this.toastText?.destroy();this.toastText=txt(this,W/2,this.vr.y+this.vr.h-(D?CAMP_BARS.bottom+12:18),msg,D?15:14,'#ffe7a8',HEADING_FONT).setOrigin(.5,1).setDepth(8).setAlign('center').setBackgroundColor('#1a120bdd').setPadding(12,6,12,6).setName('city-toast');
-  const tt=this.toastText;this.tweens.add({targets:tt,alpha:0,delay:2600,duration:600,onComplete:()=>tt.destroy()});
+  const tt=this.toastText;this.tweens.add({targets:tt,alpha:0,delay:ms,duration:600,onComplete:()=>tt.destroy()});
  }
  /** 建成 / 升级后播放一次：建筑弹起 + 尘土。 */
  private playPop(target:Phaser.GameObjects.Image|Phaser.GameObjects.Container,x:number,y:number){

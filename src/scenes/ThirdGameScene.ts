@@ -70,6 +70,8 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
  protected get arcConfig():ArcSceneConfig{return cfg;}
  /** 马厩赠马键：群雄为 third-N，其余用篇章名（如 chibi-3）。 */
  protected stableRewardKey():string|null{return (cfg.arc==='qunxiong'?'third':cfg.arc)+'-'+this.thirdStage;}
+ /** 第 3～12 章篇章场景（群雄 / 赤壁 / 荆南 / 入蜀 / 襄樊 / 南征 / 汉中 / 夷陵 / 北伐、支线）：没打过的关从存档点开打先整军（第一、二章靠 worldCampaign，这里没有）。 */
+ protected musterOnSortie(){return true;}
  /** 首领招降表的键（data/surrender.ts）：章节 arc-关:首领 id（6-3 黄忠 / 韩玄按当前出阵的首领）。 */
  protected surrenderKey():string|null{return cfg.arc+'-'+this.thirdStage+':'+this.stageInfo().id;}
  /** 这一关能不能进（篇章：WorldStore 进度；支线：cfg.gate）。 */

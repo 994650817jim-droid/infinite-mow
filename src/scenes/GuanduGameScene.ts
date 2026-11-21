@@ -51,6 +51,8 @@ export function guanduGameSceneClass(Base: typeof GameScene) {
     private guanduStage: GuanduStage = 1; private controller?: GuanduBoss; private receipt = ''; private test = false;
     /** 马厩赠马键（见 data/mounts.ts HORSES.reward）。 */
     protected stableRewardKey(): string | null { return 'guandu-' + this.guanduStage; }
+    /** 官渡：没打过的关从存档点开打先整军（同各篇章场景）。 */
+    protected musterOnSortie() { return true; }
     /** 首领招降表的键：guandu-关:首领 id（颜良 / 文丑 / 淳于琼）。 */
     protected surrenderKey(): string | null { return 'guandu-' + this.guanduStage + ':' + this.chapter.bossStyle; }
     /** 乌巢（4-3）：三座粮仓全烧 → 劝淳于琼 +15%。 */

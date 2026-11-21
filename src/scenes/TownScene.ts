@@ -19,6 +19,7 @@ import {openMedicPanel} from '../ui/MedicPanel';
 import {CHARACTERS,type CharacterId} from '../data/characters';
 import {CAMP_ART_IDS} from '../town/CampLife';
 import {cityById,SPECIALTIES,TIER_NAME,type CityTier} from '../world/WorldCities';
+import {retreatToast,takeRetreatReturn} from '../world/DefeatRetreat';
 import {CITY_BUILDINGS,CITY_BUILDING_IDS,cityBuildCost,cityBuildBlockers,cityIncome,type CityBuildingId} from '../data/cityBuildings';
 import {incomeText,TOWN_BUILDINGS,buildingOpen,citySize,levelOf} from '../town/TownData';
 import {PANO_W,PANO_H,LEVEL_SCALE,PANO_ZOOM,CAMP_BARS} from '../town/CityLayout';
@@ -102,7 +103,7 @@ export class TownScene extends Phaser.Scene {
   this.grain = txt(this, W - 26, D ? 26 : 30, '', D ? 15 : 14, '#efe0b4', HEADING_FONT).setOrigin(1, .5).setName('town-grain');
   const back = D ? lqCommand(this, W / 2, H - 26, 190, 36, '返回天下地图', true, true, 15) : homeCommand(this, W / 2, H - 72, W - 60, 52, '返回天下地图', true, true, 17);
   if (D) { back.g.setDepth(0); back.hit.setDepth(1); back.caption.setDepth(2); } // 漆金按钮：字压在底板上（场景里直接加，不在容器里）
-  back.hit.setName('town-back').on('pointerdown', () => { this.registry.set('mapFocusCity', this.cityId); this.scene.start('WorldMapScene'); });
+  back.hit.setName('town-back').on('pointerdown', () => { if (!takeRetreatReturn(this.registry)) this.registry.set('mapFocusCity', this.cityId); this.scene.start('WorldMapScene'); }); // 战败退守进城的：回地图选中那一仗
   this.input.on('pointerdown', (p: Phaser.Input.Pointer) => { if (this.anyModal() || !this.inView(p.x, p.y)) return; this.drag = {x: p.x, y: p.y, sx: this.sx, sy: this.sy, moved: false}; });
   this.input.on('pointermove', (p: Phaser.Input.Pointer) => { const d = this.drag; if (!d || !p.isDown) return; const dx = p.x - d.x, dy = p.y - d.y; if (!d.moved && Math.hypot(dx, dy) < 8) return; d.moved = true; this.scrollTo(d.sx - dx, d.sy - dy); });
   this.input.on('pointerup', (p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
@@ -116,6 +117,7 @@ export class TownScene extends Phaser.Scene {
   // 电脑：全城铺满、底边贴底栏（城墙在顶栏下）；手机照旧对准三座建筑
   if (D) this.scrollTo(0, 1e9, false); else { const sl = Object.values(this.slots()), cy = sl.reduce((n, s) => n + s.y, 0) / sl.length - 80; this.scrollTo((PANO_W * this.k - this.vr.w) / 2, cy * this.k - this.vr.h / 2, false); }
   this.refresh();
+  { const r = this.registry.get('retreatReturn') as Parameters<typeof retreatToast>[0] | undefined; if (r) this.time.delayedCall(500, () => this.toast(retreatToast(r), 6000)); } // 战败退守进城：一条提示（军医 / 募兵所在这座城里）
  }
  private anyModal() { return this.children.list.some(o => (o as unknown as {depth: number}).depth >= 600); }
  private inView(x: number, y: number) { const r = this.vr, t = D ? TOWN_BARS.top : 0, b = D ? TOWN_BARS.bottom : 0; return x >= r.x && x <= r.x + r.w && y >= r.y + t && y <= r.y + r.h - b; }
@@ -248,11 +250,11 @@ export class TownScene extends Phaser.Scene {
   const t = txt(this, x, y, v, D ? 13 : 13, state === 'built' ? '#f6e3b4' : state === 'open' ? '#eed79f' : '#b3a78f', HEADING_FONT).setOrigin(.5, 1).setBackgroundColor(state === 'built' ? '#1b120be6' : '#1b120bb8').setPadding(8, 3, 8, 3).setName(name);
   this.pano.add(t); return t;
  }
- private toast(v: string) {
+ private toast(v: string, ms = 2600) {
   const warn = storageUnavailable ? (incompatibleSave ? '存档版本较新，本次修改不会保存' : '存储不可用，修改仅保留本次会话') : '', msg = [v, warn].filter(Boolean).join('\n'); if (!msg) return;
   this.children.getByName('town-toast')?.destroy();
-  const tt = txt(this, W / 2, this.vr.y + this.vr.h - 18, msg, D ? 15 : 14, '#ffe7a8', HEADING_FONT).setOrigin(.5, 1).setDepth(8).setAlign('center').setBackgroundColor('#1a120bdd').setPadding(12, 6, 12, 6).setName('town-toast');
-  this.tweens.add({targets: tt, alpha: 0, delay: 2600, duration: 600, onComplete: () => tt.destroy()});
+  const tt = txt(this, W / 2, this.vr.y + this.vr.h - (D ? 56 : 18), msg, /* 电脑：底部「返回天下地图」按钮（36 高）上面 */ D ? 15 : 14, '#ffe7a8', HEADING_FONT).setOrigin(.5, 1).setDepth(8).setAlign('center').setBackgroundColor('#1a120bdd').setPadding(12, 6, 12, 6).setName('town-toast');
+  this.tweens.add({targets: tt, alpha: 0, delay: ms, duration: 600, onComplete: () => tt.destroy()});
  }
  /** 建筑面板：现状、下一级效果、花费、前提，建造 / 升级。 */
  private openCard(id: CityBuildingId) {

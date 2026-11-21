@@ -35,7 +35,8 @@ export const BATTLE_HEAL = {
     maxLive: 2,
     /** 刷点距离（离主将）。 */
     // 用户 11-20：离主将 260–480、并且在画面里（或刚好在画面边上）——原 380–640 常常刷在屏幕外
-    near: 300, far: 480,
+    // 用户 11-21「回血事件刷远一点」：主动刷出的回血点离主将 450–700（要专门跑一段过去，同机缘远距离思路；小场地取能到的最远处），屏外有箭头
+    near: 450, far: 700,
     /** 生命低于这个比例、泉眼在屏幕外且可用时，屏幕边缘出箭头。 */
     arrowBelow: .75,
   },
@@ -48,7 +49,7 @@ export const BATTLE_HEAL = {
    * 低血保护：生命跌破 below 时，在附近（敌人最少的方向）放一份军中伤药，让玩家有个去处。
    * 冷却 cooldownSec 秒，每关最多 perStage 次。
    */
-  lowHp: { below: .3, ratio: .12, dist: [260, 330] as const, cooldownSec: 70, perStage: 2 },
+  lowHp: { below: .3, ratio: .12, dist: [350, 450] as const, cooldownSec: 70, perStage: 2 }, // 残血不让跑太远：350–450（11-21），屏外有箭头
   /**
    * 掉落不砸在主将脸上（用户 11-20）：打碎的道具 / 倒下的精锐副将离主将不足 minDrop 时，回血物从那里「蹦」出去，落到离主将 minDrop–minDrop+spread 处
    * （方向 = 主将 → 掉落点，还在画面里）；本来就够远的就落在原处。低血保护放的药也落在 minDrop–maxDrop 之间、画面里。

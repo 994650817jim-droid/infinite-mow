@@ -204,6 +204,8 @@ assets/raw/*
 !/tools/shot-sidewall.mjs
 !/tools/flood-magenta.mjs
 !/tools/erase-grey.mjs
+!/tools/build-ink-bust.mjs
+!/tools/shot-story-portraits.mjs
 !/tools/resize-image.mjs
 !/tools/shot-boss-still.mjs
 !/tools/prepare-story-art.mjs

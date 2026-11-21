@@ -210,6 +210,7 @@ assets/raw/*
 !/tools/make-seamless.mjs
 !/tools/trim-scale.mjs
 !/tools/compose-gate-v2.mjs
+!/tools/make-ram-back.mjs
 !/tools/shot-story-portraits.mjs
 !/tools/resize-image.mjs
 !/tools/shot-boss-still.mjs

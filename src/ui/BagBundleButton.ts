@@ -11,7 +11,7 @@ export interface BagBundle { icon: Phaser.GameObjects.Image; caption: Phaser.Gam
 
 export function bagBundle(scene: Phaser.Scene, x: number, y: number, size: number, o: { depth?: number; caption?: boolean; onReady?: () => void } = {}): BagBundle {
   const has = (): boolean => scene.textures.exists('bag_bundle');
-  const icon = scene.add.image(x, y, has() ? 'bag_bundle' : '__WHITE').setDisplaySize(size, size).setScrollFactor(0).setVisible(has()).setName('bag-bundle-icon');
+  const icon = scene.add.image(x, y, has() ? 'bag_bundle' : '__DEFAULT') /* 占位用透明贴图：图还没载到时若被别处 setVisible(true)，原来是白方块（2026-11-21） */.setDisplaySize(size, size).setScrollFactor(0).setVisible(has()).setName('bag-bundle-icon');
   const caption = scene.add.text(x, y + size / 2 - 2, '行囊', { fontFamily: HEADING_FONT, fontSize: '12px', color: '#f6e2b8', resolution: 2 }).setOrigin(.5, 0).setStroke('#1a0f08', 3).setScrollFactor(0).setVisible(has() && o.caption !== false).setName('bag-bundle-caption');
   if (o.depth !== undefined) { icon.setDepth(o.depth); caption.setDepth(o.depth); }
   let hover = false;

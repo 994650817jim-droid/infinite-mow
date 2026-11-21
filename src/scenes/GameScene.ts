@@ -4528,14 +4528,15 @@ export class GameScene extends Phaser.Scene {
 
   protected buildHud(): void {
     this.hudGfx = this.add.graphics().setScrollFactor(0).setDepth(DEPTH.hud);
-    const style = (size: number, color: string) => warText(size, color);
+    // 浮在战场上的 HUD 字（计时、关名、击杀、波次…）：深色描边 + 柔和投影，敌兵再密也读得清，不加底框（2026-11-21 制作人验收：6-1 计时 / 关名压在敌兵上看不清）
+    const style = (size: number, color: string) => ({ ...warText(size, color), stroke: '#0c0805', strokeThickness: size >= 20 ? 5 : 4, shadow: { offsetX: 0, offsetY: 1, color: '#000000', blur: 4, stroke: true, fill: true } });
     this.hudTexts = {
       hp: this.add.text(206, 43, '', style(14, '#f5efe6')).setOrigin(1, 0).setScrollFactor(0).setDepth(DEPTH.hud + 1),
       level: this.add.text(28, 23, 'Lv.1', style(16, '#e8c76a')).setScrollFactor(0).setDepth(DEPTH.hud + 1),
       wave: this.add.text(28, 88, '', style(15, '#d8c9ae')).setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH.hud + 1),
       timer: this.add.text(GAME_WIDTH / 2, 22, '00:00', style(25, '#f5efe6')).setOrigin(0.5, 0).setScrollFactor(0).setDepth(DEPTH.hud + 1),
-      kills: this.add.text(GAME_WIDTH - 24, 74, '击杀 0', style(14, '#a9bba9')).setOrigin(1, 0).setScrollFactor(0).setDepth(DEPTH.hud + 1),
-      chapter: this.add.text(GAME_WIDTH / 2, 56, this.chapter.name, style(14, '#93b6a2')).setOrigin(.5,0).setScrollFactor(0).setDepth(DEPTH.hud + 1),
+      kills: this.add.text(GAME_WIDTH - 24, 74, '击杀 0', style(14, '#d2dccb')).setOrigin(1, 0).setScrollFactor(0).setDepth(DEPTH.hud + 1),
+      chapter: this.add.text(GAME_WIDTH / 2, 56, this.chapter.name, style(14, '#b8d6c2')).setOrigin(.5,0).setScrollFactor(0).setDepth(DEPTH.hud + 1),
       boss: this.add.text(GAME_WIDTH / 2, 66, this.chapter.bossName, style(15, '#e8c76a')).setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH.hud + 1).setVisible(false),
       bossHp: this.add.text(GAME_WIDTH / 2, 66, '100%', style(13, '#f5efe6')).setOrigin(1, 0).setScrollFactor(0).setDepth(DEPTH.hud + 1).setVisible(false),
       bossEnergy: this.add.text(GAME_WIDTH / 2, 100, '', style(11, '#c9a8ff')).setOrigin(1, 0).setScrollFactor(0).setDepth(DEPTH.hud + 1).setVisible(false),

@@ -1,0 +1,66 @@
+{
+  "note": "透明底序列帧横条（2× 图，显示尺寸 = 帧尺寸 / 2）。anchor 为帧内锚点（2× 像素）。",
+  "beishui": {
+    "file": "fx_beishui.png",
+    "frames": 8,
+    "frame": [
+      192,
+      224
+    ],
+    "display": [
+      96,
+      112
+    ],
+    "anchor": [
+      96,
+      208
+    ],
+    "anchorMeaning": "主将脚底中心；火焰绕身，中间人形空位不挡人",
+    "loop": true,
+    "fps": 10,
+    "use": "生命 < 40% 时挂在主将身上，depth 在主将之上（火焰在人两侧）或之下均可",
+    "blend": "ADD 可再亮一档，NORMAL 即可"
+  },
+  "pozhen": {
+    "file": "fx_pozhen.png",
+    "frames": 8,
+    "frame": [
+      256,
+      256
+    ],
+    "display": [
+      128,
+      128
+    ],
+    "anchor": [
+      128,
+      128
+    ],
+    "anchorMeaning": "爆点中心 = 命中点",
+    "loop": false,
+    "fps": 16,
+    "use": "第 5 下重击命中点播一次，播完销毁",
+    "blend": "NORMAL"
+  },
+  "wanrendi": {
+    "file": "fx_wanrendi.png",
+    "frames": 6,
+    "frame": [
+      256,
+      144
+    ],
+    "display": [
+      128,
+      72
+    ],
+    "anchor": [
+      128,
+      72
+    ],
+    "anchorMeaning": "椭圆中心 = 主将脚底；贴地，depth 在主将之下",
+    "loop": true,
+    "fps": 6,
+    "use": "万人敌点亮后常驻主将脚下，缓慢流转",
+    "blend": "NORMAL"
+  }
+}

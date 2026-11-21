@@ -3930,7 +3930,10 @@ export class GameScene extends Phaser.Scene {
     }
     if (hero?.capped) notes.push('武将已到本章等级上限 Lv.' + hero.to);
     const noteText = this.resultPanel.getByName('result-notes') as Phaser.GameObjects.Text;
-    noteText.setText(notes.length > 3 ? [notes.slice(0, 2).join(' · '), notes.slice(2).join(' · ')].join('\n') : notes.join('\n')).setVisible(notes.length > 0);
+    // 2026-11-21 总制作人（攻城结算底部三行小字挤成一段、自动换行断在词中间）：每条要事单独成行；太长的按「 · 」切开另起一行（缩进），不用自动换行
+    const noteRows: string[] = [], NOTE_MAX = 40;
+    for (const n of notes) { let cur = ''; for (const sg of n.split(' · ')) { const nx = cur ? cur + ' · ' + sg : sg; if ([...nx].length > NOTE_MAX && cur) { noteRows.push(cur); cur = '　' + sg; } else cur = nx; } if (cur) noteRows.push(cur); }
+    noteText.setWordWrapWidth(null as unknown as number).setLineSpacing(5).setText(noteRows.slice(0, 6).join('\n')).setVisible(notes.length > 0);
     const stats = this.resultPanel.getByName('result-stats') as Phaser.GameObjects.Text;
     stats.setText(['击杀 ' + this.kills, '用时 ' + this.formatTime(this.elapsed), '伤害 ' + wan(this.damageDealt), '部曲 ' + this.legion.count + ' 存活' + (this.legion.dead ? ' / ' + this.legion.dead + ' 阵亡' : '')].join('　·　')).setVisible(true);
     // 奖励区在分隔线与要事之间居中

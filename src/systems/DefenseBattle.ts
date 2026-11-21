@@ -44,6 +44,8 @@ export class DefenseBattle {
   gate: { hp: number; max: number; open: boolean }; keep: { hp: number; max: number };
   phase: Phase = 'attack'; wave = 0; private lastPhase = ''; private freeRepairUsed = false; private channel = 0;
   private archers: Archer[] = []; private engines: Engine[] = []; private ui: Phaser.GameObjects.Container | null = null; private hud: Phaser.GameObjects.Text;
+  /** 顶部城门 / 府衙两条小血条（屏幕固定；2026-11-21 总制作人：原来一行字「城门 61% · 府衙 100%」被屏边指示和掉落压住）。 */
+  private hudBars!: Phaser.GameObjects.Graphics; private hudGate!: Phaser.GameObjects.Text; private hudKeep!: Phaser.GameObjects.Text;
   private bars: Phaser.GameObjects.Graphics; private keepImg: Phaser.GameObjects.Image | null = null; private objs: Phaser.GameObjects.GameObject[] = [];
   private facility = { logs: { charges: DEFENSE.logs.charges as number, cd: 0, x: 0, y: 0 }, oil: { charges: DEFENSE.oil.charges as number, cd: 0, x: 0, y: 0 } };
   private rolling: { img: Phaser.GameObjects.Image; t0: number; x0: number; dir: number; hit: Set<Enemy> } | null = null;
@@ -76,6 +78,8 @@ export class DefenseBattle {
     this.bars = s.add.graphics().setDepth(DEPTH.dmgText - 1).setName('defense-bars'); this.objs.push(this.bars);
     this.hud = s.add.text(GAME_WIDTH / 2, 78, '', { fontFamily: FONT, fontSize: '15px', color: '#ffd98a', resolution: 2, stroke: '#1a120b', strokeThickness: 4, align: 'center' }).setOrigin(.5, 0).setScrollFactor(0).setDepth(DEPTH.hud + 1).setName('defense-hud');
     this.objs.push(this.hud);
+    { const lab = (x: number, t: string) => s.add.text(x, 112, t, { fontFamily: FONT, fontSize: '12px', color: '#f3e3bf', resolution: 2, stroke: '#0c0805', strokeThickness: 4 }).setOrigin(1, .5).setScrollFactor(0).setDepth(DEPTH.hud + 1);
+      this.hudBars = s.add.graphics().setScrollFactor(0).setDepth(DEPTH.hud + 1).setName('defense-hud-bars'); this.hudGate = lab(GAME_WIDTH / 2 - 92, '城门').setName('defense-hud-gate'); this.hudKeep = lab(GAME_WIDTH / 2 + 46, '府衙').setName('defense-hud-keep'); this.objs.push(this.hudBars, this.hudGate, this.hudKeep); }
     this.spaceKey = s.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
   }
   get keepPos() { return { x: this.o.start.x + DEFENSE.keep.x, y: this.o.start.y + DEFENSE.keep.y }; }
@@ -293,7 +297,12 @@ export class DefenseBattle {
     const K = this.keepPos; bar(K.x, K.y - 190, 160, this.keep.hp / this.keep.max, 0xd8432a);
     const cyc = D.attackSec + D.restSec, end = this.phase === 'final' ? this.starts[this.waves - 1] + D.finalSec : this.starts[this.wave] + (this.phase === 'rest' ? cyc : D.attackSec), left = Math.max(0, Math.ceil(end - el));
     const ph = this.phase === 'rest' ? '喘息' : this.phase === 'final' ? '末波' : '攻';
-    this.hud.setText(`第 ${this.wave + 1}/${this.waves} 波 · ${ph} ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}　城门 ${this.gate.open ? '已破' : Math.round(this.gate.hp / this.gate.max * 100) + '%'} · 府衙 ${Math.round(Math.max(0, this.keep.hp) / this.keep.max * 100)}%`);
+    // 波次只在左上「第 N/5 波」写一处；这里只写攻 / 喘息 / 末波倒计时，下面两条小血条：城门（金）、府衙（朱）
+    this.hud.setText(`${ph} ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`);
+    { const hb = this.hudBars.clear(), a = this.hud.visible ? this.hud.alpha : 0, w = 84, y = 108, h = 8;
+      const one = (x: number, k: number, c: number, broken: boolean): void => { hb.fillStyle(0x000000, .35 * a).fillRect(x - 1, y + 1, w + 3, h + 2).fillStyle(0x140a06, .9 * a).fillRect(x - 1, y - 1, w + 2, h + 2).lineStyle(1, 0xc9a35e, .9 * a).strokeRect(x - 1.5, y - 1.5, w + 3, h + 3); if (!broken) hb.fillStyle(c, a).fillRect(x, y, w * Math.max(0, Math.min(1, k)), h).fillStyle(0xffffff, .25 * a).fillRect(x, y, w * Math.max(0, Math.min(1, k)), 2); };
+      one(GAME_WIDTH / 2 - 86, this.gate.hp / this.gate.max, 0xd8a03a, this.gate.open); one(GAME_WIDTH / 2 + 52, Math.max(0, this.keep.hp) / this.keep.max, 0xd8432a, false);
+      this.hudGate.setText(this.gate.open ? '城门已破' : '城门').setAlpha(a).setVisible(a > .02); this.hudKeep.setText('府衙').setAlpha(a).setVisible(a > .02); }
   }
   /** 顶部守城状态行（横幅出现时场景让它先淡出）。 */
   get hudText(): Phaser.GameObjects.Text { return this.hud; }

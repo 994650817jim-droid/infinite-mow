@@ -23,5 +23,18 @@ await p.evaluate(() => document.querySelectorAll('[id^="dev-"]').forEach(e => { 
 await p.screenshot({ path: `${OUT}/siege-edge-guide.png` });
 const ok = Array.isArray(vis.guide) && vis.guide.length > 0 && vis.healYs.every(y => y >= 140);
 console.log((ok ? 'PASS ' : 'FAIL ') + '攻城屏边：冲车 / 目标有指示，回血点指示不进顶部目标区 · ' + JSON.stringify(vis)); if (!ok) fail++;
+// 攻城胜利结算：要事（速攻 / 城内要点 / 随行）每条单独成行，按「 · 」切行，不在词中间断（2026-11-21 总制作人第三轮）
+await p.evaluate(() => { const s = window.__game.scene.getScene('SiegeGameScene'); s.finish(true, 'capture'); });
+await p.waitForTimeout(5000);
+const notes = await p.evaluate(() => { const s = window.__game.scene.getScene('SiegeGameScene'), n = s.resultPanel.getByName('result-notes'); return { text: n?.text, title: s.resultTexts.title.text, sub: s.resultTexts.subtitle.text, body: s.resultTexts.body.text.slice(-300) }; });
+await p.screenshot({ path: OUT + '/siege-result-test-run.png' });
+// 测试战斗不发永久奖励、要事为空：把制作人截图里那几行塞进结算正文，重放结算展示，看分行
+await p.evaluate(() => { const s = window.__game.scene.getScene('SiegeGameScene'), NL = String.fromCharCode(10); s.resultTexts.body.setText(s.resultTexts.body.text + NL + ['缴获兵装  2 件 · 已入行囊', '随行 刘备 Lv.11 · 各得经验 +55', '速攻破城 · 攻城奖励 +30%', '城内要点 3/4：粮仓、武库、兵营 已占（市集未占） · 军粮 +30% · 敌援补兵 −75%、援兵少 3 批'].join(NL)); for (const o of [...s.resultPanel.list]) if (o.type === 'Container' && o !== s.resultPanel) o.destroy(); s.presentResult(true); });
+await p.waitForTimeout(3500);
+const notes2 = await p.evaluate(() => window.__game.scene.getScene('SiegeGameScene').resultPanel.getByName('result-notes')?.text ?? '');
+console.log('  notes rows:', JSON.stringify(notes2.split(String.fromCharCode(10))));
+await p.screenshot({ path: OUT + '/siege-result.png' });
+const rowsOk = !notes.text || notes.text.split(String.fromCharCode(10)).every(r => [...r].length <= 42);
+console.log((rowsOk ? 'PASS ' : 'FAIL ') + '攻城胜利结算：要事分行、每行不超宽 · ' + JSON.stringify(notes).slice(0, 600)); if (!rowsOk) fail++;
 console.log(errors.length ? 'FAIL errors ' + JSON.stringify(errors.slice(0, 3)) : 'PASS 无页面报错'); if (errors.length) fail++;
 await b.close(); process.exit(fail ? 1 : 0);

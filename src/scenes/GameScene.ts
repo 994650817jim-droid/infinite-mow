@@ -22,7 +22,7 @@ import { HeroCastFx } from '../systems/HeroCastFx';
 import { MOUNT_VISUAL, isHorseCavalry } from '../data/mounts';
 import { buildSettingsPanel, type SettingSpec } from '../ui/SettingsPanel';
 import {FollowerSquad,type Follower} from '../systems/FollowerSquad';
-import {showBarkCard} from '../ui/StoryBarkCard';
+import {showBarkCard,clearBarkCards} from '../ui/StoryBarkCard';
 import { DEFEAT, buildCarryNote, defeatTip, defeatLines } from '../data/defeatFlow';
 import { battlePoint, retreatTarget, type RetreatTarget } from '../world/DefeatRetreat';
 import { patchCampaignDefeat } from '../systems/Campaign';
@@ -997,7 +997,7 @@ export class GameScene extends Phaser.Scene {
         if(pv==='lubu_kills_dongzhuo'&&this.dzLubu&&dzArt&&(ready||performance.now()-t0>6000)&&performance.now()-t0>2000){this.events.off('postupdate',poll);this.dzLubu.devFinale();}};
       this.events.on('postupdate',poll);}}
     const transfer = this.registry.get('campaignTransfer') as CampaignTransfer | undefined;
-    this.registry.remove('campaignTransfer');
+    this.registry.remove('campaignTransfer'); this.startTransfer = transfer; // 留一份：第一章败走「再战此关」原样带回本关开局时的征程构筑 / 行营状态
     // 征程构筑：同章连打用内存里的 transfer；否则主线未通关的关读存档里的征程构筑（重打旧关 / 挑战为空构筑）。
     // 2026-11-20 用户「我发现攻城战之前的build没有了」（统筹定）：攻城 / 守城 / 军情 / 支线攻城关读当前主公的征程构筑但只读（inheritsCampaign）——
     // campaignReplay 仍为真，所以打完不写回（存档点只在主线首次通关时更新），不会刷攻城滚雪球
@@ -3289,7 +3289,7 @@ export class GameScene extends Phaser.Scene {
     this.legionUI?.panel.setVisible(mode === 'recruit');
     this.campUI?.setVisible(mode==='rest');
     // 营中闲话：行军休整画面左下（不挡「率军出征」）
-    if(mode==='rest'&&IS_DESKTOP&&!this.children.getByName('camp-talk'))campTalkStrip(this,24,GAME_HEIGHT-35,GAME_WIDTH/2-145-24-16,[this.storyDir?.chapterId||this.chapter.id],this.storyCtx(),DEPTH.overlay+3);
+    if(mode==='rest'&&IS_DESKTOP&&!this.children.getByName('camp-talk'))campTalkStrip(this,GAME_WIDTH/2+145+16,GAME_HEIGHT-35,GAME_WIDTH/2-145-16-24,[this.storyDir?.chapterId||this.chapter.id],this.storyCtx(),DEPTH.overlay+3);
     else if(mode!=='rest')this.children.getByName('camp-talk')?.destroy();
     this.reinforcements?.panel.setVisible(mode === 'aid');
     if (this.pausePanel) {
@@ -3457,6 +3457,10 @@ export class GameScene extends Phaser.Scene {
   private upgradeAnimAt = 0;
   /** 第一章败走：结算主按钮是「再战此关」。 */
   private resultRetry = false;
+  /** 本关开局时的征程接力（create 时从 registry 取走）；「再战此关」放回去再重开本关。 */
+  private startTransfer?: CampaignTransfer;
+  /** 第一章败走「再战此关」：带回本关开局时的征程状态，原地重开这一关（第一章败走不扣东西，同现有败退规则）。 */
+  protected retryStage(): void { this.registry.remove('menuChapterPicker'); if (this.startTransfer) this.registry.set('campaignTransfer', this.startTransfer); else this.registry.remove('campaignTransfer'); this.scene.restart(); }
   protected animateUpgradeCards(): void {
     if (!this.levelPanel?.visible) return;
     const now = performance.now();
@@ -3959,7 +3963,9 @@ export class GameScene extends Phaser.Scene {
     const notes = lines.filter(l => /^(首次通关|随行)/.test(l)).map(l => l.replace(/\s{2,}/g, ' '));
     const h = 72 + view.height + (notes.length ? notes.length * 17 + 6 : 0) + 12, top = Math.round(GAME_HEIGHT * .45 - h / 2);
     const card = this.add.container(0, 0).setScrollFactor(0).setDepth(DEPTH.overlay + 60).setName('rest-summary-card');
-    const g = this.add.graphics(); lqPanel(g, cx - w / 2, top, w, h); lqDivider(g, cx, top + 58, 130);
+    // 2026-11-21 总制作人：不要金边大框（同结算）——全屏压暗 + 上下细金线，内容浮在上面
+    const g = this.add.graphics(); g.fillStyle(0x0c0805, .86).fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT); g.fillStyle(LQ.goldHi, .85); lqDivider(g, cx, top, w / 2); lqDivider(g, cx, top + h, w / 2); lqDivider(g, cx, top + 58, 130);
+    const held: Phaser.GameObjects.GameObject[] = []; { const walk = (list: Phaser.GameObjects.GameObject[]): void => { for (const o of list) { const v = o as Phaser.GameObjects.GameObject & { visible?: boolean; list?: Phaser.GameObjects.GameObject[] }; if (v.visible && /^(camp-(medic|merchant)-art-(bubble|line)|camp-talk)$/.test(o.name ?? '')) held.push(o); if (v.list) walk(v.list); } }; walk(this.children.list); const det = (this.campUI as unknown as { detail?: Phaser.GameObjects.Text } | undefined)?.detail; if (det?.visible) held.push(det); for (const o of held) (o as unknown as { setVisible: (v: boolean) => void }).setVisible(false); }
     const head = this.add.text(cx, top + 32, '战 报', { fontFamily: TITLE_FONT, fontSize: '28px', color: RESULT_GOLD, resolution: 2 }).setOrigin(.5).setStroke(RESULT_STROKE, 5).setShadow(0, 3, '#000000', 4, true, true);
     view.root.setPosition(cx, top + 72);
     const note = this.add.text(cx, top + 72 + view.height + 2, notes.join('\n'), { fontFamily: FONT, fontSize: '12px', color: RESULT_IVORY, align: 'center', lineSpacing: 5, resolution: 2, wordWrap: { width: w - 60 } }).setOrigin(.5, 0).setStroke(RESULT_STROKE, 3).setAlpha(.85);
@@ -3971,9 +3977,10 @@ export class GameScene extends Phaser.Scene {
     const skip = playResultAnims(this, [{ start: 0, dur: 260, step: p => card.setAlpha(p) }, ...view.anims], () => {}, () => card.active);
     const close = () => { skip(); if (hit.active) hit.destroy(); if (card.active) card.destroy(); };
     // 1-3 告捷：章节告捷弹窗与战报同时出现会叠在一起——先看战报，收起后再显示告捷弹窗
-    const notice = this.children.getByName('chapter1-volunteers') as Phaser.GameObjects.Container | null, held = !!notice?.visible;
-    if (held) notice!.setVisible(false);
-    hit.on('pointerdown', close).on('destroy', () => { if (card.active) card.destroy(); if (held && notice?.active) notice.setVisible(true); });
+    const heldUi = held; // 战报收起后放回军医气泡 / 新玩法说明 / 营中闲话
+    const notice = this.children.getByName('chapter1-volunteers') as Phaser.GameObjects.Container | null, heldNotice = !!notice?.visible;
+    if (heldNotice) notice!.setVisible(false);
+    hit.on('pointerdown', close).on('destroy', () => { if (card.active) card.destroy(); if (heldNotice && notice?.active) notice.setVisible(true); for (const o of heldUi) if (o.active) (o as unknown as { setVisible: (v: boolean) => void }).setVisible(true); });
     if (view.levelUp) this.sfx.level();
     window.setTimeout(() => { if (hit.active) close(); }, 5600);
   }
@@ -4440,7 +4447,7 @@ export class GameScene extends Phaser.Scene {
       for (const l of defeatLines(key, stage)) showBarkCard(this, { side: 'left', name: l.who === '@lord' ? hero : l.who || guard, text: l.text });
     }
     this.resultPanel.setVisible(false);
-    window.setTimeout(() => { if (!this.sys?.isActive() || this.mode !== 'result') return; this.resultPanel.setVisible(true); this.presentResult(false); }, DEFEAT.resultDelayMs);
+    window.setTimeout(() => { if (!this.sys?.isActive() || this.mode !== 'result') return; clearBarkCards(this); /* 阵亡台词卡（连同还没轮到的）收掉，免得压在去框后的结算文字后面（2026-11-21） */ this.resultPanel.setVisible(true); this.presentResult(false); }, DEFEAT.resultDelayMs);
     queueMicrotask(() => this.wireDefeatButton());
   }
   /** 结算按钮改成「退守 X」：回天下地图，选中并居中那座城（或营寨），弹败退告示；关卡没平定，照样能再出征。 */
@@ -4622,16 +4629,17 @@ export class GameScene extends Phaser.Scene {
     const retry=!victory&&!worldUnlocked()&&!this.runConfig.encounter&&!this.encounterPreview;this.resultRetry=retry;
     {const again=victory&&(REPLAY_CLEARED||isChapterTestRun());/* 打过的关不能再打（data/replayRules.ts） */this.resultPanel.getByName('result-restart')?.setActive(again);(this.resultPanel.getByName('result-restart') as Phaser.GameObjects.Image)?.setVisible(again);(this.resultPanel.getByName('result-restart-text') as Phaser.GameObjects.Text)?.setVisible(again);
      if(retry){this.resultPanel.getByName('result-restart')?.setActive(true);(this.resultPanel.getByName('result-restart') as Phaser.GameObjects.Image)?.setVisible(true);(this.resultPanel.getByName('result-restart-text') as Phaser.GameObjects.Text)?.setVisible(true).setText('返回主菜单');}}
+    const retryNames=():void=>{if(!retry)return;const R=this.resultPanel,img=R.list.find(o=>o.type==='Image'&&(o.name==='result-restart'||o.name==='result-home')),cap=R.list.find(o=>o.type==='Text'&&(o.name==='result-home'||o.name==='result-restart')&&(o as Phaser.GameObjects.Text).text==='再战此关');img?.setName('result-home');R.list.find(o=>o.name==='result-restart-text')?.setName('result-home-text');cap?.setName('result-restart');};
     homeLink?.setText(!victory?(retry?'再战此关':'返回主菜单'):canAdvance?`下一关 · ${nextWest===1?'汜水关':nextWest===2?'荥阳':'虎牢关'}`:openedMap?(openChapterCount(loadWorldState())>loadWorldState().chapterSeen?'天下地图 · 新篇解锁':'返回天下地图'):this.worldCampaign&&worldUnlocked()?"返回营寨":'返回选关');
     homeLink?.removeAllListeners('pointerdown').on('pointerdown',()=>{
-      if(!victory){this.registry.remove('campaignTransfer');this.registry.remove('menuChapterPicker');if(retry)this.registry.set('autoCampaignEntry',true);this.scene.start('MenuScene');return;}
+      if(!victory){if(retry){this.retryStage();return;}this.registry.remove('campaignTransfer');this.registry.remove('menuChapterPicker');this.scene.start('MenuScene');return;}
       if(canAdvance){this.registry.remove('campaignTransfer');const {encounter:_preview,...config}=this.runConfig;this.registry.set('runConfig',{...config,chapter:'hulao',stage:undefined,westStage:nextWest});this.scene.restart();return;}
       if(this.worldCampaign&&worldUnlocked())this.scene.start(openedMap||this.registry.get('worldReveal')?'WorldMapScene':'CityScene');
       else {this.registry.set('menuChapterPicker',true);this.scene.start('MenuScene');}
     });
     mechRefresh();
     if (!victory) this.runDefeatFlow();
-    this.layoutResultButtons?.();
+    this.layoutResultButtons?.(); retryNames();
     // 电脑版结算展示：子类 finish 还会追加结算文字，等本轮调用结束再解析
     if (IS_DESKTOP) queueMicrotask(() => { if (this.sys?.isActive() && this.mode === 'result') this.presentResult(victory); });
     this.onRunFinished(stats);

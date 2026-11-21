@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { ensureFactionTextures, type PaletteId } from './FactionPalette';
 import { artStyle } from './ArtStyle';
 
 /**
@@ -18,7 +19,7 @@ export const PROPS_V2: ReadonlyArray<{ key: string; file: string; frame?: number
   { key: 'prop_debris', file: 'assets/props-v2/prop-debris.png', frame: 96 }, // 残骸 4 个
 ];
 /** 关隘营寨道具（4×2、256 格），势力：1 董卓西凉 2 袁绍河北 3 曹军 4 东吴 5 蜀（益州）6 南蛮；0 黄巾不用这套 */
-export const FACTION_PROPS: Readonly<Record<number, { key: string; file: string }>> = {
+export const FACTION_PROPS: Readonly<Record<number, { key: string; file: string; /** 没有专属图：开局用 src 那套营具换色生成（FactionPalette），不从文件载。 */ recolor?: { palette: PaletteId; src: string } }>> = {
   1: { key: 'props_v2_xiliang', file: 'assets/props-v2/fort-xiliang.png' },
   2: { key: 'props_v2_yuan', file: 'assets/props-v2/fort-yuan.png' },
   3: { key: 'props_v2_cao', file: 'assets/props-v2/fort-cao.png' },
@@ -26,6 +27,8 @@ export const FACTION_PROPS: Readonly<Record<number, { key: string; file: string 
   4: { key: 'props_v2_wu', file: 'assets/props-v2/fort-wu.png' },
   5: { key: 'props_v2_shu', file: 'assets/props-v2/fort-shu.png' },
   6: { key: 'props_v2_man', file: 'assets/props-v2/fort-man.png' },
+  // 第六章荆南（统筹 11-21）：没有专属营具图，用西凉营具（红黑）换成荆南青灰
+  7: { key: 'f_jingnan_props_v2_xiliang', file: '', recolor: { palette: 'jingnan', src: 'props_v2_xiliang' } },
 };
 
 let enabled: boolean | undefined;
@@ -43,7 +46,7 @@ export function loadPropsV2(load: Phaser.Loader.LoaderPlugin): void {
     if (p.frame) load.spritesheet(p.key + '_v2', p.file, { frameWidth: p.frame, frameHeight: p.frame });
     else load.image(p.key + '_v2', p.file);
   }
-  for (const f of Object.values(FACTION_PROPS)) load.spritesheet(f.key, f.file, { frameWidth: 256, frameHeight: 256 });
+  for (const f of Object.values(FACTION_PROPS)) if (!f.recolor) load.spritesheet(f.key, f.file, { frameWidth: 256, frameHeight: 256 });
 }
 
 /** Boot create 一开始调用（在按图宽切帧之前）：有 v2 图就顶替旧键。返回顶替了哪些键。 */
@@ -75,5 +78,6 @@ export function applyPropsV2(textures: Phaser.Textures.TextureManager): string[]
 /** 关隘营寨道具源图：该势力有 v2 图用 v2，否则旧图 sishui_props。 */
 export function factionPropsSource(scene: Phaser.Scene, faction: number): string {
   const f = FACTION_PROPS[faction];
+  if (f?.recolor && !scene.textures.exists(f.key) && scene.textures.exists(f.recolor.src)) ensureFactionTextures(scene, f.recolor.palette, [f.recolor.src]); // 换色营具：要用时生成
   return propsV2Enabled() && f && scene.textures.exists(f.key) ? f.key : 'sishui_props';
 }

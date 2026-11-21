@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { safeWorldPoint } from '../ui/SafeLabel';
 import { DEPTH, FONT } from '../config';
 import { PHASES, lieutenantArt, type PhaseKind, type PhasePlan } from '../data/stagePhases';
 import { isV2Texture, loadV2TroopSheets, V2_TROOP_SCALE, v2TroopGround } from './ArtStyle';
@@ -151,8 +152,9 @@ export class StagePhaseRunner {
       this.h.onLieutenantDown(t.name, x, y); return;
     }
     const sp = t.e.sprite, top = sp.y - sp.displayHeight * sp.originY - 12, w = 54, k = Math.max(0, t.e.hp / Math.max(1, t.e.maxHp));
-    t.tag.setPosition(t.e.x, top);
-    t.bar.clear().fillStyle(0x140a06, .8).fillRect(t.e.x - w / 2 - 1, top + 2, w + 2, 6).fillStyle(0xd8432a, 1).fillRect(t.e.x - w / 2, top + 3, w * k, 4);
+    const q = safeWorldPoint(this.h.scene, t.e.x, top, Math.max(w / 2, t.tag.displayWidth / 2), t.tag.displayHeight + 10); // 靠屏幕边时往内收，不被 HUD 盖住
+    t.tag.setPosition(q.x, q.y);
+    t.bar.clear().fillStyle(0x140a06, .8).fillRect(q.x - w / 2 - 1, q.y + 2, w + 2, 6).fillStyle(0xd8432a, 1).fillRect(q.x - w / 2, q.y + 3, w * k, 4);
   }
 
   clear(): void { if (this.lt && !this.lt.down) { this.lt.tag.destroy(); this.lt.bar.destroy(); } this.lt = undefined; this.ltPending = null; }

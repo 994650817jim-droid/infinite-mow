@@ -17,7 +17,7 @@ export function thirdPalette(stage:ThirdStage):PaletteId{return stage===3?'yuans
  * 第 7–12 章逐关检查（11-20 heroes 会话）补上其余四篇：入蜀刘璋益州军用刘璋色（黄绿，同攻城战成都守军）；襄樊 9-1 / 9-2 曹军蓝青、9-3 麦城吴军合围用孙吴橙；
  * 夷陵吴军孙吴橙；南征南蛮没有势力色，保持原来的凉州深铁灰（原来同样只在群雄篇生成：刷新后直接进第十一章，蛮兵弓手 / 精锐找不到贴图）。
  */
-export function arcPalette(arc:string,stage:ThirdStage):PaletteId|null{return arc==='qunxiong'?thirdPalette(stage):arc==='chibi'||arc==='hanzhong'||arc==='beifa'?'caocao':arc==='jingnan'||arc==='nanzheng'?'liangzhou':arc==='shu'?'liuzhang':arc==='xiangfan'?(stage===3?'sun':'caocao'):arc==='yiling'?'sun':null;}
+export function arcPalette(arc:string,stage:ThirdStage):PaletteId|null{return arc==='qunxiong'?thirdPalette(stage):arc==='chibi'||arc==='hanzhong'||arc==='beifa'?'caocao':arc==='jingnan'?'jingnan':arc==='nanzheng'?'liangzhou':arc==='shu'?'liuzhang':arc==='xiangfan'?(stage===3?'sun':'caocao'):arc==='yiling'?'sun':null;}
 /** 把借来的换色键（f_<配色>_<原键>）换成本篇配色。 */
 export function repaintChapter<C extends {enemies:Record<string,EnemyDef>}>(c:C,p:PaletteId):C{return {...c,enemies:Object.fromEntries(Object.entries(c.enemies).map(([k,d])=>{const t=d.walkVisual?.texture;if(!t||!/^f_[a-z]+_/.test(t))return[k,d];const raw=t.replace(/^f_[a-z]+_/,'');return[k,{...d,walkVisual:{...d.walkVisual!,texture:factionKey(p,raw)}}];})) as C['enemies']};}
 const recolor=(es:Record<string,EnemyDef>,p:PaletteId)=>Object.fromEntries(Object.entries(es).map(([k,d])=>[k,k==='boss'||!d.walkVisual?d:{...d,walkVisual:{...d.walkVisual,texture:factionKey(p,d.walkVisual.texture)}}])) as typeof es;

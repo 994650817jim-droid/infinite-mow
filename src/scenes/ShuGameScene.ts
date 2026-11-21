@@ -7,6 +7,7 @@ import { MountainPass } from '../systems/MountainPass';
 import { SiegeMidCity } from '../systems/SiegeMidCity';
 import { loadMidSiegeArt } from '../systems/SiegeMidArt';
 import { MID_SIEGE } from '../data/siegeMedium';
+import { stageLieutenant, type PhasePlan, type StagePhase } from '../data/stagePhases';
 import { SIEGE_GOALS } from '../data/siege';
 import { paintV2Ground } from '../systems/EnvGround';
 import { storyScroll } from '../ui/StoryScroll';
@@ -105,6 +106,16 @@ export function shuGameSceneClass(Base: typeof GameScene) {
       if (this.mid?.steer(enemy, dt)) return true;
       return super.customEnemyStep(enemy, dt, now, target);
     }
+    /**
+     * 7-3 成都不套五段时间轴（守将要打进州府才出，原 245 秒播「首领将至」与实际不符）：段落跟着中城攻城进度走——
+     * 城外攻城 → 街巷（副将刘循守街）→ 州府（刘璋）。时刻只给战况线摆位置（约 0 / 150 / 330 秒），真正切换按进度；限时仍按中城攻城（MID_SIEGE.limitSeconds）。
+     */
+    protected customPhases(plan: PhasePlan): { phases: StagePhase[]; progress: boolean } | null {
+      if (this.shuStage !== 3) return null;
+      const lt = plan.lieutenant || stageLieutenant('shu', 3, '刘璋') || '刘循';
+      return { phases: [{ kind: 'vanguard', start: 0, name: '兵临成都' }, { kind: 'lieutenant', start: 150, name: lt + '守街' }, { kind: 'boss', start: 330, name: '攻进州府' }], progress: true };
+    }
+    protected phaseProgress(): number | null { const ph = this.mid?.phase; return !ph || ph === 'outside' || ph === 'barbican' ? 0 : ph === 'street' ? 1 : 2; }
     /** 成都：守将只在州府段出场。 */
     protected spawnBoss() { if (this.mid && this.mid.phase !== 'hall') return; super.spawnBoss(); }
     private midWarned = false;

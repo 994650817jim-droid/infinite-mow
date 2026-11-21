@@ -1004,6 +1004,8 @@ export class GameScene extends Phaser.Scene {
     this.campaignReplay = !this.stableRewardKey() || stageCleared(this.stableRewardKey());
     const chained = transfer && this.chapter.id === transfer.chapter && this.runConfig.character === transfer.character ? transfer : undefined;
     const carriedState = chained ?? (this.campaignReplay && !this.inheritsCampaign() ? undefined : loadCampaignBuild(this.runConfig.character));
+    // 觉醒 / 进阶 / 合击「本局只演一次」（音效审计：换关继承构筑时不再重复弹横幅、重复响）：新的一局清空，继承构筑沿用
+    if (!carriedState) this.registry.set('runShownOnce', []);
     if (carriedState) {
       restoreCampaign(carriedState, this.player, this.legion);
       const ownId=getCharacter(this.runConfig.character).startWeapon;
@@ -1027,13 +1029,14 @@ export class GameScene extends Phaser.Scene {
     this.controlBuild=new ControlBuild(this,this.player.growth.build,(x,y,r)=>this.grid.query(x,y,r));
     this.events.once('shutdown',()=>{this.controlBuild?.clear();this.controlBuild=undefined;});
     const schoolBanner=new SchoolBanner(this,()=>this.mode==='none'&&!this.over,sch=>this.buffHud?.flashSchools(sch));this.schoolBanner=schoolBanner;
-    this.synergy=new SchoolSynergy({scene:this,player:this.player,combat:this.buildCombat,nearby:(x,y,r)=>this.grid.query(x,y,r),deal:(e,n,fire)=>{this.hitEnemy(e,n,this.combatNow,fire?'fire':'melee',false,false);},banner:(k,t,sub,sch)=>{schoolBanner.show(k,t,sub,sch);this.sfx.play(k==='combo'?'toast_combo':'toast_awaken');},
+    this.synergy=new SchoolSynergy({scene:this,player:this.player,combat:this.buildCombat,nearby:(x,y,r)=>this.grid.query(x,y,r),deal:(e,n,fire)=>{this.hitEnemy(e,n,this.combatNow,fire?'fire':'melee',false,false);},banner:(k,t,sub,sch)=>{schoolBanner.show(k,t,sub,sch);if(k==='combo')this.sfx.play('toast_combo');else{this.sfx.duck(1400,.4);this.sfx.play(sch?.[0]?'awaken_'+sch[0]:'toast_awaken');}},
       controlled:(e,n)=>this.controlBuild?.isControlled(e,n)??false,slowArea:(x,y,r,k,ms,n)=>this.controlBuild?.slowArea(x,y,r,k,ms,n)??0,escort:(x,y,n,ms)=>this.reinforcePush().spawnEscortAt(x,y,n,ms)?.members.length??0,
       vfx:(st,x,y,size,a=0,ms=360)=>buildVfx(this).emit(st,x,y,this.combatNow,size,a,ms,true),flame:(x,y,r)=>this.spawnFlameFx(x,y,r),
       wind:(x,y,a,size)=>playSheet(this,'fx_gust_band',x,y,{size,ms:420,depth:DEPTH.fx+.05,rotation:a,name:'awaken-wind'}),shake:()=>this.hitFeel.shake('medium'),
       // 觉醒手绘序列帧（第 3 期）：ground = 画在人物脚下；follow = 跟着主将；move = 播放中平移（单骑突阵）
       sheet:(key,x,y,o)=>{const pl=this.player,ox=x-pl.x,oy=y-pl.y,mv=o.move;playSheet(this,key,x,y,{size:o.size,sizeH:o.sizeH,ms:o.ms,depth:o.ground?19:DEPTH.fx+.05,rotation:o.rotation,flipX:o.flipX,originY:o.originY,add:o.add,name:'awaken-'+key.slice(10),
         onUpdate:o.follow?img=>img.setPosition(pl.x+ox,pl.y+oy):mv?(img,t)=>img.setPosition(x+mv.dx*t,y+mv.dy*t):undefined});}});
+    if(this.synergy){const sy=this.synergy;for(const k of (this.registry.get('runShownOnce') as string[]|undefined)??[])if(k.startsWith(this.runConfig.character+'|combo:'))sy.seen.add(k.slice((this.runConfig.character+'|combo:').length));this.events.once('shutdown',()=>{for(const id of sy.seen)this.markShownOnce('combo:'+id);});}
     this.legion.awakeningDefense={incoming:(_u,n)=>(this.synergy?.allyIncoming(n)??1)*(this.player.growth.build.tier('formation')>=2?1-SCHOOL_TIER.formation.allyTaken:1),onAllyHurt:()=>{}};
     this.events.once('shutdown',()=>{this.synergy?.clear();this.synergy=undefined;});
     // 军阵（formation-design.md）：开局按主线进度读学会的阵与布阵；?formation=off 关掉（只测别的系统时用）
@@ -4257,6 +4260,7 @@ export class GameScene extends Phaser.Scene {
         followerHeroes: () => (this.followers?.members ?? []).map(m => m.recruit.hero).filter((h): h is NonNullable<typeof h> => !!h),
         banner: (t, sub) => this.showWaveBanner(t, false, sub), sfx: k => this.sfx.play(k),
         onFinal: b => this.branchFinalShow(b),
+        finalSeen: id => this.shownOnce('final:' + id), markFinal: id => this.markShownOnce('final:' + id),
       });
     }
     if (this.mode === 'none' && !this.over) this.branchRt.update();
@@ -4341,13 +4345,16 @@ export class GameScene extends Phaser.Scene {
     const f = this.followers.addTemp(r, x, y); f.label.setText('降将 · ' + d.name); return f;
   }
   /** 进阶形态达成（Lv7 + 本派 4 势）：武器光芒（BranchFinalFx 手绘爆发 + 本派觉醒光）、分支名大字、全屏一震（HitFeel 震屏自带节流）。 */
+  /** 本局（含继承构筑的后续关）已经演过的高光（进阶形态、合击首触）：键带主将，换主将不算同一局。 */
+  private shownOnce(key: string): boolean { return ((this.registry.get('runShownOnce') as string[] | undefined) ?? []).includes(this.runConfig.character + '|' + key); }
+  private markShownOnce(key: string): void { const l = (this.registry.get('runShownOnce') as string[] | undefined) ?? []; const k = this.runConfig.character + '|' + key; if (!l.includes(k)) this.registry.set('runShownOnce', [...l, k]); }
   protected branchFinalShow(b: WeaponBranch): void {
     const P = this.player;
     this.branchRt?.finalFx.burst(b.id, P.x, P.y, 0);
     playSheet(this, 'fx_awaken_' + b.school, P.x, P.y - 20, { size: 340, ms: 1100, depth: DEPTH.fx, add: true });
     const t = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT * .36, b.finalName, { fontFamily: HEADING_FONT, fontSize: '46px', color: '#ffe08a', stroke: '#2a1206', strokeThickness: 7, resolution: 2 }).setOrigin(.5).setScrollFactor(0).setDepth(DEPTH.overlay - 2).setName('branch-final-title').setScale(1.4).setAlpha(0);
     this.tweens.add({ targets: t, scale: 1, alpha: 1, duration: 260, ease: 'Back.easeOut', onComplete: () => this.tweens.add({ targets: t, alpha: 0, delay: 1400, duration: 500, onComplete: () => t.destroy() }) });
-    this.hitFeel.shake('medium'); this.sfx.play('promote');
+    this.hitFeel.shake('medium'); this.sfx.duck(1400, .4); this.sfx.play('promote');
   }
   /** 2-3 营寨守将（data/dongzhuo.ts LUOYANG.commander）：借副将的生成与名牌（第二章副将专属形象、按第 3 关换色），编进正南大营守军。 */
   luoyangLt: StagePhaseRunner | null = null;

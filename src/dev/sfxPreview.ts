@@ -71,4 +71,10 @@ section('对照', [MIX], false);
     { title: '界面', sub: '舆图开 / 合 · 按钮悬停 · 点击', sounds: [['mapOpen', '舆图展开'], ['mapClose', '舆图卷起'], ['uiHover', '悬停'], ['uiClick', '点击']] },
   ], false);
   const app = document.getElementById('app')!, added = app.lastElementChild; if (added && sec !== added) app.prepend(added); }
+// 觉醒音效（2026-11-21 用户「关于觉醒音效触发优化一下」）：放在最最前面
+{ const sec = document.getElementById('app')!.lastElementChild; section('本次新增 · 觉醒（11-21）', [
+    { title: '流派六觉醒', sub: '起（涌起）→ 爆（大鼓 + 低钟 + 号角）→ 余韵（钟 + 低吟）；六派换点缀', sounds: [['awaken_fire', '火攻'], ['awaken_stratagem', '谋略'], ['awaken_archery', '弓弩'], ['awaken_cavalry', '骑突'], ['awaken_warrior', '武勇'], ['awaken_formation', '阵法']] },
+    { title: '对照', sub: '合击提示（本局首触）· 旧觉醒提示 · 兵器进阶', sounds: [['toast_combo', '合击'], ['toast_awaken', '旧觉醒'], ['promote', '兵器进阶']] },
+  ], false);
+  const app = document.getElementById('app')!, added = app.lastElementChild; if (added && sec !== added) app.prepend(added); }
 (window as unknown as { __sfxPreview?: Sfx }).__sfxPreview = sfx;

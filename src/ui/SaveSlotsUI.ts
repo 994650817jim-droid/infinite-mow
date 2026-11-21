@@ -67,7 +67,8 @@ export class SaveSlotsUI {
       return b;
     };
     if (s.active) button(bx, '当前存档', false, false, `save-slot-${s.index}-current`);
-    else button(bx, s.empty ? '新建征途' : '读取', true, true, `save-slot-${s.index}-load`, () => this.load(s.index));
+    // 2026-11-21 全界面体检：空档位有两三个时「新建征途」水墨按钮会叠出好几个；一律漆金（每屏最多一个水墨）
+    else button(bx, s.empty ? '新建征途' : '读取', false, true, `save-slot-${s.index}-load`, () => this.load(s.index));
     if (!s.empty) {
       const del = button(bx - bw - 14, '删除', false, true, `save-slot-${s.index}-delete`);
       del.hit.on('pointerdown', () => {

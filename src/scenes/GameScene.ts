@@ -102,7 +102,7 @@ import { loadWorld as loadWorldState } from '../world/WorldStore';
 import { ArtEffects } from '../systems/ArtEffects';
 import { BattlefieldDetails } from '../systems/BattlefieldDetails';
 import { WAR, warText, ensureWarTextures } from '../ui/WarStyle';
-import { LQ, lqButton, lqDivider, lqHitBox, lqImageButton, lqPanel, lqSkin, type LqState } from '../ui/LacquerKit';
+import { LQ, lqButton, lqDivider, lqHitBox, lqImageButton, lqPanel, lqSheet, lqSkin, type LqState } from '../ui/LacquerKit';
 import { chapterUnlocked, isChapterTestRun, recordChapterVictory } from '../systems/ChapterProgress';
 import { BALANCE, BATTLE_ZOOM_DESKTOP, COLORS, DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, IS_DESKTOP, RENDER_SCALE, TITLE_FONT, actorDepth, screenPoint } from '../config';
 import {upgradeCardTexture,inkUpgradeCardTexture,inkPlate,homeCommand,inkSkin} from '../ui/HomeCommand';
@@ -3611,7 +3611,7 @@ export class GameScene extends Phaser.Scene {
    */
   private layoutSettingsPanel(o: { panelG: Phaser.GameObjects.Graphics; panel: Phaser.GameObjects.Rectangle; pauseTitle: Phaser.GameObjects.Text; pauseHint: Phaser.GameObjects.Text; resume: Phaser.GameObjects.Image; resumeText: Phaser.GameObjects.Text; bgmRow: Phaser.GameObjects.GameObject[]; sfxRow: Phaser.GameObjects.GameObject[]; buildLink: Phaser.GameObjects.Text; bagLink: Phaser.GameObjects.Text; exit: Phaser.GameObjects.Text; keys: Phaser.GameObjects.Text }): void {
     const W = GAME_WIDTH, H = GAME_HEIGHT, pw = 780, ph = 515, top = (H - ph) / 2, cx = W / 2, lx = cx - 200, rx = cx + 165;
-    o.panelG.clear(); lqPanel(o.panelG, cx - pw / 2, top, pw, ph); o.panel.setSize(pw, ph).setPosition(cx, H / 2); if (o.panel.input) o.panel.input.hitArea.setTo(0, 0, pw, ph);
+    o.panelG.clear(); lqSheet(o.panelG, cx - pw / 2, top, pw, ph); o.panel.setSize(pw, ph).setPosition(cx, H / 2); if (o.panel.input) o.panel.input.hitArea.setTo(0, 0, pw, ph);
     o.pauseTitle.setText('军中设置').setFontFamily(TITLE_FONT).setFontSize(30).setColor('#efd399').setStroke('#120904', 4).setPosition(cx, top + 36);
     o.pauseHint.setText('战斗已暂停').setFontFamily(FONT).setColor('#b9a57a').setPosition(cx, top + 68);
     const div = this.add.graphics().setScrollFactor(0); div.lineStyle(1, 0xc9a96a, .35).lineBetween(cx - 30, top + 92, cx - 30, top + ph - 58); this.pausePanel.add(div);
@@ -5122,7 +5122,7 @@ export class GameScene extends Phaser.Scene {
     const pauseDim=this.add.rectangle(0,0,GAME_WIDTH,GAME_HEIGHT,0x07120d,.66).setOrigin(0).setInteractive();
     const pw=d?420:GAME_WIDTH-88, ph=d?480:520, top=(GAME_HEIGHT-ph)/2, cx=GAME_WIDTH/2;
     // 漆底描金（与结算卷、告捷弹窗同系）；底下一块透明矩形挡住点击
-    const panelG=this.add.graphics();lqPanel(panelG,cx-pw/2,top,pw,ph);
+    const panelG=this.add.graphics();(IS_DESKTOP?lqSheet:lqPanel)(panelG,cx-pw/2,top,pw,ph);
     const panel=this.add.rectangle(cx,GAME_HEIGHT/2,pw,ph,0x000000,.001).setInteractive();
     const pauseTitle=this.add.text(cx,top+34,'战斗暂停',warText(27,'#e8cf91')).setOrigin(.5);
     const pauseHint=this.add.text(cx,top+66,'稍歇片刻 · 战斗进度已暂停',warText(13,'#91ab98')).setOrigin(.5);
@@ -5171,7 +5171,7 @@ export class GameScene extends Phaser.Scene {
     this.attributePanel=this.add.container(0,0).setScrollFactor(0).setDepth(DEPTH.overlay+1).setVisible(false);
     const attrDim=this.add.rectangle(0,0,GAME_WIDTH,GAME_HEIGHT,0x07120d,.76).setOrigin(0).setInteractive();
     const attrW=d?880:GAME_WIDTH-32,attrH=d?Math.min(512,GAME_HEIGHT-16):700,attrTop=(GAME_HEIGHT-attrH)/2,attrCx=GAME_WIDTH/2;
-    const attrFrameG=this.add.graphics();lqPanel(attrFrameG,attrCx-attrW/2,attrTop,attrW,attrH);
+    const attrFrameG=this.add.graphics();(IS_DESKTOP?lqSheet:lqPanel)(attrFrameG,attrCx-attrW/2,attrTop,attrW,attrH);
     const attrFrame=this.add.rectangle(attrCx,GAME_HEIGHT/2,attrW,attrH,0x000000,.001).setInteractive();
     const attrTitle=this.add.text(attrCx,attrTop+34,'武将修习 · 属性分配',warText(24,'#e8cf91')).setOrigin(.5);
     if(d)attrTitle.setFontFamily(TITLE_FONT).setColor('#efd399').setStroke('#120904',4); // 2026-11-17 用户批准 UI 审查 G：书法标题、点数改金字、点数条换描金小菱、＋ 与返回换水墨
@@ -5342,7 +5342,7 @@ export class GameScene extends Phaser.Scene {
     const text=(x:number,y:number,value:string,size=16)=>this.add.text(x,y,value,{fontFamily:FONT,fontSize:size+'px',color:'#ecd9b5',resolution:2,wordWrap:{width:GAME_WIDTH-90}}).setScrollFactor(0);
     root.add(this.add.rectangle(GAME_WIDTH/2,GAME_HEIGHT/2,GAME_WIDTH,GAME_HEIGHT,0x17130e,.98).setScrollFactor(0).setInteractive());
     // 电脑版（2026-11-17 UI 审查）：原来字直接铺在半透明底上、透出后面的军中设置；改为漆底描金面板 + 书法标题 + 水墨返回，打开时先收起军中设置
-    const D=IS_DESKTOP;if(D){this.pausePanel.setVisible(false);const fr=this.add.graphics().setScrollFactor(0);lqPanel(fr,20,12,GAME_WIDTH-40,GAME_HEIGHT-24);root.add(fr);}
+    const D=IS_DESKTOP;if(D){this.pausePanel.setVisible(false);const fr=this.add.graphics().setScrollFactor(0);lqSheet(fr,20,12,GAME_WIDTH-40,GAME_HEIGHT-24);root.add(fr);}
     const head=text(36,24,'本局构筑',22);if(D)head.setFontFamily(TITLE_FONT).setColor('#efd399').setStroke('#120904',4).setPosition(44,26);root.add(head);
     // 2026-11-18：和行营「将帅帐」共用构筑总览（武将卡 / 战法格 / 流派与觉醒），悬停看说明
     const tip=new ItemTooltip(this,DEPTH.overlay+40);root.once('destroy',()=>tip.destroy());

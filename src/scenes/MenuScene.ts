@@ -344,7 +344,7 @@ export class MenuScene extends Phaser.Scene {
     const modal=this.add.container(0,0).setDepth(500).setName('home-settings-panel');
     const app=desktop,desk=IS_DESKTOP_APP&&!!app,pw=640,ph=448,x0=W/2-pw/2,y0=H/2-ph/2;
     modal.add(this.add.rectangle(W/2,H/2,W,H,0x0c0805,.9).setInteractive());
-    {const g=this.add.graphics();lqPanel(g,x0,y0,pw,ph);modal.add(g);}
+    modal.add(lqFloat(this,W/2,H/2,pw,ph)); // 2026-11-21 全界面体检：不要整块金边大框，改无框浮层（上下金线）
     const t=this.add.text(W/2,y0+30,'军中设置',{fontFamily:TITLE_FONT,fontSize:'28px',color:'#efd399',resolution:2}).setOrigin(.5).setStroke('#120904',4);modal.add(t);
     {const div=this.add.graphics();lqDivider(div,W/2,y0+56,150);modal.add(div);}
     const ch=(list:readonly string[],labels:Record<string,string>)=>list.map(v=>({v,label:labels[v]}));

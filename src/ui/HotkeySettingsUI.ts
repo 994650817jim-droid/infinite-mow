@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, TITLE_FONT } from '../config';
 import { FIXED_KEYS, HOTKEYS, HOTKEY_ORDER, hotkeyCode, hotkeyCodes, keyName, resetHotkeys, setHotkey, typingTarget, eventCode, type HotkeyAction } from '../data/hotkeys';
-import { lqPanel } from './LacquerKit';
+import { lqSheet } from './LacquerKit';
 import { homeCommand } from './HomeCommand';
 
 /**
@@ -19,7 +19,7 @@ export function openHotkeySettings(scene: Phaser.Scene, depth = 900): Phaser.Gam
   const root = scene.add.container(0, 0).setDepth(depth).setScrollFactor(0).setName('hotkey-settings');
   openCount++;
   root.add(scene.add.rectangle(0, 0, W, H, 0x0b0805, .72).setOrigin(0).setInteractive());
-  const g = scene.add.graphics(); lqPanel(g, x0, y0, pw, ph); root.add(g);
+  const g = scene.add.graphics(); lqSheet(g, x0, y0, pw, ph); root.add(g);
   const txt = (x: number, y: number, s: string, size: number, color: string, font = FONT) => scene.add.text(x, y, s, { fontFamily: font, fontSize: size + 'px', color, resolution: 2, stroke: '#120904', strokeThickness: 3 });
   root.add(txt(W / 2, y0 + 30, '快捷键', 28, '#efd399', TITLE_FONT).setOrigin(.5));
   const msg = txt(W / 2, y0 + 62, '点键位后按新键改键 · Esc 取消', 13, '#b9a57a').setOrigin(.5).setName('hotkey-message');

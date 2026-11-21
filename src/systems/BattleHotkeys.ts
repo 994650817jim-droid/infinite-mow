@@ -187,7 +187,7 @@ export class BattleHotkeys {
 
 /** 每个界面要标键位的对象（名字 → 动作）。 */
 const HINTS: Record<string, Array<[string | RegExp, HotkeyAction | ((i: number) => HotkeyAction)]>> = {
-  none: [['potion-button', 'potion'], ['attribute-plus', 'attributes'], ['hud-bag', 'bag'], ['hud-pause', 'back']],
+  none: [['potion-button', 'potion'], ['attribute-plus', 'attributes'], ['bag-bundle-icon', 'bag'] /* 标在包袱图上；原来标在透明命中区右上，「B」飘到「击杀」旁边（2026-11-21 全界面体检） */, ['hud-pause', 'back']],
   pause: [['pause-resume', 'back'], ['pause-build', 'build']], // 「返回主菜单」不标键：战斗中 M 是舆图
   levelup: [[/^upgrade-card-[0-2]$/, i => (['pick1', 'pick2', 'pick3'] as const)[i]], ['upgrade-reroll', 'reroll']],
   bossloot: [[/^upgrade-card-[0-2]$/, i => (['pick1', 'pick2', 'pick3'] as const)[i]]],
@@ -222,7 +222,9 @@ export class HotkeyHints {
           if (b.width < 2 || b.height < 2) return;
           const t = this.pool[n] ?? (this.pool[n] = s.add.text(0, 0, '', { fontFamily: FONT, fontSize: '11px', color: '#e8d3a6', resolution: 2, stroke: '#120904', strokeThickness: 3 }).setOrigin(1, 0).setScrollFactor(0).setName('hotkey-hint'));
           // 目标是按钮文字本身（如结算「返回主菜单」）时，角标贴在字右上方外侧；原来贴在字框右上角里，「Enter」压在「菜单」上（2026-11-20 夜间 UI 审查）
-          if (o.type === 'Text') t.setOrigin(0, .5).setPosition(b.right + 3, b.top + 2); else t.setOrigin(1, 0).setPosition(b.right - 3, b.top + 1);
+          if (o.type === 'Text') t.setOrigin(0, .5).setPosition(b.right + 3, b.top + 2);
+          else if (o.name === 'attribute-plus') t.setOrigin(0, 0).setPosition(b.left + 3, b.top + 1); // 右上是未加点数的红角标，键位放左上（2026-11-21 全界面体检）
+          else t.setOrigin(1, 0).setPosition(b.right - 3, b.top + 1);
           t.setText(hotkeyLabel(a)).setDepth(depth).setAlpha(.92).setVisible(true).setData('action', a).setData('target', o.name);
           n++;
         });

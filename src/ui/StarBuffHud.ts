@@ -42,6 +42,12 @@ export class StarBuffHud {
   height = 0;
   /** 让某颗星的图标亮一下（不在显示范围内的忽略）。 */
   flash(id: string): void { for (const s of this.slots) if (s.entry?.id === id) s.flashUntil = this.now + STAR_HUD.flashMs; }
+  /** 每帧推进「亮一下」的放大回落（整排的重画跟着 HUD 每 0.1 秒一次，见 update）。 */
+  tick(now: number): void {
+    this.now = now; if (!this.root.visible) return;
+    const H = STAR_HUD;
+    for (const s of this.slots) { if (!s.flashUntil || !s.entry) continue; const p = now < s.flashUntil ? 1 - (s.flashUntil - now) / H.flashMs : -1, k = p >= 0 ? 1 + (H.flashScale - 1) * Math.sin(Math.PI * p) : 1; s.image.setDisplaySize(H.size * k, H.size * k); if (p >= 0) s.root.setAlpha(1); else s.flashUntil = 0; }
+  }
   /** 测试 / 调试用：现在显示的每一格（编号、透明度、是不是正在亮）。 */
   snapshot(): Array<{ id: string; alpha: number; flashing: boolean; scale: number }> { return this.slots.filter(s => s.root.visible).map(s => ({ id: s.key, alpha: +s.root.alpha.toFixed(2), flashing: this.now < s.flashUntil, scale: +(s.image.displayWidth / STAR_HUD.size).toFixed(2) })); }
 

@@ -93,9 +93,9 @@ export type StarKeystoneId = keyof typeof STAR_KEYSTONE;
  * 火烧连营的爆燃：被主将法术伤害（非武器伤害，或法术武器的武器命中）打死的敌人，在原地对 radius 内的其他敌人造成一次伤害。
  * - 伤害基准 = 本关此刻新刷出来的一名 basis 兵种（刀兵）的生命上限 × ratio，与死的是谁无关（精锐、副将倒下不会炸得更狠）；
  * - 爆燃打死的敌人不再爆燃；任意 1 秒内最多 perSecond 次，超出的不炸；
- * - fxRadius = 借用手绘火焰序列帧 flame_burst 时传的半径（只管画面大小）。
+ * - 画面是手绘贴地火环（data/starFx.ts huoshao），大小在那张表里。
  */
-export const STAR_PYRE = { radius: 90, ratio: .1, perSecond: 6, windowMs: 1000, basis: 'infantry', fxRadius: 60 } as const;
+export const STAR_PYRE = { radius: 90, ratio: .1, perSecond: 6, windowMs: 1000, basis: 'infantry' } as const;
 export const STAR_REGIONS: Record<AttributeId, { name: string; color: number }> = {
   strength: { name: '力量', color: 0xc8553d }, agility: { name: '敏捷', color: 0x4fa38f }, intellect: { name: '智力', color: 0x8f7fd0 }, command: { name: '统御', color: 0xd39a3a },
 };

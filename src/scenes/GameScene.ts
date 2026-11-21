@@ -1376,6 +1376,7 @@ export class GameScene extends Phaser.Scene {
     this.syncGround();
     this.battlefieldDetails.update(this.cameras.main.scrollX, this.cameras.main.scrollY);
     this.hudAcc += dt;
+    if (this.starFeedback && starMapOn()) this.starFeedback.tick(this.player, this.combatNow); // 星图战斗反馈：特效逐帧跟随 / 触发（图标排的重画仍跟 HUD 每 0.1 秒一次）
     this.updateHud();
     this.updateBossHud();
     // 被动满层台词每帧检测（HUD 0.1 秒一刷，孙尚香这类攒满后马上触发的会漏掉）
@@ -2878,15 +2879,14 @@ export class GameScene extends Phaser.Scene {
   /**
    * 星图主星「火烧连营」（data/starMap.ts STAR_PYRE）：被主将法术伤害打死的敌人原地爆燃，对 radius 内的其他敌人造成「本关此刻一名刀兵的生命上限 × ratio」的伤害。
    * 爆燃打死的不再爆燃（starPyreBusy 期间的击杀不算法术击杀）；每秒次数上限在 RunGrowth.pyreTake。范围查询走现成的敌人网格，不扫全表。
-   * 画面借手绘火焰序列帧 flame_burst（spawnFlameFx），没有这张图时不出特效。
+   * 画面是美术的手绘贴地火环（data/starFx.ts huoshao，由 StarFeedback 在击杀点播一遍）。
    */
   private starSpellKill = false; private starPyreBusy = false;
   /** 星图 · 战斗内反馈（systems/StarFeedback：增益栏「星图」图标排 + 手绘特效挂点）；开关打开后第一次刷新 HUD 时才建。 */
   private starFeedback?: StarFeedback;
   private starPyre(enemy: Enemy): void {
-    const now = this.combatNow; if (this.starPyreBusy || !this.player.growth.pyreTake(now, enemy.x, enemy.y)) return;
+    const now = this.combatNow; if (this.starPyreBusy || !this.player.growth.pyreTake(now, enemy.x, enemy.y + enemy.radius)) return; // 信号带击杀点（敌人脚底）：画面是手绘贴地火环 fx_huoshao（systems/StarFeedback），这里不画任何东西
     const P = STAR_PYRE, x = enemy.x, y = enemy.y, dmg = this.chapter.enemies[P.basis].hp * this.chapter.hpScale(this.elapsed) * (this.chapter.growth?.hp ?? 1) * P.ratio;
-    if (!this.starFeedback?.fx.has('huoshao') && this.textures.exists('flame_burst')) this.spawnFlameFx(x, y, P.fxRadius); // 专属爆燃图到位后（data/starFx.ts huoshao）由 StarFx 播，这里就不再借 flame_burst
     this.starPyreBusy = true;
     try { for (const e of this.grid.query(x, y, P.radius)) if (e !== enemy && e.active && !e.isSupplySlot && Math.hypot(e.x - x, e.y - y) <= P.radius) this.hitEnemy(e, dmg, now, 'fire', false, false); }
     finally { this.starPyreBusy = false; }

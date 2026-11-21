@@ -14,7 +14,7 @@ import {GameCodex} from '../ui/GameCodex';
 import {HeroWarCard} from '../ui/HeroWarCard';
 import {CampaignChronicle} from '../ui/CampaignChronicle';
 import {attachHomeVideo} from '../ui/HomeVideo';
-import {homeCommand,warPanelTexture,inkSkin} from '../ui/HomeCommand';
+import {homeCommand,homeLqCommand,warPanelTexture,inkSkin} from '../ui/HomeCommand';
 import {SaveSlotsUI} from '../ui/SaveSlotsUI';
 import {AchievementsUI} from '../ui/AchievementsUI';
 import {homePlaque} from '../ui/HomePlaque';
@@ -213,7 +213,7 @@ export class MenuScene extends Phaser.Scene {
     this.homePortrait=this.homeCard.art;this.heroName=this.homeCard.name;this.weapon=this.homeCard.weapon;
     this.passiveName=text(-1000,-1000,'',13).setVisible(false);this.passive=text(-1000,-1000,'',13).setVisible(false);
     const navY=D?484:631+this.padY;
-    const heroEntry=homeCommand(this,D?230:W/2,navY,D?220:220,D?46:64,'更换武将');const pick=heroEntry.hit.setName('choose-hero');this.heroEntryPaint=heroEntry.paint;
+    const heroEntry=D?homeLqCommand(this,230,navY,200,40,'更换武将'):homeCommand(this,W/2,navY,220,64,'更换武将'); /* 电脑版：次要按钮改漆金（一屏一个水墨按钮，2026-11-21 制作人验收） */const pick=heroEntry.hit.setName('choose-hero');this.heroEntryPaint=heroEntry.paint;
     // 主公已定：入口改成「主公 · xx」并锁住；老存档还有一次改选机会时显示「改选主公」
     const paintLord=()=>{const l=lordRules()?lordHero():null;if(!l)return;const n=CHARACTERS.find(c=>c.id===l)?.name??'';if(lordFinal()){heroEntry.caption.setText('主公 · '+n);pick.disableInteractive();pick.setData('locked',true);}else heroEntry.caption.setText('改选主公');};paintLord();
     // 卷轴收起时，“更换武将”跟着卷轴上移（与卷轴底保持原间距）；展开时回到原位
@@ -238,15 +238,17 @@ export class MenuScene extends Phaser.Scene {
     }
     if(!D&&west&&!save.dongzhuoStages){const reveal=text(W/2,D?157:228+this.padY,'新篇揭晓 · 讨伐董卓',15,'#f0c389').setAlpha(0);this.tweens.add({targets:reveal,alpha:1,duration:700});}
     const closeHeroes=()=>{this.heroModal?.setVisible(false);this.heroEntryPaint?.();};
-    this.heroPicker=new HomeHeroPicker(this,index=>{if(lordRules()&&!setLord(CHARACTERS[index].id).ok)return;paintLord();this.selectedChar=index;this.registry.set('heroConfirmed',true);try{localStorage.setItem('im_last_hero',CHARACTERS[index].id);}catch{}closeHeroes();this.renderSelection();},closeHeroes);
+    // 2026-11-21 制作人验收：新档从「匡扶汉室」进选将，「确认出战」后直接出征（原来回到主页、还得再点一次「匡扶汉室」）
+    let startAfterPick=false;
+    this.heroPicker=new HomeHeroPicker(this,index=>{if(lordRules()&&!setLord(CHARACTERS[index].id).ok)return;paintLord();this.selectedChar=index;this.registry.set('heroConfirmed',true);try{localStorage.setItem('im_last_hero',CHARACTERS[index].id);}catch{}closeHeroes();this.renderSelection();if(startAfterPick){startAfterPick=false;if(!this.children.getByName('chapter-select'))this.campaignEntry();}},()=>{startAfterPick=false;closeHeroes();});
     this.heroModal=this.heroPicker.root;const modal=this.heroModal;
-    const openHeroes=()=>{this.ensureHomeArt(true);this.heroPicker?.open(this.selectedChar);this.heroEntryPaint?.('selected');};pick.on('pointerdown',openHeroes);
+    const openHeroes=(startAfter=false)=>{startAfterPick=startAfter;this.ensureHomeArt(true);this.heroPicker?.open(this.selectedChar,startAfter);this.heroEntryPaint?.('selected');};pick.on('pointerdown',()=>openHeroes());
     {const l=lordRules()?lordHero():null;if(l&&!lordFinal()&&!this.registry.get('lordNoticeShown')){this.registry.set('lordNoticeShown',true);showLordNotice(this,l,()=>{confirmLord();paintLord();},()=>openHeroes());}}
     const startY=D?414:857+this.padY,startW=D?292:W-156,startH=D?56:64;
     const primary=homeCommand(this,D?W*.73:W/2,startY,startW,startH,'匡扶汉室',true);this.startButton=primary.hit.setName('start-campaign').setData('padDefault',true);this.startLabel=primary.caption;
     // W4：有城池告急时提示“出征将失守”
     const lossWarn=isChapterTestRun()?'':alertLossWarning();if(lossWarn)text(D?W*.73:W/2,startY-startH/2-(D?14:16),lossWarn,D?12:13,'#ff8a70').setStroke('#1a0e08',3).setName('home-alert-warning');
-    this.startButton.on('pointerdown',()=>{let chosen=!!this.registry.get('heroConfirmed');try{chosen=chosen||!!localStorage.getItem('im_last_hero');}catch{}if(!chosen&&!params.has('autostart')&&!params.has('perf')){openHeroes();return;}if(this.children.getByName('chapter-select'))return;this.campaignEntry();});
+    this.startButton.on('pointerdown',()=>{let chosen=!!this.registry.get('heroConfirmed');try{chosen=chosen||!!localStorage.getItem('im_last_hero');}catch{}if(!chosen&&!params.has('autostart')&&!params.has('perf')){openHeroes(true);return;}if(this.children.getByName('chapter-select'))return;this.campaignEntry();});
     for(let k=0;k<navItems-1;k++)text((navX(k)+navX(k+1))/2,navRowY,'·',D?18:20,'#a68a57');
     if(isChapterTestRun())text(W/2,D?529:955+this.padY,'测试战斗不记录正式进度',10,'#8c806f');
     if(isChapterTestRun())text(W-34,24,'测试选关 ›',14,'#dcc399').setOrigin(1,.5).setPadding(12,10).setInteractive({useHandCursor:true}).setName('dev-stage-picker').on('pointerdown',()=>this.openTestStages());

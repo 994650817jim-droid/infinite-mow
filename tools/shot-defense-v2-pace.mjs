@@ -29,19 +29,19 @@ async function run(style) {
       // 解开会停战斗的面板（升级三选一 / 专职 / 战斗支援招兵 / 加点）
       for (let i = 0; i < 6 && s.mode !== 'none' && !s.over; i++) { if (s.mode === 'levelup') s.chooseUpgrade(0); else if (s.mode === 'branch') s.chooseBranch?.(1); else if (s.mode === 'recruit') { const all = []; const w = l => { for (const o of l) { all.push(o); if (o.list) w(o.list); } }; w(s.children.list); const o = all.find(x => x.name === 'recruit-close' && x.input?.enabled); if (o) { o.emit('pointerdown', { x: o.x, y: o.y }); o.emit('pointerup', { x: o.x, y: o.y }); } else s.setMode('none'); } else if (['story', 'attributes', 'bossloot'].includes(s.mode)) s.setMode('none'); else break; }
       s.devTimeScale = 3;
-      const put = (x, y) => s.player.sprite.setPosition(x, y), sp = { gate: { x: g.gx, y: g.top + 72 }, oil: { x: g.gx, y: g.W - 52 } };
+      const put = (x, y) => s.player.sprite.setPosition(x, y), sp = { gate: { x: g.gx, y: g.top + 72 }, oil: { x: g.gx, y: g.W - 78 } };
       let act = '';
       if (!s.over && s.mode === 'none') {
         const now = s.combatNow, ramAt = A.rams.find(r => r.atGate && r.e.active);
-        const pushLadder = () => { if (A.pushing) { s.v2Held.add('KeyF'); return 'pushing'; } s.v2Held.delete('KeyF'); const up = A.ladders.find(l => l.state === 'up'); if (!up) return ''; put(up.x, g.W - 40); s.v2Held.add('KeyF'); s.interactOverride(); return 'push' + up.seg; };
+        const pushLadder = () => { if (A.pushing) { s.v2Held.add('KeyF'); return 'pushing'; } s.v2Held.delete('KeyF'); const up = A.ladders.find(l => l.state === 'up'); if (!up) return ''; put(up.x, g.W - 70); s.v2Held.add('KeyF'); s.interactOverride(); return 'push' + up.seg; };
         if (style === 'C') { // 认真守：泼油（冲车在撞门）> 推梯 > 滚木 > 喘息修门；像真人一样走过去（基础移速 178），不瞬移
           const moveTo = (x, y) => { const d = Math.hypot(x - s.player.x, y - s.player.y), step = 178 * Math.max(.05, s.elapsed - (window.__lastEl ?? s.elapsed)); if (d <= Math.max(step, 6)) { put(x, y); return true; } put(s.player.x + (x - s.player.x) / d * step, s.player.y + (y - s.player.y) / d * step); return false; };
           if (A.pushing) { s.v2Held.add('KeyF'); act = 'pushing'; }
           else {
             s.v2Held.delete('KeyF'); const up = A.ladders.find(l => l.state === 'up'); let target = null, kind = '';
             if (ramAt && A.oil.charges > 0 && now >= A.oil.cd) { target = sp.oil; kind = 'oil'; }
-            else if (up) { target = { x: up.x, y: g.W - 40 }; kind = 'push'; }
-            else { const warn = A.ladders.find(l => l.state === 'warn' || l.state === 'down'); if (warn && A.logs[warn.seg] > 0) { target = { x: g.segs[warn.seg].ladderX + 84, y: g.W - 48 }; kind = 'log'; } else if (A.phase === 'rest' && !A.sortieReady() && A.gate.hp < A.gate.max && now >= A.repairCd) { target = sp.gate; kind = 'repair'; } }
+            else if (up) { target = { x: up.x, y: g.W - 70 }; kind = 'push'; }
+            else { const warn = A.ladders.find(l => l.state === 'warn' || l.state === 'down'); if (warn && A.logs[warn.seg] > 0) { target = { x: g.segs[warn.seg].ladderX + 84, y: g.W - 100 }; kind = 'log'; } else if (A.phase === 'rest' && !A.sortieReady() && A.gate.hp < A.gate.max && now >= A.repairCd) { target = sp.gate; kind = 'repair'; } }
             if (target) { if (moveTo(target.x, target.y)) { if (kind === 'push') s.v2Held.add('KeyF'); if (!(kind === 'repair' && A.channel)) s.interactOverride(); act = kind; } else act = 'walk-' + kind; }
             else if (!A.channel) moveTo(g.gx - 300, g.W - 90);
           }
@@ -49,7 +49,7 @@ async function run(style) {
         } else if (style === 'A') { // 只守云梯
           const pa = pushLadder();
           if (pa) act = pa;
-          else { const warn = A.ladders.find(l => l.state === 'warn' || l.state === 'down'); if (warn && A.logs[warn.seg] > 0) { put(g.segs[warn.seg].ladderX + 84, g.W - 48); s.interactOverride(); act = 'log' + warn.seg; } else put(g.segs[0].x1, g.W - 90); }
+          else { const warn = A.ladders.find(l => l.state === 'warn' || l.state === 'down'); if (warn && A.logs[warn.seg] > 0) { put(g.segs[warn.seg].ladderX + 84, g.W - 100); s.interactOverride(); act = 'log' + warn.seg; } else put(g.segs[0].x1, g.W - 90); }
         } else { // 只守门
           if (A.sortieOpen) { const t = A.rams.find(r => r.e.active) ?? A.ladders.find(l => l.cart.active && l.state === 'drive'); if (t && now < A.sortie.until - 5000) { put(t.x ?? t.cart.x, (t.e ?? t.cart).y - 40); act = 'sortie-hit'; } else { put(g.gx, g.F + 20); act = 'sortie-back'; } }
           else if (ramAt && A.oil.charges > 0 && now >= A.oil.cd) { put(sp.oil.x, sp.oil.y); s.interactOverride(); act = 'oil'; }
@@ -76,7 +76,7 @@ async function run(style) {
   return { style, entry: log.entry, landed: S.landed, heroMinHpPct: log.end.minHp ?? null, pushBroken: S.pushBroken, gateBroke: S.gateBrokeAt >= 0 ? { el: Math.round(S.gateBrokeAt), wave: waveOf(S.gateBrokeAt), late: S.gateBrokeAt % W > 45 } : null,
     gateDmg: { ram: Math.round(S.ramDmg), chop: Math.round(S.chopDmg), boss: Math.round(S.bossDmg) }, captures: S.captures, firstLost: log.firstLost, wallDown: S.wallDown, keepHits: S.keepHits,
     waveDead: log.waveDead, peakOutside: log.peakOutside, end: { el: log.end.el, gate: log.end.gate, keep: log.end.keep, over: log.end.over, timeout: !!log.end.timeout, result: log.end.over ? (log.end.keep <= 0 ? '府衙失守' : '守住 / 结束') : '未结束' },
-    acts: { pushed: S.pushed, logs: S.logs, oil: S.oil, sorties: S.sorties, repairs: S.repairs, gateShots: S.gateShots, ramsBroken: S.ramsBroken } };
+    acts: { pushed: S.pushed, logs: S.logs, oil: S.oil, sorties: S.sorties, repairs: S.repairs, gateShots: S.gateShots, ramsBroken: S.ramsBroken }, ladders: { spawned: S.ladders, raised: S.raised, climbs: S.climbs, fell: S.fell, carts: S.carts }, troops: { pushed: S.troopPushed, logs: S.troopLogs, oil: S.troopOil, pushHit: S.troopPushHit } };
 }
 const out = [];
 for (const st of only ? [only] : ['A', 'B', 'C']) { const r = await run(st); out.push(r); console.log(JSON.stringify(r)); }

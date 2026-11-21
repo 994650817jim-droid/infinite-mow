@@ -38,11 +38,45 @@ export const DEFENSE_V2 = {
     keepDy: 360,
     /** 开打时主将站在走道南半边（离外沿 heroDy，垛口后面）：镜头往城外让以后主将在画面上部，站南半边不顶到顶部计时器。 */
     heroDy: 90,
+    /**
+     * 走道南沿可走线（用户试玩 u4：主将站到外侧城垛那一排上、半个身子压在墙立面上）：外侧城垛内沿 = W − rim（= 城垛顶，墙段 / 门楼图的走道面到这里为止），
+     * 墙身碰撞从这里开始，人脚（中心）停在 W − rim − 半径，不越过城垛内沿。
+     */
+    rim: 50,
+    /**
+     * 走道两端（用户试玩 u1 / u3）：角楼贴在走道端头外侧（右缘离走道端 towerGap），走道往角楼底下多铺 under；
+     * 角楼背后（走道北半截 + 城里那个角）用山崖收满：山崖框 x 从走道端往外 cliffIn（负数 = 往走道里压一截：山崖图四周有透明边，不压会露一条土）、y 从 W − cliffTop 到 W − cliffBot；城里那角挡人到 W − cliffBlock。
+     */
+    ends: { towerGap: 10, under: 30, cliffIn: -30, cliffTop: 300, cliffBot: 110, cliffBlock: 360, cliffOut: 40 },
   },
-  /** 城头分段：每段一个梯口（段中点），4 个垛口位（避开梯口 ±mouth），梯口 2 个驻守位。 */
-  posts: { crenelDy: 40, crenels: 4, mouth: 40, guardDx: 36, guardDy: 95, rampDy: 175, reserveDy: 70, reserveGap: 34, reserveCols: 8 },
-  /** 墙上的远程兵射程 ×（够得到墙脚：外沿到墙脚 330）。 */
-  wallRangeMul: 1.6,
+  /**
+   * 城头分段：每段一个梯口（段中点）、梯口 2 个驻守位（±guardDx）；垛口位两排（离梯口的 x）：前排 front（站在城垛内沿后面 W − crenelDy）、
+   * 后排 back（W − backDy，只在梯口西侧——东侧是滚木架）；城防弓手先占前排，玩家带来的弓弩兵往上加。门楼平台 2 个守军位（gx ± gateDx，泼油的兵）。
+   */
+  posts: { crenelDy: 70, backDy: 106, front: [-114, -74, 74, 114] as readonly number[], back: [-118, -80] as readonly number[], guardDx: 36, guardDy: 95, rampDy: 175, gateDx: 60, gateDy: 84, reserveDy: 70, reserveGap: 34, reserveCols: 8 },
+  /**
+   * 城防弓手（总制作人试玩反馈二：城墙上弓箭兵太少）：守城战自带，属于这座城的守军（不占玩家部曲、不进存档、不算战损），
+   * 每段 perSeg 个（按城池档），开局就站满垛口前排；门楼平台另有 gate 个门楼守军（gateKind，冲车到门前时泼油；玩家的近战照旧去梯口 / 马道口，多的进预备队给 E 叫）。
+   * 阵亡后喘息时各补回阵亡数 × refill（向上取整），从城里走马道上来。城防是城里的民壮，出手伤害 ×damageMul（认真守实测：不打折时 22 张弓把云梯车、墙脚的人都射光，一场 0 个登城、主将不掉血）。
+   */
+  garrison: { perSeg: { small: 3, medium: 4, large: 5 } as Record<'small' | 'medium' | 'large', number>, kind: 'archer' as const, gate: 2, gateKind: 'spearman' as const, refill: .5, damageMul: .25 },
+  /**
+   * 居高临下（总制作人试玩反馈四，取代原来的 cover.arrowMul / heroArrowMul、wallRangeMul、hero.rampartMul，统一在这一处）：
+   * arrowIn = 城外（墙脚以南）射上城头的箭打到城头上的我方：部曲 / 城防弓手 ×troop、主将 ×hero（随从不挨敌方飞行物，没有这条）；
+   * down = 城头往下打（目标在城垛内沿以南：墙面上 / 墙脚 / 城外）：伤害 ×damage；城头上的远程射程 ×range（主将武器范围、走道上的远程兵）；
+   * crenelRange = 垛口位弓手的射程倍率（要够到墙脚以外，已含 down.range）。
+   * heroAimEvery = 主将在城头时，城外弓手每 heroAimEvery 个里有 1 个专瞄主将（其余照旧瞄最近的兵；垛口前排站满后原来没人瞄主将，主将一场不掉血），瞄主将的箭从兵头上抛过去。
+   */
+  height: { arrowIn: { troop: .4, hero: .6 }, down: { damage: 1.2, range: 1.2 }, crenelRange: 1.6, heroAimEvery: 2 },
+  /**
+   * 我方士兵也用守城道具（总制作人试玩反馈三：城头要像一支军队在守城；主将亲自做更快更准，士兵兜底）：
+   * 推梯 = 梯口驻守兵在这段梯上有人、这段走道上没有登城的敌兵（有就先打）、主将不在这段时自己推：读条 pushMs + 梯上每人 perClimberMs（头顶小进度条），挨一下退 hitBackMs；
+   * 滚木 = 这段梯子立着、梯上有人、墙脚（梯脚 ±logReach）敌兵 ≥ logFoot 时，滚木架旁的兵喊一声、举手 logWindMs 后放（和主将用同一份次数，每段每波最多 logPerWave 次；不先手砸排队的人）；
+   * 泼油 = 冲车到门前时门楼守军泼（每波 oilPerWave 次，其余留给主将），举锅 oilWindMs 后出手。checkMs 一次判断。
+   * engineMul = 士兵（部曲 / 城防）射砍云梯车、冲车 ×engineMul（砸器械靠主将出城 / 滚木 / 热油；不打折时云梯车大半没立起来就被城头射爆了）；
+   * climberMul = 士兵打梯子上正在爬的人 ×climberMul（贴着墙面、从垛口往下难射——梯子要靠推 / 滚木 / 等翻上来再打；城头弓手一多就把梯上的人全射下去、一场 0 个登城）。
+   */
+  troops: { pushMs: 2500, perClimberMs: 400, hitBackMs: 300, logFoot: 6, logReach: 160, logPerWave: 1, logWindMs: 700, oilPerWave: 1, oilWindMs: 800, checkMs: 400, engineMul: .3, climberMul: .25 },
   /** 预备队补位间隔（毫秒）；E 一次叫几个近战上来（去主将所在这段）。 */
   refillMs: 5000, callReserve: 3,
   /**
@@ -51,8 +85,8 @@ export const DEFENSE_V2 = {
    * 镜头跟着往上让，保证主将脚下离屏幕顶至少 heroMin 设计像素（不钻到顶部计时器下面）。城内那一侧多裁掉。
    */
   camera: { zoomMul: .82, outside: 195, heroMin: 110 },
-  /** 横幅：计时器下方那一行（设计像素 y）；第一次（完整句子）/ 之后（短句）停留多久（毫秒）。 */
-  notice: { y: 66, firstMs: 2600, shortMs: 1500 },
+  /** 横幅：计时器下方那一行（设计像素 y）；第一次（完整句子）/ 之后（短句）停留多久（毫秒）；全屏大横幅（城门已破）出着的 bigMs 内普通提示不出。 */
+  notice: { y: 66, firstMs: 2600, shortMs: 1500, bigMs: 2800 },
   /**
    * b 段：云梯与攀爬、城头近战、占段 / 夺回、一键 F（推梯 / 滚木 / 泼油 / 修门）、冲车撞门。时间用关内秒数，距离是世界像素。
    * （波次 / 喘息补满次数在 c 段接；c 段之前滚木 / 热油按 regenSec 慢慢回一次。）
@@ -60,8 +94,8 @@ export const DEFENSE_V2 = {
   assault: {
     /** 云梯车：开局 firstSec 秒第一架，之后每 everySec 秒一架，同时最多 max 架（每段一架）；开到墙脚后亮圈 warnMs 再立梯。
      *  被推倒 / 被滚木砸倒后 raiseMs 再立起来（车还在的话）；梯上每 climbGapMs 上一个人，爬完外墙要 climbSec 秒；
-     *  一段城头敌兵满 segCap 个就不再上人；墙脚 footReach 以内的近战兵会排队上梯。 */
-    ladder: { firstSec: 6, everySec: 16, max: 4, hp: 320, speed: 46, warnMs: 2000, raiseMs: 8000, climbGapMs: 1000, climbSec: 2.0, segCap: 8, footReach: 130, size: 150, footDy: 34 },
+     *  一段城头敌兵满 segCap 个就不再上人；墙脚（梯脚左右 footReach、往外 footDepth 以内）的近战兵会排队上梯。 */
+    ladder: { firstSec: 6, everySec: 16, max: 4, hp: 320, speed: 46, warnMs: 2000, raiseMs: 8000, climbGapMs: 800, climbSec: 2.0, segCap: 8, footReach: 200, footDepth: 160, size: 150, footDy: 34 },
     /**
      * 冲车（c 段验收第 1 条：城门的主要威胁改成冲车）：同时最多 max 辆；开到门前每 hitMs 撞一下，扣城门满耐久的 hitPct（按比例，各档城门一样几下破）。
      * 开得比原来快（speed），每波 ramAt 秒就出来，免得一波快完了才到门前。
@@ -75,25 +109,23 @@ export const DEFENSE_V2 = {
     gate: { hp: { small: 1500, medium: 1900, large: 2500 } as Record<'small' | 'medium' | 'large', number>, reach: 64, cap: 4, chopPct: .0003, bossPct: .004, share: 3 },
     /** 主将站在门楼上：每 everyMs 往门前一片（城门左右 halfW、墙脚往外 depth）放一轮箭，打最近的 targets 个（砍门的、冲车）（c 段验收第 2 条：门楼不只是个按 F 的点）。 */
     gateShot: { everyMs: 650, targets: 2, damage: 34, halfW: 200, depth: 170 },
-    /** 垛口掩护（c 段验收第 3 条）：城外射上来的箭打到走道上的我方士兵 × arrowMul（原来城外弓手对着主将放箭，箭先打在垛口后的士兵身上）；打到城头上的主将 × heroArrowMul。 */
-    cover: { arrowMul: .4, heroArrowMul: .7 },
     /** 城外同屏敌兵上限（c 段验收第 1 条：原来峰值 120～150 全堆在门前）；多出来的预算换成云梯车 / 冲车（waves.ladders / rams）。 */
     outsideCap: 70,
     /** 门破了：门洞处持续的尘土（每 dustMs 一团）和火光（地火序列帧 fires 团）。 */
     broken: { dustMs: 1400 },
     /** 占段：一段里我方士兵全没了、且这段城头敌兵 ≥ minFoes → 这段变红、梯子上人 ×fastMul；这段敌兵清光即夺回。 */
     capture: { minFoes: 3, fastMul: 2, checkMs: 250 },
-    /** 推下城：主将近战打中走道南沿 band 以内的普通兵（主将在它北边）→ 摔下城。 */
+    /** 推下城：主将近战打中走道南沿（城垛内沿往里 band 以内）的普通兵（主将在它北边）→ 摔下城。 */
     push: { band: 64, fallMs: 420 },
     /**
      * 推梯要按住（总制作人试玩：原来按一下就倒，认真守的玩家一场 0 个登城、主将不掉血）：站在梯口按住 F holdMs，梯上每多一个人 +perClimberMs；
      * 走开 moveTol 以上、松手就断（重新按）；挨一下打往回退 hitBackMs（打断但不清零——原来挨打就清零，登城的兵正落在梯口打主将，推不倒、越积越多）。先给保守值，交平衡会话。
      */
     pushHold: { holdMs: 800, perClimberMs: 250, moveTol: 24, hitBackMs: 300 },
-    /** 主将在城头：武器范围 ×rampartMul；近战打墙面 / 墙脚（外沿以南）的 ×belowMelee。 */
-    hero: { rampartMul: 1.3, belowMelee: .6 },
+    /** 主将在城头近战打墙面 / 墙脚（城垛内沿以南）的 ×belowMelee（射的、投的按 height.down 加成）。 */
+    hero: { belowMelee: .6 },
     /** 一键 F 的站位（离点 reach 以内）：梯口 = 梯子顶端；滚木架在梯口东侧 dx；油锅在门楼前沿；修门在门楼内侧（走道北沿）。 */
-    spots: { reach: 70, ladderDy: 40, rackDx: 84, rackDy: 48, oilDy: 52, gateDy: 72 },
+    spots: { reach: 70, ladderDy: 70, rackDx: 84, rackDy: 100, oilDy: 78, gateDy: 72 },
     /** 滚木：每个滚木架 charges 次（喘息时补满）；砸这段的梯子（梯上的人摔下去、梯子倒、云梯车 −engineDamage）+ 墙脚 foot 以内 damage。 */
     logs: { charges: 2, damage: 160, engineDamage: 220, foot: 200, fallMs: 340 },
     /** 热油：charges 次（喘息时补满）、冷却 cdMs；门前 radius 一片持续烧 ticks × tickMs，冲车 ×engineMul。 */
@@ -111,7 +143,7 @@ export const DEFENSE_V2 = {
   waves: {
     count: { small: 3, medium: 4, large: 5 } as Record<'small' | 'medium' | 'large', number>,
     attackSec: 65, restSec: 20, finalSec: 90,
-    ladders: [3, 4, 4, 4, 4] as readonly number[], rams: [1, 1, 1, 2, 2] as readonly number[],
+    ladders: [3, 4, 5, 5, 5] as readonly number[], rams: [1, 1, 1, 2, 2] as readonly number[],
     ladderAt: 4, ladderGap: 8, ramAt: 8, ramGap: 30,
   },
   /**
@@ -168,11 +200,11 @@ export const DEFENSE_V2 = {
   art: {
     seg: { file: 'assets/siege-v2/luoyang/wall_seg.png', w: 1339, h: 464, crenel: 92, ground: 452, walkTop: 50, walkBot: 90 },
     walkway: { a: 'assets/siege-v2/defense-v2/walkway_a.png', b: 'assets/siege-v2/defense-v2/walkway_b.png', w: 1024, h: 256, band: 44 },
-    gate: { file: 'assets/siege-v2/defense-v2/gate_passable_v2.png', w: 873, h: 816, rear: 186, base: 260, crenel: 449, ground: 809 },
+    gate: { file: 'assets/siege-v2/defense-v2/gate_passable_v2.png', w: 873, h: 816, rear: 186, base: 260, crenel: 449, ground: 809, pavL: 265, pavR: 605 },
     /** 破门版门楼（同尺寸同标注，只有拱门不同：门板撞碎、门洞是暗通道）：城门耐久归零换上，喘息堵门修回 reopenPct 换回完好的。 */
     gateBroken: { file: 'assets/siege-v2/defense-v2/gate_passable_v2_broken.png' },
     corner: { file: 'assets/siege-v2/luoyang/wall_corner.png', w: 487, h: 674, crenel: 205, ground: 640 },
-    /** 外侧城垛顶比 W 高多少（城垛压住走道南沿，站在后面的人腿被挡住）。 */
+    /** 外侧城垛顶比 W 高多少（墙段 / 门楼 / 角楼按这个对齐缩放；走道可走线 layout.rim 也到这里）。 */
     crenelOver: 50,
   },
 } as const;
@@ -180,7 +212,7 @@ export const DEFENSE_V2 = {
 export interface Box { left: number; right: number; top: number; bottom: number }
 export interface Pt { x: number; y: number }
 export interface Segment { i: number; x0: number; x1: number; ladderX: number }
-export type PostKind = 'crenel' | 'guard' | 'ramp' | 'reserve' | 'extra';
+export type PostKind = 'crenel' | 'guard' | 'ramp' | 'gate' | 'reserve' | 'extra';
 export interface Post { kind: PostKind; seg: number; x: number; y: number }
 
 /** 场地几何（纯函数）：o = 开局点。 */
@@ -193,21 +225,24 @@ export function v2Geometry(o: Pt) {
   const ramps = [gx - L.rampX, gx + L.rampX];
   const posts: Post[] = [];
   for (const s of segs) {
-    // 垛口：段内均分，避开梯口 ±mouth
-    const xs: number[] = []; const n = P.crenels, w = s.x1 - s.x0;
-    for (let k = 0; k < n + 1 && xs.length < n; k++) { const x = s.x0 + w * (k + .5) / (n + 1); if (Math.abs(x - s.ladderX) > P.mouth) xs.push(x); }
-    for (let k = 0; xs.length < n; k++) xs.push(s.x0 + 30 + k * 40);
-    for (const x of xs.slice(0, n)) posts.push({ kind: 'crenel', seg: s.i, x, y: W - P.crenelDy });
+    // 垛口：前排（城垛内沿后面）先、后排后；离梯口的 x 见 posts.front / back
+    for (const dx of P.front) posts.push({ kind: 'crenel', seg: s.i, x: s.ladderX + dx, y: W - P.crenelDy });
+    for (const dx of P.back) posts.push({ kind: 'crenel', seg: s.i, x: s.ladderX + dx, y: W - P.backDy });
     for (const dx of [-P.guardDx, P.guardDx]) posts.push({ kind: 'guard', seg: s.i, x: s.ladderX + dx, y: W - P.guardDy });
   }
   ramps.forEach((x, k) => posts.push({ kind: 'ramp', seg: k === 0 ? 0 : 3, x, y: W - P.rampDy }));
-  // 碰撞：墙身（走道南沿到墙脚，含关着的城门）、内侧女墙（马道处留缺口）、四面封边、角楼
-  const boxes: Box[] = [{ left: X0, right: X1, top: W - 6, bottom: F - 18 }];
+  ([-1, 1] as const).forEach(d => posts.push({ kind: 'gate', seg: d < 0 ? 1 : 2, x: gx + d * P.gateDx, y: W - P.gateDy }));
+  // 碰撞：墙身（城垛内沿 W − rim 到墙脚，含关着的城门）、内侧女墙（马道处留缺口）、门楼楼阁台基、四面封边、角楼、两端山崖
+  const boxes: Box[] = [{ left: X0, right: X1, top: W - L.rim, bottom: F - 18 }];
+  { const A = DEFENSE_V2.art.gate, gs = (L.face + DEFENSE_V2.art.crenelOver) / (A.ground - A.crenel), pav = (A.pavR - A.pavL) / 2 * gs;
+    boxes.push({ left: gx - pav, right: gx + pav, top: top + L.band - 4, bottom: F - (A.ground - A.base) * gs + 4 }); } // 楼阁在平台后面，人从楼前走过
   { let x = X0; for (const r of ramps) { boxes.push({ left: x, right: r - L.rampHalf, top: innerTop, bottom: top + L.band }); x = r + L.rampHalf; } boxes.push({ left: x, right: X1, top: innerTop, bottom: top + L.band }); }
   // 场地边界：走道两端外是角楼（贴地图左右边）；城外 / 城里横向到角楼外沿，纵向城里到 cityTop、城外到 outBot
   const bounds = { left: X0 - L.corner, right: X1 + L.corner, top: cityTop, bottom: outBot };
   // 角楼：墙头那一层（内侧女墙到墙脚）走道两端以外都挡住；城外 / 城里的人可以走到角楼底下（到场地边）
   boxes.push({ left: bounds.left - L.flank, right: X0, top: innerTop, bottom: F - 18 }, { left: X1, right: bounds.right + L.flank, top: innerTop, bottom: F - 18 });
+  // 角楼背后的山崖（城里那个角）：挡人，不让人走到山崖图上
+  { const E = L.ends; boxes.push({ left: bounds.left - L.flank, right: X0 - E.cliffIn - 26, top: W - E.cliffBlock, bottom: innerTop }, { left: X1 + E.cliffIn + 26, right: bounds.right + L.flank, top: W - E.cliffBlock, bottom: innerTop }); }
   // 四面封边（StageArena 也会把人挪回场内；这里给寻路和刷兵避让用）
   boxes.push({ left: bounds.left - L.flank, right: bounds.left, top: cityTop - L.flank, bottom: outBot + L.flank }, { left: bounds.right, right: bounds.right + L.flank, top: cityTop - L.flank, bottom: outBot + L.flank });
   boxes.push({ left: bounds.left - L.flank, right: bounds.right + L.flank, top: cityTop - L.flank, bottom: cityTop }, { left: bounds.left - L.flank, right: bounds.right + L.flank, top: outBot, bottom: outBot + L.flank });
@@ -226,6 +261,11 @@ export function v2ArenaDef(g: V2Geo): StageMapDef {
   return { kind: 'arena', bounds: { ...g.bounds }, edges: { n: 'houses', s: 'palisade', w: 'cliff', e: 'cliff' }, gates: S.xs.map(x => ({ x: g.gx + x, y: g.F + S.dy })), band: DEFENSE_V2.layout.edgeBand, forest: 'pine' };
 }
 
+/** 走道两端角楼背后的山崖（地形层 cliffs 矩形：x 中心、y 中心、宽、高）：盖住走道北半截和城里那个角，地图左右端用角楼 + 山崖收满。 */
+export function v2EndCliffs(g: V2Geo): Array<{ x: number; y: number; w: number; h: number }> {
+  const E = DEFENSE_V2.layout.ends, top = g.W - E.cliffTop, bot = g.W - E.cliffBot;
+  return [[g.bounds.left - E.cliffOut, g.X0 - E.cliffIn], [g.X1 + E.cliffIn, g.bounds.right + E.cliffOut]].map(([a, b]) => ({ x: (a + b) / 2, y: (top + bot) / 2, w: b - a, h: bot - top }));
+}
 /** 主将在不在走道带里（镜头往城外让）。 */
 export function onWalk(g: V2Geo, p: Pt): boolean { return p.y >= g.top - 20 && p.y <= g.W + 10 && p.x >= g.X0 && p.x <= g.X1; }
 /** 这一点在不在城外（墙脚以南）。 */
@@ -233,22 +273,25 @@ export function isOutside(g: V2Geo, p: Pt): boolean { return p.y >= g.F; }
 /** 这一点在哪一段（不在段里返回离得最近的段）。 */
 export function segmentAt(g: V2Geo, x: number): Segment { let best = g.segs[0], bd = Infinity; for (const s of g.segs) { const d = x < s.x0 ? s.x0 - x : x > s.x1 ? x - s.x1 : 0; if (d < bd) { bd = d; best = s; } } return best; }
 
-export interface UnitLite { id: number; kind: string; ranged: boolean }
+export interface UnitLite { id: number; kind: string; ranged: boolean; garrison?: boolean }
 const MELEE = new Set(['swordsman', 'spearman', 'guardian', 'halberdier', 'lishi']);
 /**
- * 自动站位（纯函数）：远程兵进垛口（四段轮着填，先填离城门远的段）；近战兵先进梯口驻守（每段 2 个，轮着填），再进马道口；
- * 骑兵、军医、多出来的都进门内预备队。返回 id → 岗位。
+ * 自动站位（纯函数）：远程兵进垛口（四段轮着填，先填离城门远的段；城防弓手排在最前，先占前排）；近战兵先进梯口驻守（每段 2 个，轮着填），再进马道口、门楼守军位；
+ * 门楼守军位没人时多出来的远程兵补上；骑兵、军医、多出来的都进门内预备队。返回 id → 岗位。
  */
 export function assignPosts(units: readonly UnitLite[], g: V2Geo): Map<number, Post> {
   const out = new Map<number, Post>(), segOrder = [0, 3, 1, 2];
   const queue = (kind: PostKind): Post[] => { const by = segOrder.map(s => g.posts.filter(p => p.kind === kind && p.seg === s)), res: Post[] = []; for (let k = 0; by.some(b => b[k]); k++) for (const b of by) if (b[k]) res.push(b[k]); return res; };
-  const crenels = queue('crenel'), guards = queue('guard'), ramps = g.posts.filter(p => p.kind === 'ramp');
+  const crenels = queue('crenel'), guards = queue('guard'), ramps = g.posts.filter(p => p.kind === 'ramp'), gates = g.posts.filter(p => p.kind === 'gate');
   let reserveN = 0; const toReserve = (u: UnitLite) => { const r = g.reserve(reserveN++); out.set(u.id, { kind: 'reserve', seg: -1, x: r.x, y: r.y }); };
-  for (const u of units) {
+  const order = [...units.filter(u => u.garrison), ...units.filter(u => !u.garrison)];
+  for (const u of order) {
     if (u.ranged) { const p = crenels.shift(); if (p) out.set(u.id, p); else toReserve(u); continue; }
-    if (MELEE.has(u.kind)) { const p = guards.shift() ?? ramps.shift(); if (p) out.set(u.id, p); else toReserve(u); continue; }
+    if (MELEE.has(u.kind)) { const p = (u.garrison ? gates.shift() : undefined) ?? guards.shift() ?? ramps.shift() ?? gates.shift(); if (p) out.set(u.id, p); else toReserve(u); continue; } // 城防的近战（门楼守军）先占门楼平台
     toReserve(u);
   }
+  // 门楼守军位还空着：从预备队里挑远程兵补（泼油要有人）
+  for (const p of gates) { const u = order.find(q => q.ranged && out.get(q.id)?.kind === 'reserve'); if (!u) break; out.set(u.id, p); }
   return out;
 }
 

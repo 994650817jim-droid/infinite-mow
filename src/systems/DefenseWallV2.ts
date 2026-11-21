@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { DEPTH, actorDepth } from '../config';
-import { DEFENSE_V2, assignPosts, cameraCenterY, isOutside, nextWaypoint, segmentAt, v2Geometry, v2ReinforceNeed, type Post, type Pt, type V2Geo, type Segment } from '../data/defenseV2';
+import { DEFENSE_V2, assignPosts, cameraCenterY, isOutside, nextWaypoint, onWalk, segmentAt, v2Geometry, v2ReinforceNeed, type Post, type PostKind, type Pt, type V2Geo, type Segment } from '../data/defenseV2';
 import type { Ally } from '../entities/Ally';
 
 /**
@@ -52,7 +52,7 @@ export class DefenseWallV2 {
   /** 开局分岗（所有在编的兵），并直接放到岗位上（守城开打时守军已经在墙上）。 */
   assignAll(place = true): void {
     const units = this.h.units().filter(u => u.active);
-    const map = assignPosts(units.map(u => ({ id: u.id, kind: u.kind, ranged: !!u.def.ranged })), this.g);
+    const map = assignPosts(units.map(u => ({ id: u.id, kind: u.kind, ranged: !!u.def.ranged, garrison: u.garrison })), this.g);
     this.slots.clear();
     for (const u of units) { const post = map.get(u.id); if (!post) continue; this.slots.set(u, { post, life: u.lifeId }); if (place) { u.setPosition(post.x, post.y); u.ai.x = post.x; u.ai.y = post.y; u.ai.nextThink = 0; } }
     this.stats.assigned = this.slots.size;
@@ -63,8 +63,20 @@ export class DefenseWallV2 {
     if (!s || s.life !== u.lifeId) { s = { post: this.reserveSlot(), life: u.lifeId }; this.slots.set(u, s); }
     return nextWaypoint(this.g, u, s.post);
   }
-  /** 垛口上的远程兵射程加长（够得到墙脚）。 */
-  rangeMul(u: Ally): number { const s = this.slots.get(u); return s && s.life === u.lifeId && s.post.kind === 'crenel' ? DEFENSE_V2.wallRangeMul : 1; }
+  /** 城头远程兵射程（居高临下，data height）：垛口位 ×crenelRange（够得到墙脚以外）；走道上别的远程兵 ×down.range。 */
+  rangeMul(u: Ally): number { const H = DEFENSE_V2.height, s = this.slots.get(u); if (s && s.life === u.lifeId && s.post.kind === 'crenel') return H.crenelRange; return u.def.ranged && onWalk(this.g, u) ? H.down.range : 1; }
+  /** 站在某类岗位（某段）上的兵（活着、岗位没换过）。 */
+  holders(kind: PostKind, seg?: number): Ally[] { const out: Ally[] = []; for (const [u, s] of this.slots) if (s.post.kind === kind && (seg === undefined || s.post.seg === seg) && u.active && s.life === u.lifeId) out.push(u); return out; }
+  /** 这个兵的岗位（测试 / 守城道具用）。 */
+  postFor(u: Ally): Post | null { const s = this.slots.get(u); return s && s.life === u.lifeId ? s.post : null; }
+  /**
+   * 城防补员（喘息时）：新来的城防弓手按空着的垛口位分（前排先）、门楼守军回门楼平台，从城里走马道上去；没空位就进预备队。返回上墙几个。
+   */
+  addGarrison(units: readonly Ally[]): number {
+    let n = 0; const free = this.g.posts.filter(p => p.kind === 'crenel' && !this.holder(p)).sort((a, b) => b.y - a.y), gates = this.g.posts.filter(p => p.kind === 'gate' && !this.holder(p));
+    for (const u of units) { const post = u.def.ranged ? free.shift() : gates.shift(); this.slots.set(u, { post: post ?? this.reserveSlot(), life: u.lifeId }); u.ai.nextThink = 0; if (post) n++; }
+    return n;
+  }
   private reserveSlot(): Post { const used = new Set([...this.slots.values()].filter(v => v.post.kind === 'reserve').map(v => v.post.x + ',' + v.post.y)); for (let i = 0; i < 64; i++) { const r = this.g.reserve(i); if (!used.has(r.x + ',' + r.y)) return { kind: 'reserve', seg: -1, x: r.x, y: r.y }; } const r = this.g.reserve(0); return { kind: 'reserve', seg: -1, x: r.x, y: r.y }; }
   private holder(post: Post): Ally | null { for (const [u, s] of this.slots) if (s.post === post && u.active && s.life === u.lifeId) return u; return null; }
   private reserveUnits(ranged: boolean): Ally[] { const out: Ally[] = []; for (const [u, s] of this.slots) if (s.post.kind === 'reserve' && u.active && s.life === u.lifeId && !!u.def.ranged === ranged && u.kind !== 'rider' && u.kind !== 'medic') out.push(u); return out; }
@@ -134,8 +146,10 @@ export class DefenseWallV2 {
     }
     // 城门楼那一截不铺（门楼图自带楼前平台；后排女墙垛口缺口里该看见城里的地，不是走道的女墙顶），两段的纹理接着 X0 对齐
     const gHalf = A.gate.w * ((g.F - (g.W - A.crenelOver)) / (A.gate.ground - A.gate.crenel)) / 2 - 12;
-    for (const [x0, x1] of [[g.X0, g.gx - gHalf], [g.gx + gHalf, g.X1]]) this.art.push(s.add.tileSprite((x0 + x1) / 2, g.top + WK.h / 2, x1 - x0, WK.h, walkKey).setTilePosition(x0 - g.X0, 0).setDepth(DEPTH.ground + 2).setName('defv2-walk'));
+    const E = DEFENSE_V2.layout.ends;
+    for (const [x0, x1] of [[g.X0 - E.under, g.gx - gHalf], [g.gx + gHalf, g.X1 + E.under]]) this.art.push(s.add.tileSprite((x0 + x1) / 2, g.top + WK.h / 2, x1 - x0, WK.h, walkKey).setTilePosition(x0 - g.X0, 0).setDepth(DEPTH.ground + 2).setName('defv2-walk'));
     // 马道口：女墙带在缺口处换成路面（同一张走道图往下取路面那几行盖上去），看得出这里能上下城
+    // （原来缺口北边摆的石阶图 siege_mid_city 帧 4 高的一头朝城里，和「城头高、城里低」反了——人站上去像贴在台阶图上，去掉；等美术组出下城马道图。往城里再铺一截石板试过，像贴了块补丁，也不铺。）
     for (const r of g.ramps) { const half = DEFENSE_V2.layout.rampHalf; this.art.push(s.add.tileSprite(r, g.top + WK.band / 2, half * 2, WK.band, walkKey).setTilePosition(r - half - g.X0, WK.band + 60).setDepth(DEPTH.ground + 2.5).setName('defv2-ramp-gap')); }
     // 外墙立面：墙段图从外侧城垛顶往下裁（城垛盖住走道南沿上站着的人的腿），墙脚对齐 F；从城门楼两侧往外排
     // 墙段从城门楼图的两边往外排（按图的实际半宽，和段的几何一致）
@@ -151,11 +165,10 @@ export class DefenseWallV2 {
     { this.gateBack = s.add.image(g.gx, g.F, KEY.gate).setOrigin(.5, A.gate.ground / A.gate.h).setScale(gs).setDepth(actorDepth(g.top) - .01).setName('defv2-gate'); this.art.push(this.gateBack);
       const front = s.add.image(g.gx, g.F, KEY.gate).setOrigin(.5, A.gate.ground / A.gate.h).setScale(gs).setDepth(actorDepth(g.W) + .005).setName('defv2-gate-front');
       front.setCrop(0, A.gate.crenel, A.gate.w, A.gate.h - A.gate.crenel); this.art.push(front); this.gateFront = front; if (this.gateBroken) this.setGateBroken(true); }
-    // 角楼：在墙两端外侧（不压走道）
+    // 角楼：贴在走道端头外侧（右缘离走道端 towerGap，人走到走道端头不会站进角楼图里）；顶上城垛和墙段城垛齐平；角楼背后的走道北半截 / 城里那角由地形层山崖收满（v2EndCliffs）
     { const cs = (g.F - (g.W - A.crenelOver)) / (A.corner.ground - A.corner.crenel), half = A.corner.w * cs / 2;
-      for (const [x, flip] of [[g.X0 - half + 10, false], [g.X1 + half - 10, true]] as const) this.art.push(s.add.image(x, g.F, KEY.corner).setOrigin(.5, A.corner.ground / A.corner.h).setScale(cs).setFlipX(flip).setDepth(actorDepth(g.W) + .01).setName('defv2-corner')); }
-    // 城内：马道斜坡（siege_mid_city 帧 4）、府衙（siege_mid_hall 帧 0）
-    if (s.textures.exists('siege_mid_city')) for (const x of g.ramps) this.art.push(s.add.image(x, g.innerTop + 8, 'siege_mid_city', 4).setOrigin(.5, .9).setDisplaySize(170, 170).setDepth(actorDepth(g.innerTop - 30)).setName('defv2-ramp'));
+      for (const [x, flip] of [[g.X0 - half - E.towerGap, false], [g.X1 + half + E.towerGap, true]] as const) this.art.push(s.add.image(x, g.F, KEY.corner).setOrigin(.5, A.corner.ground / A.corner.h).setScale(cs).setFlipX(flip).setDepth(actorDepth(g.W) + .01).setName('defv2-corner')); }
+    // 城内：府衙（siege_mid_hall 帧 0）
     if (s.textures.exists('siege_mid_hall')) this.art.push(s.add.image(g.keep.x, g.keep.y, 'siege_mid_hall', 0).setOrigin(.5, .85).setDisplaySize(280, 280).setDepth(actorDepth(g.keep.y)).setName('defv2-keep'));
     // 城外：敌营（siege_mid_ram 帧 7 营帐）
     if (s.textures.exists('siege_mid_ram')) for (const dx of DEFENSE_V2.spawn.xs) this.art.push(s.add.image(g.gx + dx, g.F + DEFENSE_V2.spawn.dy + 90, 'siege_mid_ram', 7).setOrigin(.5, .85).setDisplaySize(190, 190).setDepth(actorDepth(g.F + DEFENSE_V2.spawn.dy + 90)).setName('defv2-camp'));

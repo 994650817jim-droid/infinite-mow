@@ -66,7 +66,7 @@ try {
   // ———— 喘息：结算赏粮、滚木 / 热油补满、状态行、Space 跳过
   const food0 = await ev(() => { const s = window.__S, A = s.defenseAssault; A.logs[0] = 0; A.oil.charges = 0; return s.legion.food; });
   await ev(() => { const s = window.__S; s.elapsed = 65.5; });
-  const restOk = await until(() => window.__S.defenseAssault.phase === 'rest', 5000); await wait2(3700); // 第一次的完整横幅约 3 秒，出着时顶上状态行先让开
+  const restOk = await until(() => window.__S.defenseAssault.phase === 'rest', 5000); await wait2(3700); await until(() => window.__S.defenseAssault.status.visible, 6000); // 横幅出着时顶上状态行先让开（喘息开头的赏粮、城防补员、车毁…），等它出来
   const rest = await ev(() => { const s = window.__S, A = s.defenseAssault; return { phase: A.phase, logs: [...A.logs], oil: A.oil.charges, reward: A.stats.rewardFood, food: s.legion.food, status: A.status.visible ? A.status.text : '', banner: s.children.list.filter(o => o.name === 'combat-notice').map(o => o.text).join(' | ') }; });
   await p.screenshot({ path: OUT + '/c-5-rest.png' });
   ck('喘息：赏粮（守得干净有奖）、滚木 / 热油补满、顶上一行状态（喘息 N 秒 · 城门 · 府衙 · 还有几波 · Space 跳过）', restOk && rest.reward > 0 && rest.food >= food0 + rest.reward - 1 && rest.logs[0] === 2 && rest.oil === 3 && /喘息/.test(rest.status) && /Space/.test(rest.status), rest);

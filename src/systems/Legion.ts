@@ -34,6 +34,10 @@ export class Legion {
   rangeMul=1;damageMul=1;
   /** 守城 v2（systems/DefenseWallV2）：给了就按岗位站（不跟主将、不退），postRangeMul 是岗位上的射程倍率（垛口远程兵够得到墙脚）。 */
   postOf?:(u:Ally)=>{x:number;y:number}|null;postRangeMul?:(u:Ally)=>number;
+  /** 守城 v2：这个兵正在用守城道具（推梯 / 放滚木 / 泼油读条）——这期间不走位、不出手。 */
+  busy?:(u:Ally)=>boolean;
+  /** 守城 v2：出手伤害倍率（居高临下：城头往下打 ×height.down.damage）。 */
+  hitMul?:(u:Ally,e:Enemy)=>number;
   /** 受伤倍率（守城 v2：城外射上来的箭打到垛口后的士兵 × 掩护倍率）。 */
   hurtMul?:(u:Ally,source?:{x:number;y:number;normal:boolean})=>number;
   /** 军阵（systems/FormationRuntime）：入阵士兵的伤害 / 受伤 / 射程倍率；没有 = 1。 */
@@ -107,9 +111,10 @@ export class Legion {
     this.projectiles = new LegionProjectiles(scene); this.tactics = new LegionTactics(this.centerProxy(player),u=>this.command.target(u)??(this.focus?.active&&this.focus.spawnId===this.focusLife?this.focus:null)??this.campTarget?.(u)??null,u=>{const p=this.formation.position(u);return this.freeAt?this.freeAt(p.x,p.y):p;},o=>this.formation.extent+(o==='guard'?this.formation.leashAdj:0),(u,x,y,now)=>{const w=this.flowRoute?.(u.x,u.y,x,y);if(w){this.navStats.routed++;return w;}return this.navigation.steer(u.id,u.x,u.y,x,y,u.radius,now);});
     this.tactics.relocate=(u,x,y)=>this.place(u,x,y); // 收回兜底也走统一换位（屏外直接换、屏内淡出淡入）
   }
-  get count(): number { let n = 0; for (const u of this.units) if (u.active) n++; return n; }
+  /** 在编兵力（城防弓手是城里的守军，不算）。 */
+  get count(): number { let n = 0; for (const u of this.units) if (u.active && !u.garrison) n++; return n; }
   recover(): void { for (const u of this.units) if (u.active) u.hp = u.maxHp; }
-  exportState(): LegionState { return { training:{...this.training},groups:{...this.groups},food: this.food, dead: this.dead, recruited: this.recruited, levels: { ...this.levels }, soldiers: this.units.filter(u => u.active).map(u => ({ kind: u.kind, hp: u.hp,reserveSoldier:u.reserveSoldier||undefined,max:u.maxHp })) }; }
+  exportState(): LegionState { return { training:{...this.training},groups:{...this.groups},food: this.food, dead: this.dead, recruited: this.recruited, levels: { ...this.levels }, soldiers: this.units.filter(u => u.active && !u.garrison).map(u => ({ kind: u.kind, hp: u.hp,reserveSoldier:u.reserveSoldier||undefined,max:u.maxHp })) }; }
   restore(state: LegionState): void {
     this.clear();this.training=freshTraining();for(const id of Object.keys(this.training)as CampTrainingId[])this.training[id]=Math.max(0,Math.min(3,Math.floor(state.training?.[id]??0)));this.groups={...state.groups};this.command.setState(this.player.growth.build); Object.assign(this.levels, state.levels);
     for(const kind of TROOP_KINDS){const saved=state.soldiers.filter(s=>s.kind===kind),start=this.units.length;if(saved.length)this.recruit(kind,saved.length,true,true);saved.forEach((s,i)=>{const u=this.units[start+i];u.hp=Math.max(0,Math.min(u.maxHp,s.hp));u.reserveSoldier=s.reserveSoldier===true;});}for(const u of this.units){const p=this.formation.position(u);u.setPosition(p.x,p.y);}
@@ -182,7 +187,7 @@ export class Legion {
     if (!u.hp) {
       this.onDeath?.(u, now);
       this.corpses.spawn(u, u.view?.sprite, now);
-      u.active = false; this.dead++; u.deathsReported = true; const v = u.release(); if (v) this.views.push(v); this.regroup();
+      u.active = false; if (!u.garrison) this.dead++; u.deathsReported = true; const v = u.release(); if (v) this.views.push(v); this.regroup();
      
     }
     return true;
@@ -267,6 +272,7 @@ export class Legion {
       if (!u.active) continue;
       u.beginStep();
       if (this.arriving.size && this.arriving.has(u)) { this.stepArrival(u, dt); continue; }
+      if (this.busy?.(u)) continue;
       u.simDebt += dt; const nearPlayer = Math.hypot(u.x - this.player.x, u.y - this.player.y) < 900;
       if (!nearPlayer && u.simDebt < LEGION.farStep) continue;
       const step = nearPlayer ? dt : u.simDebt; u.simDebt = 0;
@@ -280,7 +286,7 @@ export class Legion {
     if (this.combatClock >= LEGION.nearStep) {
       this.combatClock = 0;
       for (const u of this.units) {
-        if (!u.active || u.cooldown > 0 || u.kind === 'rider' && u.ai.mode === 'return' || u.ai.recall || this.arriving.has(u)) continue;
+        if (!u.active || u.cooldown > 0 || u.kind === 'rider' && u.ai.mode === 'return' || u.ai.recall || this.arriving.has(u) || this.busy?.(u)) continue;
         const range = u.def.range * (u.def.ranged ? stats.range : u.kind === 'halberdier' && u.level === 3 ? 1.25 : 1) * (this.fm?.range(u) ?? 1) * (this.postRangeMul?.(u) ?? 1);
         if (u.kind === 'medic') {
           const wounded = this.grid.query(u.x, u.y, range, this.friends).filter(a => a.active && a.hp < a.maxHp && Math.hypot(a.x - u.x, a.y - u.y) <= range).sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp);
@@ -301,7 +307,7 @@ export class Legion {
             if (u.ai.chargeHits.has(e.spawnId) || u.ai.chargeHits.size >= (u.level === 3 ? 3 : 1)) continue;
             u.ai.chargeHits.add(e.spawnId);
           }
-          const amount = u.def.damage * this.drillMultiplier * (1+CAMP_TRAINING.attack.perLevel*this.training.attack) * (1 + .25 * (u.level - 1)) * stats.melee * (u.kind === 'spearman' && e.kind === 'cavalry' && u.level === 3 ? 2 : 1) * (this.fm?.dmg(u, e) ?? 1);
+          const amount = u.def.damage * this.drillMultiplier * (1+CAMP_TRAINING.attack.perLevel*this.training.attack) * (1 + .25 * (u.level - 1)) * stats.melee * (u.kind === 'spearman' && e.kind === 'cavalry' && u.level === 3 ? 2 : 1) * (this.fm?.dmg(u, e) ?? 1) * (this.hitMul?.(u, e) ?? 1);
           if (u.def.ranged) { if (u.kind === 'crossbowman') { const total = Math.max(1, Math.round(amount)), first = u.level === 3 ? total : Math.ceil(total / 2), second = u.level === 3 ? total : Math.floor(total / 2); this.projectiles.fire(u, e, first, now + 180); if (second) this.projectiles.fire(u, e, second, now + 260); } else this.projectiles.fire(u, e, amount, now + 180); }
           else if(u.kind==='spearman'){this.strikes.push({owner:u,life:u.lifeId,target:e,spawn:e.spawnId,due:now+120,amount});}
           else { this.fx(u, e.x, e.y, now, false); this.knock(u, e, u.kind==='rider'?5:3, now); damage(e, amount); }

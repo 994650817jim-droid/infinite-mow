@@ -55,6 +55,20 @@ const BOUNDS = { x0: Math.min(...XS) - 40, x1: Math.max(...XS) + 40, y0: Math.mi
 /** 中心头像位：四个入口围出的方框中点。 */
 const CENTER = (() => { const g = STAR_NODES.filter(n => n.kind === 'gate'); return { x: g.reduce((s, n) => s + n.x, 0) / g.length, y: g.reduce((s, n) => s + n.y, 0) / g.length }; })();
 const ZOOM_MIN = .8, ZOOM_MAX = 1.6;
+/** 底图（美术之后交 bg_starmap_stars.webp 替换时只改这里）。 */
+export const STAR_BG = { key: P + 'bg', file: 'bg_starmap.webp' } as const;
+/**
+ * 八卦阵装饰层（2026-11-21 用户批准星图背景做成「八卦阵」；素材与坐标见 public/assets/star-map/bagua/layout.json）。
+ * 星图坐标、1× 显示尺寸（图本身 2×）、不透明度——微调只改这张表。放在星图层里：跟着平移缩放、在文字栏下淡出，不参与点击。
+ */
+export const BAGUA = {
+  plate: { file: 'bagua/taiji_plate.png', x: 800, y: 450, w: 368, h: 368, alpha: .2 },
+  trigrams: [
+    { id: 'qian', x: 505, y: 235 }, { id: 'xun', x: 1095, y: 235 }, { id: 'li', x: 1095, y: 665 }, { id: 'kun', x: 505, y: 665 },
+    { id: 'zhen', x: 800, y: 255 }, { id: 'dui', x: 1000, y: 450 }, { id: 'kan', x: 800, y: 645 }, { id: 'gen', x: 600, y: 450 },
+  ],
+  trigram: { w: 56, h: 52, alpha: .32 },
+} as const;
 /** 可见区边上的淡出带宽度（逻辑像素）。 */
 const FADE_E = 16;
 
@@ -65,7 +79,7 @@ const nodeKey = (n: StarNode, st: NodeState): string => `${P}${setOf(n)}_${n.kin
 function queueArt(scene: Phaser.Scene, hero: string): number {
   const L = scene.load; let n = 0;
   const img = (k: string, url: string) => { if (!scene.textures.exists(k)) { L.image(k, url); n++; } };
-  img(P + 'bg', BASE + 'bg_starmap.webp'); img(P + 'line_ink', BASE + 'line_ink.png'); img(P + 'line_gold', BASE + 'line_gold.png');
+  img(STAR_BG.key, BASE + STAR_BG.file); img(P + 'bagua_plate', BASE + BAGUA.plate.file); for (const t of BAGUA.trigrams) img(P + 'bagua_' + t.id, `${BASE}bagua/trigram_${t.id}.png`); img(P + 'line_ink', BASE + 'line_ink.png'); img(P + 'line_gold', BASE + 'line_gold.png');
   for (const s of SETS) for (const k of KINDS) for (const st of STATES) img(`${P}${s}_${k}_${st}`, `${BASE}nodes/${s}/${k}_${st}.png`);
   for (const id of new Set(Object.values(ICONS))) img(P + 'icon_' + id, `${BASE}icon_${id}.png`);
   if (!scene.textures.exists(P + 'fx')) { L.spritesheet(P + 'fx', BASE + 'fx_light_strip.png', { frameWidth: 192, frameHeight: 192 }); n++; }
@@ -120,7 +134,7 @@ export class StarMapUI {
     const s = this.scene, W = this.W, H = this.H;
     this.built = true;
     if (!s.anims.exists(P + 'fx_play')) s.anims.create({ key: P + 'fx_play', frames: s.anims.generateFrameNumbers(P + 'fx', { start: 0, end: 11 }), frameRate: 15, repeat: 0 });
-    const bg = s.add.image(W / 2, H / 2, P + 'bg').setScrollFactor(0); bg.setScale(Math.max(W / bg.width, H / bg.height)); this.root.add(bg);
+    const bg = s.add.image(W / 2, H / 2, STAR_BG.key).setScrollFactor(0); bg.setScale(Math.max(W / bg.width, H / bg.height)); this.root.add(bg);
     // 图：容器里用设计稿坐标；默认缩放 = 正好一屏放下（左右各留出文字栏）
     this.map = s.add.container(0, 0).setScrollFactor(0).setName('star-map-layer'); this.root.add(this.map);
     const sideL = IS_DESKTOP ? 210 : 0, sideR = IS_DESKTOP ? 230 : 0;
@@ -129,6 +143,10 @@ export class StarMapUI {
     const availW = this.clip.r - this.clip.l - 2 * FADE_E, availH = this.clip.b - this.clip.t - 2 * FADE_E;
     this.fit = Math.min(availW / (BOUNDS.x1 - BOUNDS.x0), availH / (BOUNDS.y1 - BOUNDS.y0));
     this.home = { x: (this.clip.l + this.clip.r) / 2, y: (this.clip.t + this.clip.b) / 2 };
+    // 八卦阵（最底层：太极盘 + 八卦，在连线和节点之下；不可点）
+    { const add = (key: string, x: number, y: number, w: number, h: number, alpha: number, name: string) => { if (!s.textures.exists(key)) return; const im = s.add.image(x, y, key).setDisplaySize(w, h).setAlpha(alpha).setScrollFactor(0).setName(name); this.map.add(im); this.decor.push({ obj: im, x, y, alpha }); };
+      const pl = BAGUA.plate; add(P + 'bagua_plate', pl.x, pl.y, pl.w, pl.h, pl.alpha, 'star-bagua-plate');
+      for (const t of BAGUA.trigrams) add(P + 'bagua_' + t.id, t.x, t.y, BAGUA.trigram.w, BAGUA.trigram.h, BAGUA.trigram.alpha, 'star-bagua-' + t.id); }
     // 连线（先画，在节点下面）
     for (const [a, b] of STAR_EDGES) {
       const A = STAR_BY_ID.get(a)!, B = STAR_BY_ID.get(b)!, len = Math.hypot(B.x - A.x, B.y - A.y), ang = Math.atan2(B.y - A.y, B.x - A.x);
@@ -160,6 +178,7 @@ export class StarMapUI {
   private home = { x: 0, y: 0 };
   /** 星图可见区（左右文字栏与底部操作提示之外）；区外的星、线、头像淡出到 0 并关掉点击（2026-11-21 验收：放大 / 拖动后文字栏压在星上）。 */
   private clip = { l: 0, r: 0, t: 0, b: 0 };
+  private readonly decor: Array<{ obj: Phaser.GameObjects.Image; x: number; y: number; alpha: number }> = [];
   private portraitParts: Array<{ setAlpha: (a: number) => unknown }> = [];
   private fadeAt(x: number, y: number): number {
     const s = this.fit * this.zoom, sx = this.map.x + x * s, sy = this.map.y + y * s, c = this.clip, E = FADE_E;
@@ -175,6 +194,7 @@ export class StarMapUI {
     }
     for (const l of this.lines) { const A = STAR_BY_ID.get(l.a)!, B = STAR_BY_ID.get(l.b)!, a = Math.min(this.fadeAt(A.x, A.y), this.fadeAt(B.x, B.y)); l.ink.setAlpha(.72 * a); l.gold.setAlpha(a); }
     const pa = this.fadeAt(CENTER.x, CENTER.y); for (const o of this.portraitParts) o.setAlpha(pa);
+    for (const d of this.decor) d.obj.setAlpha(d.alpha * this.fadeAt(d.x, d.y));
     this.ring.setAlpha(this.selected ? this.nodes.get(this.selected)?.fade ?? 1 : 1);
   }
   /** 底座图的显示尺寸系数（图是 2×，显示按设计稿 1×；入口 / 要星图 128 宽包含外圈笔触，按设计稿 44 直径换算）。 */

@@ -57,6 +57,14 @@ const leak = await ui('GameScene', (r, s) => { const W = 960, H = 540, out = [];
 const hidden = await ui('GameScene', r => { let n = 0; const walk = l => { for (const o of l) { if (o.list) walk(o.list); else if (/^star-base-/.test(o.name ?? '') && o.alpha <= .05) n++; } }; walk(r.list); return n; });
 ck('放大拖动后文字栏 / 底部提示下的星都淡出（星图不压字）', leak.length === 0 && hidden > 0, { leak: leak.slice(0, 6), hidden });
 await p.screenshot({ path: `${OUT}/ui-battle-zoom-clip.png` });
+// 八卦阵：太极盘 + 8 卦在场、在星图层里跟着平移缩放（位置 = 星图层位置 + 坐标 × 缩放）、文字栏 / 底部提示下淡出、不可点
+const bagua = await ui('GameScene', r => { const layer = r.list.find(o => o.name === 'star-map-layer'), W = 960, H = 540, out = { n: 0, follow: true, leak: [], hidden: 0, interactive: 0, belowLines: true };
+  const firstLine = layer.list.findIndex(o => o.type === 'TileSprite');
+  layer.list.forEach((o, i) => { if (!/^star-bagua-/.test(o.name ?? '')) return; out.n++; if (o.input) out.interactive++; if (i > firstLine) out.belowLines = false;
+    const m = o.getWorldTransformMatrix(), ex = layer.x + o.x * layer.scaleX, ey = layer.y + o.y * layer.scaleY; if (Math.abs(m.tx - ex) > 1 || Math.abs(m.ty - ey) > 1) out.follow = false;
+    if (m.tx < 210 || m.tx > W - 230 || m.ty > H - 24) { if (o.alpha > .02) out.leak.push([o.name, +o.alpha.toFixed(2)]); else out.hidden++; } });
+  out.scale = +layer.scaleX.toFixed(3); return out; });
+ck('八卦阵：太极 + 8 卦在场、随缩放平移、在连线之下、不可点、文字栏下淡出', bagua.n === 9 && bagua.follow && bagua.belowLines && bagua.interactive === 0 && bagua.leak.length === 0, bagua);
 // 验收第 2 条：悬停在当前选中的星上不弹悬停框（不盖右栏）
 const tipChk = await ui('GameScene', r => { const zones = []; const walk = l => { for (const o of l) { if (/^star-/.test(o.name ?? '') && o.type === 'Zone') zones.push(o); if (o.list) walk(o.list); } }; walk(r.list); const tip = r.list.find(o => o.name === 'star-map-tip'), sel = r.list.find(o => o.name === 'star-map-sel-name').text; const vis = zones.filter(z => z.input?.enabled); vis[0].emit('pointerup', { upTime: 1 }); /* 选中第一颗可见的星 */ vis[0].emit('pointerover'); const onSel = tip.visible; vis[0].emit('pointerout'); vis[vis.length - 1].emit('pointerover'); const b = tip.getBounds(); const other = { visible: tip.visible, right: Math.round(b.right) }; vis[vis.length - 1].emit('pointerout'); return { sel, onSel, other }; });
 ck('悬停在选中的星上不弹框；别的星的悬停框不伸进右栏', !tipChk.onSel && tipChk.other.visible && tipChk.other.right <= 960 - 230, tipChk);

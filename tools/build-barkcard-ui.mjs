@@ -34,13 +34,14 @@ for (const j of jobs) {
   outs.forEach((o, i) => { if (!j.names[i]) return; writeFileSync(DIR + j.names[i] + '.png', Buffer.from(o.url.split(',')[1], 'base64')); console.log('→', DIR + j.names[i] + '.png', o.w + '×' + o.h); });
 }
 // 墨迹扩散：白底黑墨 → 透明底墨色（不透明度 = 1 - 亮度），缩成每格 256
+// 2026-11-20 修：源图其实已是透明底黑墨——透明像素 RGB 为 0，旧算法把它当成黑墨，八帧全成了实心暗色方块（剧情卡出场「黑框一闪」）。现在乘上源图自己的不透明度
 const ink = 'public/assets/epic-home/opening/ink_bloom.png';
 if (existsSync(ink)) {
   const url = await p.evaluate(async u => {
     const im = new Image(); im.src = u; await im.decode();
     const c = document.createElement('canvas'); c.width = 1024; c.height = 512; const g = c.getContext('2d', { willReadFrequently: true }); g.imageSmoothingQuality = 'high'; g.drawImage(im, 0, 0, 1024, 512);
     const id = g.getImageData(0, 0, 1024, 512), a = id.data;
-    for (let i = 0; i < a.length; i += 4) { const lum = (a[i] * .3 + a[i + 1] * .59 + a[i + 2] * .11); a[i + 3] = Math.round(Math.max(0, Math.min(255, (255 - lum) * 1.15))); a[i] = 18; a[i + 1] = 12; a[i + 2] = 8; }
+    for (let i = 0; i < a.length; i += 4) { const lum = (a[i] * .3 + a[i + 1] * .59 + a[i + 2] * .11); a[i + 3] = Math.round(a[i + 3] / 255 * Math.max(0, Math.min(255, (255 - lum) * 1.15))); a[i] = 18; a[i + 1] = 12; a[i + 2] = 8; }
     g.putImageData(id, 0, 0); return c.toDataURL('image/png');
   }, 'data:image/png;base64,' + readFileSync(ink).toString('base64'));
   writeFileSync(DIR + 'inkbloom.png', Buffer.from(url.split(',')[1], 'base64')); console.log('→', DIR + 'inkbloom.png', '1024×512（4×2 每格 256）');

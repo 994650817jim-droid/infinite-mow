@@ -213,6 +213,11 @@ export class FollowerSquad {
   obstacles: (() => ReadonlyArray<{ left: number; right: number; top: number; bottom: number }> | undefined) | null = () => (this.scene as unknown as { sishuiObstacles?: { footprints: Array<{ left: number; right: number; top: number; bottom: number }> } }).sishuiObstacles?.footprints;
   /** 地形层（树干）推开：返回推开量（没碰到为 null）。场景有地形时接上。 */
   terrainPush: ((x: number, y: number, r: number) => { x: number; y: number } | null) | null = null;
+  /**
+   * 我方绕障（2026-11-21 用户试玩「关于我自己的兵也会被围栏卡住」）：GameScene 接到敌兵绕障导航（以主将为终点）。
+   * route：去阵位 / 追击点的连线被挡时给绕路路点（null = 直走）；free：瞬移归位落点压在栅栏 / 城墙里时挪到最近可走点（不卡墙后、不穿墙）。
+   */
+  nav: { route(x: number, y: number, tx: number, ty: number): { x: number; y: number } | null; free(x: number, y: number): { x: number; y: number } } | null = null;
   /** 无名之辈招式 / 被动的统计（测试 / 平衡用）。 */
   readonly skillStats = { sweep: 0, thrust: 0, thrustHits: 0, volley: 0, heal: 0, healed: 0, block: 0, crit: 0, formation: 0, rally: 0 };
   /** 降将专属招式统计：casts 出招次数、hits 命中人次、damage 伤害；byBoss[首领 id] = 出招次数（测试 / 平衡用）。 */
@@ -272,7 +277,8 @@ export class FollowerSquad {
       if (f.recalling) this.recall(f, gx, gy, d, dt, now);
       else {
       if (d > FOLLOW.snap) this.teleport(f, gx, gy);
-      this.move(f, gx, gy, dt, now);
+      const w = this.nav?.route(f.x, f.y, gx, gy);
+      if (w) this.walkTo(f, w.x, w.y, f.walkSpeed * RECALL.speedMul, dt, now); else this.move(f, gx, gy, dt, now);
       }
       }
       // 可玩名将：本命武器自己找目标、出手（以随行为发射源）
@@ -391,6 +397,7 @@ export class FollowerSquad {
     let gx = e.x - (e.x - f.x) / d * reach, gy = e.y - (e.y - f.y) / d * reach;
     const lx = gx - this.player.x, ly = gy - this.player.y, ld = Math.hypot(lx, ly);
     if (ld > FOLLOW.sortieLeash) { gx = this.player.x + lx / ld * FOLLOW.sortieLeash; gy = this.player.y + ly / ld * FOLLOW.sortieLeash; }
+    { const w = this.nav?.route(f.x, f.y, gx, gy); if (w) { gx = w.x; gy = w.y; } }
     const dx = gx - f.x, dy = gy - f.y, dist = Math.hypot(dx, dy), step = Math.min(dist, FOLLOW.sortieSpeed * f.speedMul * dt);
     if (step > .25) {
       f.sprite.setPosition(f.x + dx / dist * step, f.y + dy / dist * step); f.walk += step; f.passive?.onMove(now);
@@ -412,7 +419,7 @@ export class FollowerSquad {
     }
     if (moved) f.sprite.setPosition(x, y);
   }
-  private teleport(f: Follower, x: number, y: number): void { f.place(x, y); f.target = null; this.stats.teleports++; f.sprite.setAlpha(.3); this.scene.tweens.add({ targets: f.sprite, alpha: 1, duration: 220 }); }
+  private teleport(f: Follower, x: number, y: number): void { if (this.nav) ({ x, y } = this.nav.free(x, y)); f.place(x, y); f.target = null; this.stats.teleports++; f.sprite.setAlpha(.3); this.scene.tweens.add({ targets: f.sprite, alpha: 1, duration: 220 }); }
   /**
    * 护阵收回（RECALL）：正在播的出手 / 受伤动作先播完；之后转身朝阵位、播行走帧、以 行走速度 × RECALL.speedMul 跑回去。
    * 回到 doneDist 以内恢复紧贴跟随。兜底：收回超过 fallbackMs 仍离阵位超过 farPx（约 1.5 屏）或 stuckMs 内没再靠近，直接归位。
@@ -422,9 +429,17 @@ export class FollowerSquad {
     if (now - f.recallAt > RECALL.fallbackMs && (d > RECALL.farPx || now - f.recallBestAt > RECALL.stuckMs)) { this.teleport(f, gx, gy); f.recalling = false; this.stats.recallTeleports++; return; }
     if (d <= RECALL.doneDist) { f.recalling = false; this.move(f, gx, gy, dt, now); return; }
     if (f.act && !f.act.hold && now < f.act.until) { f.walk = 0; f.lastX = f.x; f.lastY = f.y; return; } // 先把这一下打完
-    const dx = gx - f.x, dy = gy - f.y, step = Math.min(d, f.walkSpeed * RECALL.speedMul * dt);
+    const w = this.nav?.route(f.x, f.y, gx, gy), wx = w?.x ?? gx, wy = w?.y ?? gy, wd = Math.hypot(wx - f.x, wy - f.y) || 1;
+    const dx = wx - f.x, dy = wy - f.y, step = Math.min(wd, f.walkSpeed * RECALL.speedMul * dt);
+    f.sprite.setPosition(f.x + dx / wd * step, f.y + dy / wd * step); f.walk += step; f.passive?.onMove(now);
+    f.faceUntil = 0; f.dir = Math.abs(dx) > Math.abs(dy) ? dx < 0 ? 'left' : 'right' : dy < 0 ? 'up' : 'down'; // 面朝阵位（或绕路路点）跑
+    f.lastX = f.x; f.lastY = f.y;
+  }
+  /** 按速度朝 (x, y) 走一步（绕路时用；朝向跟着走向）。 */
+  private walkTo(f: Follower, x: number, y: number, speed: number, dt: number, now: number): void {
+    const dx = x - f.x, dy = y - f.y, d = Math.hypot(dx, dy) || 1, step = Math.min(d, speed * dt);
     f.sprite.setPosition(f.x + dx / d * step, f.y + dy / d * step); f.walk += step; f.passive?.onMove(now);
-    f.faceUntil = 0; f.dir = Math.abs(dx) > Math.abs(dy) ? dx < 0 ? 'left' : 'right' : dy < 0 ? 'up' : 'down'; // 面朝阵位跑
+    if (now >= f.faceUntil) f.dir = Math.abs(dx) > Math.abs(dy) ? dx < 0 ? 'left' : 'right' : dy < 0 ? 'up' : 'down';
     f.lastX = f.x; f.lastY = f.y;
   }
   /** 指数平滑追阵位（与帧率无关），走路距离推动行走帧，朝向跟随移动方向（出手后短时间朝向目标）。 */

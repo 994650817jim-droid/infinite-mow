@@ -108,6 +108,41 @@ export class EnemyFlowField {
     }
     return true;
   }
+  // —— 我方单位共用这张图（2026-11-21 用户试玩「关于我自己的兵也会被围栏卡住」）：部曲、名将随从等跟的是主将或主将身边的阵位，以主将为终点的流场正好用得上 ——
+  private cellOf(x: number, y: number): number { const C = FLOW.cell, col = Math.floor((x - this.ox) / C), row = Math.floor((y - this.oy) / C); return col < 0 || row < 0 || col >= FLOW.cols || row >= FLOW.rows ? -1 : row * FLOW.cols + col; }
+  /** 任意两点连线上有没有挡路格（起点所在格不算；网格外不管）。 */
+  lineClear(x1: number, y1: number, x2: number, y2: number): boolean {
+    if (!this.live) return true;
+    const C = FLOW.cell, dx = x2 - x1, dy = y2 - y1, steps = Math.ceil(Math.hypot(dx, dy) / (C * .5)), start = this.cellOf(x1, y1);
+    for (let k = 1; k <= steps; k++) { const j = this.cellOf(x1 + dx * k / steps, y1 + dy * k / steps); if (j < 0) return true; if (j !== start && this.solid[j]) return false; }
+    return true;
+  }
+  private readonly tmp = { x: 0, y: 0 };
+  /**
+   * 我方单位从 (x, y) 去 (tx, ty)：连线通畅 → null（照旧直走）；被挡且目标在主将附近（near 以内）→ 绕路的下一个路点
+   * （沿流场往主将方向；自己到主将的连线通畅就先朝主将走，到了主将身边目标自然就看得见）。目标离主将远（出击追敌）、自己到不了 → null（交回原来的局部绕角）。
+   */
+  route(x: number, y: number, tx: number, ty: number, near = 320): { x: number; y: number } | null {
+    if (!this.live || this.lineClear(x, y, tx, ty) || Math.hypot(tx - this.tx, ty - this.ty) > near) return null;
+    if (this.steer(x, y, this.tmp)) return { x: x + this.tmp.x * FLOW.cell * 1.5, y: y + this.tmp.y * FLOW.cell * 1.5 };
+    return this.pathLength(x, y) < Infinity ? { x: this.tx, y: this.ty } : null;
+  }
+  /** (x, y) 落在挡路格里（阵位 / 归位点压在栅栏、城墙上）→ 最近的、主将走得到的可走格中心；否则原样返回。 */
+  free(x: number, y: number): { x: number; y: number } {
+    const i = this.cellOf(x, y); if (!this.live || i < 0 || (!this.solid[i] && this.dist[i] < INF)) return { x, y };
+    const C = FLOW.cell, W = FLOW.cols, H = FLOW.rows, col = i % W, row = (i - col) / W;
+    for (let r = 1; r <= 8; r++) {
+      let best = -1, bd = Infinity;
+      for (let dr = -r; dr <= r; dr++) for (let dc = -r; dc <= r; dc++) {
+        if (Math.max(Math.abs(dr), Math.abs(dc)) !== r) continue;
+        const c2 = col + dc, r2 = row + dr; if (c2 < 0 || r2 < 0 || c2 >= W || r2 >= H) continue;
+        const j = r2 * W + c2; if (this.solid[j] || this.dist[j] >= INF) continue;
+        const d = Math.hypot(this.ox + (c2 + .5) * C - x, this.oy + (r2 + .5) * C - y); if (d < bd) { bd = d; best = j; }
+      }
+      if (best >= 0) return { x: this.ox + ((best % W) + .5) * C, y: this.oy + (Math.floor(best / W) + .5) * C };
+    }
+    return { x, y };
+  }
   /** 测试 / 调试：某点到主将的网格路程（像素，到不了 = Infinity）。 */
   pathLength(x: number, y: number): number { const C = FLOW.cell, col = Math.floor((x - this.ox) / C), row = Math.floor((y - this.oy) / C); if (col < 0 || row < 0 || col >= FLOW.cols || row >= FLOW.rows) return Infinity; const d = this.dist[row * FLOW.cols + col]; return d >= INF ? Infinity : d * C; }
   clear(): void { this.live = false; this.at = -INF; this.stats.builds = this.stats.steered = 0; }

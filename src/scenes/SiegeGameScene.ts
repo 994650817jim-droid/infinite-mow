@@ -301,7 +301,7 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
       // 军营等级（城建 reinforcements）每级每队多 1 人。地图上的行军线 / 碧点由 BattleMap 读 allyPush.squads。
       const A = SIEGE_ALLIES, lv = permanentEffects().reinforcements;
       this.allyPush?.clear();
-      this.allyPush = new AllyPush({scene: this, now: () => this.combatNow, paused: () => this.mode !== 'none' || this.over, player: () => this.player,
+      this.allyPush = new AllyPush({route:(x,y,tx,ty)=>this.enemyFlow.route(x,y,tx,ty),scene: this, now: () => this.combatNow, paused: () => this.mode !== 'none' || this.over, player: () => this.player,
         camps: () => this.mid?.allyTargets() ?? [], enemies: () => this.enemies, hit: (e, d) => { this.hitEnemy(e, d, this.combatNow, 'melee', true, false); },
         push: (x, y, r) => pushOutBoxes((this.sishuiObstacles?.footprints ?? []) as unknown as Array<{left: number; right: number; top: number; bottom: number}>, x, y, r),
         rally: () => this.mid?.rallyPoint() ?? null, origin: () => this.mid?.allyOrigin() ?? null}, {...A, squad: Math.min(A.maxSquad, A.squad + A.perLevel * lv)});

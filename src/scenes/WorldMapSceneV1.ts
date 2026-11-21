@@ -677,7 +677,7 @@ ${city.tier==='large'?'守城大将：'+siegeBossName(city,owner):'守军：'+FA
   root.add(worldText(this,x,y,'出战',13,'#b6a07b'));
   if(W>600){const g=this.add.graphics();lqPanel(g,x,y+20,w,44,{shadow:false,glow:false});root.add(g);root.add(this.add.rectangle(x+w/2,y+42,w,44,0x000000,0).setName(name));}
   else root.add(this.add.rectangle(x+w/2,y+42,w,44,0x51402b,.96).setStrokeStyle(1,0xd7b778).setName(name));
-  root.add(worldText(this,x+w/2,y+42,`主公 ${n} · 亲征`,18,'#f0d79e').setOrigin(.5).setName(name+'-text'));
+  root.add(worldText(this,x+w/2,y+42,`主将 ${n} · 亲征`,18,'#f0d79e').setOrigin(.5).setName(name+'-text'));
  }
  private launchSiege(city:CityDef,hero:CharacterId,defense=false,intercept=false){
   if(!defense&&sortieBlocked(this,()=>this.launchSiege(city,hero,defense)))return;
@@ -712,7 +712,7 @@ ${city.tier==='large'?'守城大将：'+siegeBossName(city,owner):'守军：'+FA
  private lordId():CharacterId{let hero:CharacterId=defaultHero(null);try{hero=defaultHero(localStorage.getItem('im_last_hero'));}catch{/* storage unavailable */}return hero;}
  /** 「主公 赵云 · 随行 华雄、张辽」一行（出征小卡上）。 */
  private musterLine():string{const lord=CHARACTERS.find(c=>c.id===this.lordId())?.name??'';let names:string[]=[];try{const r=loadRoster();names=r.followers.map(id=>r.owned.find(o=>o.id===id)?.name).filter((x):x is string=>!!x);}catch{/* 存档不可用 */}
-  return names.length?`主公 ${lord} · 随行 ${names.slice(0,3).join('、')}${names.length>3?' 等':''}`:`主公 ${lord} 亲征`;}
+  return names.length?`主将 ${lord} · 随行 ${names.slice(0,3).join('、')}${names.length>3?' 等':''}`:`主将 ${lord} 亲征`;}
  /** 出征按钮布局：已平定章节并列显示「乱世难度」。 */
  private layoutActions(showHard:boolean){const desk=W>600,h=this.actionHome,a=this.action,b=this.hardBtn,bh=desk?48:62;
   b.image.setVisible(showHard);b.text.setVisible(showHard);if(showHard)b.image.setInteractive({useHandCursor:true});else b.image.disableInteractive();

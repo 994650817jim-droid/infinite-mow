@@ -36,12 +36,12 @@ const R = (p, fn, arg) => p.evaluate(async ([src, a]) => { const r = await impor
     ok.emit('pointerdown'); o.afterOne = R.lordHero(); o.hint = pk.root.getByName('hero-locked-hint').text;
     ok.emit('pointerdown'); o.lord = R.lordHero(); o.final = R.lordFinal();
     o.others = ['zhaoyun', 'guanyu', 'diaochan'].map(h => R.heroOwned(h)); o.change = R.setLord('zhaoyun').ok; o.still = R.lordHero();
-    o.entry = M.children.list.some(x => x.text === '主公 · 张飞'); o.locked = !!M.children.getByName('choose-hero').getData('locked');
+    o.entry = M.children.list.some(x => x.text === '主将 · 张飞'); o.locked = !!M.children.getByName('choose-hero').getData('locked');
     return o;
   });
   ck('新存档：开局没有主公、谁都能选，不弹老存档提示', n.lord0 === null && n.anyOk && !n.notice, n);
   ck('择主公要点两次确认，提示「主公选定后本存档不可更改」', n.afterOne === null && /不可更改/.test(n.hint) && n.lord === 'zhangfei' && n.final, n);
-  ck('主公定下后：其他武将不能出战、不能改选，主页入口显示「主公 · 张飞」并锁住', n.others.every(x => !x) && !n.change && n.still === 'zhangfei' && n.entry && n.locked, n);
+  ck('主公定下后：其他武将不能出战、不能改选，主页入口显示「主将 · 张飞」并锁住', n.others.every(x => !x) && !n.change && n.still === 'zhangfei' && n.entry && n.locked, n);
   await p.screenshot({ path: `${out}/lord-locked-desktop.png` });
   await p.close();
 }
@@ -53,17 +53,17 @@ const R = (p, fn, arg) => p.evaluate(async ([src, a]) => { const r = await impor
   const k = await p.evaluate(async () => {
     const R = await import('/src/systems/RosterStore.ts'), M = window.__game.scene.getScene('MenuScene'), o = {};
     o.lord = R.lordHero(); o.final0 = R.lordFinal(); const nt = M.children.getByName('lord-notice'); o.notice = !!nt;
-    o.entry0 = M.children.list.some(x => x.text === '改选主公');
+    o.entry0 = M.children.list.some(x => x.text === '改选主将');
     nt.getByName('lord-repick').emit('pointerdown'); o.pickerOpen = M.heroPicker.root.visible;
     const pk = M.heroPicker; pk.open(1); const ok = pk.root.getByName('hero-confirm'); ok.emit('pointerdown'); ok.emit('pointerdown');
     o.lord2 = R.lordHero(); o.final2 = R.lordFinal(); o.again = R.setLord('zhaoyun').ok;
     return o;
   });
-  ck('老存档：自动以最近出战的赵云为主公，弹一次提示，入口显示「改选主公」', k.lord === 'zhaoyun' && !k.final0 && k.notice && k.entry0, k);
+  ck('老存档：自动以最近出战的赵云为主公，弹一次提示，入口显示「改选主将」', k.lord === 'zhaoyun' && !k.final0 && k.notice && k.entry0, k);
   ck('老存档改选一次（关羽）后锁定，不能再改', k.pickerOpen && k.lord2 === 'guanyu' && k.final2 && !k.again, k);
   const kp = await page('desktop', '', {});
   await kp.waitForFunction(() => window.__game?.scene.isActive('MenuScene') && window.__game.scene.getScene('MenuScene').heroPicker, null, { timeout: 90000 }); await kp.waitForTimeout(400);
-  const keep = await kp.evaluate(async () => { const R = await import('/src/systems/RosterStore.ts'), M = window.__game.scene.getScene('MenuScene'); M.children.getByName('lord-notice').getByName('lord-keep').emit('pointerdown'); return { lord: R.lordHero(), final: R.lordFinal(), entry: M.children.list.some(x => x.text === '主公 · 赵云') }; });
+  const keep = await kp.evaluate(async () => { const R = await import('/src/systems/RosterStore.ts'), M = window.__game.scene.getScene('MenuScene'); M.children.getByName('lord-notice').getByName('lord-keep').emit('pointerdown'); return { lord: R.lordHero(), final: R.lordFinal(), entry: M.children.list.some(x => x.text === '主将 · 赵云') }; });
   ck('老存档选「就用赵云」：主公锁定为赵云', keep.lord === 'zhaoyun' && keep.final && keep.entry, keep);
   await kp.close();
   // 测试入口不受限制

@@ -140,7 +140,7 @@ export function defaultHero(saved: string | null | undefined): CharacterId {
   const lord = lordRules() ? lordHero() : null; if (lord) return lord;
   return isHero(saved) ? saved : 'zhaoyun';
 }
-export const LOCKED_HINT = '主公已定，本存档不可更换';
+export const LOCKED_HINT = '主将已定，本存档不可更换';
 
 // ———— 随行等级上限（用户 2026-11-17「随从等级一开始不要这么高，随着章节解锁提升」） ————
 

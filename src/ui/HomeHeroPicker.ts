@@ -53,9 +53,9 @@ export class HomeHeroPicker{
   if(!heroUnlocked(c.id)){this.hint?.setText(`${c.name} · ${LOCKED_HINT}`).setVisible(true);return;}
   if(!canPickLord(c.id)){this.hint?.setText(this.lockText()).setVisible(true);return;}
   const decides=lordRules()&&(!lordHero()||!lordFinal());
-  if(decides&&this.armed!==this.candidate){this.armed=this.candidate;this.hint?.setColor(D?GOLD:'#ffd98a').setText(D?`再点一次「${this.okLabel}」· 定 ${c.name} 为主公，选定后不可更改`:`主公选定后本存档不可更改 · 再点一次「${this.okLabel}」，以 ${c.name} 为主公`).setVisible(true);return;}
+  if(decides&&this.armed!==this.candidate){this.armed=this.candidate;this.hint?.setColor(D?GOLD:'#ffd98a').setText(D?`再点一次「${this.okLabel}」· 定 ${c.name} 为主将，选定后不可更改`:`主将选定后本存档不可更改 · 再点一次「${this.okLabel}」，以 ${c.name} 为主将`).setVisible(true);return;}
   this.armed=-1;this.confirm(this.order[this.candidate]);}
- private lockText():string{const l=lordHero(),n=CHARACTERS.find(c=>c.id===l)?.name??'';return D?`主公 · ${n} · 不可更换（其他武将可招为随行）`:`主公已定为 ${n} · 本存档不可更换（其他武将可在招贤馆招为随行）`;}
+ private lockText():string{const l=lordHero(),n=CHARACTERS.find(c=>c.id===l)?.name??'';return D?`主将 · ${n} · 不可更换（其他武将可招为随行）`:`主将已定为 ${n} · 本存档不可更换（其他武将可在招贤馆招为随行）`;}
  private turn(dir:number){this.page=(this.page+dir+this.pages)%this.pages;this.refreshArt();}
  /** startAfter：从「匡扶汉室」打开（还没选过将）——确认后直接出征，按钮写「确认出战」；否则只是换将 / 定主公，按钮写「选定武将」。 */
  open(index:number,startAfter=false):void{this.okLabel=startAfter?'确认出战':'选定武将';this.okCaption?.setText(this.okLabel);this.order=CHARACTERS.map((c,i)=>({i,u:heroUnlocked(c.id)})).sort((a,b)=>Number(b.u)-Number(a.u)||a.i-b.i).map(o=>o.i); /* 打开时按当前解锁重排 */index=Math.max(0,this.order.indexOf(index));if(!heroUnlocked(CHARACTERS[this.order[index]].id))index=0;this.candidate=index;this.page=Math.floor(index/PER);this.root.setVisible(true);this.refreshArt();}
@@ -66,7 +66,7 @@ export class HomeHeroPicker{
   if(this.armed!==this.candidate)this.armed=-1;
   {const g=this.selG,c=this.cards[this.candidate];g?.clear();if(g&&c&&c.root.visible){const x=c.root.x,y=c.root.y,w=c.width,h=c.height;g.lineStyle(10,0xf0c860,.14).strokeRoundedRect(x-9,y-9,w+18,h+18,14).lineStyle(5,0xf0c860,.22).strokeRoundedRect(x-6,y-6,w+12,h+12,12).lineStyle(2.5,0xf3d48a,.95).strokeRoundedRect(x-3,y-3,w+6,h+6,10);}}
   const cid=CHARACTERS[this.order[this.candidate]]?.id??'zhaoyun',lock=!canPickLord(cid);
-  if(!heroUnlocked(cid)&&this.armed<0){this.hint?.setColor(D?IVORY:'#ff9a72').setText(`${CHARACTERS[this.order[this.candidate]].name} · ${LOCKED_HINT}`);this.pageText?.setText(D?`${this.page+1} / ${this.pages}`:`第 ${this.page+1} / ${this.pages} 页 · 共 ${CHARACTERS.length} 将`);return;}if(this.armed<0)this.hint?.setColor(D?IVORY:'#ff9a72').setText(lock?(needHire(cid)?`${CHARACTERS[this.order[this.candidate]].name}已归附 · 随行需往招贤馆招募`:this.lockText()):lordRules()&&!lordHero()?(D?'选定即为主公 · 不可更改':'择一良将为主公 · 选定后本存档不可更改'):'');this.hint?.setVisible(!!this.hint.text);
+  if(!heroUnlocked(cid)&&this.armed<0){this.hint?.setColor(D?IVORY:'#ff9a72').setText(`${CHARACTERS[this.order[this.candidate]].name} · ${LOCKED_HINT}`);this.pageText?.setText(D?`${this.page+1} / ${this.pages}`:`第 ${this.page+1} / ${this.pages} 页 · 共 ${CHARACTERS.length} 将`);return;}if(this.armed<0)this.hint?.setColor(D?IVORY:'#ff9a72').setText(lock?(needHire(cid)?`${CHARACTERS[this.order[this.candidate]].name}已归附 · 随行需往招贤馆招募`:this.lockText()):lordRules()&&!lordHero()?(D?'选定即为主将 · 不可更改':'择一良将为主将 · 选定后本存档不可更改'):'');this.hint?.setVisible(!!this.hint.text);
   this.pageText?.setText(D?`${this.page+1} / ${this.pages}`:`第 ${this.page+1} / ${this.pages} 页 · 共 ${CHARACTERS.length} 将`);
  }
 }

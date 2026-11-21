@@ -215,7 +215,7 @@ export class MenuScene extends Phaser.Scene {
     const navY=D?484:631+this.padY;
     const heroEntry=D?homeLqCommand(this,230,navY,200,40,'更换武将'):homeCommand(this,W/2,navY,220,64,'更换武将'); /* 电脑版：次要按钮改漆金（一屏一个水墨按钮，2026-11-21 制作人验收） */const pick=heroEntry.hit.setName('choose-hero');this.heroEntryPaint=heroEntry.paint;
     // 主公已定：入口改成「主公 · xx」并锁住；老存档还有一次改选机会时显示「改选主公」
-    const paintLord=()=>{const l=lordRules()?lordHero():null;if(!l)return;const n=CHARACTERS.find(c=>c.id===l)?.name??'';if(lordFinal()){heroEntry.caption.setText('主公 · '+n);pick.disableInteractive();pick.setData('locked',true);}else heroEntry.caption.setText('改选主公');};paintLord();
+    const paintLord=()=>{const l=lordRules()?lordHero():null;if(!l)return;const n=CHARACTERS.find(c=>c.id===l)?.name??'';if(lordFinal()){heroEntry.caption.setText('主将 · '+n);pick.disableInteractive();pick.setData('locked',true);}else heroEntry.caption.setText('改选主将');};paintLord();
     // 卷轴收起时，“更换武将”跟着卷轴上移（与卷轴底保持原间距）；展开时回到原位
     const card=this.homeCard,entryY=(folded:boolean)=>navY-(card.height-card.heightWhen(folded));
     if(startFolded)heroEntry.setY(entryY(true));

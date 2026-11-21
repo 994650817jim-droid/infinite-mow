@@ -68,7 +68,7 @@ export class EndingScene extends Phaser.Scene {
     root.add(this.add.rectangle(W / 2, H / 2, W, H, 0x120d09, 1));
     root.add(t(W / 2, 34, '麒麟阁 · 本局编年史', 30, '#f0d79e', TITLE_FONT).setOrigin(.5));
     const lord = getCharacter(this.lord as CharacterId).name, cleared = CHRONICLE.reduce((n, c) => n + (prog[c.arc]?.cleared ?? 0), 0);
-    root.add(t(W / 2, 70, `主公 ${lord} · 占城 ${owned}/${total} · 平定 ${cleared}/${CHRONICLE.length * 3} 关 · ${this.kind === 'unify' ? '天下一统' : '三分天下'}`, 15, '#c9ad7a').setOrigin(.5));
+    root.add(t(W / 2, 70, `主将 ${lord} · 占城 ${owned}/${total} · 平定 ${cleared}/${CHRONICLE.length * 3} 关 · ${this.kind === 'unify' ? '天下一统' : '三分天下'}`, 15, '#c9ad7a').setOrigin(.5));
     const cols = 2, rows = Math.ceil(CHRONICLE.length / cols), cw = (W - 80) / cols, rh = Math.min(64, (H - 170) / rows);
     CHRONICLE.forEach((c, i) => {
       const x = 40 + (i % cols) * cw, y = 100 + Math.floor(i / cols) * rh, p = prog[c.arc] ?? { cleared: 0 }, done = p.cleared;

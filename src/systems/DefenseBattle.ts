@@ -56,6 +56,8 @@ export class DefenseBattle {
   /** 正在砍城门 / 府衙的人（最后一次贴上来的时刻）：超过 gateCap / keepCap 的在后面排着。 */
   private atGate = new Map<Enemy, number>(); private atKeep = new Map<Enemy, number>();
   /** 测试用。 */
+  /** 云梯爬进城里、还活着的兵（DEFENSE.climberCap 封顶）。 */
+  private climbing = new Set<Enemy>();
   readonly stats = { prepSpent: 0, archerShots: 0, gateHits: 0, keepHits: 0, rams: 0, ladders: 0, climbers: 0, logs: 0, oil: 0, repairs: 0, phaseLog: [] as string[] };
 
   constructor(private readonly h: DefenseHost, private readonly o: DefenseOpts) {
@@ -227,7 +229,10 @@ export class DefenseBattle {
         if (g.y < ty) { g.y = Math.min(ty, g.y + D.ramSpeed * (this.h.scene.game.loop.delta / 1000)); g.e.sprite.setPosition(g.x, g.y).setDepth(actorDepth(g.y)); g.label.setPosition(g.x, g.y - 150); }
         else if (!rest && !this.gate.open && now >= g.next) { g.next = now + D.ramMs; this.gate.hp -= D.ramDamage; this.stats.gateHits++; this.h.sfx('bossHit'); g.e.sprite.setFrame(Math.floor(now / 200) % 4); this.h.scene.cameras.main.shake(90, .002); }
       } else if (!rest && now >= g.next) {
-        g.next = now + D.climbMs; const c = this.h.spawn('infantry', g.x + (Math.random() - .5) * 30, this.o.wallLine + 50); if (c) this.stats.climbers++;
+        // 城里同时最多 climberCap 个爬进来的（满了梯子上的人等 0.8 秒再看）：原来每架梯子每 3.2 秒进一个、不封顶，城里被围成一圈
+        for (const c of this.climbing) if (!c.active || c.hp <= 0) this.climbing.delete(c);
+        if (this.climbing.size >= D.climberCap) { g.next = now + 800; continue; }
+        g.next = now + D.climbMs; const c = this.h.spawn('infantry', g.x + (Math.random() - .5) * 30, this.o.wallLine + 50); if (c) { this.stats.climbers++; this.climbing.add(c); }
       }
     }
   }

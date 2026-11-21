@@ -37,6 +37,8 @@ export const DEFENSE = {
   /** 攻城器械（中档起）：冲车每波 rams 辆，撞门每 ramMs 一下 ramDamage；云梯每波 ladders 架，立起后每 climbMs 爬上来一个兵。 */
   rams: { mid: 1, late: 2 } as Partial<Record<DefenseTier, number>>, ramHp: 600, ramSpeed: 26, ramMs: 1600, ramDamage: 90,
   ladders: { mid: 2, late: 3 } as Partial<Record<DefenseTier, number>>, ladderHp: 260, ladderWarnMs: 2000, climbMs: 3200,
+  /** 止血（用户 11-21「士兵四面八方围攻中心、和守城不关联」）：云梯爬进城里的兵同时最多 climberCap 个（各梯子合计），满了梯子上的人等着；守城重做见共享笔记 defense-redesign-v2.md。 */
+  climberCap: 5,
   /** 奖励：守住按攻城奖励 × DEFENSE_RULES.rewardMul（data/defenseRules.ts）。 */
 } as const;
 

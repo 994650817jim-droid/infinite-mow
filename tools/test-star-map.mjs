@@ -6,7 +6,8 @@
 // 用法：node tools/test-star-map.mjs      （STAR_BASE=<提交号> 可换对照的提交，默认 718f2bc7 = 星图开工前的 main）
 import { build } from 'esbuild';
 import { execFileSync } from 'node:child_process';
-import { relative } from 'node:path';
+import { relative, join } from 'node:path';
+import { existsSync } from 'node:fs';
 
 const root = process.cwd(), BASE = process.env.STAR_BASE ?? '718f2bc7';
 // 存档用的假 localStorage（HeroProgress / MasteryStore / WorldStore 都读它）
@@ -21,8 +22,9 @@ export * as HS from './src/data/heroStats';
 export * as AT from './src/data/attributes';
 export * as PA from './src/ui/PrimaryAttrInfo';
 export * as PH from './src/data/pointsHint';
-export * as MU from './src/data/mechanicUnlocks';`;
-const ENTRY_BASE = ENTRY.replace(/^export \* as SM.*$/m, '');
+export * as MU from './src/data/mechanicUnlocks';
+export * as FX from './src/data/starFx';`;
+const ENTRY_BASE = ENTRY.replace(/^export \* as SM.*$/m, '').replace(/^export \* as FX.*$/m, '');
 /** 打包在内存里；base = true 时 src 下的文件内容改从 git 的 BASE 提交读（对照「改动前」）。 */
 async function load(entry, base) {
   // Phaser 只在界面 / 场景代码里用，这里测的是数据与结算：给一个空壳（任何属性都是一个可继承的空类），免得打包整个引擎
@@ -35,7 +37,7 @@ let pass = 0, fail = 0;
 const ck = (n, ok, d) => { ok ? pass++ : fail++; console.log((ok ? 'PASS ' : 'FAIL ') + n + (d !== undefined ? ' · ' + JSON.stringify(d).slice(0, 400) : '')); };
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
-const { SM, HP, MS, RG, HS, AT, PA, PH, MU } = await load(ENTRY, false);
+const { SM, HP, MS, RG, HS, AT, PA, PH, MU, FX } = await load(ENTRY, false);
 const ATTRS = AT.ATTRIBUTE_IDS, byName = new Map(SM.STAR_NODES.filter(n => n.kind === 'notable' || n.kind === 'keystone').map(n => [n.name, n]));
 ck('开关默认关', SM.starMapOn() === false);
 
@@ -222,6 +224,34 @@ for (const key of Object.keys(TABLE)) {
   SM.setStarMap(false);
   const off = mk('zhaoyun', SM.STAR_NODES.map(n => n.id)), none = mk('zhaoyun');
   ck('开关关着：四颗主星都点着也没有任何效果', off.maxHpMultiplier() === 1 && off.pyreTake(0) === false && off.freeRecruitBonus() === none.freeRecruitBonus() && off.criticalBonus() === none.criticalBonus() && off.dodgeChance() === none.dodgeChance() && off.damageMultiplier(0) === none.damageMultiplier(0) && off.attackSpeedMultiplier(0) === none.attackSpeedMultiplier(0) && off.gearHitMultiplier('boss') === none.gearHitMultiplier('boss') && off.allyDamageMultiplier() === none.allyDamageMultiplier() && off.allyHpMultiplier() === none.allyHpMultiplier());
+}
+// ⑫ 第四期：战斗内反馈（触发信号、状态、图标与特效挂点的数据表）
+{
+  SM.setStarMap(true);
+  const id = name => byName.get(name).id, mk = (hero, extra = []) => { const g = new RG.RunGrowth(hero); g.heroLevel = 30; g.stars = [...extra]; return g; };
+  const named = SM.STAR_NODES.filter(n => n.kind === 'notable' || n.kind === 'keystone');
+  ck('28 颗要星 / 主星都有图标，文件都在 public/assets/star-map/', named.length === 28 && named.every(n => FX.STAR_ICON_FILE[n.id] && existsSync(join(root, 'public', FX.starIconUrl(n.id)))) && Object.keys(FX.STAR_ICON_FILE).length === 28 && FX.starIconKey('strength.NL1') === 'sm_icon_pozhen', named.filter(n => !FX.STAR_ICON_FILE[n.id]).map(n => n.name));
+  const kinds = k => Object.entries(FX.STAR_FEEDBACK).filter(e => e[1] === k).map(e => SM.starNode(e[0]).name).sort();
+  ck('反馈分类：触发式 = 破阵 / 连珠 / 游刃 / 火烧连营，限时式 = 疾影 / 奇谋，状态式 = 背水 / 号令 / 身先士卒 / 追风', same(kinds('trigger'), ['破阵', '连珠', '游刃', '火烧连营'].sort()) && same(kinds('timed'), ['疾影', '奇谋'].sort()) && same(kinds('state'), ['背水', '号令', '身先士卒', '追风'].sort()));
+  const fx = Object.entries(FX.STAR_FX);
+  ck('特效挂点表：8 项（背水 / 万人敌 / 三军统帅 / 半径环 / 破阵 / 连珠 / 游刃 / 火烧连营），每项有贴图 key、帧数、帧率、锚点、缩放', same(fx.map(e => e[0]).sort(), ['beishui', 'huoshao', 'lianzhu', 'pozhen', 'ring', 'sanjun', 'wanrendi', 'youren']) && fx.every(([, d]) => d.key.startsWith('star_fx_') && d.url.startsWith('assets/star-map/fx/') && d.frames > 0 && d.fps > 0 && d.frameW > 0 && d.frameH > 0 && d.scale > 0 && d.anchor.x >= 0 && d.anchor.y <= 1 && SM.starNode(d.star)) && same(fx.filter(e => e[1].mode === 'loop').map(e => e[0]).sort(), ['beishui', 'ring', 'sanjun', 'wanrendi']));
+  ck('特效表里标了 ready 的项，图一定已经在 fx 目录里（没到位的必须是 ready = false，不会去加载）', fx.every(([, d]) => !d.ready || existsSync(join(root, 'public', d.url))), fx.filter(e => e[1].ready).map(e => e[0]));
+  { const g = mk('guanyu', [id('破阵'), id('连珠')]); g.crushMul({ x: 5, y: 6 }); g.crushMul(); const p = g.takePulses();
+    ck('破阵重击发触发信号（带命中点），取走后清空；没点亮的星不发', same(p, [{ id: 'strength.NL1', x: 5, y: 6 }, { id: 'strength.NL1' }]) && g.takePulses().length === 0 && (mk('guanyu').crushMul({ x: 1, y: 1 }), mk('guanyu').takePulses().length === 0)); }
+  { const g = mk('zhuge', [id('连珠')]); let doubled = 0; for (let i = 0; i < 400; i++) if (g.spellEcho({ x: 1, y: 2 }) === 2) doubled++; const p = g.takePulses();
+    ck('连珠翻倍几次就发几次信号（积压最多 64 条）', doubled > 20 && p.length === Math.min(64, doubled) && p.every(x => x.id === 'intellect.NL1' && x.x === 1), [doubled, p.length]); }
+  { const g = mk('zhaoyun', [id('游刃'), id('一骑当千')]); let dodged = 0; for (let i = 0; i < 300; i++) { if (g.rollDodge()) dodged++; } const p = g.takePulses();
+    ck('闪避（合计 20%）：闪掉一次，游刃和一骑当千各发一个信号', dodged > 30 && dodged < 100 && p.length === Math.min(64, dodged * 2) && p[0].id === 'agility.NL1' && p[1].id === 'agility.K', [dodged]); }
+  { const g = mk('zhuge', [id('火烧连营')]); const ok = g.pyreTake(100, 7, 8); ck('火烧连营爆燃发信号（带击杀点）', ok && same(g.takePulses(), [{ id: 'intellect.K', x: 7, y: 8 }])); }
+  { const g = mk('zhaoyun', [id('背水'), id('追风'), id('号令'), id('身先士卒'), id('疾影'), id('奇谋'), id('千钧')]);
+    g.hpRatio = .5; g.recordMovement(0, .016); const a = ['strength.NR2', 'agility.NR2', 'command.NR2', 'bridge3.h', 'agility.NL2', 'bridge1.h', 'strength.NC'].map(x => g.starActive(x, 1000, false));
+    g.hpRatio = .3; g.recordMovement(3, .016); g.hasteUntil = 2000; g.starHit(900, true, true, false); const b = ['strength.NR2', 'agility.NR2', 'command.NR2', 'bridge3.h', 'agility.NL2', 'bridge1.h', 'strength.NC'].map(x => g.starActive(x, 1000, true));
+    ck('状态：背水看残血、追风看移动、号令 / 身先士卒看身边有没有部曲、疾影 / 奇谋看暴击后的时间；常驻的星和没点亮的星返回 null', same(a, [false, false, false, false, false, false, null]) && same(b, [true, true, true, true, true, true, null]) && g.starActive('bridge1.h', 3900, true) === false && mk('zhaoyun').starActive('strength.NR2', 0, true) === null, [a, b]); }
+  SM.setStarMap(false);
+  { const g = mk('zhaoyun', SM.STAR_NODES.map(n => n.id)); g.crushMul({ x: 1, y: 1 }); for (let i = 0; i < 50; i++) { g.spellEcho(); g.rollDodge(); } g.pyreTake(0, 1, 1); g.pulse('strength.NL1');
+    ck('开关关着：不发任何信号，状态一律 null', g.takePulses().length === 0 && g.starActive('strength.NR2', 0, true) === null && g.starActive('agility.NR2', 0, true) === null); }
+  // 掷骰次数与原来一致：rollDodge 每次只调一次 Math.random（原来是 Math.random() < dodgeChance()）
+  { const r = Math.random; let calls = 0; Math.random = () => { calls++; return .99; }; const g = mk('zhaoyun'); for (let i = 0; i < 25; i++) g.rollDodge(); Math.random = r; ck('闪避改走 rollDodge 后仍是每次只掷一次骰子', calls === 25, calls); }
 }
 // ⑩ 第二期：开关打开时的显示
 {

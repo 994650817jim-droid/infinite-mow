@@ -177,6 +177,30 @@ export class RunGrowth {
    */
   starOn(id: StarEffectId): boolean { return starMapOn() && this.stars.includes(id); }
   moving = false; hpRatio = 1; spellSurgeUntil = -Infinity;
+  /**
+   * 第四期：战斗内反馈的信号（data/starFx.ts）。pulse(id) = 这颗星刚触发了一下（开关关着 / 没点亮时什么都不记）；
+   * x / y 是触发点（命中点、击杀点），没有就是主将身上。界面（ui/StarBuffHud）和特效挂点（systems/StarFx）每帧 takePulses() 取走。
+   */
+  private pulses: Array<{ id: string; x?: number; y?: number }> = [];
+  pulse(id: string, x?: number, y?: number): void { if (starMapOn() && this.stars.includes(id) && this.pulses.length < 64) this.pulses.push({ id, x, y }); }
+  takePulses(): Array<{ id: string; x?: number; y?: number }> { if (!this.pulses.length) return this.pulses; const p = this.pulses; this.pulses = []; return p; }
+  /**
+   * 状态式 / 限时式的星现在是否「成立」：背水 = 生命低于 40%；追风 = 移动中；号令 / 身先士卒 = 有部曲在主将身边（alliesNear 由战斗场景给）；
+   * 疾影 = 暴击后的攻速加成还在；奇谋 = 暴击后的法术加成还在。其余的星（常驻 / 触发式）返回 null。
+   */
+  starActive(id: string, now: number, alliesNear: boolean): boolean | null {
+    if (!starMapOn() || !this.stars.includes(id)) return null;
+    switch (id) {
+      case 'strength.NR2': return this.hpRatio < STAR_EFFECT['strength.NR2'].below;
+      case 'agility.NR2': return this.moving;
+      case 'command.NR2': case 'bridge3.h': return alliesNear;
+      case 'agility.NL2': return now < this.hasteUntil;
+      case 'bridge1.h': return now < this.spellSurgeUntil;
+      default: return null;
+    }
+  }
+  /** 受伤时掷闪避（Player.takeDamage）：和原来一样只掷一次骰子；闪掉了给游刃 / 一骑当千发一个触发信号。 */
+  rollDodge(): boolean { const hit = Math.random() < this.dodgeChance(); if (hit) { this.pulse('agility.NL1'); this.pulse('agility.K'); } return hit; }
   /** 第三期：4 颗主星（数值在 starMap.STAR_KEYSTONE）。keyOn(id) = 开关开着且这颗主星点亮。 */
   keyOn(id: StarKeystoneId): boolean { return starMapOn() && this.stars.includes(id); }
   /** 万人敌（主将全伤害 +15%）× 三军统帅（主将自身伤害 −25%）：乘在全伤害 ×2 封顶之外。 */
@@ -185,11 +209,11 @@ export class RunGrowth {
   maxHpMultiplier(): number { return this.keyOn('agility.K') ? 1 + STAR_KEYSTONE['agility.K'].maxHp : 1; }
   /** 火烧连营：这一下击杀能不能爆燃——点亮了、且最近 windowMs 内不到 perSecond 次；能的话记一次。 */
   private pyreAt: number[] = [];
-  pyreTake(now: number): boolean {
+  pyreTake(now: number, x?: number, y?: number): boolean {
     if (!this.keyOn('intellect.K')) return false;
     while (this.pyreAt.length && now - this.pyreAt[0] >= STAR_PYRE.windowMs) this.pyreAt.shift();
     if (this.pyreAt.length >= STAR_PYRE.perSecond) return false;
-    this.pyreAt.push(now); return true;
+    this.pyreAt.push(now); this.pulse('intellect.K', x, y); return true;
   }
   /** 铁骨 + 身先士卒：主将生命上限（按基础生命的比例，和力量每点 +3% 加在一起）。 */
   private starHp(): number { return (this.starOn('strength.NR1') ? STAR_EFFECT['strength.NR1'].hp : 0) + (this.starOn('bridge3.h') ? STAR_EFFECT['bridge3.h'].hp : 0); }
@@ -230,7 +254,7 @@ export class RunGrowth {
     return mul;
   }
   /** 力量「破阵」重击倍率（星图开着 ×1.6，平衡评审第 30 节；关着是原值 ×2）。 */
-  crushMul(): number { return starMapOn() ? STAR_TUNING.crushMul : PRIMARY_PERK.strength.crushMul; }
+  crushMul(at?: { x: number; y: number }): number { this.pulse('strength.NL1', at?.x, at?.y); return starMapOn() ? STAR_TUNING.crushMul : PRIMARY_PERK.strength.crushMul; } // at = 重击的命中点（给反馈用）
   /** 「破阵」这一下能不能定身：星图开着时每秒最多一次（关着每次重击都定）。返回 true 时记下时刻。 */
   private crushStunAt = -Infinity;
   crushStunReady(time: number): boolean {
@@ -323,7 +347,7 @@ export class RunGrowth {
   /** 敏捷「游刃」：受伤时闪避的几率。 */
   dodgeChance(): number { const d = this.perk('agility', 2) ? PRIMARY_PERK.agility.dodge : 0; return starMapOn() ? Math.min(STAR_TUNING.dodgeCap, d + (this.keyOn('agility.K') ? STAR_KEYSTONE['agility.K'].dodge : 0)) : d; } // 星图开着：闪避合计封顶 20%
   /** 智力「连珠」：法术伤害翻倍的倍率（掷骰）。 */
-  spellEcho(): number { return this.perk('intellect', 2) && Math.random() < PRIMARY_PERK.intellect.echoChance ? 2 : 1; }
+  spellEcho(at?: { x: number; y: number }): number { const m = this.perk('intellect', 2) && Math.random() < PRIMARY_PERK.intellect.echoChance ? 2 : 1; if (m > 1) this.pulse('intellect.NL1', at?.x, at?.y); return m; } // at = 翻倍那一下的命中点（给反馈用）
   /** 统御「募众」：每次免费招兵多给的人数。 */
   freeRecruitBonus(): number { return (this.perk('command', 2) ? PRIMARY_PERK.command.freeRecruit : 0) + (this.keyOn('command.K') ? STAR_KEYSTONE['command.K'].freeRecruit : 0); }
   /** 统御「同袍」：随从救起所需时间倍率与救起生命比例（null = 用默认）。 */

@@ -437,7 +437,7 @@ export class Player {
   victoryGuard = false;
   takeDamage(raw: number, now: number): boolean {
     if (!this.alive || this.damageImmune || this.victoryGuard || now < this.invulnUntil || this.passive.isInvulnerable(now)) return false; // 马超锦马冲锋中无敌
-    if (Math.random() < this.growth.dodgeChance()) return false; // 敏捷·游刃：闪避
+    if (this.growth.rollDodge()) return false; // 敏捷·游刃：闪避（rollDodge 里掷同一次骰子，星图开着时顺带发反馈信号）
     const afterArmor = Math.max(1, raw - this.stats.armor);
     const unguarded = Math.max(1, Math.round(afterArmor * this.stats.damageTakenMul * this.armyDamageTakenMul * this.formationTakenMul * this.rageTakenMul * this.growth.incomingDamageMultiplier() * this.passive.damageTakenMultiplier(now) * (now < this.propGuardUntil ? this.propGuardMul : 1)));
     const ridden=this.mountGuard?this.mountGuard(unguarded,now):unguarded;if(ridden<=0)return false;

@@ -139,6 +139,7 @@ import { allocateHeroAttr, claimFirstClear, creditHeroXp, enlistHero, heroFreePo
 import { HERO_XP_RATE, OVERFLOW_XP_PER_GRAIN, PICK_GUARANTEE, PICK_PACE, XP_SHIFT, chapterXpMul } from '../data/heroLevels';
 import { attributePointsBetween } from '../systems/RunGrowth';
 import { STAR_PYRE, starMapOn } from '../data/starMap';
+import { StarFeedback } from '../systems/StarFeedback';
 import { heroStars, lightHeroStar } from '../systems/HeroProgress';
 import { StarMapUI } from '../ui/StarMapUI';
 import { vigorHp } from '../data/attributes';
@@ -2727,12 +2728,12 @@ export class GameScene extends Phaser.Scene {
   private perkShoveAt = new WeakMap<Enemy, number>();
   protected primaryPerkHit(enemy: Enemy, time: number, weaponHit: boolean, crit: boolean): number {
     const g = this.player.growth, P = PRIMARY_PERK; let mul = 1;
-    if (!weaponHit || SPELL_WEAPONS.has(this.player.weapons[0]?.id ?? '')) mul *= g.spellEcho(); // 智力·连珠
+    if (!weaponHit || SPELL_WEAPONS.has(this.player.weapons[0]?.id ?? '')) mul *= g.spellEcho(enemy); // 智力·连珠
     if (!weaponHit) return mul;
     if (crit && g.perk('agility', 3)) g.hasteUntil = time + P.agility.hasteMs; // 敏捷·疾影
     const pushable = enemy.kind !== 'boss' && !enemy.controlImmune && !enemy.isSupplySlot;
     if (g.perk('strength', 2) && ++g.crushCount >= P.strength.crushEvery) { // 力量·破阵
-      g.crushCount = 0; mul *= g.crushMul(); // 星图开着 ×1.6（RunGrowth.crushMul），关着是 P.strength.crushMul
+      g.crushCount = 0; mul *= g.crushMul(enemy); // 星图开着 ×1.6（RunGrowth.crushMul），关着是 P.strength.crushMul
       if (pushable && g.crushStunReady(time)) enemy.stunUntil = Math.max(enemy.stunUntil, time + P.strength.crushStunMs); // 星图开着：定身每秒最多一次
     }
     if (g.perk('strength', 1) && pushable && time - (this.perkShoveAt.get(enemy) ?? -1e9) >= P.strength.shoveCdMs) { // 力量·千钧
@@ -2880,10 +2881,12 @@ export class GameScene extends Phaser.Scene {
    * 画面借手绘火焰序列帧 flame_burst（spawnFlameFx），没有这张图时不出特效。
    */
   private starSpellKill = false; private starPyreBusy = false;
+  /** 星图 · 战斗内反馈（systems/StarFeedback：增益栏「星图」图标排 + 手绘特效挂点）；开关打开后第一次刷新 HUD 时才建。 */
+  private starFeedback?: StarFeedback;
   private starPyre(enemy: Enemy): void {
-    const now = this.combatNow; if (this.starPyreBusy || !this.player.growth.pyreTake(now)) return;
+    const now = this.combatNow; if (this.starPyreBusy || !this.player.growth.pyreTake(now, enemy.x, enemy.y)) return;
     const P = STAR_PYRE, x = enemy.x, y = enemy.y, dmg = this.chapter.enemies[P.basis].hp * this.chapter.hpScale(this.elapsed) * (this.chapter.growth?.hp ?? 1) * P.ratio;
-    if (this.textures.exists('flame_burst')) this.spawnFlameFx(x, y, P.fxRadius);
+    if (!this.starFeedback?.fx.has('huoshao') && this.textures.exists('flame_burst')) this.spawnFlameFx(x, y, P.fxRadius); // 专属爆燃图到位后（data/starFx.ts huoshao）由 StarFx 播，这里就不再借 flame_burst
     this.starPyreBusy = true;
     try { for (const e of this.grid.query(x, y, P.radius)) if (e !== enemy && e.active && !e.isSupplySlot && Math.hypot(e.x - x, e.y - y) <= P.radius) this.hitEnemy(e, dmg, now, 'fire', false, false); }
     finally { this.starPyreBusy = false; }
@@ -5014,6 +5017,7 @@ export class GameScene extends Phaser.Scene {
     { const st = branchStatus(this.player.weapons[0], s => this.player.growth.build.tags()[s] ?? 0, s => SCHOOLS[s].name); this.passiveHud.updateBranch(st); this.buffHud?.root.setY(st ? 214 : 180); } // 专职行在被动栏下，增益栏往下让
     buildVfx(this).density=this.enemies.filter(e=>e.active&&!e.isSupplySlot).length+this.legion.count;
     this.buffHud.update(this.player,this.combatNow,!overlay&&!this.over&&!this.relicExpanded,(id,now)=>this.buffProgress(id,now));
+    if(starMapOn()){if(this.starFeedback&&!this.starFeedback.alive)this.starFeedback=undefined;(this.starFeedback??=new StarFeedback(this)).update(this.player,this.combatNow,!overlay&&!this.over&&!this.relicExpanded,this.buffHud,this.legion.units);}else this.starFeedback?.hide(); // 星图 · 战斗内反馈（增益栏图标排 + 特效挂点；开关关着不建）
     this.hudGfx.setVisible(!overlay);
     if (this.hudTexts) for (const t of Object.values(this.hudTexts)) t.setVisible(!overlay && (t !== this.hudTexts.bag || mechShown('gear')));
     if (this.statusFrame) { this.statusFrame.setVisible(!overlay); this.hudTexts?.level.setVisible(false); }

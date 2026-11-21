@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import {HEADING_FONT,RENDER_SCALE} from '../config';
+import {HEADING_FONT,RENDER_SCALE,IS_DESKTOP} from '../config';
 import {uiSfx} from '../systems/Sfx';
 import {lqButton,lqLabelColor,type LqState} from './LacquerKit';
 
@@ -59,6 +59,8 @@ export function fitArt(g:Phaser.GameObjects.NineSlice,a:{w:number;h:number;cap:n
 
 /** 首页/军营通用命令按钮。返回 g（底板图像）、hit、caption、paint(state) 与旧接口一致。 */
 export function homeCommand(scene:Phaser.Scene,x:number,y:number,width:number,height:number,label:string,primary=false,enabled=true,fontSize?:number){
+ // 2026-11-21 总制作人「每屏只留一个水墨主按钮」：电脑版次要按钮（原黑色水墨）一律改漆金（homeLqCommand，接口相同）
+ if((!primary||!enabled)&&IS_DESKTOP)return homeLqCommand(scene,x,y,width,height,label,Math.min(18,fontSize??Math.round(height*.38)),enabled);
  // 有青铜按钮美术时用三段拉伸（两端花纹不变形）；缺图时退回程序画底板
  const art=buttonArt(scene,primary,enabled?'normal':'disabled');
  let g:Phaser.GameObjects.Image|Phaser.GameObjects.NineSlice;
@@ -193,8 +195,8 @@ export function inkSkin(scene:Phaser.Scene,target:Phaser.GameObjects.Text,size:(
  * 次要按钮的漆金版（2026-11-21 制作人验收「一屏一个水墨按钮」：主页「更换武将 / 主公 · xx」原来是黑色水墨）。
  * 接口同 homeCommand（g / hit / caption / paint / setY / y），调用方不用改；外观是漆底描金（LacquerKit.lqButton）。
  */
-export function homeLqCommand(scene:Phaser.Scene,x:number,y:number,width:number,height:number,label:string,fontSize=17){
- const g=scene.add.graphics(),hit=scene.add.rectangle(x,y,width,height,0,0.001).setInteractive({useHandCursor:true});
+export function homeLqCommand(scene:Phaser.Scene,x:number,y:number,width:number,height:number,label:string,fontSize=17,enabled=true){
+ const g=scene.add.graphics(),hit=scene.add.rectangle(x,y,width,height,0,0.001);if(enabled)hit.setInteractive({useHandCursor:true});
  const caption=scene.add.text(x,y,label,{fontFamily:HEADING_FONT,fontSize:fontSize+'px',color:'#ffe9bd',resolution:2}).setOrigin(.5).setLetterSpacing(2).setShadow(0,1,'#120a05',3,true,true);
  let current='normal';
  const paint=(state:string='normal')=>{
@@ -202,7 +204,7 @@ export function homeLqCommand(scene:Phaser.Scene,x:number,y:number,width:number,
   g.clear();const d=lqButton(g,x,y,width,height,st,'quiet');caption.setPosition(x,y+d).setColor(lqLabelColor(st));
  };
  paint();
- hit.on('pointerdown',()=>{const s=uiSfx();s.unlock();s.play('uiClick');});
+ if(enabled)hit.on('pointerdown',()=>{const battle=(scene as unknown as {sfx?:{play(k:string):void}}).sfx;if(battle)battle.play('uiClick');else{const s=uiSfx();s.unlock();s.play('uiClick');}});
  hit.on('pointerover',()=>{if(current!=='selected'){paint('hover');uiSfx().play('uiHover');}}).on('pointerout',()=>{if(current!=='selected')paint();}).on('pointerdown',()=>paint('pressed')).on('pointerup',()=>paint('hover'));
  const setY=(ny:number)=>{y=ny;hit.setY(ny);paint(current);};
  return{g,hit,caption,paint,setY,get y(){return y;}};

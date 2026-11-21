@@ -10,7 +10,7 @@ import {isChapterTestRun} from '../systems/ChapterProgress';
 import {W,H,worldShell,worldAssets} from '../world/WorldUI';
 import {FONT,HEADING_FONT} from '../config';
 import {homeCommand,warPanelTexture} from '../ui/HomeCommand';
-import {lqCommand,lqPanel} from '../ui/LacquerKit';
+import {lqCommand,lqPanel,lqFloat} from '../ui/LacquerKit';
 import {uiSfx} from '../systems/Sfx';
 import {startCityAmbient} from '../systems/ContentSfx';
 import {loadWorld,worldUnlocked,storageUnavailable,incompatibleSave,cityLevels,cityBuild,spendProvisions,gainProvisions} from '../world/WorldStore';
@@ -260,8 +260,8 @@ export class TownScene extends Phaser.Scene {
   const s = loadWorld(), t = this.tier(), lv = cityLevels(this.cityId, s), l = lv[id], def = CITY_BUILDINGS[id], cost = cityBuildCost(id, t, l), block = cityBuildBlockers(id, t, lv), ok = cost !== null && !block.length && s.provisions >= cost;
   const h = D ? 380 : 560, w = Math.min(D ? 640 : W - 24, W - 24), y0 = (H - h) / 2, x0 = (W - w) / 2;
   const root = this.add.container(0, 0).setDepth(640).setName('town-build-card');
-  root.add(this.add.rectangle(W / 2, H / 2, W, H, 0x0b0806, .78).setInteractive());
-  root.add(this.add.image(W / 2, H / 2, warPanelTexture(this, w, h, true)).setDisplaySize(w + 16, h + 16));
+  root.add(this.add.rectangle(W / 2, H / 2, W, H, 0x0b0806, D ? .86 : .78).setInteractive());
+  root.add(D ? lqFloat(this, W / 2, H / 2, w, h) : this.add.image(W / 2, H / 2, warPanelTexture(this, w, h, true)).setDisplaySize(w + 16, h + 16)); // 电脑版去金边大框（2026-11-21）
   root.add(txt(this, W / 2, y0 + 30, `${def.name} · ${l ? 'Lv' + l : '未建'}`, 22, '#efd399', HEADING_FONT).setOrigin(.5).setName('town-build-card-title'));
   const px = D ? x0 + 130 : W / 2, py = D ? y0 + 240 : y0 + 220, key = this.artKey(id, Math.max(1, l));
   if (this.textures.exists(key)) { const img = this.add.image(px, py, key).setOrigin(.5, 1); img.setScale(Math.min((D ? 210 : 240) / img.width, (D ? 170 : 150) / img.height)); if (!l) img.setAlpha(.45); root.add(img); }

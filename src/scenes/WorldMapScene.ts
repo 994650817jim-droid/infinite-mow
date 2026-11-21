@@ -9,7 +9,7 @@ import { isChapterTestRun } from '../systems/ChapterProgress';
 import { requestDirectDepart } from '../systems/DirectDepart';
 import { W, H, worldText, worldButton, worldShell, panel, worldAssets } from '../world/WorldUI';
 import { homeCommand } from '../ui/HomeCommand';
-import { lqPanel } from '../ui/LacquerKit';
+import { lqPanel, lqFloat } from '../ui/LacquerKit';
 import { addMainMenuButton } from '../ui/MainMenuButton';
 import { arcUnlocked, thirdChapterUnlocked, worldUnlocked, loadWorld, rewardGrain, cityLevels, hardChapterCleared, ensureIntel, intelEvents, lubuChallengeOpen, lubuClears, advanceEra, takeLostNotice, takeNewChapters, type CityAlert, type EraAdvance } from '../world/WorldStore';
 import { citySize, CITY_TITLE, incomeText } from '../town/TownData';
@@ -556,7 +556,7 @@ export class WorldMapScene extends Phaser.Scene {
   }
 
   // ———————————————————————— 弹窗（攻城 / 军情 / 时局） ————————————————————————
-  private modalPanel(pw: number, ph: number): Phaser.GameObjects.GameObject { if (!this.desktop) return panel(this, W / 2, H / 2, pw, ph); const g = this.add.graphics(); lqPanel(g, W / 2 - pw / 2, H / 2 - ph / 2, pw, ph); return g; }
+  private modalPanel(pw: number, ph: number): Phaser.GameObjects.GameObject { if (!this.desktop) return panel(this, W / 2, H / 2, pw, ph); return lqFloat(this, W / 2, H / 2, pw, ph); /* 电脑版去金边大框（2026-11-21） */ }
   private modalButton(root: Phaser.GameObjects.Container, x: number, y: number, w: number, label: string, primary: boolean, name: string, fn: () => void) {
     if (this.desktop) { const b = homeCommand(this, x, y, w, 46, label, primary); b.hit.setName(name).on('pointerup', fn); root.add([b.g, b.caption, b.hit]); return; }
     const wb = worldButton(this, x, y, label, fn, w); wb.image.setName(name); root.add([wb.image, wb.text]);
@@ -569,7 +569,7 @@ export class WorldMapScene extends Phaser.Scene {
   }
   private modalRoot(name: string, pw: number, ph: number) {
     const root = this.add.container(0, 0).setDepth(60).setName(name); this.modal = root;
-    root.add(this.add.rectangle(W / 2, H / 2, W, H, 0x07100b, .72).setInteractive()); root.add(this.modalPanel(pw, ph)); return root;
+    root.add(this.add.rectangle(W / 2, H / 2, W, H, 0x07100b, this.desktop ? .86 : .72).setInteractive()); root.add(this.modalPanel(pw, ph)); return root;
   }
   closeModal() { this.modal?.destroy(); this.modal = undefined; }
   openSiege(city: CityDef, defense = false) {

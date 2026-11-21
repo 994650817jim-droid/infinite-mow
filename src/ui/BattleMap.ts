@@ -354,8 +354,8 @@ export class BattleMap {
     const sx = (cur.pos.x - v.x) * kx, sy = (cur.pos.y - v.y) * ky, pad = 46;
     if (sx >= pad && sy >= pad && sx <= GAME_WIDTH - pad && sy <= GAME_HEIGHT - pad) { this.arrowText.setVisible(false); return; }
     const cx = GAME_WIDTH / 2, cy = GAME_HEIGHT / 2, a = Math.atan2(sy - cy, sx - cx);
-    // 沿方向射到屏幕内框（避开顶部 HUD 与底部血条：上 92、下 84）
-    const top = 92, bottom = GAME_HEIGHT - 84, left = 40, right = GAME_WIDTH - 40, dx = Math.cos(a), dy = Math.sin(a);
+    // 沿方向射到屏幕内框（避开顶部 HUD / 目标文字与底部血条：上 150、下 84；2026-11-21 原来上 92，攻城时压在「破城门 · N 步」上）
+    const top = 150, bottom = GAME_HEIGHT - 84, left = 40, right = GAME_WIDTH - 40, dx = Math.cos(a), dy = Math.sin(a);
     const t = Math.min(dx > 0 ? (right - cx) / dx : dx < 0 ? (left - cx) / dx : Infinity, dy > 0 ? (bottom - cy) / dy : dy < 0 ? (top - cy) / dy : Infinity);
     const ax = cx + dx * t, ay = cy + dy * t, r = 13;
     g.fillStyle(0x1a0e08, .55).fillCircle(ax, ay, 16);

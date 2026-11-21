@@ -30,7 +30,7 @@ import { CHARACTER_PASSIVES } from '../data/passives';
 import { WEAPON_META,weaponName } from '../data/upgrades';
 import { chapterOneCleared, chapterUnlocked, isChapterTestRun } from '../systems/ChapterProgress';
 import { FONT, TITLE_FONT, HEADING_FONT, GAME_HEIGHT as H, GAME_WIDTH as W, IS_DESKTOP as D, switchLayout } from '../config';
-import { lqDivider, lqHitBox, lqPanel, lqSkin } from '../ui/LacquerKit';
+import { lqDivider, lqFloat, lqHitBox, lqPanel, lqSkin } from '../ui/LacquerKit';
 import { buildSettingsPanel, type SettingSpec } from '../ui/SettingsPanel';
 import { BARKS_LABEL, heroBarks, setHeroBarks, type HeroBarks, SCHOOL_HINT_LABEL, schoolHint, setSchoolHint, type SchoolHint, ORDERS_PANEL_LABEL, ordersPanelSetting, setOrdersPanelSetting, type OrdersPanelSetting } from '../systems/BattleSettings';
 import { CHAPTER_SCENES, openChapterSelect } from '../ui/ChapterSelect';
@@ -329,7 +329,7 @@ export class MenuScene extends Phaser.Scene {
     if(this.children.getByName('quit-confirm')||!desktop)return;
     const app=desktop,modal=this.add.container(0,0).setDepth(560).setName('quit-confirm');
     modal.add(this.add.rectangle(W/2,H/2,W,H,0x0b0806,.82).setInteractive());
-    modal.add(this.add.image(W/2,H/2,warPanelTexture(this,420,200,true)).setDisplaySize(436,216));
+    modal.add(lqFloat(this,W/2,H/2,420,200)); // 去金边大框（2026-11-21）
     modal.add(this.add.text(W/2,H/2-50,'退出游戏？',{fontFamily:HEADING_FONT,fontSize:'26px',color:'#efd399',resolution:2}).setOrigin(.5).setLetterSpacing(4));
     modal.add(this.add.text(W/2,H/2-14,'进度已自动保存',{fontFamily:FONT,fontSize:'13px',color:'#a99d88',resolution:2}).setOrigin(.5));
     const cancel=homeCommand(this,W/2-95,H/2+48,150,46,'取消');cancel.hit.setName('quit-cancel').setData('padDefault',true).on('pointerdown',()=>modal.destroy());

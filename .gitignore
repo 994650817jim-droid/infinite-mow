@@ -206,6 +206,7 @@ assets/raw/*
 !/tools/erase-grey.mjs
 !/tools/build-ink-bust.mjs
 !/tools/cut-epic-home.mjs
+!/tools/cut-icon-sheet.mjs
 !/tools/shot-story-portraits.mjs
 !/tools/resize-image.mjs
 !/tools/shot-boss-still.mjs

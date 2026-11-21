@@ -24,7 +24,7 @@ const H = `const s = ${G}, pl = s.player, w = pl.weapons[0], wait = ms => new Pr
   const atk = async (ms = 520) => { const a0 = D().attacks; w.cooldownLeft = 0; const r0 = Date.now(); while (D().attacks === a0 && Date.now() - r0 < 3000) await wait(8); w.cooldownLeft = 1e9; await waitG(ms); };`;
 
 const r0 = await p.evaluate(`(async () => { ${H}
-  return { weapon: w.id, tex: ['dianwei_walk_sheet','dianwei_actions','dianwei_portrait','dianwei_halberd','fx_dianwei_throw','fx_dianwei_whirl','fx_dianwei_hit','fx_dianwei_rage','fx_cast_dianwei','ink_hero_dianwei','icon_zhenbei','growth_icon_pearl_volley','growth_icon_berserk'].filter(k => !s.textures.exists(k)), hurt: !!pl.actionSet?.hurt, die: !!pl.actionSet?.die, skill: !!pl.actionSet?.skill };
+  return { weapon: w.id, tex: ['dianwei_walk_sheet','dianwei_actions','dianwei_portrait','dianwei_halberd','fx_dianwei_throw','fx_dianwei_whirl','fx_dianwei_hit','fx_dianwei_rage','fx_cast_dianwei','ink_hero_dianwei','icon_tieji','branch_icon_dw_sizhan','branch_icon_dw_huzhu','growth_icon_pearl_volley','growth_icon_berserk'].filter(k => !s.textures.exists(k)), hurt: !!pl.actionSet?.hurt, die: !!pl.actionSet?.die, skill: !!pl.actionSet?.skill };
 })()`);
 ck('典韦开局本命武器是双铁戟（shuang_tieji）', r0.weapon === 'shuang_tieji', r0);
 ck('典韦的行走 / 动作（随军图拼成，只登记待机 / 出招 / 招牌技）/ 头像 / 水墨立轴、随军典韦特效、图标全部载入', r0.tex.length === 0 && r0.skill && !r0.hurt && !r0.die, r0);

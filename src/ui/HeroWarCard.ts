@@ -5,10 +5,13 @@ import {WEAPON_META,weaponName} from '../data/upgrades';
 import {CHARACTER_PASSIVES} from '../data/passives';
 import {FONT,HEADING_FONT,TITLE_FONT,RENDER_SCALE,IS_DESKTOP} from '../config';
 import {attrBadge,setAttrBadge} from './AttrBadge';
-const titles=['游龙先锋','重甲武圣','百步神射','卧龙军师','燕人猛将','西凉锦马','镇北悍将','仁德之主','凤雏军师','巧思机关','弓腰郡主','闭月舞姬'];const roles=['突进','近战','远程','法术','猛攻','突骑','血战','统御','火计','机关','游射','魅惑'];
+// 按 CHARACTERS 顺序：原 12 人 + P2（吕布 / 张辽 / 周瑜 / 太史慈 / 曹操）+ P3（甘宁 / 典韦 / 孙权 / 孟获 / 祝融）
+const titles=['游龙先锋','重甲武圣','百步神射','卧龙军师','燕人猛将','西凉锦马','镇北悍将','仁德之主','凤雏军师','巧思机关','弓腰郡主','闭月舞姬','飞将无双','止啼名将','雄姿英发','信义之将','乱世奸雄','锦帆游侠','古之恶来','江东之主','南蛮之王','火神后裔'];const roles=['突进','近战','远程','法术','猛攻','突骑','血战','统御','火计','机关','游射','魅惑','猛攻','突骑','火计','游射','统御','突进','血战','统御','猛攻','游射'];
 /** 闲章与题句（原创短句，取材常见三国典故）。 */
-const leisure=['常胜','忠义','神射','卧龙','万夫','锦马','子午','仁德','凤雏','巧思','弓腰','闭月'];
-const verses=['长坂单骑护幼主','千里单骑寻故主','定军山下斩夏侯','隆中一对定三分','据水断桥喝曹军','渭水横枪战孟德','子午奇谋出秦川','携民渡江不弃众','连环一计破曹军','木牛流马运千里','侍婢百人皆执刀','凤仪亭前离董吕'];
+const leisure=['常胜','忠义','神射','卧龙','万夫','锦马','子午','仁德','凤雏','巧思','弓腰','闭月','无双','止啼','英发','信义','奸雄','锦帆','恶来','碧眼','南蛮','祝融'];
+const verses=['长坂单骑护幼主','千里单骑寻故主','定军山下斩夏侯','隆中一对定三分','据水断桥喝曹军','渭水横枪战孟德','子午奇谋出秦川','携民渡江不弃众','连环一计破曹军','木牛流马运千里','侍婢百人皆执刀','凤仪亭前离董吕','辕门射戟解兵围','逍遥津上八百骑','火烧赤壁破曹军','神亭酣战斗孙策','煮酒青梅论英雄','百骑夜劫曹公营','宛城独守营门前','坐断东南战未休','七擒七纵终心服','飞刀百步取上将'];
+/** 按武将序号取（2026-11-21：P2 / P3 新武将原来没登记，序号 12 起是 undefined，主页画卷 [...titles[i]] 报错、主页进不去；再有新武将没登记时退回空字）。 */
+const at = (a: readonly string[], i: number): string => a[i] ?? '';
 type FrameState='normal'|'hover'|'selected'|'pressed';
 
 /** 立轴形制尺寸：木轴、天头（上）、地头（下）、两侧绫边；画心为宣纸。 */
@@ -309,14 +312,14 @@ export class HeroWarCard{
   this.name.setText(c.name);this.foldName?.setText(c.name);
   // 画卷版收起时名字写在 foldName 上，竖排名始终更新（否则“先收起再进首页/换将”展开后名字为空）
   if(this.painted||!this.folded)this.nameV.setText([...c.name].join('\n'));else this.nameV.setText(c.name);
-  this.title.setText([...titles[index]].join('\n'));
+  this.title.setText([...at(titles, index)].join('\n'));
   const nameBottom=this.nameV.y+this.nameV.height;this.seal.setTexture(sealTexture(this.s,c.faction??'蜀',small?26:32)).setDisplaySize(small?26:32,small?26:32).setY(nameBottom+(small?4:6));
   setAttrBadge(this.attrSeal,c.id);this.attrSeal?.setPosition(this.colX,this.seal.y+(small?30:36));
   this.brush.setDisplaySize(small?40:52,Math.max(small?96:128,this.nameV.height+(small?14:20)));
-  this.role.setText(roles[index]);
-  this.roleSeal.setTexture(sealTexture(this.s,roles[index],small?30:36,false,HEADING_FONT)).setDisplaySize(small?30:36,small?30:36);
-  this.verse.setText([...verses[index]].join('\n'));
-  this.leisureSeal.setTexture(sealTexture(this.s,leisure[index],small?26:32,true)).setDisplaySize(Math.round((small?26:32)*.72),small?26:32);
+  this.role.setText(at(roles, index));
+  this.roleSeal.setTexture(sealTexture(this.s,at(roles, index),small?30:36,false,HEADING_FONT)).setDisplaySize(small?30:36,small?30:36);
+  this.verse.setText([...at(verses, index)].join('\n'));
+  this.leisureSeal.setTexture(sealTexture(this.s,at(leisure, index),small?26:32,true)).setDisplaySize(Math.round((small?26:32)*.72),small?26:32);
   this.weapon.setText(weaponName(c.startWeapon,c.id));
   this.passive.setText('天赋 · '+CHARACTER_PASSIVES[c.id].name);
   this.skills.setText(Object.values(MARTIALS).filter(a=>a.character===c.id).map(a=>a.name).join('  ◆  ')).setWordWrapWidth(pw-12).setAlign('center');

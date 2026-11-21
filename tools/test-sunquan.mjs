@@ -25,7 +25,7 @@ const H = `const s = ${G}, pl = s.player, w = pl.weapons[0], wait = ms => new Pr
   const killN = n => { for (let i = 0; i < n; i++) { const e = mk('infantry', pl.x + 600, pl.y + 400, 5); e.hp = 0; s.killEnemy(e); } };`;
 
 const r0 = await p.evaluate(`(async () => { ${H}
-  return { weapon: w.id, label: pl.passive.label(s.combatNow), tex: ['sunquan_walk_sheet','sunquan_actions','sunquan_portrait','ink_hero_sunquan','fx_md_slash','fx_awaken_archery','fx_awaken_formation','fx_awaken_cavalry','fx_cast_sunquan','icon_yitian','growth_icon_steady_aim','growth_icon_critical'].filter(k => !s.textures.exists(k)) };
+  return { weapon: w.id, label: pl.passive.label(s.combatNow), tex: ['sunquan_walk_sheet','sunquan_actions','sunquan_portrait','ink_hero_sunquan','fx_md_slash','fx_awaken_archery','fx_awaken_formation','fx_awaken_cavalry','fx_cast_sunquan','icon_guding','branch_icon_sq_zuoduan','branch_icon_sq_gongnu','growth_icon_steady_aim','growth_icon_critical'].filter(k => !s.textures.exists(k)) };
 })()`);
 ck('孙权开局本命武器是古锭刀 · 令箭（guding_dao），被动条写当前阵势', r0.weapon === 'guding_dao' && /守势/.test(r0.label), r0);
 ck('孙权的行走 / 动作（首领图拼成）/ 头像 / 水墨立轴、借用的刀光 / 齐射 / 阵势特效、图标全部载入', r0.tex.length === 0, r0);

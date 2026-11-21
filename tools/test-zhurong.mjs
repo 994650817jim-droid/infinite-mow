@@ -25,7 +25,7 @@ const H = `const s = ${G}, pl = s.player, w = pl.weapons[0], wait = ms => new Pr
 
 const r0 = await p.evaluate(`(async () => { ${H}
   const ink = (await fetch('/assets/ink-scroll/zhurong.webp', { method: 'HEAD' })).ok; /* 水墨立轴只在主页主将是她时开局就载：查文件 */
-  return { ink, weapon: w.id, tex: ['zhurong_walk_sheet','zhurong_actions','zhurong_portrait','fx_zhurong_knife','fx_zy_field','fx_cast_zhurong','icon_sunknives','growth_icon_wildfire','growth_icon_pearl_volley'].filter(k => !s.textures.exists(k)), die: !!pl.actionSet?.die, skill: !!pl.actionSet?.skill };
+  return { ink, weapon: w.id, tex: ['zhurong_walk_sheet','zhurong_actions','zhurong_portrait','fx_zhurong_knife','fx_zy_field','fx_cast_zhurong','icon_huoyan','branch_icon_zr_huoshen','branch_icon_zr_feidao','growth_icon_wildfire','growth_icon_pearl_volley'].filter(k => !s.textures.exists(k)), die: !!pl.actionSet?.die, skill: !!pl.actionSet?.skill };
 })()`);
 ck('祝融开局本命武器是火焰飞枪（huoyan_feiqiang）', r0.weapon === 'huoyan_feiqiang', r0);
 ck('祝融的行走 / 动作（首领图拼成，只登记待机 / 出招 / 招牌技）/ 头像 / 水墨立轴、燃火飞刀 / 火场特效、图标全部载入', r0.tex.length === 0 && r0.ink && r0.skill && !r0.die, r0);

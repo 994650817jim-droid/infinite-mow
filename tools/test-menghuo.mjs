@@ -24,7 +24,7 @@ const H = `const s = ${G}, pl = s.player, w = pl.weapons[0], wait = ms => new Pr
   const killN = n => { for (let i = 0; i < n; i++) { const e = mk('infantry', pl.x + 700, pl.y + 500, 5); e.hp = 0; s.killEnemy(e); } };`;
 
 const r0 = await p.evaluate(`(async () => { ${H}
-  return { weapon: w.id, tex: ['menghuo_walk_sheet','menghuo_actions','menghuo_portrait','ink_hero_menghuo','mh_beast_sheet','mh_elephant_sheet','weiyan_crack','fx_md_slash','fx_cast_menghuo','icon_guandao','growth_icon_might','growth_icon_constitution'].filter(k => !s.textures.exists(k)) };
+  return { weapon: w.id, tex: ['menghuo_walk_sheet','menghuo_actions','menghuo_portrait','ink_hero_menghuo','mh_beast_sheet','mh_elephant_sheet','weiyan_crack','fx_md_slash','fx_cast_menghuo','icon_nanman','branch_icon_mh_bufu','branch_icon_mh_xiangzhen','growth_icon_might','growth_icon_constitution'].filter(k => !s.textures.exists(k)) };
 })()`);
 ck('孟获开局本命武器是南蛮大刀（nanman_dao）', r0.weapon === 'nanman_dao', r0);
 ck('孟获的行走 / 动作（首领图拼成）/ 头像 / 水墨立轴、猛兽 / 象兵、裂地 / 刀光 / 起手特效、图标全部载入', r0.tex.length === 0, r0);

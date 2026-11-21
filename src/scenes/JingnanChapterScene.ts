@@ -69,7 +69,7 @@ export class JingnanChapterScene extends Phaser.Scene {
  openStory(){const lord=CHARACTERS.find(c=>c.id===this.hero)?.name??'主公';
   storyScroll(this,W,H,IS_DESKTOP,{name:'story-jingnan-open',confirmName:'story-jingnan-open-confirm',kicker:'第六章 · 平定荆南',title:'南取四郡',
    lines:[{text:'建安十三年冬，赤壁一把火烧尽曹军锐气。江陵既下，荆州以南的长沙、桂阳、零陵、武陵四郡仍在观望。'},
-    {who:'诸葛亮',text:'主公，荆南四郡钱粮丰足，取之可为根本。桂阳赵范、零陵刘度庸懦，或可劝降；长沙韩玄刚愎，帐下老将黄忠却是万人敌。'},
+    {who:'诸葛亮',text:(this.hero==='liubei'?'主公':'将军')+'，荆南四郡钱粮丰足，取之可为根本。桂阳赵范、零陵刘度庸懦，或可劝降；长沙韩玄刚愎，帐下老将黄忠却是万人敌。'},
     {text:'本章敌将残血时可选「劝降」或「斩杀」：劝降者入招贤馆（黄忠可收为麾下武将），斩杀者掉首领宝箱与兵装。'},
     {who:lord,text:'先取桂阳，再下零陵、武陵，最后会一会长沙的老将。'}],
    reward:'本章玩法：劝降 / 斩杀',confirm:'出征荆南',background:'rest_camp',onDone:()=>{try{localStorage.setItem(OPEN_KEY,'1');}catch{}}});}

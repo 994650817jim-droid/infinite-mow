@@ -1262,7 +1262,7 @@ export class GameScene extends Phaser.Scene {
     const hotkeyHost = {
       scene: this as Phaser.Scene, mode: () => this.mode as string, over: () => this.over,
       togglePause: () => this.togglePause(), usePotion: () => this.usePotion(), useJinnang: () => this.useJinnang(),
-      order: () => this.legion.order, cycleOrder: () => this.legion.cycleOrder(), switchFormation: () => this.formationRt?.switch(this.combatNow) ?? false,
+      order: () => this.legion.order, cycleOrder: () => { if (mechOpen('squad')) this.legion.cycleOrder(); }, switchFormation: () => this.formationRt?.switch(this.combatNow) ?? false,
       openBag: () => this.openBattleBag(), canAttributes: () => this.player.growth.unallocated > 0 && mechOpen('attributes'),
       openAttributes: (from: 'none' | 'pause') => { this.attributeReturn = from; this.renderAttributePanel(); this.setMode('attributes'); },
       openBuild: () => this.openBuildPanel(), chooseUpgrade: (i: number) => this.chooseUpgrade(i), chooseBranch: (i: number) => this.chooseBranch(i),
@@ -4661,7 +4661,8 @@ export class GameScene extends Phaser.Scene {
       this.potionGlow?.setVisible(can&&low);
     }
     this.pointsBadge?.setText(String(Math.min(99,this.player.growth.unallocated)));if(this.pointsButton)this.pointsButton.setVisible(!overlay&&!this.over&&this.player.growth.unallocated>0&&mechOpen('attributes')).setData('points',this.player.growth.unallocated);
-    this.legionUI?.update(this.legion, !overlay && !this.over);
+    // 部曲（1-2 开放，mechanic-rollout #5）开放前：护阵 / 出击按钮、「随军粮 · 兵力」一行都不显示（11-21 制作人验收：1-1 开战就有「护阵 E」）
+    this.legionUI?.update(this.legion, !overlay && !this.over && mechOpen('squad'));
     this.passiveHud.update(this.player.passive, this.combatNow, !overlay);
     { const st = branchStatus(this.player.weapons[0], s => this.player.growth.build.tags()[s] ?? 0, s => SCHOOLS[s].name); this.passiveHud.updateBranch(st); this.buffHud?.root.setY(st ? 214 : 180); } // 专职行在被动栏下，增益栏往下让
     buildVfx(this).density=this.enemies.filter(e=>e.active&&!e.isSupplySlot).length+this.legion.count;

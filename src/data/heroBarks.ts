@@ -44,7 +44,7 @@ export const HERO_BARKS: Record<CharacterId, HeroBarkLines> = {
     vsBoss: { 曹操: '孟德，濡须口那一战可还记得？', 关羽: '云长，荆州之事，今日了断。', 陆逊: '伯言，你可是孤的大都督。' },
   },
   dianwei: {
-    trigger: ['古之恶来在此！', '主公退后，某来挡！', '谁敢近前一步！'],
+    trigger: ['古之恶来在此！', '将军退后，某来挡！', '谁敢近前一步！'],
     bossAppear: ['来，吃某一戟！'], bossDown: ['不过如此。'],
     vsBoss: { 张绣: '张绣！宛城那夜的账，今日一并算了！', 许褚: '仲康，比比谁的力气大！' },
   },

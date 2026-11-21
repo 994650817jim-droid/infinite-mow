@@ -44,6 +44,16 @@ const rest = (p, key) => p.evaluate(async key => {
   const after = await p.evaluate(() => window.__game.scene.getScene('GameScene').mode);
   ck('新档 1-1：只开行囊；部曲 / 舆图 / 军医在 1-1 后，商人在第一章后，其余更晚', st.gear && IDS.filter(i => i !== 'gear').every(i => st[i] === false), st);
   ck('1-1：不弹战斗支援、舆图卷轴不显示且 M 无反应、加点按钮不出；还没掉兵装时行囊按钮不出现', sc.mode === 'none' && sc.scroll !== true && !sc.bag && sc.points !== true && after === 'none', { ...sc, afterM: after });
+  // 11-21 制作人验收：1-1 开战右下就有「护阵 E」、左上「随军粮 0 · 兵力 0」——部曲 1-2 才开放
+  await p.waitForTimeout(300); await p.keyboard.press('KeyE'); await p.waitForTimeout(200);
+  const sq = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); return { hud: s.legionUI?.hud?.visible ?? null, order: s.legion.order }; });
+  await p.screenshot({ path: OUT + '/hud-1-1.png' });
+  ck('1-1：部曲没开放——护阵 / 出击按钮、「随军粮 · 兵力」一行都不显示，按 E 无反应', sq.hud === false && sq.order === 'guard', sq);
+  // 称谓规则：刘备始终是义军之主，玩家是出战主将——三兄弟之外的主将，章头不叫「桃园结义」；简雍称「主公」时由刘备作答
+  const lord = await p.evaluate(async () => { const St = await import('/src/systems/Story.ts'), H = (await import('/src/data/story/huangjin.ts')).HUANGJIN_STORY, ctx = l => ({ lord: l, team: () => [l], recruited: () => false });
+    const camp2 = H.camp.find(n => n.id === 'huangjin.camp2');
+    return { zy: St.nodeTitle(H.open, 'zhaoyun'), lb: St.nodeTitle(H.open, 'liubei'), zf: St.nodeTitle(H.open, 'zhangfei'), reply: St.resolveLines(camp2, ctx('zhaoyun'))[1]?.who, brief: St.resolveLines(H.stages[1].brief, ctx('zhaoyun')).map(l => l.who).join(',') }; });
+  ck('称谓：赵云当主将时第一章章头是「涿郡投军」（刘备 / 张飞仍是「桃园结义」）；简雍喊「主公」由刘备作答；1-1 军情主将也说一句', lord.zy === '涿郡投军' && lord.lb === '桃园结义' && lord.zf === '桃园结义' && lord.reply === 'liubei' && /\{lord\}/.test(lord.brief), lord);
   // 首领掉第一件兵装：张飞一句 + 「新玩法 · 行囊」，行囊按钮出现
   const gear = await p.evaluate(async () => { const s = window.__game.scene.getScene('GameScene'); s.player.damageImmune = true; s.itemDrops.collect(s.itemDrops.rollBossItem()); await new Promise(r => setTimeout(r, 1200)); s.updateHud?.();
     return { log: s.data.get('__storyBarkCardLog') ?? [], bag: s.hudTexts.bag.visible, seen: JSON.parse(localStorage.getItem('im_mech_seen') ?? '[]') }; });
@@ -60,6 +70,8 @@ const rest = (p, key) => p.evaluate(async key => {
   const p = await open(after11, '&mech=real');
   const st = await states(p);
   ck('1-1 打完：军医、部曲、舆图开放；军需商人仍未开', st.medic && st.squad && st.atlas && st.gear && !st.merchant && !st.jinnang, st);
+  const sq2 = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); for (let i = 0; i < 6 && s.mode !== 'none'; i++) { s.__DEV_ACTIONS?.closePopup?.(); if (s.mode !== 'none') s.setMode?.('none'); } s.updateHud?.(); return { hud: s.legionUI?.hud?.visible ?? null }; });
+  ck('1-2（部曲开放）：护阵按钮、「随军粮 · 兵力」出现', sq2.hud === true, sq2);
   await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.player.hp = Math.round(s.player.maxHp * .5); });
   const r = await rest(p, 'test-rest-12');
   await p.screenshot({ path: OUT + '/medic-intro.png' });

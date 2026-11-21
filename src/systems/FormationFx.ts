@@ -10,10 +10,14 @@ import type { Player } from '../entities/Player';
 export const SIGIL_KEY = 'formation_sigils';
 export const formationIconKey = (id: FormationId): string => 'formation_icon_' + id;
 /** 按需加载（开打时 GameScene 建 FormationFx 时调；行营布阵页、增益条、舆图都用）。 */
+/** 正在载入的键（同一张图载入完成前又被要一次时不重复排队，免得「Texture key already in use」）。 */
+const pending = new Set<string>();
 export function loadFormationArt(scene: Phaser.Scene, done?: () => void): void {
   const L = scene.load, miss: string[] = [];
-  if (!scene.textures.exists(SIGIL_KEY)) { L.spritesheet(SIGIL_KEY, 'assets/formation/sigils.webp', { frameWidth: 512, frameHeight: 512 }); miss.push(SIGIL_KEY); }
-  for (const id of FORMATION_IDS) { const k = formationIconKey(id); if (!scene.textures.exists(k)) { L.image(k, `assets/formation/icon_${id}.webp`); miss.push(k); } }
+  const want = (k: string, add: () => void) => { if (scene.textures.exists(k)) return; miss.push(k); if (pending.has(k)) return; pending.add(k); add(); L.once(`filecomplete-${k === SIGIL_KEY ? 'spritesheet' : 'image'}-${k}`, () => pending.delete(k)); };
+  want(SIGIL_KEY, () => L.spritesheet(SIGIL_KEY, 'assets/formation/sigils.webp', { frameWidth: 512, frameHeight: 512 }));
+  for (const id of FORMATION_IDS) { const k = formationIconKey(id); want(k, () => L.image(k, `assets/formation/icon_${id}.webp`)); }
+  if (miss.length) { L.once(Phaser.Loader.Events.COMPLETE, () => { for (const k of miss) if (scene.textures.exists(k)) pending.delete(k); }); scene.events.once('shutdown', () => { for (const k of miss) pending.delete(k); }); } // 场景中途关掉（载入作废）也放掉，下次重新排
   if (!miss.length) { done?.(); return; }
   if (done) L.once(Phaser.Loader.Events.COMPLETE, done);
   if (!L.isLoading()) L.start();

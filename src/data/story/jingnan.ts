@@ -142,7 +142,7 @@ export const JINGNAN_STORY: StoryChapter = {
           { who: 'zhuge', text: '……也罢。魏延，汝可尽忠报主，勿生异心。' },
         ] },
         { label: '留用，但须提防', flag: 'weiyan_trust', value: 'watched', reply: [
-          { who: '{lord}', text: '魏文长暂且留用，交云长节制。' },
+          { who: 'liubei', text: '魏文长暂且留用，交云长节制。' },
           { who: 'zhuge', text: '亮当时时留意。' },
         ] },
       ] },
@@ -153,7 +153,7 @@ export const JINGNAN_STORY: StoryChapter = {
     lines: [
       { text: '是年，公子刘琦病卒。群下推刘备为荆州牧，治公安。' },
       { who: 'sunshangxiang', text: '二兄派人来说，要把我许给皇叔。……这一仗打完，我是该回江东一趟了。', ifFollower: 'sunshangxiang' },
-      { who: '{lord}', text: '兵精粮足，可图大事。传令诸将，整军西望。' },
+      { who: 'liubei', text: '兵精粮足，可图大事。传令诸将，整军西望。' },
       { text: '西川刘璋暗弱，张鲁窥其北。益州天府之国，正在眼前……（第七章 · 入蜀）' },
     ],
   },
@@ -180,11 +180,11 @@ export const JINGNAN_STORY: StoryChapter = {
     ] },
     { id: 'jingnan.camp6', type: 'campTalk', lines: [
       { who: 'pangtong', text: '四郡易得，人心难收。主公让四个太守各复原职，这一招比打仗高明。', ifFollower: 'pangtong', ifNotLord: ['pangtong'] },
-      { who: '{lord}', text: '士元过奖。', ifFollower: 'pangtong', ifNotLord: ['pangtong'] },
+      { who: 'liubei', text: '士元过奖。', ifFollower: 'pangtong', ifNotLord: ['pangtong'] },
     ] },
     { id: 'jingnan.camp7', type: 'campTalk', lines: [
       { who: 'sunshangxiang', text: '鲁子敬又来了。每回来，都只说两个字：荆州。', ifFollower: 'sunshangxiang', ifNotLord: ['sunshangxiang'] },
-      { who: '{lord}', text: '让他等着。', ifFollower: 'sunshangxiang', ifNotLord: ['sunshangxiang'] },
+      { who: 'liubei', text: '让他等着。', ifFollower: 'sunshangxiang', ifNotLord: ['sunshangxiang'] },
     ] },
   ],
   bonds: [

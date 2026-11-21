@@ -97,7 +97,7 @@ export const STORY_CAST: Record<string, { name: string; portrait?: string }> = {
   huangquan: { name: '黄权', portrait: 'ink_cast_huangquan' }, sunhuan: { name: '孙桓', portrait: 'ink_cast_sunhuan' }, zhuran: { name: '朱然', portrait: 'ink_cast_zhuran' }, luxun: { name: '陆逊', portrait: 'ink_cast_luxun' },
   // 11-21 说话人排查：名字登记上（立绘排队中，见 speakers.ts AWAITING_ART），中文名台词可反查
   qinmi: { name: '秦宓' }, sushuang: { name: '苏双' },
-  zhangsong: { name: '张松', portrait: 'ink_cast_zhangsong' }, mangyachang: { name: '忙牙长', portrait: 'ink_cast_mangyachang' }, wutugu: { name: '兀突骨', portrait: 'ink_cast_wutugu' }, masu: { name: '马谡', portrait: 'ink_cast_masu' },
+  zhangsong: { name: '张松', portrait: 'ink_cast_zhangsong' }, huatuo: { name: '华佗', portrait: 'ink_cast_huatuo' }, mangyachang: { name: '忙牙长', portrait: 'ink_cast_mangyachang' }, wutugu: { name: '兀突骨', portrait: 'ink_cast_wutugu' }, masu: { name: '马谡', portrait: 'ink_cast_masu' },
   wangping: { name: '王平', portrait: 'ink_cast_wangping' }, jiangwei: { name: '姜维', portrait: 'ink_cast_jiangwei' }, haozhao: { name: '郝昭', portrait: 'ink_cast_haozhao' }, simayi: { name: '司马懿', portrait: 'ink_cast_simayi' },
 };
 /** 第一、二章还没有对白立绘的（通用角色只显示名字章）。人物立绘 2026-11-18 夜已全部补齐。 */

@@ -1,4 +1,5 @@
 import { shouldPlayOpening } from '../systems/BattleSettings';
+import { DEFENSE_V2 } from '../data/defenseV2';
 import { FIREPIT_ART } from '../data/fireProps';
 import { TACTIC_ICON_ALIAS, SCHOOL_IDS } from '../data/schools';
 import { LEAN_BOOT } from '../systems/LeanBoot';
@@ -37,6 +38,8 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
+    // 守城 v2 一键预览（?dev=1&defenseV2=1&defensePreview=1）：测试存档，开机直接进一场中城守城（data/defenseV2.ts DEFENSE_V2.preview）
+    {const q=new URLSearchParams(location.search);if(import.meta.env.DEV&&q.get('dev')==='1'&&q.get('defensePreview')==='1'&&!this.registry.get('defensePreviewArmed')){this.registry.set('defensePreviewArmed',true);this.registry.set('defensePreview',true);this.registry.set('loadBattle',true);this.registry.set('pendingWarlord','SiegeGameScene');this.registry.set('siegeCity',DEFENSE_V2.preview.city);this.registry.set('siegeMode','defense');this.registry.set('runConfig',{character:'zhaoyun'});}}
     const lean=this.lean=LEAN_BOOT&&!this.registry.get('loadBattle')&&!this.registry.get('battleReady');
     // 加载画面：水墨底 + 一行字 + 细金线进度（ui/LoadScreen）；开机叫「正在进入乱世」，进关叫「整军出征」
     this.bootFailed=[];loadScreen.show(this.registry.get('loadBattle')&&!this.registry.get('battleReady')?'整军出征':'正在进入乱世');

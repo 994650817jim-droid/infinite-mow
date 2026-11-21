@@ -103,7 +103,9 @@ export function buildCinematic(s: Phaser.Scene, l: In, W: number, margin: number
   if (say.height > (big ? 80 : 66)) say.setFontSize(fs0 - 2);
   const sy = big ? 62 : 56, sh = Math.max(big ? 60 : 52, say.height + 24), h = sy + sh, y0 = place ? place.bottom - h : 290;
   root.setY(y0);
-  say.setY(sy + (sh - say.height) / 2).setFixedSize(0, say.height).setData('full', full).setText('');
+  // 逐字打出时文字竖向居中在墨条上（原来固定成整段的高度、从上往下长：只打出一行时字贴在墨条上沿外、墨条下面空着——总制作人 c 段验收第 5 条「墨条里没有字」）
+  const center = (): void => { say.setY(sy + (sh - say.height) / 2); };
+  say.setData('full', full).setText(''); center();
   // 2026-11-20 去掉入场墨迹晕开（用户「每次剧情对话会先浮现出一个黑框框然后快速消失」）：inkbloom.png 转图时丢了透明通道、八帧都是实心暗色方块，
   // 笔刷带后面先闪一块黑框再淡掉；图已重做成透明底，但末几帧仍铺满整块（≈94%），照样像一块暗框——卡片改成从全透明直接淡入。
   root.add(s.add.image(cx0 + colW / 2 + (right ? -4 : 4), sy + sh / 2 + 5, 'barkui_brush').setDisplaySize(colW + 6, sh + 6).setScrollFactor(0).setTintFill(f.color).setAlpha(.5).setFlipX(!right).setName('story-bark-card-faction'));
@@ -121,11 +123,11 @@ export function buildCinematic(s: Phaser.Scene, l: In, W: number, margin: number
   // 点卡片（文字栏）直接出全文
   let shownAll = false;
   const hit = s.add.rectangle(cx0 + colW / 2, h / 2, colW, h, 0, .001).setScrollFactor(0).setInteractive({ useHandCursor: true }).setName('story-bark-card-hit');
-  hit.on('pointerdown', () => { shownAll = true; say.setText(full); });
+  hit.on('pointerdown', () => { shownAll = true; say.setText(full); center(); });
   root.add(hit);
   const typeMs = [...full].length / BARK_TYPE.cps * 1000;
   return { root, w, h, x0, y0, off: right ? 40 : -40, typeMs, onTick: t => {
-    if (!shownAll && say.active) { const n = Math.min([...full].length, Math.floor(Math.max(0, t - 180) / 1000 * BARK_TYPE.cps)); const cur = [...full].slice(0, n).join(''); if (say.text !== cur) say.setText(cur); if (n >= [...full].length) shownAll = true; }
+    if (!shownAll && say.active) { const n = Math.min([...full].length, Math.floor(Math.max(0, t - 180) / 1000 * BARK_TYPE.cps)); const cur = [...full].slice(0, n).join(''); if (say.text !== cur) { say.setText(cur); center(); } if (n >= [...full].length) shownAll = true; }
     if (nextHint?.active) nextHint.setVisible(!!o.more?.()).setAlpha(.55 + .45 * Math.abs(Math.sin(t / 380)));
   } };
 }

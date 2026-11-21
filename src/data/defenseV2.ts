@@ -62,11 +62,25 @@ export const DEFENSE_V2 = {
      *  被推倒 / 被滚木砸倒后 raiseMs 再立起来（车还在的话）；梯上每 climbGapMs 上一个人，爬完外墙要 climbSec 秒；
      *  一段城头敌兵满 segCap 个就不再上人；墙脚 footReach 以内的近战兵会排队上梯。 */
     ladder: { firstSec: 6, everySec: 16, max: 4, hp: 320, speed: 46, warnMs: 2000, raiseMs: 8000, climbGapMs: 1500, climbSec: 2.5, segCap: 8, footReach: 130, size: 150, footDy: 34 },
-    /** 冲车：开局 firstSec 秒第一辆，之后每 everySec 秒，同时最多 max 辆；开到门前每 hitMs 撞一下扣 damage。 */
-    ram: { firstSec: 28, everySec: 55, max: 1, hp: 600, speed: 28, hitMs: 1600, damage: 90, size: 150, footDy: 48 },
-    /** 城门耐久（按城池档，同旧守城 DEFENSE.gateHp）；门前同时最多 cap 个砍门（每秒 自身伤害 × contactMul），首领 × bossMul；
-     *  城外近战每 share 个里有 1 个（骑兵全部）去砍门，其余去排云梯。 */
-    gate: { hp: { small: 1500, medium: 1900, large: 2500 } as Record<'small' | 'medium' | 'large', number>, reach: 64, cap: 6, contactMul: .4, bossMul: 3, share: 3 },
+    /**
+     * 冲车（c 段验收第 1 条：城门的主要威胁改成冲车）：同时最多 max 辆；开到门前每 hitMs 撞一下，扣城门满耐久的 hitPct（按比例，各档城门一样几下破）。
+     * 开得比原来快（speed），每波 ramAt 秒就出来，免得一波快完了才到门前。
+     */
+    ram: { firstSec: 28, everySec: 55, max: 2, hp: 600, speed: 40, hitMs: 1600, hitPct: .0082, size: 150, footDy: 48 },
+    /**
+     * 城门耐久（按城池档，同旧守城 DEFENSE.gateHp）。步兵砍门只是慢慢磨（c 段验收第 1 条：原来每人每秒 自身伤害 × 0.4、同时 6 个，后期一波就砍破）：
+     * 每人每秒扣满耐久的 chopPct（跟敌兵伤害无关），门前同时最多 cap 个；攻城主将 bossPct；喘息 / 出城开着门时不砍。
+     * 城外近战每 share 个里有 1 个（骑兵全部）去砍门，其余去排云梯。
+     */
+    gate: { hp: { small: 1500, medium: 1900, large: 2500 } as Record<'small' | 'medium' | 'large', number>, reach: 64, cap: 4, chopPct: .0003, bossPct: .004, share: 3 },
+    /** 主将站在门楼上：每 everyMs 往门前一片（城门左右 halfW、墙脚往外 depth）放一轮箭，打最近的 targets 个（砍门的、冲车）（c 段验收第 2 条：门楼不只是个按 F 的点）。 */
+    gateShot: { everyMs: 650, targets: 2, damage: 34, halfW: 200, depth: 170 },
+    /** 垛口掩护（c 段验收第 3 条）：城外射上来的箭打到走道上的我方士兵 × arrowMul（原来城外弓手对着主将放箭，箭先打在垛口后的士兵身上）。 */
+    cover: { arrowMul: .4 },
+    /** 城外同屏敌兵上限（c 段验收第 1 条：原来峰值 120～150 全堆在门前）；多出来的预算换成云梯车 / 冲车（waves.ladders / rams）。 */
+    outsideCap: 70,
+    /** 门破了：门洞处持续的尘土（每 dustMs 一团）和火光（地火序列帧 fires 团）。 */
+    broken: { dustMs: 1400, fires: 2 },
     /** 占段：一段里我方士兵全没了、且这段城头敌兵 ≥ minFoes → 这段变红、梯子上人 ×fastMul；这段敌兵清光即夺回。 */
     capture: { minFoes: 3, fastMul: 2, checkMs: 250 },
     /** 推下城：主将近战打中走道南沿 band 以内的普通兵（主将在它北边）→ 摔下城。 */
@@ -92,14 +106,21 @@ export const DEFENSE_V2 = {
   waves: {
     count: { small: 3, medium: 4, large: 5 } as Record<'small' | 'medium' | 'large', number>,
     attackSec: 65, restSec: 20, finalSec: 90,
-    ladders: [2, 3, 4, 4, 4] as readonly number[], rams: [0, 1, 1, 2, 2] as readonly number[],
-    ladderAt: 4, ladderGap: 9, ramAt: 14, ramGap: 26,
+    ladders: [3, 4, 4, 4, 4] as readonly number[], rams: [1, 1, 1, 2, 2] as readonly number[],
+    ladderAt: 4, ladderGap: 8, ramAt: 8, ramGap: 30,
   },
   /**
    * 守得干净有奖（借鉴清单第 2 条）：每波攻完结算——没失守过的段每段 perSeg 随军粮 + 城门剩余比例 × gate；
    * 四段全无失再给部曲伤害 ×cleanMul 持续到下一波攻完。随军粮是战斗内的钱（行营招兵），不算单场缴获上限里的永久收益。
    */
   reward: { perSeg: 15, gate: 40, cleanMul: 1.1 },
+  /**
+   * 目标节奏（c 段验收第 1 条，可调；tools/shot-defense-v2-pace.mjs 两种打法各打一局对数）：
+   * 只守云梯不管门（推梯 / 滚木，不泼油、不出城、不修门）→ 城门大约在第 gateBreakWave 波后段才破；
+   * 只守门不管云梯（泼油 / 出城砸冲车 / 喘息修门，不推梯、不放滚木）→ 第 segLostWave 波起有段失守、敌兵从城头下城；
+   * 两条线都用好 → 城门守到最后。两条线压力大致对等，逼玩家来回跑。
+   */
+  pacing: { gateBreakWave: 3, segLostWave: 2 },
   /**
    * c 段 · 出城冲阵（设计第五节，按 3 天砍版）：每波攻城 afterSec 秒后（或喘息时）门楼内侧亮「F · 出城冲阵」，每波一次；
    * 开门 durationSec 秒，回到门洞 returnR 以内就关门回城头，时间到直接拉回城门内（不做关在外面）。
@@ -112,13 +133,15 @@ export const DEFENSE_V2 = {
    * 城里离主将远于 raidDist 的敌兵去砍府衙（同时最多 cap 个，每秒 自身伤害 × contactMul）；府衙耐久（按城池档，同旧守城）归零 = 府衙失守。
    * 门楼内侧 F「下城守府衙」/ 城门内侧 F「上城头」：主将走门楼里的楼梯上下（不用绕到马道）。
    */
-  keep: { hp: { small: 1600, medium: 2000, large: 2600 } as Record<'small' | 'medium' | 'large', number>, raidDist: 340, reach: 90, cap: 8, contactMul: .4, passR: 28, insideDy: 50, stairDy: 60 },
+  keep: { hp: { small: 1600, medium: 2000, large: 2600 } as Record<'small' | 'medium' | 'large', number>, raidDist: 340, reach: 90, cap: 8, chopPct: .0007, passR: 28, passHalf: 80, passDepth: 40, insideDy: 50, stairDy: 60 },
   /**
    * 借鉴清单第 1 条 · 预备队按威胁自动增援：每 checkMs 算各段威胁（立着的梯子 ×ladder + 这段城头敌兵 + 失守 lost），
    * 威胁 ≥ 1 的段派 ceil(威胁 / per) 个预备队近战过去（每段最多 max 个）；那段没威胁了就回预备队。
    * E 改成紧急手段：预备队全体（含已派去别段的）压到主将这段。
    */
   reinforce: { checkMs: 1000, ladder: 2, lost: 3, per: 2, max: 3 },
+  /** 一键预览（?dev=1&defenseV2=1&defensePreview=1，测试存档、不写正式存档）：直接进一场中城守城（陈留），补一支部曲上墙。 */
+  preview: { city: 'chenliu', army: [['archer', 6], ['swordsman', 6], ['spearman', 6], ['rider', 2]] as ReadonlyArray<readonly ['archer' | 'swordsman' | 'spearman' | 'rider', number]> },
   /** 首次引导（只出一次，存档 key）：按事件弹左下角的军师卡。 */
   guideKey: 'im_defense_v2_guide_v1',
   guide: {

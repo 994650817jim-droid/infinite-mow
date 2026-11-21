@@ -5,14 +5,14 @@
 // 用法：SRC=public/assets/star-map/originals/bases2_keyed.png node tools/cut-star-bases2.mjs
 import { chromium } from 'playwright';
 import fs from 'fs';
-const SRC = process.env.SRC, OUT = 'public/assets/star-map/nodes/', rd = f => 'data:image/png;base64,' + fs.readFileSync(f).toString('base64');
+const KEY_OFF = +(process.env.KEY_OFF ?? .6), SMALL_OFF = +(process.env.SMALL_OFF ?? 1.9); const SRC = process.env.SRC, OUT = 'public/assets/star-map/nodes/', rd = f => 'data:image/png;base64,' + fs.readFileSync(f).toString('base64');
 const KINDS = [['gate', 88], ['small', 40], ['notable', 88], ['keystone', 128]], STATES = ['off', 'ready', 'on'];
 const CY = [200, 530, 855, 1215], HALF = [170, 125, 175, 190], CX = [180, 540, 905];
 const SETS = { neutral: { on: [58, 46, 34], ready: [40, 32, 24], off: [22, 18, 15] }, strength: { on: [112, 34, 24], ready: [66, 30, 22], off: [26, 17, 15] }, agility: { on: [18, 80, 72], ready: [24, 54, 48], off: [17, 24, 22] }, intellect: { on: [68, 46, 116], ready: [48, 36, 76], off: [22, 19, 30] }, command: { on: [102, 74, 22], ready: [70, 52, 22], off: [26, 21, 14] } };
 const b = await chromium.launch({ channel: 'chrome', headless: true });
 try {
   const p = await b.newPage();
-  const r = await p.evaluate(async ([src, KINDS, STATES, CY, HALF, CX, SETS]) => {
+  const r = await p.evaluate(async ([src, KINDS, STATES, CY, HALF, CX, SETS, KEY_OFF, SMALL_OFF]) => {
     const im = new Image(); im.src = src; await im.decode(); const files = {}, sock = {};
     for (let ri = 0; ri < 4; ri++) {
       const [kind, D] = KINDS[ri], H = HALF[ri], C = Math.round(D * 1.45 / 2) * 2;
@@ -27,12 +27,13 @@ try {
         for (const [setName, cols] of Object.entries(SETS)) {
           const col = cols[STATES[ci]], img = new ImageData(new Uint8ClampedArray(base.data), C, C), d = img.data, R = rIn * s * 0.96, ctr = C / 2;
           for (let y = 0; y < C; y++) for (let x = 0; x < C; x++) { const dx = x - ctr, dy = y - ctr, dd = Math.sqrt(dx * dx + dy * dy); if (dd > R) continue; const i = (y * C + x) * 4; if (d[i + 3] < 128) continue; const l = (d[i] + d[i + 1] + d[i + 2]) / 3 / 255, k = Math.max(.55, Math.min(1.1, .9 + (l - .13) * 4)), edge = Math.max(0, Math.min(1, (R - dd) / 3)), vig = 1.05 - .4 * (dd / R) ** 2; for (let q = 0; q < 3; q++) d[i + q] = Math.max(0, Math.min(255, d[i + q] * (1 - edge) + col[q] * k * vig * edge)); }
+          if (STATES[ci] === 'off' && (kind === 'keystone' || kind === 'small')) { const f = kind === 'keystone' ? KEY_OFF : SMALL_OFF; for (let y = 0; y < C; y++) for (let x = 0; x < C; x++) { const i = (y * C + x) * 4; if (d[i + 3] < 8) continue; const dx = x - ctr, dy = y - ctr, inSock = Math.sqrt(dx * dx + dy * dy) < R; if (kind === 'keystone' && inSock) continue; for (let q = 0; q < 3; q++) d[i + q] = Math.max(0, Math.min(255, d[i + q] * (inSock ? 1.5 : f) + (kind === 'small' && inSock ? 12 : 0))); } }
           const oc = document.createElement('canvas'); oc.width = C; oc.height = C; oc.getContext('2d').putImageData(img, 0, 0); (files[setName] ??= {})[`${kind}_${STATES[ci]}.png`] = oc.toDataURL('image/png');
         }
       }
     }
     return { files, sock };
-  }, [rd(SRC), KINDS, STATES, CY, HALF, CX, SETS]);
+  }, [rd(SRC), KINDS, STATES, CY, HALF, CX, SETS, KEY_OFF, SMALL_OFF]);
   for (const [setName, fs2] of Object.entries(r.files)) { fs.mkdirSync(OUT + setName, { recursive: true }); for (const [f, u] of Object.entries(fs2)) fs.writeFileSync(OUT + setName + '/' + f, Buffer.from(u.split(',')[1], 'base64')); }
   fs.writeFileSync(OUT + 'sockets.json', JSON.stringify(r.sock, null, 1)); console.log(JSON.stringify(r.sock));
 } finally { await b.close(); }

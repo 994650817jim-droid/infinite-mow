@@ -216,6 +216,7 @@ import {ItemBagUI} from '../ui/ItemBagUI';
 import { enemyArrowTexture } from '../systems/ArrowPalette';
 import { EnemyTraits } from '../systems/EnemyTraits';
 import { LuoyangCamps } from '../systems/LuoyangCamps';
+import { EnemyFlowField, type FlowBox } from '../systems/EnemyFlowField';
 import { HitFeel, BossStagger } from '../systems/HitFeel';
 /** 武将序列帧的透明度与时长（缺省 1 / 450 毫秒）。2026-11-17 用户：「张飞攻击特效有点太夸张」「魏延也是」→ 张飞声浪 / 断桥怒吼、魏延劈地 / 裂波 / 谁敢杀我 调淡、调短。 */
 const HERO_FX_TONE: Record<string, { alpha: number; ms: number }> = {
@@ -733,6 +734,13 @@ export class GameScene extends Phaser.Scene {
   private relicWaveGfx!:Phaser.GameObjects.Graphics;private relicWaves:Array<{x:number;y:number;at:number}>=[];
   private firstBossAt=-1;private settledFrontlineKills=0;private frontlineNextSettlement=1;
   private frontlineVictories=new Map<number,{elapsed:number}>();private frontlineStarts=new Map<number,number>();
+  /** 敌兵绕障导航（栅栏 / 营栅 / 城墙等挡住的近战兵绕到缺口）。 */
+  readonly enemyFlow=new EnemyFlowField();
+  /** 导航用碰撞框：关墙 / 营栅 / 城墙（sishuiObstacles，攻城 / 官渡 / 军情 / 北伐等都放这里）、2-3 城头、战场拒马 / 栅栏等物件（supplies crates，1-3 栏杆）。 */
+  private readonly flowBoxBuf:FlowBox[]=[];
+  private readonly flowBoxes=():readonly FlowBox[]=>{const out=this.flowBoxBuf;out.length=0;for(const b of this.sishuiObstacles?.footprints??[])out.push(b);for(const b of this.dzLubu?.obstacles.footprints??[])out.push(b);this.supplies?.appendNavigationBoxes(out);return out;};
+  /** 碰撞框以外的挡路：地形（山崖 / 树 / 河）、2-3 营寨、场地边界。都没有时不逐格查。 */
+  private flowExtra():((x:number,y:number,r:number)=>boolean)|null{const t=this.terrain,l=this.luoyangCamps,a=this.arena;if(!t&&!l&&!a)return null;return (x,y,r)=>!!t?.pushCircle(x,y,r)||!!l?.pushOut(x,y,r)||(!!a&&!a.inside(x,y,r));}
   private chasingBosses:ChasingBoss[]=[];/** 剧情卷轴占用计数（StoryDirector pause / resume）。 */protected storyHolds=0;private deadBossControllers:Array<HuaxiongBoss|XurongBoss>=[];
   private get trailingBoss():ChasingBoss|null{return this.chasingBosses[0]??null;}
   /** 首领倒地后掉的宝箱（捡起遗物才进下一阶段）。 */
@@ -1124,7 +1132,7 @@ export class GameScene extends Phaser.Scene {
   protected resetState(): void {
     this.phaseRunner?.clear();this.battleTrack?.destroy();this.phaseRunner=null;this.battleTrack=null;this.phasePlan=null;this.phasedFor=null;this.fortunes?.clear();this.fortunes=null;this.fortuneQueue=[];this.fortuneTaken={};this.beaconCalmUntil=0;this.jinnang=null;this.jinnangButton=undefined;this.resetStageCards();this.branchRt?.clear();this.branchRt=null;this.branchFor=null;
     this.relicWaves=[];this.runMerit={elite:0,boss:0};this.picksGiven=0;this.militaryPending=0; // 场景实例会被重复使用：每场重置
-    this.firstBossAt=-1;this.settledFrontlineKills=0;this.frontlineNextSettlement=1;this.frontlineVictories.clear();this.frontlineStarts.clear();this.chasingBosses=[];this.storyHolds=0;this.deadBossControllers=[];for(const c of this.bossChests)c.clear();this.bossChests=[];this.lootContinue=null;this.relicHits=0;this.relicFireAt=0;this.relicHealAt=0;
+    this.firstBossAt=-1;this.settledFrontlineKills=0;this.frontlineNextSettlement=1;this.frontlineVictories.clear();this.frontlineStarts.clear();this.chasingBosses=[];this.enemyFlow.clear();this.storyHolds=0;this.deadBossControllers=[];for(const c of this.bossChests)c.clear();this.bossChests=[];this.lootContinue=null;this.relicHits=0;this.relicFireAt=0;this.relicHealAt=0;
     this.rerolls=0;this.warfeedCount=0;this.pointsButton=undefined;this.pointsBadge=undefined;this.potionButton=undefined;this.potionBadge=undefined;this.potionIcon=undefined;this.potionGlow=undefined;this.rerollButton=undefined;
     this.crowdSteering = true; this.freeRecruit = false; this.resting = false; this.restIntroPlayed = false; this.restIntroSkip = undefined; this.recruitedWaves.clear();
     this.pendingGrowthNotices.length = 0;
@@ -1802,7 +1810,9 @@ export class GameScene extends Phaser.Scene {
   protected updateEnemies(dt: number, time: number): void {
     const player = this.player;
     this.rebuildGrid();
-    this.enemyMovement.prepare(this.enemies, this.grid, this.legion.grid, player.x, player.y, dt, this.combatNow);
+    // 绕障导航：栅栏 / 营栅 / 城墙 / 地形挡住的近战兵绕到缺口（systems/EnemyFlowField，每 0.3 秒按主将位置重算一次，全场共用）
+    this.enemyFlow.update(this.combatNow, player.x, player.y, this.flowBoxes, this.flowExtra());
+    this.enemyMovement.prepare(this.enemies, this.grid, this.legion.grid, player.x, player.y, dt, this.combatNow, this.enemyFlow);
     this.traits?.update(this.combatNow); // 新兵种：落石 / 地火 / 毒箭 / 中毒
     this.luoyangCamps?.update(dt); // 2-3 营寨：警觉 / 援兵
     for (const enemy of this.enemies) {

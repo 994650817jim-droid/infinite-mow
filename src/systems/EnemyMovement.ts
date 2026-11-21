@@ -2,12 +2,16 @@ import type { Enemy } from '../entities/Enemy';
 import type { Ally } from '../entities/Ally';
 import type { SpatialGrid } from './SpatialGrid';
 
+/** 绕障导航（systems/EnemyFlowField）：返回 true = 被挡、out 是绕路方向。 */
+export interface EnemyFlowSteer { steer(x: number, y: number, out: { x: number; y: number }): boolean }
+
 /** Velocity steering, solved from one spatial snapshot before any enemy is moved. */
 export class EnemyMovement {
   private readonly allies: Ally[] = [];
   private readonly neighbors: Enemy[] = [];
+  private readonly flowDir = { x: 0, y: 0 };
 
-  prepare(enemies: readonly Enemy[], grid: SpatialGrid<Enemy>, allyGrid: SpatialGrid<Ally>, px: number, py: number, dt: number, now=0): void {
+  prepare(enemies: readonly Enemy[], grid: SpatialGrid<Enemy>, allyGrid: SpatialGrid<Ally>, px: number, py: number, dt: number, now=0, flow?: EnemyFlowSteer | null): void {
     const blend = 1 - Math.exp(-14 * dt);
     for (const enemy of enemies) {
       if (!enemy.active||enemy.isSupplySlot) continue;
@@ -32,10 +36,12 @@ export class EnemyMovement {
       }
       const target = enemy.targetAlly;
       const dx = (target?.x ?? px) - enemy.x, dy = (target?.y ?? py) - enemy.y, distance = Math.hypot(dx, dy);
-      const nx = distance > .001 ? dx / distance : 0, ny = distance > .001 ? dy / distance : 0;
+      let nx = distance > .001 ? dx / distance : 0, ny = distance > .001 ? dy / distance : 0;
       const speed = enemy.def.speed;
       // Preserve ranged approach/retreat distances and retreat speed. No arrive slowdown for melee.
       const behavior=enemy.def.behavior,ranged=behavior==='shaman'||behavior==='thunder',reach=ranged?240:behavior==='spear'?92:behavior==='halberd'?105:62;
+      // 近战被栅栏 / 营栅 / 城墙挡住：顺着绕障导航走到缺口（远程兵照旧，可隔栏放箭）；追的是主将或主将身边的部曲才用（导航图以主将为终点）
+      if (flow && !ranged && enemy.kind !== 'archer' && (!target || Math.hypot(target.x - px, target.y - py) < 260) && flow.steer(enemy.x, enemy.y, this.flowDir)) { nx = this.flowDir.x; ny = this.flowDir.y; }
       const goal = yellow ? distance>reach*.9?1:ranged&&distance<145?-1:0 : enemy.kind === 'archer' ? distance > 230 ? 1 : distance < 150 ? -.8 : 0 : target && distance < enemy.radius + target.radius ? 0 : 1;
       let sx = 0, sy = 0;
       for (const other of grid.query(enemy.x, enemy.y, enemy.radius + 38, this.neighbors)) {

@@ -61,7 +61,8 @@ const bonus = await ev(p, s => { const r = s.formationRt, L = s.legion, f = L.fo
   o.circle = { taken: L.fm.taken(inU), outTaken: outU ? L.fm.taken(outU) : null, dmg: L.fm.dmg(inU, front), hero: P.formationTakenMul };
   L.cycleOrder(); r.update(0, s.combatNow); o.circleSortie = { taken: L.fm.taken(inU), hero: P.formationTakenMul }; L.cycleOrder();
   const set = id => { r.current = id; r.loadout = [id, 'circle']; r.settleUntil = 0; r.powerAt = -1e9; r.apply(); r.update(0, s.combatNow); };
-  set('wedge'); o.wedge = { front: L.fm.dmg(inU, front), behind: L.fm.dmg(inU, behind), taken: L.fm.taken(inU), heroMove: P.formationSpeedMul };
+  const side = { x: P.x + Math.cos(f.facing + 1.4) * 120, y: P.y + Math.sin(f.facing + 1.4) * 120 }; // 侧前 80°
+  set('wedge'); o.wedge = { front: L.fm.dmg(inU, front), side80: L.fm.dmg(inU, side), behind: L.fm.dmg(inU, behind), taken: L.fm.taken(inU), heroMove: P.formationSpeedMul };
   set('geese'); o.geese = { ranged: L.fm.dmg(rg, front), range: L.fm.range(rg), melee: L.fm.dmg(inU, front), heroRange: P.passive.formationRangeMul };
   set('snake'); o.snake = { speed: inU.formSpeed, mul: r.pow().mul, favored: r.pow().favored };
   // 呼应：学一招骑突战法 → 主修含骑突 → 锋矢主效果 ×1.5
@@ -72,7 +73,7 @@ const bonus = await ev(p, s => { const r = s.formationRt, L = s.legion, f = L.fo
   return o; });
 ck('方圆：入阵士兵受伤 ×0.8、伤害 ×0.9；后军不吃；主将受伤 ×0.92', Math.abs(bonus.circle.taken - .8) < 1e-6 && Math.abs(bonus.circle.dmg - .9) < 1e-6 && (bonus.circle.outTaken ?? 1) === 1 && Math.abs(bonus.circle.hero - .92) < 1e-6, bonus.circle);
 ck('出击时散阵：士兵阵势停掉，主将加成保留', bonus.circleSortie.taken === 1 && Math.abs(bonus.circleSortie.hero - .92) < 1e-6, bonus.circleSortie);
-ck('锋矢：正前方 ×1.15、身后 ×1；受伤 ×1.1；主将移速 ×1.06', Math.abs(bonus.wedge.front - 1.15) < 1e-6 && bonus.wedge.behind === 1 && Math.abs(bonus.wedge.taken - 1.1) < 1e-6 && Math.abs(bonus.wedge.heroMove - 1.06) < 1e-6, bonus.wedge);
+ck('锋矢（11-21 调）：前方半边（侧前 80° 也算）×1.15、身后 ×1；受伤 ×1.05；主将移速 ×1.06', Math.abs(bonus.wedge.front - 1.15) < 1e-6 && Math.abs(bonus.wedge.side80 - 1.15) < 1e-6 && bonus.wedge.behind === 1 && Math.abs(bonus.wedge.taken - 1.05) < 1e-6 && Math.abs(bonus.wedge.heroMove - 1.06) < 1e-6, bonus.wedge);
 ck('雁行：远程伤害 ×1.2、射程 ×1.2，近战 ×0.85；主将范围 ×1.05', Math.abs(bonus.geese.ranged - 1.2) < 1e-6 && Math.abs(bonus.geese.range - 1.2) < 1e-6 && Math.abs(bonus.geese.melee - .85) < 1e-6 && Math.abs(bonus.geese.heroRange - 1.05) < 1e-6, bonus.geese);
 ck('长蛇：入阵士兵移速 ×1.25；赵云擅长蛇 ×1.25', Math.abs(bonus.snake.speed - 1.25) < 1e-6 && bonus.snake.favored && Math.abs(bonus.snake.mul - 1.25) < 1e-6, bonus.snake);
 ck('呼应：主修骑突 → 锋矢正前方 ×(1 + 0.15 × 1.5)', bonus.echo.echo && Math.abs(bonus.echo.front - 1.225) < 1e-6, bonus.echo);
@@ -138,9 +139,10 @@ await p.screenshot({ path: `${OUT}/battle-circle-sigil.png` });
 const camp = await p.evaluate(async () => { const s = window.__S; s.resting = true; s.setMode('rest'); s.campUI.open('test-form-rest', '下一关'); await new Promise(r => setTimeout(r, 5200));
   const ui = s.campUI, f = n => window.__find(ui.root, n), tab = f('camp-tab-5'); tab?.emit('pointerdown'); await new Promise(r => setTimeout(r, 300));
   const pick = f('formation-pick-0-geese'); pick?.emit('pointerdown'); await new Promise(r => setTimeout(r, 300));
-  const r = s.formationRt; return { tab: !!tab?.visible, cur: ui.tab, picked: !!pick, load: r.loadout, rtCur: r.current, name: f('formation-focus-name')?.text, cap: f('formation-cap')?.text, diagram: !!f('formation-diagram') }; });
+  const texts = []; const w = l => { for (const o of l) { if (typeof o.text === 'string') texts.push(o.text); if (o.list) w(o.list); } }; w(ui.root.list);
+  const r = s.formationRt; return { tab: !!tab?.visible, cur: ui.tab, picked: !!pick, load: r.loadout, rtCur: r.current, name: f('formation-focus-name')?.text, cap: f('formation-cap')?.text, diagram: !!f('formation-diagram'), fit: texts.find(t => /远程部曲（弓兵、连弩）多时用/.test(t)) ?? null }; });
 await p.waitForTimeout(300); await p.screenshot({ path: `${OUT}/formation-panel.png` });
-ck('行营「布阵」页：点「雁行阵」布为主阵，战斗里的军阵跟着改；有说明与站位示意、入阵人数', camp.tab && camp.cur === 5 && camp.picked && camp.load[0] === 'geese' && camp.rtCur === 'geese' && camp.name === '雁行阵' && /入阵 \d+ \/ \d+ 人/.test(camp.cap ?? '') && camp.diagram, camp);
+ck('行营「布阵」页：点「雁行阵」布为主阵，战斗里的军阵跟着改；有说明（含「适用：远程部曲多时用」）与站位示意、入阵人数', camp.tab && camp.cur === 5 && camp.picked && camp.load[0] === 'geese' && camp.rtCur === 'geese' && camp.name === '雁行阵' && /入阵 \d+ \/ \d+ 人/.test(camp.cap ?? '') && camp.diagram && !!camp.fit, camp);
 await p.close();
 
 // ⑧ 按进度：第一章通关（&mech=real）军阵还没开：没有阵、X 无效、没有布阵页签

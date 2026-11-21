@@ -257,6 +257,7 @@ assets/raw/*
 !/tools/render-opening.mjs
 !/tools/test-camp-buy-bag.mjs
 !/tools/shot-story-cards.mjs
+!/tools/shot-story-flash.mjs
 !/tools/shot-bag-cells.mjs
 !/tools/test-merchant-sell.mjs
 !/tools/test-respec.mjs

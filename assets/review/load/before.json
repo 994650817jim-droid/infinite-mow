@@ -1,0 +1,49 @@
+{
+ "label": "before",
+ "dir": "C:\\Users\\99465\\OneDrive\\文档\\deepseek-harness\\default-workspace\\infinite-mow\\.claude\\worktrees\\death-fx\\.build-tmp\\base",
+ "milestones": [
+  {
+   "name": "主页",
+   "reqs": 548,
+   "mb": 114.2,
+   "dReqs": 548,
+   "dMB": 114.2,
+   "missingObjects": 0,
+   "sec": 12.3
+  },
+  {
+   "name": "GameScene",
+   "reqs": 611,
+   "mb": 119.4,
+   "dReqs": 63,
+   "dMB": 5.2,
+   "missingObjects": 0,
+   "sec": 4.1
+  },
+  {
+   "name": "ThirdGameScene",
+   "reqs": 624,
+   "mb": 123.9,
+   "dReqs": 13,
+   "dMB": 4.5,
+   "missingObjects": 0,
+   "sec": 3.8
+  }
+ ],
+ "failed": [],
+ "errors": [],
+ "topDirs": [
+  "4.7 MB 17 个 assets/hero-fx/cast",
+  "4.4 MB 30 个 assets/processed/yellow",
+  "3.8 MB 1 个 assets/index-BKTrWTjy.js",
+  "3.4 MB 8 个 assets/warn-fx/handpainted",
+  "3.3 MB 7 个 assets/processed/hulao",
+  "2.8 MB 1 个 assets/epic-home/video",
+  "2.7 MB 1 个 assets/build-vfx/styles-hp-v1.png",
+  "1.8 MB 30 个 assets/processed-v2/enemies",
+  "1.7 MB 1 个 assets/env-v2/ground_hebei.png",
+  "1.6 MB 6 个 assets/hero-fx/zhouyu",
+  "1.6 MB 5 个 assets/processed/overhaul",
+  "1.6 MB 1 个 assets/env-v2/ground_guanzhong.png"
+ ]
+}

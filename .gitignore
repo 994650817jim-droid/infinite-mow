@@ -343,3 +343,5 @@ assets/raw/*
 !/tools/verify-dist-assets.mjs
 !/tools/check-dist-refs.mjs
 !/tools/prune-dist.mjs
+!/tools/measure-load.mjs
+!/tools/test-load-flow.mjs

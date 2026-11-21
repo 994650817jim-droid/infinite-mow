@@ -19,6 +19,16 @@ const SHELL_SCENES = new Set(['MenuScene', 'WorldMapScene', 'OpeningScene', 'Tal
 /** 这些界面自己载入的图，界面关闭时卸掉。 */
 const OWNER_SCENES = new Set([...SHELL_SCENES, 'CityScene']);
 
+/**
+ * 精简启动开关（2026-11-20 首屏加载优化）：开机只载入主页 / 选将 / 通用界面素材，战斗素材进关时才载入（BootScene 第二遍）。
+ * 手机一直是这样；现在电脑也一样（原来开机把全游戏素材一次载完，公网上 100 多 MB、几百个请求）。
+ * 测试入口 ?autostart=1（直接进战斗）和 ?lean=0 保持旧的「全载」；?lean=1 可强制开。卸载战斗图集 / 界面图的省内存逻辑仍只在手机（LOW_RES）上做——电脑内存够，同一章连打也不用重载。
+ */
+export const LEAN_BOOT: boolean = ((): boolean => {
+  if (LOW_RES) return true; if (typeof location === 'undefined') return false;
+  const q = new URLSearchParams(location.search); if (q.get('lean') === '1') return true; if (q.get('lean') === '0' || q.has('autostart')) return false; return true;
+})();
+
 let owner: string | null = null;
 const owned = new Map<string, Map<string, Phaser.Textures.Texture>>();
 const hooked = new Set<string>();
@@ -84,7 +94,7 @@ export function attachLeanBoot(game: Phaser.Game): void {
 }
 
 export function installLeanBoot(): void {
-  if (!LOW_RES) return;
+  if (!LEAN_BOOT) return;
   const mgr = Phaser.Scenes.SceneManager.prototype as unknown as { start(key: string, data?: object): unknown };
   const start = mgr.start;
   mgr.start = function (this: Phaser.Scenes.SceneManager, key: string, data?: object) {
@@ -94,13 +104,13 @@ export function installLeanBoot(): void {
       return start.call(this, 'BootScene');
     }
     // 回到主页 / 地图等：战斗场景关闭后卸载战斗图集
-    if (SHELL_SCENES.has(key) && reg.get('battleReady') && reg.get('shellTextureKeys')) {
+    if (LOW_RES && SHELL_SCENES.has(key) && reg.get('battleReady') && reg.get('shellTextureKeys')) {
       const release = (): void => { if (!reg.get('battleReady')) return; const n = releaseBattleTextures(game); console.info(`[LeanBoot] 回到 ${key}：卸载战斗图集 ${n} 张`); };
       const live = game.scene.getScenes(true).filter(s => BATTLE_SCENES.has(s.scene.key));
       if (live.length) live[live.length - 1].events.once(Phaser.Scenes.Events.SHUTDOWN, () => afterStep(game, release)); else afterStep(game, release);
     }
     // 界面自己载入的图：记在该界面名下，界面关闭时卸掉
-    owner = OWNER_SCENES.has(key) ? key : null;
+    owner = LOW_RES && OWNER_SCENES.has(key) ? key : null;
     if (owner && !hooked.has(key)) {
       hooked.add(key);
       const sc = this.getScene(key) as Phaser.Scene | null;

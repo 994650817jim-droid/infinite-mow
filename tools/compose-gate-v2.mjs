@@ -49,8 +49,8 @@ try {
     const crop = document.createElement('canvas'); crop.width = 2000; crop.height = 1100; crop.getContext('2d').drawImage(p, (pw - 2000) / 2, 0, 2000, 1100, 0, 0, 2000, 1100);
     return { size: [ow, oh], full: o.toDataURL('image/png'), cmp: crop.toDataURL('image/png'),
       key: { backCrenelTop: Math.round(218 * SCALE), baseBottom: Math.round(305 * SCALE), merlonTop: Math.round(merlonTop), ground: Math.round((820 + INSERT) * SCALE) } };
-  }, [rd(D + 'gate_passable.png'), rd(D + 'walkway_a.png'), rd('public/assets/siege-v2/luoyang/wall_seg.png'), CUT, INSERT, SCALE, B0, B1, E.ACTORS === '0' ? null : [rd('public/assets/processed-v2/zhaoyun_walk_sheet.png'), rd('public/assets/processed-v2/troops/halberdier_walk.png')]]);
+  }, [rd(D + 'originals/gate_passable_v1.png'), rd(D + 'walkway_a.png'), rd('public/assets/siege-v2/luoyang/wall_seg.png'), CUT, INSERT, SCALE, B0, B1, E.ACTORS === '0' ? null : [rd('public/assets/processed-v2/zhaoyun_walk_sheet.png'), rd('public/assets/processed-v2/troops/halberdier_walk.png')]]);
   fs.writeFileSync(D + 'gate_passable_v2.png', Buffer.from(r.full.split(',')[1], 'base64'));
-  fs.writeFileSync(E.CMP ?? (D + 'gate_v2_compare.png'), Buffer.from(r.cmp.split(',')[1], 'base64'));
+  fs.writeFileSync(E.CMP ?? 'assets/review/defense-v2/art/gate_v2_compare.png', Buffer.from(r.cmp.split(',')[1], 'base64'));
   console.log(JSON.stringify({ size: r.size, key: r.key }));
 } finally { await b.close(); }

@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { DEPTH, actorDepth } from '../config';
-import { DEFENSE_V2, assignPosts, cameraCenterY, isOutside, nextWaypoint, segmentAt, v2Geometry, type Post, type Pt, type V2Geo } from '../data/defenseV2';
+import { DEFENSE_V2, assignPosts, cameraCenterY, isOutside, nextWaypoint, segmentAt, v2Geometry, v2ReinforceNeed, type Post, type Pt, type V2Geo, type Segment } from '../data/defenseV2';
 import type { Ally } from '../entities/Ally';
 
 /**
@@ -13,9 +13,10 @@ export interface DefenseWallV2Host {
   scene: Phaser.Scene;
   player: () => Pt;
   units: () => readonly Ally[];
-  banner: (title: string, danger: boolean, caption?: string) => void;
+  banner: (title: string, danger: boolean, caption?: string, short?: string) => void;
 }
-interface Slot { post: Post; life: number }
+/** auto = 按威胁自动派去的增援（威胁没了就回预备队）；E 叫来的不算 auto。 */
+interface Slot { post: Post; life: number; auto?: boolean }
 
 const KEY = { seg: 'luoyang_wall_seg', corner: 'luoyang_wall_corner', gate: 'defv2_gate_v2', walkA: 'defv2_walkway_a', walkB: 'defv2_walkway_b' } as const;
 const FILE: Record<keyof typeof KEY, string> = { seg: DEFENSE_V2.art.seg.file, corner: DEFENSE_V2.art.corner.file, gate: DEFENSE_V2.art.gate.file, walkA: DEFENSE_V2.art.walkway.a, walkB: DEFENSE_V2.art.walkway.b };
@@ -24,11 +25,11 @@ export class DefenseWallV2 {
   readonly g: V2Geo;
   private readonly art: Phaser.GameObjects.GameObject[] = [];
   private readonly slots = new Map<Ally, Slot>();
-  private refillAt = 0; private alive = true;
+  private refillAt = 0; private alive = true; private reinforceAt = 0;
   /** 走道贴图的纹理名（walkway_a + b 横拼成一张；占段变红的那层复用）。 */
   readonly walkKey = 'defv2_walk_ab';
   /** 测试读。 */
-  readonly stats = { built: false, assigned: 0, refills: 0, called: 0 };
+  readonly stats = { built: false, assigned: 0, refills: 0, called: 0, autoSent: 0, autoBack: 0 };
 
   constructor(private readonly h: DefenseWallV2Host, start: Pt) {
     this.g = v2Geometry(start);
@@ -66,8 +67,9 @@ export class DefenseWallV2 {
   private holder(post: Post): Ally | null { for (const [u, s] of this.slots) if (s.post === post && u.active && s.life === u.lifeId) return u; return null; }
   private reserveUnits(ranged: boolean): Ally[] { const out: Ally[] = []; for (const [u, s] of this.slots) if (s.post.kind === 'reserve' && u.active && s.life === u.lifeId && !!u.def.ranged === ranged && u.kind !== 'rider' && u.kind !== 'medic') out.push(u); return out; }
   /** 预备队补位：梯口 / 马道口 / 垛口空了，就从预备队挑最近的一个上去（每 refillMs 一个）。 */
-  update(now: number): void {
-    if (now < this.refillAt) return; this.refillAt = now + DEFENSE_V2.refillMs;
+  /** paused = 出城冲阵中（门开着，预备队守门洞，不上城补位）。 */
+  update(now: number, paused = false): void {
+    if (paused || now < this.refillAt) return; this.refillAt = now + DEFENSE_V2.refillMs;
     for (const post of this.g.posts) {
       if (this.holder(post)) continue;
       const pool = this.reserveUnits(post.kind === 'crenel'); if (!pool.length) continue;
@@ -77,12 +79,34 @@ export class DefenseWallV2 {
     }
   }
   /** E：预备队里最多 callReserve 个近战上城，去主将所在这段的梯口两侧（临时岗位）。返回上来几个。 */
+  /**
+   * E（借鉴清单第 1 条改成紧急手段）：预备队全体——门内的近战，加上自动派去别段的增援——立刻压到主将这段。返回上来几个。
+   */
   callReserve(x: number): number {
-    const seg = segmentAt(this.g, x), pool = this.reserveUnits(false).slice(0, DEFENSE_V2.callReserve);
-    pool.forEach((u, k) => { const dx = (k - (pool.length - 1) / 2) * 52; this.slots.set(u, { post: { kind: 'extra', seg: seg.i, x: seg.ladderX + dx, y: this.g.W - 150 }, life: u.lifeId }); u.ai.nextThink = 0; });
+    const seg = segmentAt(this.g, x), pool = [...this.reserveUnits(false), ...this.autoUnits().filter(([, s]) => s.post.seg !== seg.i).map(([u]) => u)];
+    pool.forEach((u, k) => { this.slots.set(u, { post: this.extraPost(seg, k, pool.length), life: u.lifeId }); u.ai.nextThink = 0; });
     this.stats.called += pool.length;
-    this.h.banner(pool.length ? '预备队上城' : '预备队已空', !pool.length, pool.length ? `${pool.length} 人去第 ${seg.i + 1} 段梯口` : '城头的兵死了会从预备队补；战斗支援的新兵也进预备队');
+    this.h.banner(pool.length ? `预备队全体压上 · ${pool.length} 人` : '预备队已空', !pool.length, pool.length ? `去第 ${seg.i + 1} 段` : '城头的兵死了会从预备队补；战斗支援的新兵也进预备队', pool.length ? `预备队 ${pool.length} 人压上` : '预备队已空');
     return pool.length;
+  }
+  /** 第 k 个（共 n 个）增援在这段的站位：梯口两侧往外排，两排错开。 */
+  private extraPost(seg: Segment, k: number, n: number): Post { const half = (seg.x1 - seg.x0) / 2 - 24, dx = Math.max(-half, Math.min(half, (k - (n - 1) / 2) * 34)); return { kind: 'extra', seg: seg.i, x: seg.ladderX + dx, y: this.g.W - (k % 2 ? 122 : 150) }; }
+  private autoUnits(): Array<[Ally, Slot]> { return [...this.slots].filter(([u, s]) => s.auto && s.post.kind === 'extra' && u.active && s.life === u.lifeId); }
+  /**
+   * 预备队按威胁自动增援（借鉴清单第 1 条）：threats = 各段威胁（DefenseAssaultV2.threats）；每 checkMs 一次，
+   * 威胁段派 v2ReinforceNeed 个近战过去（从离那段最近的预备队挑），威胁没了就回预备队。出城中（paused）不动。
+   */
+  autoReinforce(threats: readonly number[], now: number, paused = false): void {
+    if (paused || now < this.reinforceAt) return; this.reinforceAt = now + DEFENSE_V2.reinforce.checkMs;
+    for (const seg of this.g.segs) {
+      const need = v2ReinforceNeed(threats[seg.i] ?? 0), sent = this.autoUnits().filter(([, s]) => s.post.seg === seg.i);
+      for (const [u] of sent.slice(need)) { this.slots.set(u, { post: this.reserveSlot(), life: u.lifeId }); u.ai.nextThink = 0; this.stats.autoBack++; }
+      for (let k = sent.length; k < need; k++) {
+        const pool = this.reserveUnits(false); if (!pool.length) return;
+        pool.sort((a, b) => Math.abs(a.x - seg.ladderX) - Math.abs(b.x - seg.ladderX)); const u = pool[0];
+        this.slots.set(u, { post: this.extraPost(seg, k, need), life: u.lifeId, auto: true }); u.ai.nextThink = 0; this.stats.autoSent++;
+      }
+    }
   }
   /** 岗位一览（测试 / 截图用）。 */
   postsInfo(): Array<{ kind: string; seg: number; held: boolean }> { return this.g.posts.map(p => ({ kind: p.kind, seg: p.seg, held: !!this.holder(p) })); }
@@ -104,13 +128,14 @@ export class DefenseWallV2 {
     // 马道口：女墙带在缺口处换成路面（同一张走道图往下取路面那几行盖上去），看得出这里能上下城
     for (const r of g.ramps) { const half = DEFENSE_V2.layout.rampHalf; this.art.push(s.add.tileSprite(r, g.top + WK.band / 2, half * 2, WK.band, walkKey).setTilePosition(r - half - g.X0, WK.band + 60).setDepth(DEPTH.ground + 2.5).setName('defv2-ramp-gap')); }
     // 外墙立面：墙段图从外侧城垛顶往下裁（城垛盖住走道南沿上站着的人的腿），墙脚对齐 F；从城门楼两侧往外排
-    const face = (x: number, flip: boolean): void => {
-      const im = s.add.image(x, g.F, KEY.seg).setOrigin(.5, A.seg.ground / A.seg.h).setScale(sc).setFlipX(flip).setDepth(actorDepth(g.W)).setName('defv2-face');
-      im.setCrop(0, A.seg.crenel, A.seg.w, A.seg.h - A.seg.crenel); this.art.push(im);
-    };
     // 墙段从城门楼图的两边往外排（按图的实际半宽，和段的几何一致）
     const gs = (g.F - (g.W - A.crenelOver)) / (A.gate.ground - A.gate.crenel), gateHalf = Math.min(DEFENSE_V2.layout.gateHalf, A.gate.w * gs / 2);
-    for (const side of [-1, 1]) for (let x = gateHalf - 20 + pieceW / 2; x - pieceW / 2 < DEFENSE_V2.layout.half; x += step) face(g.gx + side * x, side > 0);
+    // 定宽场地：从门楼两边铺到走道两端再往里盖 40（压在角楼底下），最后一块按剩下的宽裁掉（不伸出地图边）
+    const reach = DEFENSE_V2.layout.half + 40;
+    for (const side of [-1, 1]) for (let a = gateHalf - 20; a < reach; a += step) {
+      const tw = Math.min(pieceW, reach - a) / sc, im = s.add.image(g.gx + side * a, g.F, KEY.seg).setOrigin(side > 0 ? 0 : 1, A.seg.ground / A.seg.h).setScale(sc).setFlipX(side > 0).setDepth(actorDepth(g.W)).setName('defv2-face');
+      im.setCrop(A.seg.w - tw, A.seg.crenel, tw, A.seg.h - A.seg.crenel); // 两边都裁原图右端那截：右边这几块是翻转的（实测 Phaser 翻转后裁剪框按原图算），左边不翻、贴门楼的是右端 this.art.push(im);
+    }
     // 城门楼（可通行版）：墙脚对齐 F，外侧城垛和墙段齐平。画两层：整张在走道上所有人身后（楼阁、后排女墙、楼前平台），
     // 从外侧城垛往下裁一层盖在墙段和走道南沿的人前面（门楼正面不被墙段盖住、城垛挡住腿）——人从楼前平台走过，楼阁在人后面
     { this.art.push(s.add.image(g.gx, g.F, KEY.gate).setOrigin(.5, A.gate.ground / A.gate.h).setScale(gs).setDepth(actorDepth(g.top) - .01).setName('defv2-gate'));

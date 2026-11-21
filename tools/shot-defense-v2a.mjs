@@ -48,7 +48,7 @@ try {
   const called = await p.evaluate(() => { const s = window.__S; const before = s.defenseV2.stats.called; s.legionOrderOverride(); return s.defenseV2.stats.called - before; });
   await wait(3000);
   await p.screenshot({ path: OUT + '/a-4-call.png' });
-  ck('E：预备队上来（最多 3 个，去主将所在这段）', called >= 1 && called <= 3, { called });
+  ck('E：预备队全体压到主将所在这段（借鉴清单第 1 条：E 是紧急手段）', called >= 1, { called });
   const fps = await p.evaluate(() => window.__game.loop.actualFps);
   ck('帧率', fps > 20, { fps: Math.round(fps) });
 } catch (e) { fail++; console.log('FAIL 异常', String(e).slice(0, 300)); }

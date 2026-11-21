@@ -28,7 +28,7 @@ try {
   const cam = await ev(() => { const s = window.__S, v = s.cameras.main.worldView, g = s.defenseV2.g, H = 540, sy = wy => (wy - v.y) / v.height * H;
     const notes = s.children.list.filter(o => o.name === 'combat-notice'); return { foot: Math.round(sy(g.F)), hero: Math.round(sy(s.player.y)), outsidePx: Math.round((H - sy(g.F)) * 4 / 3), zoom: +(s.cameras.main.zoom / (window.__game.config.zoom || 1)).toFixed(3), notes: notes.map(n => ({ lines: (n.text ?? '').split('\n').length, y: Math.round(n.y), text: (n.text ?? '').slice(0, 30) })) }; });
   ck('镜头（a 段第 2 条）：主将在城头，墙脚以下城外地面 ≥ 240 截图像素，主将不钻到顶部 HUD 下', cam.outsidePx >= 240 && cam.hero >= 100, cam);
-  ck('横幅（a 段第 4 条）：一次一行、在主将下方（外墙面高度）', cam.notes.length <= 1 && cam.notes.every(n => n.lines === 1 && n.y > cam.hero + 40), cam.notes);
+  ck('横幅（b 段验收第 3 条）：一次一行、放在计时器下方那一行（不挡墙面上爬的敌兵）', cam.notes.length <= 1 && cam.notes.every(n => n.lines === 1 && n.y < 90), cam.notes);
   await p.screenshot({ path: OUT + '/b-1-start.png' });
   // ———— 城门楼（可通行版 gate_passable_v2）：主将从楼前平台走过，楼阁在人后面、外侧城垛在人前面，不再半透明
   await to(G.gx + 40, G.W - 100); await wait(1300);
@@ -38,7 +38,7 @@ try {
   await to(G.gx - 900, G.W - 90); await wait(1000);
   ck('城门楼（新图）：主将站在楼前平台上——楼阁在主将身后、外侧城垛在主将身前，不透明', gate.tex === 'defv2_gate_v2' && gate.back < gate.hero && gate.front > gate.hero && gate.alpha === 1, gate);
   // ———— 云梯：开到墙脚 → 立梯 → 攀爬 → 翻上城头
-  await ev(() => { const s = window.__S; s.elapsed = Math.max(s.elapsed, 40); const A = s.defenseAssault; A.spawnLadder(); A.spawnLadder(); for (const l of A.ladders) l.cart.sprite.y = s.defenseV2.g.F + 90; });
+  await ev(() => { const s = window.__S; s.elapsed = Math.max(s.elapsed, 8); const A = s.defenseAssault; /* c 段有波次：别拨到喘息 */ A.spawnLadder(); A.spawnLadder(); for (const l of A.ladders) l.cart.sprite.y = s.defenseV2.g.F + 90; });
   const upOk = await until(() => window.__S.defenseAssault.ladders.some(l => l.state === 'up'), 8000);
   const lad = await ev(() => { const l = window.__S.defenseAssault.ladders.find(q => q.state === 'up'); return l ? { seg: l.seg, x: l.x } : null; });
   ck('云梯车开到墙脚 → 亮圈 → 立梯（梯子靠在外墙面上）', upOk && !!lad, await ev(() => window.__S.defenseAssault.snapshot().ladders));
@@ -62,7 +62,7 @@ try {
     const after = await ev(seg => { const A = window.__S.defenseAssault; return { stats: { ...A.stats }, state: A.ladders.find(l => l.seg === seg)?.state }; }, L.seg);
     ck('站梯口头顶出「F · 推梯」，按 F 梯子往外倒、梯上的人摔下城', prompt === 'F · 推梯' && after.stats.pushed === before.pushed + 1 && after.state === 'down', { prompt, fell: after.stats.fell - before.fell, state: after.state });
     // ———— F · 滚木（同一段）
-    await to(G.segs[L.seg].lx + 130, G.W - 48); await wait(150);
+    await to(G.segs[L.seg].lx + 84, G.W - 48); await wait(150);
     const lp = await ev(() => window.__S.defenseAssault.prompt.text);
     const cartHp0 = await ev(seg => window.__S.defenseAssault.ladders.find(l => l.seg === seg)?.cart.hp ?? 0, L.seg);
     await ev(() => window.__S.interactOverride()); await wait(700);
@@ -70,7 +70,7 @@ try {
     ck('站滚木架头顶出「F · 滚木 ×2」，按 F 滚木砸下去（这段的云梯车掉血、次数 −1）', lp === 'F · 滚木 ×2' && lg.logs === 1 && lg.left === 1 && lg.cart < cartHp0, { lp, ...lg, cartHp0: Math.round(cartHp0) });
   } else ck('推梯 / 滚木（没有立着的梯子）', false);
   // ———— 冲车撞门 → F · 泼油
-  await ev(() => { const s = window.__S, A = s.defenseAssault; A.spawnRam(); for (const r of A.rams) r.e.sprite.y = s.defenseV2.g.F + 100; });
+  await ev(() => { const s = window.__S, A = s.defenseAssault; A.spawnRam(); for (const r of A.rams) r.y = s.defenseV2.g.F + 100; }); // 冲车按自己的 y 走（行进时上下颠）
   const ramOk = await until(() => window.__S.defenseAssault.stats.ramHits > 0, 9000);
   const gate0 = await ev(() => window.__S.defenseAssault.snapshot());
   ck('冲车开到门前撞门（第二战线），城门掉耐久', ramOk && gate0.gate < gate0.gateMax, { gate: gate0.gate, max: gate0.gateMax, ramHits: gate0.stats.ramHits });
@@ -82,7 +82,7 @@ try {
   const ramHp1 = await ev(() => window.__S.defenseAssault.rams[0]?.e.hp ?? 0);
   ck('站门楼油锅头顶出「F · 泼油 ×3」，按 F 门前烧一片（冲车 ×4 掉血）', /^F · 泼油/.test(op) && (await ev(() => window.__S.defenseAssault.stats.oil)) === 1 && ramHp1 < ramHp0, { op, ramHp0: Math.round(ramHp0), ramHp1: Math.round(ramHp1) });
   // ———— F · 修门（站定读条）
-  await ev(() => { const A = window.__S.defenseAssault; A.gate.hp = Math.min(A.gate.hp, A.gate.max * .5); for (const r of A.rams) r.e.hp = 1; });
+  await ev(() => { const A = window.__S.defenseAssault; A.gate.hp = Math.min(A.gate.hp, A.gate.max * .5); for (const r of A.rams) r.e.hp = 1; A.sortie.usedWave = A.wave; }); // 这一波的出城先算用过（不然门楼内侧 F 优先出城）
   await to(G.gx, G.top + 50); await wait(150);
   const rp = await ev(() => window.__S.defenseAssault.prompt.text), g0 = await ev(() => window.__S.defenseAssault.gate.hp);
   await ev(() => window.__S.interactOverride()); await wait(1200);
@@ -92,6 +92,7 @@ try {
   // ———— 占段 / 夺回（第 1 段：我方全没了 + 城头敌兵 ≥ 3）
   await to(G.segs[1].x0 + 80, G.W - 90); await wait(300);
   const cap = await ev(() => { const s = window.__S, g = s.defenseV2.g, sg = g.segs[0], out = [];
+    s.defenseV2.reinforceAt = 1e12; /* 关掉按威胁自动增援（不然预备队会补进这段，测不到失守） */
     for (const u of s.legion.units) if (u.active && u.x >= sg.x0 - 30 && u.x < sg.x1 && u.y < g.W + 10) s.legion.hurt(u, 1e7, s.combatNow, undefined, 0, true);
     s.defInside = true; try { for (let i = 0; i < 4; i++) { const e = s.spawnEnemy('infantry', sg.ladderX - 90 + i * 60, g.W - 70, 1, true); if (e) out.push(e.spawnId); } } finally { s.defInside = false; }
     window.__capIds = out; return out.length; });

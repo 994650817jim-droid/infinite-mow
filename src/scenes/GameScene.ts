@@ -193,8 +193,8 @@ import { dmgFontKey } from '../ui/DamageFont';
 import { baseEquiv, baseStat, statMultiplier, statSource } from '../data/heroStats';
 import { ATTRIBUTE_IDS } from '../data/attributes';
 import { PROP_LOOT, rollPropItem, rollPropQuality, type PropLootKind } from '../data/propLoot';
-import { terrainConfigFor } from '../data/terrain';
-import { stageMapFor } from '../data/stageMaps';
+import { terrainConfigFor, type TerrainConfig } from '../data/terrain';
+import { stageMapFor, type StageMapDef } from '../data/stageMaps';
 import { StageArena } from '../systems/StageArena';
 import { Tutorial } from '../systems/Tutorial';
 import { IffOverlay, readIffMode, warmIffTextures, type IffUnit } from '../systems/IffOverlay';
@@ -1424,14 +1424,14 @@ export class GameScene extends Phaser.Scene {
     if(this.mode==='none'&&!this.over)this.sishuiPass?.update();
     this.parley?.update(); // 首领招降：残血弹窗 / 再压一压
     if(this.mode==='none'&&!this.over)this.dual?.update(this.combatNow); // 双首领：招降、配合技、狂怒 / 心乱、退走线
-    if(!this.terrainInit&&this.player){this.terrainInit=true;const tc0=terrainConfigFor(this.hardKey(),this.hardStage()),tc=tc0?.auto&&new URLSearchParams(location.search).get('groves')==='0'?{...tc0,auto:undefined}:tc0; /* ?groves=0：关掉自动树林（前后对比截图用） */if(tc){this.terrain=new Terrain(this,tc,tc.auto?this.treeAvoid():undefined);const t=this.terrain;if(tc.auto)this.supplies?.purge((x,y)=>t.treeNear(x,y,50)); /* 自动树林种下后，已经摆在树脚下的补给箱 / 道具收掉 */Ally.terrainMul=(x,y)=>t.speedMul(x,y);this.terrainNav=[...t.navBoxes(),...t.cliffBoxes];if(t.cliffBoxes.length){if(!this.sishuiObstacles)this.sishuiObstacles=new SishuiObstacles([]);this.sishuiObstacles.footprints.push(...t.cliffBoxes);} /* 山崖碰撞并进场景障碍：挡人、刷兵避开、随行也认 */this.events.once('shutdown',()=>{t.clear();if(this.terrain===t){this.terrain=null;Ally.terrainMul=null;}});}}
+    if(!this.terrainInit&&this.player){this.terrainInit=true;const tc0=this.terrainDef(),tc=tc0?.auto&&new URLSearchParams(location.search).get('groves')==='0'?{...tc0,auto:undefined}:tc0; /* ?groves=0：关掉自动树林（前后对比截图用） */if(tc){this.terrain=new Terrain(this,tc,tc.auto?this.treeAvoid():undefined);const t=this.terrain;if(tc.auto)this.supplies?.purge((x,y)=>t.treeNear(x,y,50)); /* 自动树林种下后，已经摆在树脚下的补给箱 / 道具收掉 */Ally.terrainMul=(x,y)=>t.speedMul(x,y);this.terrainNav=[...t.navBoxes(),...t.cliffBoxes];if(t.cliffBoxes.length){if(!this.sishuiObstacles)this.sishuiObstacles=new SishuiObstacles([]);this.sishuiObstacles.footprints.push(...t.cliffBoxes);} /* 山崖碰撞并进场景障碍：挡人、刷兵避开、随行也认 */this.events.once('shutdown',()=>{t.clear();if(this.terrain===t){this.terrain=null;Ally.terrainMul=null;}});}}
     if(!this.traits&&this.player)this.traits=new EnemyTraits({scene:this,player:this.player,enemies:()=>this.enemies,stageKey:()=>this.hardKey()+'.'+this.hardStage(),wave:()=>waveIndexAt(this.elapsed,this.chapter.waves)+1,enabled:()=>!this.hardMode&&this.mode==='none'&&(!this.runConfig.encounter||this.achievementArc()!==undefined),/* 第三章起的篇章场景都带 encounter（qunxiong），按自己的篇章键配兵；只排除 ?encounter= 预览 */
       baseDef:k=>{const b=this.chapter.enemies[k];if(!this.yellow)return b;const v=this.yellow.variant(b,this.elapsed);return v.behavior?b:v;},spawn:(k,x,y,def)=>this.spawnEnemy(k,x,y,undefined,false,def),
       fireArrow:(e,tx,ty,d,sp)=>this.fireBolt(this.bullets,e.x,e.y,tx,ty,d*(this.env?.damageMul(e)??1),0,false,sp,enemyArrowTexture(this,e.sprite.texture.key)),hurtTroops:(x,y,r,d)=>this.legion.hurtArea(x,y,r,d,this.combatNow),
       move:(e,nx,ny,dt)=>{e.moveVx=nx*e.def.speed;e.moveVy=ny*e.def.speed;this.advanceEnemy(e,nx,ny,dt);},sfx:k=>this.sfx.play(k),
       ringDistance:()=>this.spawnRingDistance(),inWater:(x,y)=>this.terrain?.inWater(x,y)??false,waterPoint:(px,py)=>{const t=this.terrain;if(!t)return null;for(let i=0;i<40;i++){const a=Math.random()*Math.PI*2,d=420+Math.random()*560,x=px+Math.cos(a)*d,y=py+Math.sin(a)*d;if(t.inWater(x,y))return{x,y};}return null;},
       gainFood:n=>{if(this.killGrant.food)this.legion.food+=n;}, /* 押粮卒被截的粮：首领阶段超额不给 */boss:()=>this.boss,farPoint:(x,y)=>{const g=this.arena?.info.gates;if(!g?.length)return null;const p=this.player;return [...g].sort((a,b)=>Math.hypot(b.x-p.x,b.y-p.y)-Math.hypot(a.x-p.x,a.y-p.y))[0]??null;void x;void y;}}); // 机制自己定方向（保持距离 / 绕圈）：不用群体寻路的追击速度
-    if(!this.arenaInit&&this.player&&this.terrainInit){this.arenaInit=true;const def=stageMapFor(this.hardKey(),this.hardStage());if(def)this.arena=new StageArena({scene:this,player:this.player,allies:()=>this.allies,enemies:()=>this.enemies,now:()=>this.combatNow,
+    if(!this.arenaInit&&this.player&&this.terrainInit){this.arenaInit=true;const def=this.arenaDef();if(def)this.arena=new StageArena({scene:this,player:this.player,allies:()=>this.allies,enemies:()=>this.enemies,now:()=>this.combatNow,
       spawnTarget:(x,y,hp,size)=>{const e=this.supplies?.spawnGate(x,y,hp,size)??null;e?.sprite.setAlpha(0);return e;},hitEnemy:(e,d,src)=>{this.hitEnemy(e,d,this.combatNow,src??'melee',true,false);},spawnEnemy:(k,x,y)=>this.spawnEnemy(k,x,y,undefined,true),breakBridgeNear:(x,y)=>{const t=this.terrain as unknown as {rivers?:Array<{bridges:Array<{x:number;y:number}>}>;setBridgeBroken?:(i:number,b?:boolean)=>boolean}|null;const all=t?.rivers?.flatMap(r=>r.bridges)??[];let bi=-1,bd=300;all.forEach((b,i)=>{const d=Math.hypot(b.x-x,b.y-y);if(d<bd){bd=d;bi=i;}});return bi>=0&&!!t?.setBridgeBroken?.(bi,true);},
       hurtTroops:(x,y,r,d)=>this.legion.hurtArea(x,y,r,d,this.combatNow),banner:(t,d,c)=>this.showWaveBanner(t,!!d,c),sfx:k=>this.sfx.play(k),purge:pred=>{this.supplies?.purge(pred);},block:b=>this.blockBoxes(b,true)},def);}
     if(this.terrain){this.terrain.update(this.combatNow,dt);this.player.terrainSpeedMul=this.terrain.speedMul(this.player.x,this.player.y);}
@@ -1513,6 +1513,12 @@ export class GameScene extends Phaser.Scene {
   protected legionOrderOverride(): boolean { return false; }
   /** F（出击键）的场景覆盖（守城 v2：一键 F 推梯 / 滚木 / 泼油 / 修门）；返回 true 表示已处理。 */
   protected interactOverride(): boolean { return false; }
+  /** 舆图画心中心 / 守城标记（守城 v2 覆盖：整张定宽场地、四段城头状态）。 */
+  protected mapCenter(): { x: number; y: number } | null { return null; }
+  protected mapFort(): import('../ui/PaintedMap').FortMark | null { return null; }
+  /** 本关的地形配置 / 有边场地定义（默认按章节表；守城 v2 换成自己算的定宽场地）。 */
+  protected terrainDef(): TerrainConfig | null { return terrainConfigFor(this.hardKey(), this.hardStage()); }
+  protected arenaDef(): StageMapDef | null { return stageMapFor(this.hardKey(), this.hardStage()); }
   /** 主线没打过的关从存档点开打时先整军：第一、二章看天下战役标记（worldCampaign）；第 3～12 章篇章场景、官渡覆盖成 true（第六轮试玩：8-1 两次直接开打）。 */
   protected musterOnSortie(): boolean { return this.worldCampaign; }
   /** 回血点（泉眼 / 水井 / 干粮）落点：默认同 fieldPlace；守城 v2 放城里。 */
@@ -1646,7 +1652,7 @@ export class GameScene extends Phaser.Scene {
       this.battleMap = new BattleMap({locked: () => !mechOpen('atlas'), scene: this, player: () => this.player, enemies: () => this.enemies, followers: () => this.followers?.members ?? [],
         // 军阵：部曲淡青点 + 主将脚下当前阵纹小图
         army: () => this.legion.units, eyes: () => this.enemyForms?.eyes() ?? [], formation: () => { const r = this.formationRt; return r?.current ? { frame: FORMATION_IDS.indexOf(r.current), rot: this.legion.formation.facing + Math.PI / 2 } : null; },
-        title: () => this.chapter.name ?? this.chapter.label ?? '',
+        title: () => this.chapter.name ?? this.chapter.label ?? '', center: () => this.mapCenter(), fort: () => this.mapFort(),
         // 2026-11-19 用户「打开小地图会暂停是我要要求的」：舆图展开时战斗暂停，卷回后恢复
         pause: on => { if (on) { if (this.mode === 'none' && !this.over) this.setMode('map'); } else if (this.mode === 'map') this.setMode('none'); },
         camps: () => { const z = this.allyPush, now = this.combatNow; return [...(this.objective?.standing ?? []).map(e => ({x: e.x, y: e.y, ratio: e.hp / Math.max(1, e.maxHp), hit: !!z && now - (z.campHitAt.get(e) ?? -1e9) < 900})), ...tentMarks(this).filter(m => !m.objective)]; }, // 破营目标 + 各刷兵帐篷（systems/SpawnTents）

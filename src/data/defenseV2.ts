@@ -7,6 +7,7 @@
  * 坐标都相对开局点 O（主将站的地方）：W = 外沿垛口线（走道南沿），走道 [W − walk, W]，外墙立面 [W, F]，F = 墙脚线，城外 y > F，城内 y < 内侧女墙。
  * 所有数值交平衡会话。
  */
+import type { StageMapDef } from './stageMaps';
 export const DEFENSE_V2_KEY = 'im_defense_v2';
 export function defenseV2On(search: string = typeof location !== 'undefined' ? location.search : ''): boolean {
   const q = new URLSearchParams(search).get('defenseV2'); if (q === '1') return true; if (q === '0') return false;
@@ -15,25 +16,31 @@ export function defenseV2On(search: string = typeof location !== 'undefined' ? l
 
 export const DEFENSE_V2 = {
   layout: {
-    /** 开局点在走道中线（O.y = W − walk/2）、城门西侧 startDx。 */
-    startDx: -700,
+    /** 开局点在走道中线（O.y = W − walk/2）、城门西侧 startDx（第 2 段中间）。 */
+    startDx: -470,
     /** 墙半宽（到角楼内侧）、走道宽（3.5 个身位）、外墙立面高、内侧女墙厚。 */
-    half: 1300, walk: 240, face: 220, inner: 50,
+    /**
+     * 有边场地（用户「防守战不要是无限大地图，这样城墙就可以铺开」）：走道从城门往两边各 half（走道全长 2·half = 1780，
+     * 主将基础移速 178 → 一头跑到另一头 10 秒），两端角楼贴着地图左右边（corner = 角楼占的宽，场地边界在角楼外沿往里 20）。
+     */
+    half: 890, walk: 240, face: 220, inner: 50, corner: 272,
     /** 走道图上沿 44 像素是内侧女墙顶（walkway_a / b）：女墙的碰撞往走道里伸 band，人不站到女墙顶上。 */
     band: 40,
     /** 城门楼半宽（门楼在走道上，主将可以走过去）：按城门楼图（外侧城垛与墙段齐平时约 990 宽）。 */
-    gateHalf: 340,
+    gateHalf: 327,
     /** 马道（内侧女墙的两个缺口，上下城头）：离城门的 x、半宽。 */
-    rampX: 1150, rampHalf: 60,
+    rampX: 402, rampHalf: 50,
     /** 城内深度、城外深度（场地边界）、两侧外留。 */
-    city: 650, outside: 1000, flank: 500,
+    city: 520, outside: 1000, flank: 500,
+    /** 场地边外的边带厚度（山崖 / 民居 / 敌营营栅画在这里；镜头最多看到边带为止）。 */
+    edgeBand: 220,
     /** 府衙：内侧女墙以北多远。 */
-    keepDy: 380,
+    keepDy: 360,
     /** 开打时主将站在走道南半边（离外沿 heroDy，垛口后面）：镜头往城外让以后主将在画面上部，站南半边不顶到顶部计时器。 */
     heroDy: 90,
   },
   /** 城头分段：每段一个梯口（段中点），4 个垛口位（避开梯口 ±mouth），梯口 2 个驻守位。 */
-  posts: { crenelDy: 40, crenels: 4, mouth: 70, guardDx: 36, guardDy: 95, rampDy: 175, reserveDy: 70, reserveGap: 34, reserveCols: 8 },
+  posts: { crenelDy: 40, crenels: 4, mouth: 40, guardDx: 36, guardDy: 95, rampDy: 175, reserveDy: 70, reserveGap: 34, reserveCols: 8 },
   /** 墙上的远程兵射程 ×（够得到墙脚：外沿到墙脚 330）。 */
   wallRangeMul: 1.6,
   /** 预备队补位间隔（毫秒）；E 一次叫几个近战上来（去主将所在这段）。 */
@@ -44,6 +51,8 @@ export const DEFENSE_V2 = {
    * 镜头跟着往上让，保证主将脚下离屏幕顶至少 heroMin 设计像素（不钻到顶部计时器下面）。城内那一侧多裁掉。
    */
   camera: { zoomMul: .82, outside: 195, heroMin: 110 },
+  /** 横幅：计时器下方那一行（设计像素 y）；第一次（完整句子）/ 之后（短句）停留多久（毫秒）。 */
+  notice: { y: 66, firstMs: 2600, shortMs: 1500 },
   /**
    * b 段：云梯与攀爬、城头近战、占段 / 夺回、一键 F（推梯 / 滚木 / 泼油 / 修门）、冲车撞门。时间用关内秒数，距离是世界像素。
    * （波次 / 喘息补满次数在 c 段接；c 段之前滚木 / 热油按 regenSec 慢慢回一次。）
@@ -65,18 +74,63 @@ export const DEFENSE_V2 = {
     /** 主将在城头：武器范围 ×rampartMul；近战打墙面 / 墙脚（外沿以南）的 ×belowMelee。 */
     hero: { rampartMul: 1.3, belowMelee: .6 },
     /** 一键 F 的站位（离点 reach 以内）：梯口 = 梯子顶端；滚木架在梯口东侧 dx；油锅在门楼前沿；修门在门楼内侧（走道北沿）。 */
-    spots: { reach: 70, ladderDy: 40, rackDx: 130, rackDy: 48, oilDy: 52, gateDy: 72 },
-    /** 滚木：每个滚木架 charges 次（c 段之前每 regenSec 回一次）；砸这段的梯子（梯上的人摔下去、梯子倒、云梯车 −engineDamage）+ 墙脚 foot 以内 damage。 */
-    logs: { charges: 2, regenSec: 45, damage: 160, engineDamage: 220, foot: 200, fallMs: 340 },
-    /** 热油：charges 次、冷却 cdMs（c 段之前每 regenSec 回一次）；门前 radius 一片持续烧 ticks × tickMs，冲车 ×engineMul。 */
-    oil: { charges: 3, regenSec: 40, cdMs: 5000, radius: 120, tickMs: 400, ticks: 10, damage: 22, engineMul: 4 },
+    spots: { reach: 70, ladderDy: 40, rackDx: 84, rackDy: 48, oilDy: 52, gateDy: 72 },
+    /** 滚木：每个滚木架 charges 次（喘息时补满）；砸这段的梯子（梯上的人摔下去、梯子倒、云梯车 −engineDamage）+ 墙脚 foot 以内 damage。 */
+    logs: { charges: 2, damage: 160, engineDamage: 220, foot: 200, fallMs: 340 },
+    /** 热油：charges 次（喘息时补满）、冷却 cdMs；门前 radius 一片持续烧 ticks × tickMs，冲车 ×engineMul。 */
+    oil: { charges: 3, cdMs: 5000, radius: 120, tickMs: 400, ticks: 10, damage: 22, engineMul: 4 },
     /** 修门：站定读条 channelMs（走开就断），+amount（占满耐久的比例），冷却 cdMs。 */
     repair: { channelMs: 3000, amount: .12, cdMs: 15000, moveTol: 24 },
     /** 头顶提示离主将脚下多高。 */
     promptDy: 86,
   },
+  /**
+   * c 段 · 波次（设计第七节）：按城池档几波（小 3 / 中 4 / 大 5）；每波攻 attackSec → 喘息 restSec（Space 跳过；喘息够跑一趟修门，
+   * 借鉴清单第 6 条：不够就加长、不加按钮）；末波 finalSec，攻城主将出阵，守满或败主将即胜。
+   * 每波器械（按第几波取，超出取最后一个）：云梯车架数 ladders（减去出城砸掉的 ladderCut）、冲车 rams；这一波开始后 ladderAt 秒起每 ladderGap 秒一架、冲车同理。
+   */
+  waves: {
+    count: { small: 3, medium: 4, large: 5 } as Record<'small' | 'medium' | 'large', number>,
+    attackSec: 65, restSec: 20, finalSec: 90,
+    ladders: [2, 3, 4, 4, 4] as readonly number[], rams: [0, 1, 1, 2, 2] as readonly number[],
+    ladderAt: 4, ladderGap: 9, ramAt: 14, ramGap: 26,
+  },
+  /**
+   * 守得干净有奖（借鉴清单第 2 条）：每波攻完结算——没失守过的段每段 perSeg 随军粮 + 城门剩余比例 × gate；
+   * 四段全无失再给部曲伤害 ×cleanMul 持续到下一波攻完。随军粮是战斗内的钱（行营招兵），不算单场缴获上限里的永久收益。
+   */
+  reward: { perSeg: 15, gate: 40, cleanMul: 1.1 },
+  /**
+   * c 段 · 出城冲阵（设计第五节，按 3 天砍版）：每波攻城 afterSec 秒后（或喘息时）门楼内侧亮「F · 出城冲阵」，每波一次；
+   * 开门 durationSec 秒，回到门洞 returnR 以内就关门回城头，时间到直接拉回城门内（不做关在外面）。
+   * 出城那一刻：主将兵器冷却清零、移速 ×speedMul 持续 speedSec（武将配合只做通用这条）。出城期间 E 不可用、预备队不上城补位。
+   * 砸掉云梯车：那一段这一波不再立梯，下一波少一架梯子；砸掉冲车：这一波不再来冲车。
+   */
+  sortie: { afterSec: 20, durationSec: 20, returnR: 70, speedMul: 1.2, speedSec: 6, outDy: 70 },
+  /**
+   * c 段 · 门破退守府衙：城门破了，城外近战走到门洞「穿过去」（门洞在城楼底下看不见，淡出淡入）到城门内侧；
+   * 城里离主将远于 raidDist 的敌兵去砍府衙（同时最多 cap 个，每秒 自身伤害 × contactMul）；府衙耐久（按城池档，同旧守城）归零 = 府衙失守。
+   * 门楼内侧 F「下城守府衙」/ 城门内侧 F「上城头」：主将走门楼里的楼梯上下（不用绕到马道）。
+   */
+  keep: { hp: { small: 1600, medium: 2000, large: 2600 } as Record<'small' | 'medium' | 'large', number>, raidDist: 340, reach: 90, cap: 8, contactMul: .4, passR: 28, insideDy: 50, stairDy: 60 },
+  /**
+   * 借鉴清单第 1 条 · 预备队按威胁自动增援：每 checkMs 算各段威胁（立着的梯子 ×ladder + 这段城头敌兵 + 失守 lost），
+   * 威胁 ≥ 1 的段派 ceil(威胁 / per) 个预备队近战过去（每段最多 max 个）；那段没威胁了就回预备队。
+   * E 改成紧急手段：预备队全体（含已派去别段的）压到主将这段。
+   */
+  reinforce: { checkMs: 1000, ladder: 2, lost: 3, per: 2, max: 3 },
+  /** 首次引导（只出一次，存档 key）：按事件弹左下角的军师卡。 */
+  guideKey: 'im_defense_v2_guide_v1',
+  guide: {
+    start: '敌军从城外（下方）攻来，会架梯爬墙。我军已上墙守垛口、梯口；预备队会自己补到吃紧的那段，按 E 让预备队全体压到你这段。',
+    ladder: '云梯立起来了——站到梯口按 F 推梯，梯上的人全摔下去；梯子多就去这段的滚木架按 F 砸。',
+    ram: '冲车在撞门——到门楼油锅按 F 泼热油（专克冲车）；城门掉血了，站门楼内侧按 F 修门。',
+    sortie: '城门这一波可以开一次：站门楼内侧按 F 出城冲阵，砸云梯车、冲车，20 秒内回到城门洞。',
+    rest: '喘息：滚木、热油都补满了，预备队在补岗。想快点打下一波就按 Space。',
+    gate: '城门破了！敌兵会冲府衙——站门楼内侧按 F 下城守府衙，府衙破了就算失守。',
+  } as Record<string, string>,
   /** 刷兵口（城外）：墙脚以南 dy，x 三处 ± jitter；攻城主将在墙脚以南 bossDy。 */
-  spawn: { dy: 820, xs: [-900, 0, 900] as readonly number[], jitter: 200, bossDy: 600 },
+  spawn: { dy: 820, xs: [-620, 0, 620] as readonly number[], jitter: 160, bossDy: 600 },
   /**
    * 2.5D 城墙图：墙段 / 角楼复用 2-3 洛阳那套（data/dongzhuo.ts wallArt 的像素标注；crenel = 外侧城垛顶、ground = 墙脚）。
    * 走道（美术组 walkway_a / b，1024×256 不透明、左右无缝，上沿 band 像素是内侧女墙顶）：游戏里 1:1，a / b 交替横铺，上沿对齐走道北沿。
@@ -120,13 +174,27 @@ export function v2Geometry(o: Pt) {
   // 碰撞：墙身（走道南沿到墙脚，含关着的城门）、内侧女墙（马道处留缺口）、四面封边、角楼
   const boxes: Box[] = [{ left: X0, right: X1, top: W - 6, bottom: F - 18 }];
   { let x = X0; for (const r of ramps) { boxes.push({ left: x, right: r - L.rampHalf, top: innerTop, bottom: top + L.band }); x = r + L.rampHalf; } boxes.push({ left: x, right: X1, top: innerTop, bottom: top + L.band }); }
-  boxes.push({ left: X0 - L.flank, right: X0, top: cityTop - L.flank, bottom: outBot + L.flank }, { left: X1, right: X1 + L.flank, top: cityTop - L.flank, bottom: outBot + L.flank });
-  boxes.push({ left: X0 - L.flank, right: X1 + L.flank, top: cityTop - L.flank, bottom: cityTop }, { left: X0 - L.flank, right: X1 + L.flank, top: outBot, bottom: outBot + L.flank });
+  // 场地边界：走道两端外是角楼（贴地图左右边）；城外 / 城里横向到角楼外沿，纵向城里到 cityTop、城外到 outBot
+  const bounds = { left: X0 - L.corner, right: X1 + L.corner, top: cityTop, bottom: outBot };
+  // 角楼：墙头那一层（内侧女墙到墙脚）走道两端以外都挡住；城外 / 城里的人可以走到角楼底下（到场地边）
+  boxes.push({ left: bounds.left - L.flank, right: X0, top: innerTop, bottom: F - 18 }, { left: X1, right: bounds.right + L.flank, top: innerTop, bottom: F - 18 });
+  // 四面封边（StageArena 也会把人挪回场内；这里给寻路和刷兵避让用）
+  boxes.push({ left: bounds.left - L.flank, right: bounds.left, top: cityTop - L.flank, bottom: outBot + L.flank }, { left: bounds.right, right: bounds.right + L.flank, top: cityTop - L.flank, bottom: outBot + L.flank });
+  boxes.push({ left: bounds.left - L.flank, right: bounds.right + L.flank, top: cityTop - L.flank, bottom: cityTop }, { left: bounds.left - L.flank, right: bounds.right + L.flank, top: outBot, bottom: outBot + L.flank });
   const keep = { x: gx, y: innerTop - L.keepDy };
   const reserve = (i: number): Pt => ({ x: gx + ((i % P.reserveCols) - (P.reserveCols - 1) / 2) * P.reserveGap, y: innerTop - P.reserveDy - Math.floor(i / P.reserveCols) * P.reserveGap });
-  return { gx, W, top, F, innerTop, cityTop, outBot, X0, X1, segs, ramps, posts, boxes, keep, reserve, start: { x: o.x, y: o.y } };
+  return { gx, W, top, F, innerTop, cityTop, outBot, X0, X1, bounds, segs, ramps, posts, boxes, keep, reserve, start: { x: o.x, y: o.y } };
 }
 export type V2Geo = ReturnType<typeof v2Geometry>;
+
+/**
+ * 有边场地定义（交给 StageArena：镜头夹在边界 + 边带以内、每帧把人挪回场内、边外画山崖 / 民居 / 营栅）。
+ * 北边（城里）民居、南边（城外）敌营营栅、东西两边山崖；刷兵关口 = 城外三处敌营。
+ */
+export function v2ArenaDef(g: V2Geo): StageMapDef {
+  const S = DEFENSE_V2.spawn;
+  return { kind: 'arena', bounds: { ...g.bounds }, edges: { n: 'houses', s: 'palisade', w: 'cliff', e: 'cliff' }, gates: S.xs.map(x => ({ x: g.gx + x, y: g.F + S.dy })), band: DEFENSE_V2.layout.edgeBand, forest: 'pine' };
+}
 
 /** 主将在不在走道带里（镜头往城外让）。 */
 export function onWalk(g: V2Geo, p: Pt): boolean { return p.y >= g.top - 20 && p.y <= g.W + 10 && p.x >= g.X0 && p.x <= g.X1; }
@@ -205,3 +273,25 @@ export function cameraCenterY(g: V2Geo, p: Pt, zoom: number, H: number): number 
 }
 /** 爬梯速度（像素 / 秒）：从墙脚爬到翻上垛口（W − 26）用 climbSec 秒。 */
 export function climbSpeed(g: V2Geo): number { return (g.F - (g.W - 26)) / DEFENSE_V2.assault.ladder.climbSec; }
+
+// ———— c 段 ————
+/** 守城 v2 波次（纯函数）：第 i 波开始的关内秒数；末波开始 = 攻城主将出阵。 */
+export function v2WaveStarts(n: number): number[] { const W = DEFENSE_V2.waves, out: number[] = []; for (let i = 0; i < n; i++) out.push(i * (W.attackSec + W.restSec)); return out; }
+/** 关内秒数 el 时在第几波、哪个阶段、这一阶段还剩几秒（末波打满 finalSec 即 done）。 */
+export function v2Phase(n: number, el: number): { wave: number; phase: 'attack' | 'rest' | 'final' | 'done'; left: number; start: number } {
+  const W = DEFENSE_V2.waves, cyc = W.attackSec + W.restSec, i = Math.min(n - 1, Math.floor(el / cyc)), start = i * cyc, within = el - start;
+  if (i === n - 1) return within >= W.finalSec ? { wave: i, phase: 'done', left: 0, start } : { wave: i, phase: 'final', left: W.finalSec - within, start };
+  return within < W.attackSec ? { wave: i, phase: 'attack', left: W.attackSec - within, start } : { wave: i, phase: 'rest', left: cyc - within, start };
+}
+/** 第 i 波的器械：云梯车 / 冲车各几架（超出表取最后一个；云梯车减去出城砸掉的 cut，最少 1）。 */
+export function v2Engines(i: number, cut = 0): { ladders: number; rams: number } {
+  const W = DEFENSE_V2.waves, at = (a: readonly number[]) => a[Math.min(i, a.length - 1)];
+  return { ladders: Math.max(1, at(W.ladders) - cut), rams: at(W.rams) };
+}
+/** 一波攻完的赏粮（守得干净有奖）：没失守过的段 × perSeg + 城门剩余比例 × gate。 */
+export function v2WaveReward(lostSegs: number, gateRatio: number): { food: number; clean: boolean } {
+  const R = DEFENSE_V2.reward, held = Math.max(0, 4 - lostSegs);
+  return { food: Math.round(held * R.perSeg + Math.max(0, Math.min(1, gateRatio)) * R.gate), clean: lostSegs === 0 };
+}
+/** 各段要派几个预备队（借鉴清单第 1 条）：威胁 = 立着的梯子 × ladder + 这段城头敌兵 + 失守 × lost。 */
+export function v2ReinforceNeed(threat: number): number { const R = DEFENSE_V2.reinforce; return threat < 1 ? 0 : Math.min(R.max, Math.ceil(threat / R.per)); }

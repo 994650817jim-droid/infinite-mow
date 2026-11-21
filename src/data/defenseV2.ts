@@ -61,7 +61,7 @@ export const DEFENSE_V2 = {
     /** 云梯车：开局 firstSec 秒第一架，之后每 everySec 秒一架，同时最多 max 架（每段一架）；开到墙脚后亮圈 warnMs 再立梯。
      *  被推倒 / 被滚木砸倒后 raiseMs 再立起来（车还在的话）；梯上每 climbGapMs 上一个人，爬完外墙要 climbSec 秒；
      *  一段城头敌兵满 segCap 个就不再上人；墙脚 footReach 以内的近战兵会排队上梯。 */
-    ladder: { firstSec: 6, everySec: 16, max: 4, hp: 320, speed: 46, warnMs: 2000, raiseMs: 8000, climbGapMs: 1500, climbSec: 2.5, segCap: 8, footReach: 130, size: 150, footDy: 34 },
+    ladder: { firstSec: 6, everySec: 16, max: 4, hp: 320, speed: 46, warnMs: 2000, raiseMs: 8000, climbGapMs: 1000, climbSec: 2.0, segCap: 8, footReach: 130, size: 150, footDy: 34 },
     /**
      * 冲车（c 段验收第 1 条：城门的主要威胁改成冲车）：同时最多 max 辆；开到门前每 hitMs 撞一下，扣城门满耐久的 hitPct（按比例，各档城门一样几下破）。
      * 开得比原来快（speed），每波 ramAt 秒就出来，免得一波快完了才到门前。
@@ -75,8 +75,8 @@ export const DEFENSE_V2 = {
     gate: { hp: { small: 1500, medium: 1900, large: 2500 } as Record<'small' | 'medium' | 'large', number>, reach: 64, cap: 4, chopPct: .0003, bossPct: .004, share: 3 },
     /** 主将站在门楼上：每 everyMs 往门前一片（城门左右 halfW、墙脚往外 depth）放一轮箭，打最近的 targets 个（砍门的、冲车）（c 段验收第 2 条：门楼不只是个按 F 的点）。 */
     gateShot: { everyMs: 650, targets: 2, damage: 34, halfW: 200, depth: 170 },
-    /** 垛口掩护（c 段验收第 3 条）：城外射上来的箭打到走道上的我方士兵 × arrowMul（原来城外弓手对着主将放箭，箭先打在垛口后的士兵身上）。 */
-    cover: { arrowMul: .4 },
+    /** 垛口掩护（c 段验收第 3 条）：城外射上来的箭打到走道上的我方士兵 × arrowMul（原来城外弓手对着主将放箭，箭先打在垛口后的士兵身上）；打到城头上的主将 × heroArrowMul。 */
+    cover: { arrowMul: .4, heroArrowMul: .7 },
     /** 城外同屏敌兵上限（c 段验收第 1 条：原来峰值 120～150 全堆在门前）；多出来的预算换成云梯车 / 冲车（waves.ladders / rams）。 */
     outsideCap: 70,
     /** 门破了：门洞处持续的尘土（每 dustMs 一团）和火光（地火序列帧 fires 团）。 */
@@ -85,6 +85,11 @@ export const DEFENSE_V2 = {
     capture: { minFoes: 3, fastMul: 2, checkMs: 250 },
     /** 推下城：主将近战打中走道南沿 band 以内的普通兵（主将在它北边）→ 摔下城。 */
     push: { band: 64, fallMs: 420 },
+    /**
+     * 推梯要按住（总制作人试玩：原来按一下就倒，认真守的玩家一场 0 个登城、主将不掉血）：站在梯口按住 F holdMs，梯上每多一个人 +perClimberMs；
+     * 走开 moveTol 以上、松手就断（重新按）；挨一下打往回退 hitBackMs（打断但不清零——原来挨打就清零，登城的兵正落在梯口打主将，推不倒、越积越多）。先给保守值，交平衡会话。
+     */
+    pushHold: { holdMs: 800, perClimberMs: 250, moveTol: 24, hitBackMs: 300 },
     /** 主将在城头：武器范围 ×rampartMul；近战打墙面 / 墙脚（外沿以南）的 ×belowMelee。 */
     hero: { rampartMul: 1.3, belowMelee: .6 },
     /** 一键 F 的站位（离点 reach 以内）：梯口 = 梯子顶端；滚木架在梯口东侧 dx；油锅在门楼前沿；修门在门楼内侧（走道北沿）。 */

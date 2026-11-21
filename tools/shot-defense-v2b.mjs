@@ -57,10 +57,12 @@ try {
     await to(L.x, G.W - 40); await wait(150);
     const prompt = await ev(() => window.__S.defenseAssault.prompt.text);
     const before = await ev(() => ({ ...window.__S.defenseAssault.stats }));
-    await ev(() => window.__S.interactOverride()); await wait(220);
+    // 推梯要按住 F（总制作人试玩：原来按一下就倒）：按住读条 0.8 秒 + 梯上每人 0.25 秒
+    const mid = await ev(async () => { const s = window.__S; s.v2Held.add('KeyF'); s.interactOverride(); await new Promise(r => setTimeout(r, 350)); const m = { prompt: s.defenseAssault.prompt.text, pushing: !!s.defenseAssault.pushing, state: s.defenseAssault.ladders.find(l => l.state === 'up') ? 'up' : '?' }; return m; });
+    await until(() => !window.__S.defenseAssault.pushing, 5000); await wait(150); await ev(() => window.__S.v2Held.delete('KeyF'));
     await p.screenshot({ path: OUT + '/b-4-push.png' });
     const after = await ev(seg => { const A = window.__S.defenseAssault; return { stats: { ...A.stats }, state: A.ladders.find(l => l.seg === seg)?.state }; }, L.seg);
-    ck('站梯口头顶出「F · 推梯」，按 F 梯子往外倒、梯上的人摔下城', prompt === 'F · 推梯' && after.stats.pushed === before.pushed + 1 && after.state === 'down', { prompt, fell: after.stats.fell - before.fell, state: after.state });
+    ck('站梯口头顶出「F · 按住推梯」，按住 F 读条（推梯中 x 秒）→ 梯子往外倒、梯上的人摔下城', /^F · 按住推梯/.test(prompt) && /^推梯中/.test(mid.prompt) && mid.pushing && after.stats.pushed === before.pushed + 1 && after.state === 'down', { prompt, mid, fell: after.stats.fell - before.fell, state: after.state });
     // ———— F · 滚木（同一段）
     await to(G.segs[L.seg].lx + 84, G.W - 48); await wait(150);
     const lp = await ev(() => window.__S.defenseAssault.prompt.text);

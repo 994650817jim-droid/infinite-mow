@@ -131,6 +131,15 @@ ck('回血点（泉眼 / 水井）走 healPlace：守城 v2 放城里（内侧�
   ck('敌兵对象是池子里复用的：爬梯 / 摔落 / 穿门洞按 spawnId 认', Asl.includes('return (!!c && c.life === e.spawnId) || this.falling.get(e) === e.spawnId || this.tunnel.get(e) === e.spawnId;'));
   ck('对白卡：逐字打出时字竖向居中在墨条上（守城和主线共用）', Card.includes('const center = (): void => { say.setY(sy + (sh - say.height) / 2); };') && Card.includes('if (say.text !== cur) { say.setText(cur); center(); }') && !Card.includes('setFixedSize(0, say.height)'));
   ck('一键预览：?dev=1&defenseV2=1&defensePreview=1 开机直接进中城守城（测试存档），补一支部曲上墙', Bt.includes("q.get('defensePreview')==='1'") && Bt.includes("this.registry.set('pendingWarlord','SiegeGameScene')") && S.includes("if (this.registry.get('defensePreview')) { for (const [k, n] of DEFENSE_V2.preview.army)") && D.preview.city === 'chenliu'); }
+// ———— 用户试玩前一轮（总制作人试玩反馈）
+{ const PH = D.assault.pushHold, LD = D.assault.ladder, BS = src('src/systems/BattlefieldSupplies.ts');
+  ck('城里开局那个「盾兵」是场地互动物件（军旗，kind shield）摆进了城里：守城 v2 只让它放在城外', BS.includes('envBlocked?:(x:number,y:number)=>boolean;') && BS.includes('&&!this.envBlocked?.(x,y);}') && S.includes('this.supplies.envBlocked = (_x, y) => y < w.g.F + 40;'));
+  ck('推梯要站梯口按住 F ' + PH.holdMs / 1000 + ' 秒（梯上每人 +' + PH.perClimberMs / 1000 + ' 秒；挨一下退 ' + PH.hitBackMs / 1000 + ' 秒；走开 / 松手就断）', PH.holdMs >= 600 && PH.holdMs <= 1400 && PH.perClimberMs > 0 && Asl.includes('private updatePush(now: number): void') && Asl.includes('P.start = Math.min(now, P.start + H.hitBackMs)') && Asl.includes("!this.h.interactHeld() ? '松手了'") && Asl.includes("return 'F · 按住推梯'") && S.includes("interactHeld: () => hotkeyCodes('sortie').some(c => this.v2Held.has(c))"));
+  ck('云梯上人：每 ' + LD.climbGapMs / 1000 + ' 秒一个、爬 ' + LD.climbSec + ' 秒', LD.climbGapMs <= 1200 && LD.climbSec <= 2.5);
+  ck('城外的箭打到城头上的主将 ×' + D.assault.cover.heroArrowMul + '（士兵 ×' + D.assault.cover.arrowMul + '）', D.assault.cover.heroArrowMul > D.assault.cover.arrowMul && D.assault.cover.heroArrowMul < 1 && G.includes('bullet.damage * this.playerBulletMul(bullet)') && S.includes('bullet.vy < 0 && onWalk(g, this.player) ? DEFENSE_V2.assault.cover.heroArrowMul'));
+  ck('守城打赢结算写「守城成功」（其它关照旧「讨伐成功」）', G.includes("row('结局', victory ? this.victoryLabel() :") && G.includes("protected victoryLabel(): string { return '讨伐成功'; }") && S.includes("protected victoryLabel() { return this.defense ? '守城成功' : super.victoryLabel(); }"));
+  ck('城门耐久只留门楼上那条血条：顶上一行 / 掉耐久横幅只在门楼出屏时出', Asl.includes('private gateBarOnScreen(): boolean') && Asl.includes("gp = this.gateBarOnScreen() ? '' :") && Asl.includes('if (!this.gateBarOnScreen()) this.h.banner('));
+  ck('预览开局横幅注明「预览：不计入存档」', S.includes("(this.registry.get('defensePreview') ? '　预览：不计入存档' : '')")); }
 const I = src('src/systems/ItemDrops.ts');
 ck('定时宝箱落点走钩子（守城 v2 挪回走道，别落在墙面 / 城外）；其它关不给钩子照旧', /place\?: \(x: number, y: number\) => \{ x: number; y: number \};/.test(I) && /const q = this\.place\?\.\(/.test(I) && /this\.itemDrops\.place = \(x, y\) => this\.fieldPlace\(x, y\);/.test(S));
 console.log(fail ? `\n${fail} 项失败` : '\n全部通过'); process.exit(fail ? 1 : 0);

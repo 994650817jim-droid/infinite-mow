@@ -1521,6 +1521,10 @@ export class GameScene extends Phaser.Scene {
   protected interactOverride(): boolean { return false; }
   /** 舆图画心中心 / 守城标记（守城 v2 覆盖：整张定宽场地、四段城头状态）。 */
   protected mapCenter(): { x: number; y: number } | null { return null; }
+  /** 敌方飞行物打到主将的伤害倍率（守城 v2：城头上挨城外射上来的箭有垛口掩护）。 */
+  protected playerBulletMul(_bullet: { vy: number; img: { x: number; y: number } }): number { return 1; }
+  /** 结算「结局」一栏打赢时写什么（守城：守城成功）。 */
+  protected victoryLabel(): string { return '讨伐成功'; }
   protected mapFort(): import('../ui/PaintedMap').FortMark | null { return null; }
   /** 本关的地形配置 / 有边场地定义（默认按章节表；守城 v2 换成自己算的定宽场地）。 */
   protected terrainDef(): TerrainConfig | null { return terrainConfigFor(this.hardKey(), this.hardStage()); }
@@ -3063,7 +3067,7 @@ export class GameScene extends Phaser.Scene {
         bullet.img.setVisible(false);
         const spark = this.add.image(bullet.img.x, bullet.img.y, 'spark').setDepth(DEPTH.fx).setScale(2.2);
         this.tweens.add({ targets: spark, alpha: 0, scale: 0.6, duration: 180, onComplete: () => spark.destroy() });
-        if (this.player.takeDamage(bullet.damage, this.combatNow)) this.cameras.main.flash(90, 180, 40, 40, false);
+        if (this.player.takeDamage(bullet.damage * this.playerBulletMul(bullet), this.combatNow)) this.cameras.main.flash(90, 180, 40, 40, false);
         continue;
       }
       if (bullet.life <= 0) {
@@ -4699,7 +4703,7 @@ export class GameScene extends Phaser.Scene {
         row('随军粮', String(this.legion.food)), // 11-21 用户试玩：资源数字从 1-1 起就要看得到
         ...(mechOpen('squad') ? [row('部曲战损', `${this.legion.count}存活 / ${this.legion.dead}阵亡`)] : []),
         row(this.chapter.bossName, stats.bossKilled ? '已击败' : '未击败'),
-        row('结局', victory ? '讨伐成功' : reason === 'timeout' ? '超时' : reason === 'keep' ? '府衙失守' : '阵亡'),
+        row('结局', victory ? this.victoryLabel() : reason === 'timeout' ? '超时' : reason === 'keep' ? '府衙失守' : '阵亡'),
       ].join('\n'),
     );
     // 兵装缴获：胜利或坚持 60 秒带回全部，速败只带回一半；测试 / 调试战斗不入行囊

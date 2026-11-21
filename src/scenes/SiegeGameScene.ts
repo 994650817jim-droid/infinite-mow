@@ -44,6 +44,7 @@ import {EdgeGuide} from '../ui/EdgeGuide';
 import {DefenseWallV2} from '../systems/DefenseWallV2';
 import {DEFENSE_V2, defenseV2On, onWalk, v2ArenaDef, v2WaveStarts} from '../data/defenseV2';
 import {propFootprint} from '../systems/PropFootprint';
+import {hotkeyCodes} from '../data/hotkeys';
 import {playSheet} from '../systems/SkillFxSheets';
 import {arenaTerrain} from '../data/stageMaps';
 import {DefenseAssaultV2} from '../systems/DefenseAssaultV2';
@@ -66,6 +67,7 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
     /** 守城 v2（data/defenseV2.ts 开关 defenseV2On，默认关）：视角翻转的新守城；开着时不建旧的 DefenseBattle。 */
     private defV2: DefenseWallV2 | null = null; /** 守城 v2 b 段：云梯 / 冲车 / 一键 F / 占段。 */ private assault: DefenseAssaultV2 | null = null; private v2Rampart = false;
     /** 守城 v2 横幅：出过的提示（数字换成 #）；第二次起只出短句；v2Big = 这一条走全屏大横幅。 */ private v2Seen = new Set<string>(); private v2Short: string | undefined; private v2Big = false;
+    /** 守城 v2：按着的键（推梯要按住 F）。 */ v2Held = new Set<string>();
     /** 守城 v2：喘息跳过键；守得干净的部曲伤害加成（到关内秒数 until 为止）。 */ private v2Space?: Phaser.Input.Keyboard.Key; private v2Buff: {mul: number; until: number} | null = null; private defInside = false; private defTier: DefenseTier = 'early'; private receipt = ''; private test = false;
     private enemyCamps?: EnemyCamps; private controller?: GuanduBoss;
     private gate: Enemy | null = null; private gateLife = 0; private gateLabel?: Phaser.GameObjects.Text; private gateWarned = false;
@@ -392,7 +394,10 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
         fx: (key, x, y, size, depth) => { playSheet(this, key, x, y, {size, ms: 700, depth}); },
         skipPressed: () => !!this.v2Space && Phaser.Input.Keyboard.JustDown(this.v2Space),
         bigBanner: (t, c) => { this.v2Big = true; try { this.showWaveBanner(t, true, c); } finally { this.v2Big = false; } },
-        gateArt: broken => this.defV2?.setGateBroken(broken) });
+        gateArt: broken => this.defV2?.setGateBroken(broken), interactHeld: () => hotkeyCodes('sortie').some(c => this.v2Held.has(c)) });
+      // 推梯要按住 F：记下现在按着的键（按 event.code，跟着改键走）
+      this.v2Held.clear(); const kb = this.input.keyboard, down = (e: KeyboardEvent) => this.v2Held.add(e.code), up = (e: KeyboardEvent) => this.v2Held.delete(e.code);
+      kb?.on('keydown', down); kb?.on('keyup', up); this.events.once('shutdown', () => { kb?.off('keydown', down); kb?.off('keyup', up); });
       // 垛口掩护：城外射上来的箭打到走道上的我方士兵 × cover.arrowMul
       this.legion.hurtMul = (u, src) => { const gg = this.defV2?.g; return gg && src?.normal && src.y > gg.W - 10 && u.y > gg.top && u.y < gg.W + 6 ? DEFENSE_V2.assault.cover.arrowMul : 1; };
       // 一键预览（?dev=1&defenseV2=1&defensePreview=1）：测试战斗没有出征带兵，补一支部曲
@@ -401,7 +406,8 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
       this.time.delayedCall(2600, () => { if (!this.over) this.v2Guide('start'); });
       this.sishuiObstacles.pass = e => this.assault?.ghost(e) ?? false; // 爬梯 / 摔下城的人在墙面上，不受墙身碰撞
       if (this.supplies) this.supplies.pass = e => this.assault?.ghost(e) ?? false; // 也不受梯脚云梯车的碰撞（车就停在梯子底下）
-      this.time.delayedCall(600, () => { if (!this.over) this.showWaveBanner('守城 · ' + this.city.name, true, '敌军从下方城外攻来，守住城头'); });
+      if (this.supplies) this.supplies.envBlocked = (_x, y) => y < w.g.F + 40; // 场地互动物件（军旗等）只放城外
+      this.time.delayedCall(600, () => { if (!this.over) this.showWaveBanner('守城 · ' + this.city.name, true, '敌军从下方城外攻来，守住城头' + (this.registry.get('defensePreview') ? '　预览：不计入存档' : '')); });
     }
     /** 测试用：守城 v2 场地 / b 段攻防。 */
     get defenseV2() { return this.defV2; }
@@ -450,6 +456,10 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
     /** 守城 v2：定宽场地（城墙铺满地图全宽，四边山崖 / 民居 / 营栅收边，镜头夹在场地里）；地形层只画边外那一圈。 */
     protected arenaDef() { return this.defV2 ? v2ArenaDef(this.defV2.g) : super.arenaDef(); }
     protected terrainDef() { return this.defV2 ? arenaTerrain(v2ArenaDef(this.defV2.g)) : super.terrainDef(); }
+    /** 守城 v2：城头上（走道带里）挨城外射上来的箭（往上飞的）× cover.heroArrowMul。 */
+    protected playerBulletMul(bullet: { vy: number; img: { x: number; y: number } }) { const g = this.defV2?.g; return g && bullet.vy < 0 && onWalk(g, this.player) ? DEFENSE_V2.assault.cover.heroArrowMul : super.playerBulletMul(bullet); }
+    /** 守城打赢：结局写「守城成功」。 */
+    protected victoryLabel() { return this.defense ? '守城成功' : super.victoryLabel(); }
     /** 守城 v2：舆图画整张场地（以场地中心为画心），标四段城头状态、城门 / 府衙血量、云梯车 / 冲车。 */
     protected mapCenter() { const b = this.defV2?.g.bounds; return b ? {x: (b.left + b.right) / 2, y: (b.top + b.bottom) / 2} : super.mapCenter(); }
     protected mapFort() { return this.assault?.fort() ?? super.mapFort(); }

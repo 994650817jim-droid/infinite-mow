@@ -164,7 +164,9 @@ export class BattlefieldSupplies {
  /** 该处能否放物件：不压别的物件，也不压场景障碍。 */
  /** 撤掉满足条件的物件（2-3 洛阳：城墙 / 场地外的布景、旗子；开局先于城墙生成的）。 */
  purge(pred:(x:number,y:number)=>boolean):number{let n=0;for(const c of this.crates)if(c.enemy.active&&c.cell&&pred(c.enemy.x,c.enemy.y)){c.enemy.deactivate();c.shadow.setVisible(false);this.broken.add(c.cell);c.cell=null;n++;}return n;}
- envClear(x:number,y:number,size:number):boolean{return this.placementClear(x,y,size)&&!this.healBlocked?.(x,y,size*.4);}
+ /** 场地互动物件（军旗 / 酒罐…）不许放的地方（守城 v2：城里、城头、墙面都不放——原来军旗摆进了城里，统计成「墙内敌兵」）。 */
+ envBlocked?:(x:number,y:number)=>boolean;
+ envClear(x:number,y:number,size:number):boolean{return this.placementClear(x,y,size)&&!this.healBlocked?.(x,y,size*.4)&&!this.envBlocked?.(x,y);}
  /** 某类环境物件当前在场的个数。 */
  envCount(env:string):number{return this.crates.filter(c=>c.enemy.active&&c.env===env).length;}
  /** 环境物件（含已在场的）列表：物件本身与类型。 */

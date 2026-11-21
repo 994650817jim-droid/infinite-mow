@@ -85,7 +85,7 @@ export class WeaponBranches {
     // 「出手」：冷却被重置（跳回较大的值）
     const fired = w.cooldownLeft > this.lastCd + .05; this.lastCd = w.cooldownLeft;
     if (fired) { this.stats.fires++; this.onFire(b, now); if (this.final()) { const t = this.nearest(300); this.fin.burst(b.id, P.x, P.y, t ? Math.atan2(t.y - P.y, t.x - P.x) : 0); } }
-    this.fin.setAura(b.id, this.final(), now);
+    this.fin.prime(b.id); this.fin.setAura(b.id, this.final(), now);
     while (this.dashQueue.length && now >= this.dashQueue[0]) { this.dashQueue.shift(); this.dash(); }
     // 移动距离（千里走单骑）
     const dx = P.x - this.moveX, dy = P.y - this.moveY, d = Math.hypot(dx, dy);

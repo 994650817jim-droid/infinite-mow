@@ -1,0 +1,238 @@
+{
+ "label": "lean4-all",
+ "dir": "C:\\Users\\99465\\OneDrive\\文档\\deepseek-harness\\default-workspace\\infinite-mow\\.claude\\worktrees\\death-fx\\.build-tmp\\lean4",
+ "milestones": [
+  {
+   "name": "主页",
+   "reqs": 69,
+   "mb": 13.9,
+   "dReqs": 69,
+   "dMB": 13.9,
+   "missingObjects": 0,
+   "top": [
+    "3.8MB/1个 assets/index-C1XX9lfV.js",
+    "3.1MB/3个 assets/epic-home",
+    "2.5MB/17个 assets/processed",
+    "1.2MB/2个 assets/fonts",
+    "1.1MB/1个 assets/world",
+    "0.5MB/3个 assets/items",
+    "0.5MB/2个 assets/bosses-v2",
+    "0.4MB/7个 assets/ui-buttons"
+   ],
+   "sec": 3.9
+  },
+  {
+   "name": "界面 WorldMapScene",
+   "reqs": 112,
+   "mb": 17.6,
+   "dReqs": 43,
+   "dMB": 3.7,
+   "missingObjects": 0,
+   "top": [
+    "3.8MB/43个 assets/world"
+   ],
+   "sec": 4
+  },
+  {
+   "name": "界面 CityScene",
+   "reqs": 157,
+   "mb": 23.1,
+   "dReqs": 45,
+   "dMB": 5.5,
+   "missingObjects": 0,
+   "top": [
+    "2.4MB/29个 assets/city",
+    "1.8MB/6个 assets/props-v2",
+    "0.5MB/1个 assets/siege-v2",
+    "0.3MB/5个 assets/processed-v2",
+    "0.2MB/1个 assets/camp",
+    "0.2MB/1个 assets/skill-fx",
+    "0.2MB/1个 assets/horses-v2",
+    "0.1MB/1个 assets/town"
+   ],
+   "sec": 4
+  },
+  {
+   "name": "界面 TalentHallScene",
+   "reqs": 158,
+   "mb": 23.1,
+   "dReqs": 1,
+   "dMB": 0,
+   "missingObjects": 0,
+   "top": [
+    "0.1MB/1个 assets/recruits"
+   ],
+   "sec": 4
+  },
+  {
+   "name": "GameScene",
+   "reqs": 642,
+   "mb": 97.3,
+   "dReqs": 484,
+   "dMB": 74.2,
+   "missingObjects": 0,
+   "top": [
+    "11.1MB/10个 assets/env-v2",
+    "10.9MB/31个 assets/hero-fx",
+    "10.1MB/65个 assets/processed",
+    "4.6MB/13个 assets/props-v2",
+    "4.1MB/59个 assets/processed-v2",
+    "3.9MB/3个 assets/jinnang-fx",
+    "3.4MB/8个 assets/warn-fx",
+    "2.9MB/17个 assets/hero-actions-v2"
+   ],
+   "sec": 8.7
+  },
+  {
+   "name": "ThirdGameScene",
+   "reqs": 655,
+   "mb": 101.9,
+   "dReqs": 13,
+   "dMB": 4.6,
+   "missingObjects": 0,
+   "top": [
+    "2.6MB/3个 assets/siege-v2",
+    "1.5MB/4个 assets/bosses-v2",
+    "0.4MB/6个 assets/processed-v2"
+   ],
+   "sec": 3.4
+  },
+  {
+   "name": "GuanduGameScene",
+   "reqs": 686,
+   "mb": 106.4,
+   "dReqs": 31,
+   "dMB": 4.5,
+   "missingObjects": 0,
+   "top": [
+    "2.9MB/22个 assets/terrain",
+    "1.2MB/3个 assets/bosses-v2",
+    "0.4MB/6个 assets/processed-v2"
+   ],
+   "sec": 3.2
+  },
+  {
+   "name": "ChibiGameScene",
+   "reqs": 696,
+   "mb": 107.9,
+   "dReqs": 10,
+   "dMB": 1.5,
+   "missingObjects": 0,
+   "top": [
+    "1.1MB/3个 assets/bosses-v2",
+    "0.4MB/7个 assets/processed-v2"
+   ],
+   "sec": 3.1
+  },
+  {
+   "name": "JingnanGameScene",
+   "reqs": 710,
+   "mb": 109.9,
+   "dReqs": 14,
+   "dMB": 2,
+   "missingObjects": 0,
+   "top": [
+    "1.5MB/4个 assets/bosses-v2",
+    "0.5MB/10个 assets/processed-v2"
+   ],
+   "sec": 3.1
+  },
+  {
+   "name": "ShuGameScene",
+   "reqs": 737,
+   "mb": 114.9,
+   "dReqs": 27,
+   "dMB": 5,
+   "missingObjects": 0,
+   "top": [
+    "3.2MB/15个 assets/siege-v2",
+    "1.0MB/3个 assets/bosses-v2",
+    "0.4MB/7个 assets/processed-v2",
+    "0.4MB/2个 assets/terrain"
+   ],
+   "sec": 3.2
+  },
+  {
+   "name": "HanzhongGameScene",
+   "reqs": 754,
+   "mb": 116.6,
+   "dReqs": 17,
+   "dMB": 1.7,
+   "missingObjects": 0,
+   "top": [
+    "1.0MB/3个 assets/bosses-v2",
+    "0.6MB/10个 assets/processed-v2",
+    "0.0MB/4个 assets/env-v2"
+   ],
+   "sec": 3.1
+  },
+  {
+   "name": "XiangfanGameScene",
+   "reqs": 764,
+   "mb": 117.7,
+   "dReqs": 10,
+   "dMB": 1.1,
+   "missingObjects": 0,
+   "top": [
+    "0.6MB/2个 assets/bosses-v2",
+    "0.5MB/8个 assets/processed-v2"
+   ],
+   "sec": 3
+  },
+  {
+   "name": "YilingGameScene",
+   "reqs": 777,
+   "mb": 119.3,
+   "dReqs": 13,
+   "dMB": 1.6,
+   "missingObjects": 0,
+   "top": [
+    "1.1MB/4个 assets/bosses-v2",
+    "0.4MB/9个 assets/processed-v2"
+   ],
+   "sec": 3.1
+  },
+  {
+   "name": "NanzhengGameScene",
+   "reqs": 790,
+   "mb": 121.4,
+   "dReqs": 13,
+   "dMB": 2.1,
+   "missingObjects": 0,
+   "top": [
+    "1.6MB/4个 assets/bosses-v2",
+    "0.6MB/9个 assets/processed-v2"
+   ],
+   "sec": 3
+  },
+  {
+   "name": "BeifaGameScene",
+   "reqs": 799,
+   "mb": 122.9,
+   "dReqs": 9,
+   "dMB": 1.5,
+   "missingObjects": 0,
+   "top": [
+    "1.1MB/3个 assets/bosses-v2",
+    "0.4MB/6个 assets/processed-v2"
+   ],
+   "sec": 2.9
+  }
+ ],
+ "failed": [],
+ "errors": [],
+ "topDirs": [
+  "6.0 MB 101 个 assets/processed-v2/enemies",
+  "4.4 MB 30 个 assets/processed/yellow",
+  "3.8 MB 1 个 assets/index-C1XX9lfV.js",
+  "3.4 MB 8 个 assets/warn-fx/handpainted",
+  "3.3 MB 7 个 assets/processed/hulao",
+  "2.9 MB 10 个 assets/world/grand",
+  "2.8 MB 1 个 assets/epic-home/video",
+  "2.7 MB 1 个 assets/build-vfx/styles-hp-v1.png",
+  "2.0 MB 13 个 assets/terrain/river",
+  "1.7 MB 1 个 assets/env-v2/ground_hebei.png",
+  "1.6 MB 5 个 assets/processed/overhaul",
+  "1.6 MB 1 个 assets/env-v2/ground_guanzhong.png"
+ ]
+}

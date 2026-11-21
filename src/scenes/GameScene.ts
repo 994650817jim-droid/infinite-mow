@@ -1,6 +1,6 @@
 import { playMenuMusic, stopMenuMusic } from '../systems/Music';
 import { SCHOOLS, SCHOOL_TIER, SHI_SOURCES, FOLLOWER_SCHOOL, heroAffinity, type SchoolId } from '../data/schools';
-import { playSheet } from '../systems/SkillFxSheets';
+import { ensureHeroSkillFx, playSheet } from '../systems/SkillFxSheets';
 import { ZHANGLIAO } from '../data/zhangliao';
 import { FOOT_HUD } from '../data/passiveGauge';
 import { TAISHICI } from '../data/taishici';
@@ -3806,6 +3806,7 @@ export class GameScene extends Phaser.Scene {
   /** 武将等级（开局读入，HUD 显示用）。 */
   protected heroLv = 1;
   protected applyHeroLevel(carried: boolean): void {
+    ensureHeroSkillFx(this, this.runConfig.character); // 当前武将的专属特效图按需加载（systems/SkillFxSheets）
     this.heroLv = heroLevel(this.runConfig.character);
     const id = this.runConfig.character, g = this.player.growth, r = enlistHero(id), ratio = this.player.hp / Math.max(1, this.player.maxHp);
     const bonusLeft = Math.max(0, g.unallocated - g.heroFree);

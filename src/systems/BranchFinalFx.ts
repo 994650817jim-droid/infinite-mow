@@ -29,8 +29,17 @@ export function branchFxOf(scene: Phaser.Scene, branchId: string): { key: string
   return { key, slot: WEAPON_BRANCHES.filter(x => x.weapon === b.weapon).findIndex(x => x.id === branchId) };
 }
 
+/** 选定分支时按需加载该武将的进阶图（只在没载入、没在载入时发起；后台载完自动生效，缺图期间什么都不画）。 */
+export function ensureBranchFx(scene: Phaser.Scene, branchId: string): void {
+  const hero = BRANCH_FX_HERO[branchId.split('_')[0]]; if (!hero || !BRANCH_FX_READY.includes(hero)) return;
+  const key = branchFxKey(hero); if (scene.textures.exists(key) || scene.load.list.getArray().some(f => f.key === key)) return;
+  scene.load.spritesheet(key, branchFxFile(hero), { frameWidth: 256, frameHeight: 256 }); if (!scene.load.isLoading()) scene.load.start();
+}
+
 export class BranchFinalFx {
-  private live = 0; private aura: Phaser.GameObjects.Image | null = null;
+  private live = 0; private primed = new Set<string>();
+  /** 每帧调用也行：同一个分支只会触发一次加载检查。 */
+  prime(branchId: string): void { if (this.primed.has(branchId)) return; this.primed.add(branchId); ensureBranchFx(this.scene, branchId); } private aura: Phaser.GameObjects.Image | null = null;
   readonly stats = { bursts: 0, auraFrames: 0 };
   constructor(private readonly scene: Phaser.Scene, private readonly follow: () => { x: number; y: number }) {
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => { this.aura?.destroy(); this.aura = null; });

@@ -1,7 +1,8 @@
 import { shouldPlayOpening } from '../systems/BattleSettings';
 import { FIREPIT_ART } from '../data/fireProps';
 import { TACTIC_ICON_ALIAS, SCHOOL_IDS } from '../data/schools';
-import { LOW_RES } from '../systems/LowResTextures';
+import { LEAN_BOOT } from '../systems/LeanBoot';
+import { loadScreen } from '../ui/LoadScreen';
 let openingTried = false;
 import { BOOT_TO_KEY } from '../systems/BattleSnapshot';
 import {loadWarnFx} from '../ui/WarnFx';
@@ -29,12 +30,18 @@ export class BootScene extends Phaser.Scene {
   private shellOnly=false;
   /** 手机精简启动：首次只载入主页 / 界面资源，战斗图集等进战斗时再载入（见 systems/LeanBoot.ts），避免一次性解码几百张图撑爆 iOS 页面内存。 */
   private lean=false;
+  /** 本遍加载里失败的文件键（loaderror）；create() 里据此自动重试 / 提示（2026-11-20 首屏加载优化）。 */
+  private bootFailed:string[]=[];private bootTotal=0;
   constructor() {
     super('BootScene');
   }
 
   preload(): void {
-    const lean=this.lean=LOW_RES&&!this.registry.get('loadBattle')&&!this.registry.get('battleReady');
+    const lean=this.lean=LEAN_BOOT&&!this.registry.get('loadBattle')&&!this.registry.get('battleReady');
+    // 加载画面：水墨底 + 一行字 + 细金线进度（ui/LoadScreen）；开机叫「正在进入乱世」，进关叫「整军出征」
+    this.bootFailed=[];loadScreen.show(this.registry.get('loadBattle')&&!this.registry.get('battleReady')?'整军出征':'正在进入乱世');
+    const onProgress=(p:number):void=>loadScreen.progress(p),onError=(f:Phaser.Loader.File):void=>{this.bootFailed.push(String(f.key));};
+    this.load.on('progress',onProgress);this.load.on('loaderror',onError);this.load.once('complete',(_l:unknown,ok:number,bad:number)=>{this.bootTotal=(ok??0)+(bad??0);this.registry.set('bootTotalMax',Math.max(this.bootTotal,Number(this.registry.get('bootTotalMax')??0)));this.load.off('progress',onProgress);this.load.off('loaderror',onError);});
     if(!lean)this.load.spritesheet('build_vfx','assets/build-vfx/styles-hp-v1.png',{frameWidth:128,frameHeight:128});   // 手绘版（2026-11-19，原 styles-ai-v1.png 是 64px 像素风；行序不变，后面多 8 个额外样式）
     // 特效型警示序列帧（src/ui/WarnFx.ts；缺图时首领招式退回细虚线 / 无提示）
     if(!lean){loadWarnFx(this.load); // 手绘版优先，缺图的种类退回像素版
@@ -274,6 +281,14 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
+    // 有文件没载上：自动重试两遍（已载入的键 Phaser 会跳过，只补缺的）；还不行就提示后继续——缺的图各处都有备用画面，不让玩家卡在加载页；大半都失败（多半断网）则停在加载页给「重试」
+    if(this.bootFailed.length){
+      const n=Number(this.registry.get('bootRetry')??0),total=Math.max(1,this.bootTotal,Number(this.registry.get('bootTotalMax')??0)),bad=this.bootFailed.length;
+      if(n<2){this.registry.set('bootRetry',n+1);loadScreen.note(`有 ${bad} 个素材没载上，正在重试（${n+1}/2）…`);this.time.delayedCall(900,()=>this.scene.restart());return;}
+      this.registry.set('bootRetry',0);this.registry.set('bootTotalMax',0);
+      if(bad>total*.5){loadScreen.fail(`素材大多没载上（${bad}/${total}），请检查网络后重试。`,()=>this.scene.restart());return;}
+      loadScreen.note(`有 ${bad} 个素材没能载入，已用备用画面继续。`);console.warn('[Boot] 未载入的素材：',this.bootFailed.slice(0,30).join(', '));
+    }else{this.registry.set('bootRetry',0);this.registry.set('bootTotalMax',0);}
     if(this.shellOnly){const hint=document.getElementById('boot-hint');if(hint)hint.style.display='none';this.scene.start('CityScene');return;}
     if(this.lean){
       // 手机精简启动：只载入了主页 / 界面资源。设好过滤方式就进主页；战斗图集到进战斗时再载入（systems/LeanBoot.ts 拦截战斗场景的启动）
@@ -366,6 +381,7 @@ export class BootScene extends Phaser.Scene {
   }
   /** 启动后去哪：测试入口 / 待进的战斗 / 开场 / 主页 / 天下地图。 */
   private goNext():void{
+    loadScreen.hide();
     if(import.meta.env.DEV&&new URLSearchParams(location.search).get('dev')==='1'&&new URLSearchParams(location.search).has('thirdStage')){this.scene.start('ThirdChapterScene');}else if(this.registry.get('pendingThird')){this.registry.remove('pendingThird');this.scene.start('ThirdChapterScene');}else if(this.registry.get('pendingWarlord')){const key=String(this.registry.get('pendingWarlord'));this.registry.remove('pendingWarlord');const pd=this.registry.get('pendingBattleData');this.registry.remove('pendingBattleData');this.scene.start(key,pd);}else{let to:string|null=null;try{to=sessionStorage.getItem(BOOT_TO_KEY);sessionStorage.removeItem(BOOT_TO_KEY);}catch{/* 存储不可用 */}const opening=!openingTried&&!to&&shouldPlayOpening();openingTried=true;this.scene.start(to==='WorldMapScene'&&worldUnlocked()?'WorldMapScene':opening?'OpeningScene':'MenuScene');} /* 开场动画：每页只在第一次启动时考虑（回战斗重载图集也会经过这里） */ // 战斗中「撤退」回滚重载后直接回天下地图
   }
 

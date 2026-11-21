@@ -1,5 +1,4 @@
 import Phaser from 'phaser';
-import { BRANCH_FX_READY, branchFxKey, branchFxFile } from './BranchFinalFx';
 
 /**
  * 技艺 / 战法手绘特效序列帧（用户 2026-11-16：「不要再做像素特效了」，改用像诸葛亮 flame_burst 那样的手绘透明序列帧）。
@@ -80,10 +79,18 @@ export const SKILL_FX: Readonly<Record<string, { file: string; cell: number; fra
   fx_md_banner: { file: 'assets/hero-fx/mengde/banner.png', cell: 256, frames: 6 },
 };
 
+/**
+ * 武将专属特效图按需加载（2026-11-20 首屏加载优化）：起手特效 cast_<武将>、周瑜 / 太史慈 / 曹操 / 张辽 / 吕布的招牌技图原来 17 个武将一次载完（约 9 MB），
+ * 现在只载当前武将的（GameScene 开局 ensureHeroSkillFx）；随行武将用到别人的图时，playSheet 第一次碰到缺图会顺手发起加载（那一次什么都不画，之后正常）。
+ */
+const heroOfSheet = (d: { file: string }): string | null => { const m = /assets\/hero-fx\/(zhouyu|taishici|mengde|zhangliao|lvbu)\//.exec(d.file) ?? /assets\/hero-fx\/cast\/cast_([a-z]+)\.png/.exec(d.file); return m ? m[1] : null; };
+const asked = new Set<string>();
+function ensureOne(scene: Phaser.Scene, key: string): void { const d = SKILL_FX[key]; if (!d || scene.textures.exists(key) || asked.has(key + scene.sys.settings.key)) return; asked.add(key + scene.sys.settings.key); scene.load.spritesheet(key, d.file, { frameWidth: d.cell, frameHeight: d.cellH ?? d.cell }); if (!scene.load.isLoading()) scene.load.start(); }
+export function ensureHeroSkillFx(scene: Phaser.Scene, hero: string): void { for (const [key, d] of Object.entries(SKILL_FX)) if (heroOfSheet(d) === hero && !scene.textures.exists(key)) ensureOne(scene, key); }
+
 export function loadSkillFx(load: Phaser.Loader.LoaderPlugin): void {
-  for (const [key, d] of Object.entries(SKILL_FX)) load.spritesheet(key, d.file, { frameWidth: d.cell, frameHeight: d.cellH ?? d.cell });
-  // 兵器专职进阶形态专属图（每位武将 1 张 6×4，已出图的才加载；BranchFinalFx 用）
-  for (const h of BRANCH_FX_READY) load.spritesheet(branchFxKey(h), branchFxFile(h), { frameWidth: 256, frameHeight: 256 });
+  for (const [key, d] of Object.entries(SKILL_FX)) { if (heroOfSheet(d)) continue; load.spritesheet(key, d.file, { frameWidth: d.cell, frameHeight: d.cellH ?? d.cell }); }
+  // 兵器专职进阶形态专属图改成按需加载（BranchFinalFx.prime：选定分支时才载入当前武将那一张，原来 17 张一次载完约 22 MB）
 }
 
 export interface SheetOpts {
@@ -98,7 +105,7 @@ export interface SheetOpts {
 
 /** 播放一段序列帧，播完销毁；缺图返回 null（不画任何替代图形）。 */
 export function playSheet(scene: Phaser.Scene, key: string, x: number, y: number, o: SheetOpts): Phaser.GameObjects.Image | null {
-  const d = SKILL_FX[key]; if (!d || !scene.textures.exists(key)) return null;
+  const d = SKILL_FX[key]; if (!d) return null; if (!scene.textures.exists(key)) { if (heroOfSheet(d)) ensureOne(scene, key); return null; }
   const img = scene.add.image(x, y, key, 0).setDisplaySize(o.size, o.sizeH ?? o.size * (d.cellH ?? d.cell) / d.cell).setDepth(o.depth).setRotation(o.rotation ?? 0).setFlip(!!o.flipX, !!o.flipY)
     .setAlpha(o.alpha ?? 1).setOrigin(o.originX ?? .5, o.originY ?? .5).setBlendMode(o.add ? Phaser.BlendModes.ADD : Phaser.BlendModes.NORMAL);
   if (o.tint !== undefined) img.setTint(o.tint);

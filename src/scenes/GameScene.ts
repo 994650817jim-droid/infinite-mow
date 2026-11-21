@@ -1,3 +1,4 @@
+import { BOSS_CLEAR, pickWithdraw } from '../data/bossClear';
 import { EnemyFormations } from '../systems/EnemyFormations';
 import { safeWorldPoint } from '../ui/SafeLabel';
 import { SIGIL_LABEL, formationSigil, setFormationSigil, type FormationSigil } from '../systems/BattleSettings';
@@ -1730,6 +1731,24 @@ export class GameScene extends Phaser.Scene {
     for (const f of this.followers?.members ?? []) if (f.recruit.hero && !f.downed) out.push({ id: f.recruit.hero, passive: f.passive, sprite: f.sprite, lord: false });
     return out;
   }
+  /** 鸣金让道的统计（测试读）。 */
+  bossClearStats = { withdrawn: 0, before: 0, skipped: '' };
+  /**
+   * 鸣金让道适不适用（返回跳过原因，空 = 适用；子类可再覆盖）：
+   * 攻城 / 守城（一波波攻守本身就是玩法）、目标型关卡目标没完成（2-3 营寨：营里守军是目标的一部分）跳过；
+   * 双首领照常让道（只撤普通小兵，第二位首领由子类在 spawnBoss 之后接上，不受影响）。
+   */
+  protected bossClearAllowed(): string { if (this.scene.key === 'SiegeGameScene') return '攻城 / 守城'; if (this.objective && !this.objective.done) return '目标型关卡'; return ''; }
+  /** 首领登场：场上非首领敌人多于 BOSS_CLEAR.keep 时，离「主将 → 首领」连线最近的普通小兵往两侧退开、淡出后撤走（不算击杀、不掉落）；精锐 / 副将 / 特殊兵种不撤。 */
+  protected bossClearStage(boss: Enemy): void {
+    const skip = this.bossClearAllowed(); this.bossClearStats = { withdrawn: 0, before: 0, skipped: skip }; if (skip) return;
+    const list = this.enemies.filter(e => e.active && e !== boss && e.kind !== 'boss' && !e.isSupplySlot && e.def.behavior !== 'wall' && e.hp > 0);
+    this.bossClearStats.before = list.length;
+    const picks = pickWithdraw(list.map(e => ({ x: e.x, y: e.y, kind: e.kind, special: !!e.def.trait || !!e.def.roster || e.controlImmune })), this.player, boss);
+    for (const p of picks) { const e = list[p.index], v = e.def.speed * BOSS_CLEAR.speedMul; e.withdrawUntil = this.combatNow + BOSS_CLEAR.ms; e.withdrawVx = p.dx * v; e.withdrawVy = p.dy * v; e.routUntil = 0; }
+    this.bossClearStats.withdrawn = picks.length;
+    if (picks.length) this.sfx.play('gong'); // 鸣金
+  }
   protected spawnBoss(): void {
     if(this.boss?.active)return;this.yellowAltar?.destroy();this.yellowAltar=null;
     if (this.bossSpawned) return;
@@ -1743,6 +1762,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.boss = boss;
+    this.bossClearStage(boss); // 鸣金让道：首领登场时普通小兵往两侧退开撤走一部分（data/bossClear.ts）
     this.startParley(boss);
     preloadBossDeath(this, this.chapter.bossStyle); // 倒地帧（张角 / 张梁 / 张宝 / 董卓 / 吕布）提前载好
     this.firstBossAt=this.combatNow;
@@ -1848,6 +1868,8 @@ export class GameScene extends Phaser.Scene {
       enemy.frameStartX = enemy.x;
       enemy.frameStartY = enemy.y;
       if (!enemy.controlImmune && enemy.stunUntil > time) { enemy.moveVx = enemy.moveVy = enemy.intentDx = enemy.intentDy = 0; continue; }
+      // 鸣金让道（首领登场）：退开中的兵不出手，往两侧走、最后淡出，到点撤走（不算击杀、不掉落）
+      if (enemy.withdrawUntil) { const left = enemy.withdrawUntil - this.combatNow; if (left <= 0) { enemy.sprite.setAlpha(1); enemy.deactivate(); continue; } enemy.contactCd = Math.max(enemy.contactCd, .3); enemy.moveVx = enemy.withdrawVx; enemy.moveVy = enemy.withdrawVy; const d = Math.hypot(enemy.moveVx, enemy.moveVy) || 1; enemy.intentDx = enemy.moveVx / d; enemy.intentDy = enemy.moveVy / d; enemy.sprite.x += enemy.moveVx * dt; enemy.sprite.y += enemy.moveVy * dt; enemy.sprite.setAlpha(Math.min(1, left / BOSS_CLEAR.fadeMs)); continue; }
       // 张辽「震慑」叠满：溃逃中的敌兵背向主将逃跑、不出手（weapons/zhangliaoWeapon.ts 设 routUntil；首领 / 免控的不会溃逃）
       if (enemy.routUntil > this.combatNow && enemy.kind !== 'boss' && !enemy.controlImmune) { const fx = enemy.x - player.x, fy = enemy.y - player.y, fd = Math.hypot(fx, fy) || 1; enemy.contactCd = Math.max(enemy.contactCd, .2); const v = enemy.def.speed * ZHANGLIAO.routSpeed; enemy.moveVx = fx / fd * v; enemy.moveVy = fy / fd * v; enemy.intentDx = fx / fd; enemy.intentDy = fy / fd; enemy.sprite.x += enemy.moveVx * dt; enemy.sprite.y += enemy.moveVy * dt; continue; } // 人群转向会把速度算成朝主将，溃逃直接按背向位移
       // 貂蝉「离间」：倒戈中的敌人不追主将，转身冲撞最近的同伴（逻辑在 CharacterPassives.driveTurned）

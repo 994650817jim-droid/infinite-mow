@@ -106,6 +106,8 @@ export class Enemy {
   stunUntil = 0;
   /** 张辽「震慑」层数 / 最后叠层时间、「溃逃」到期时间、溃兵踩踏冷却（weapons/zhangliaoWeapon.ts）。 */
   zhenshe = 0; zhensheAt = 0; routUntil = 0; trampleAt = 0;
+  /** 首领登场「鸣金让道」（data/bossClear.ts）：退开到此时刻撤走；退开速度。0 = 没在退。 */
+  withdrawUntil = 0; withdrawVx = 0; withdrawVy = 0;
   /** 曹操「军令」标记到期时间（weapons/mengdeWeapon.ts；受伤加成在 CharacterPassives.vulnerability）。 */
   junlingUntil = 0;
   /** P3：甘宁铁索钩钩过的到期时间（被钩过的被击杀才攒「锦帆」）；P3 火攻（甘宁 / 祝融）着火标记到期时间。 */
@@ -164,7 +166,7 @@ export class Enemy {
     this.invulnerable = false;
     this.controlImmune = false;
     this.stunUntil = 0;
-    this.zhenshe = 0; this.zhensheAt = 0; this.routUntil = 0; this.trampleAt = 0; this.junlingUntil = 0; this.hookedUntil = 0; this.p3BurnUntil = 0;
+    this.zhenshe = 0; this.zhensheAt = 0; this.routUntil = 0; this.trampleAt = 0; this.withdrawUntil = 0; this.withdrawVx = 0; this.withdrawVy = 0; this.junlingUntil = 0; this.hookedUntil = 0; this.p3BurnUntil = 0;
     this.targetAlly = null; this.targetLife = 0;
     this.flashUntil = 0; this.flashReadyAt = 0;
     this.recoilUntil = 0; this.squash = 0;

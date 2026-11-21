@@ -212,6 +212,8 @@ assets/raw/*
 !/tools/compose-gate-v2.mjs
 !/tools/make-ram-back.mjs
 !/tools/paste-broken-gate.mjs
+!/tools/make-ramp.mjs
+!/tools/compose-wallend.mjs
 !/tools/shot-story-portraits.mjs
 !/tools/resize-image.mjs
 !/tools/shot-boss-still.mjs

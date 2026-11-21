@@ -51,7 +51,7 @@ export function hanzhongBattle(stage: HanzhongStage): ChapterDef {
     ...base,
     waves: base.waves.map((w, i) => ({ ...w, name: WAVE_NAMES[stage - 1][i] ?? w.name })),
     name: `8-${stage} ${d.name}`, label: `第八章 · 汉中之战 · ${d.name}`, description: d.story, bossName: d.boss, bossStyle: d.id,
-    pickEnemy: (t: number) => { const r = Math.random(); return r < .25 ? 'archer' : r < .35 ? 'cavalry' : base.pickEnemy(t); },
+    pickEnemy: (t: number) => { const r = Math.random(); return r < .18 ? 'archer' : r < .26 ? 'infantry' : base.pickEnemy(t); }, // 2026-11-21 配兵审计：原弓 .25 / 骑 .1——8-1 远程约 42%，8-2 定军山、8-3 山路骑兵约 31%；改弓 .18、章内额外骑兵换步兵
     enemies: { ...base.enemies, infantry, archer, boss: { ...base.enemies.boss, texture: hanzhongTexture(d.id), hp: [3000, 3200, 3800][stage - 1], speed: [46, 62, 48][stage - 1], damage: [17, 18, 19][stage - 1] } },
     victoryTitle: d.boss + '败退', victoryText: stage === 3 ? '曹操退兵 · 汉中尽归 · 汉中之战告捷' : d.name + '告捷 · 进入军营休整',
   };

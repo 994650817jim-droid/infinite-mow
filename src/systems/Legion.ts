@@ -34,6 +34,8 @@ export class Legion {
   rangeMul=1;damageMul=1;
   /** 守城 v2（systems/DefenseWallV2）：给了就按岗位站（不跟主将、不退），postRangeMul 是岗位上的射程倍率（垛口远程兵够得到墙脚）。 */
   postOf?:(u:Ally)=>{x:number;y:number}|null;postRangeMul?:(u:Ally)=>number;
+  /** 受伤倍率（守城 v2：城外射上来的箭打到垛口后的士兵 × 掩护倍率）。 */
+  hurtMul?:(u:Ally,source?:{x:number;y:number;normal:boolean})=>number;
   /** 军阵（systems/FormationRuntime）：入阵士兵的伤害 / 受伤 / 射程倍率；没有 = 1。 */
   fm?:{dmg(u:Ally,e:Enemy):number;taken(u:Ally):number;range(u:Ally):number};
   /** 护阵 / 出击切换后（军阵的出击打法）。 */
@@ -159,7 +161,7 @@ export class Legion {
   hurt(u: Ally, raw: number, now: number, source?: { x: number; y: number; normal: boolean }, floor = 0, ignoreHurtGap = false): boolean {
     if (!u.active || (!ignoreHurtGap && now < u.hurtUntil)) return false;
     const armor = u.def.armor + (u.kind === 'guardian' && u.level === 3 ? 5 : 0);
-    let mitigation = Math.min(this.command.incoming(u,now),this.defense?.incoming(u,now)??1,this.awakeningDefense?.incoming(u,now)??1)*(this.fm?.taken(u)??1);
+    let mitigation = Math.min(this.command.incoming(u,now),this.defense?.incoming(u,now)??1,this.awakeningDefense?.incoming(u,now)??1)*(this.fm?.taken(u)??1)*(this.hurtMul?.(u,source)??1);
     if (source?.normal) {
       const dx = source.x - u.x, dy = source.y - u.y, d = Math.hypot(dx, dy) || 1;
       const frontal = (dx * u.facingX + dy * u.facingY) / d >= .25;

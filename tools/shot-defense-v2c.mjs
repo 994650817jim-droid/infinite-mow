@@ -38,7 +38,17 @@ try {
   for (const [name, x] of [['c-1-left', G.X0 + 50], ['c-2-center', G.gx], ['c-3-right', G.X1 - 50]]) {
     await to(x, G.W - 90); await wait2(1600); await p.screenshot({ path: OUT + '/' + name + '.png' });
     const ib = await inBounds(); ck(name + '：镜头夹在场地 + 边带以内、人都在场内', ib.cam && ib.out.length === 0, ib);
+    if (name === 'c-1-left') { // 军师卡：逐字打出时字竖向居中在墨条上（c 段验收第 5 条：原来字飘在墨条上沿外、墨条下面空着）
+      await ev(async () => { const B = await import('/src/ui/StoryBarkCard.ts'); B.showBarkCard(window.__S, { side: 'left', name: '简雍', text: '敌军从城外（下方）攻来，会架梯爬墙。我军已上墙守垛口、梯口；预备队会自己补到吃紧的那段，按 E 让预备队全体压到你这段。' }); }); await wait(900); // 打到一半时量
+      await p.screenshot({ path: OUT + '/c-10-card.png' });
+      const card = await ev(() => { const c = window.__S.children.list.filter(o => o.name === 'story-bark-card').pop(); if (!c) return null; const say = c.list.find(o => o.name === 'story-bark-card-text'), brush = c.list.filter(o => o.texture?.key === 'barkui_brush' && o.name !== 'story-bark-card-faction')[0];
+        return say && brush ? { text: say.text, sayMid: Math.round(say.y + say.height * (0.5 - (say.originY ?? 0))), brushMid: Math.round(brush.y), brushH: Math.round(brush.displayHeight) } : null; });
+      ck('军师卡：打出来的字在墨条中间（不飘在墨条上沿外）', !!card && Math.abs(card.sayMid - card.brushMid) <= 14 && card.text.length > 0, card);
+    }
   }
+  // 修门字签：门楼内侧（楼阁台基前）、小号字（c 段验收第 6 条）
+  const lab = await ev(() => { const s = window.__S, g = s.defenseV2.g, o = s.children.getByName('defv2-gate-label'); return o ? { y: Math.round(o.y), want: g.top + 50, size: o.style.fontSize, x: Math.round(o.x - g.gx) } : null; });
+  ck('「修门」字签挪到门楼内侧（楼阁台基前）、缩小', !!lab && Math.abs(lab.y - lab.want) <= 4 && lab.size === '11px' && lab.x === 0, lab);
   // ———— 舆图（M）：整张场地
   await to(G.gx - 300, G.W - 90); await wait2(400);
   await ev(() => window.__S.battleMap?.toggleBig()); await wait2(1200);
@@ -92,7 +102,13 @@ try {
   const ram = await ev(() => { const A = window.__S.defenseAssault; return { tex: A.rams[0]?.e.sprite.texture.key, hits: A.stats.ramHits }; });
   ck('冲车换成背面图（defv2_ram_back），开到门前撞门', ramOk && ram.tex === 'defv2_ram_back', ram);
   // ———— 门破 → 敌兵穿门洞进城 → 砍府衙 → 府衙失守
-  await ev(() => { const s = window.__S; s.defenseAssault.gate.hp = 0; }); await wait2(600);
+  await to(G.gx + 60, G.W - 90);
+  await ev(() => { const s = window.__S; s.defenseAssault.gate.hp = 0; }); await wait(700);
+  await p.screenshot({ path: OUT + '/c-9-gate-broken.png' });
+  const brk = await ev(() => { const s = window.__S, A = s.defenseAssault; const big = s.children.list.filter(o => o.name === 'combat-notice' && o.type === 'Container').flatMap(o => o.list).filter(o => o.type === 'Text').map(o => o.text);
+    return { big, fires: s.children.list.filter(o => o.name === 'defv2-broken-fire').length, edge: A.guideTargets().find(t => t.key === 'gate')?.label ?? '', rams: A.rams.length }; });
+  ck('破门那一刻做明显（c 段验收第 4 条）：全屏大横幅一次、门洞处持续的火光 / 尘土、屏边指示「城门已破 · 敌兵入城」；冲车退走不挡门洞', brk.big.some(t => /城门已破/.test(t)) && brk.fires >= 2 && brk.edge === '城门已破 · 敌兵入城' && brk.rams === 0, brk);
+  await wait2(600);
   await ev(() => { const s = window.__S, g = s.defenseV2.g; for (let i = 0; i < 6; i++) s.spawnEnemy('infantry', g.gx - 150 + i * 60, g.F + 120, 1, true); });
   const passOk = await until(() => window.__S.defenseAssault.stats.passed > 0, 15000);
   await to(gs.x, gs.y); await wait2(250);

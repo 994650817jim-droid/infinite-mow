@@ -90,7 +90,7 @@ try {
   const g1 = await ev(() => ({ hp: window.__S.defenseAssault.gate.hp, repairs: window.__S.defenseAssault.stats.repairs }));
   ck('站门楼内侧头顶出「F · 修门」，按 F 站定读条（「修门中 x 秒」）→ 城门 +12%', rp === 'F · 修门' && /^修门中/.test(mid) && g1.repairs === 1 && g1.hp > g0, { rp, mid, g0: Math.round(g0), g1: Math.round(g1.hp) });
   // ———— 占段 / 夺回（第 1 段：我方全没了 + 城头敌兵 ≥ 3）
-  await to(G.segs[1].x0 + 80, G.W - 90); await wait(300);
+  await to(G.segs[3].x1 - 40, G.W - 90); await wait(300); // 段变窄（定宽场地 281）以后站第 2 段会把这几个兵直接打死：站到最右段
   const cap = await ev(() => { const s = window.__S, g = s.defenseV2.g, sg = g.segs[0], out = [];
     s.defenseV2.reinforceAt = 1e12; /* 关掉按威胁自动增援（不然预备队会补进这段，测不到失守） */
     for (const u of s.legion.units) if (u.active && u.x >= sg.x0 - 30 && u.x < sg.x1 && u.y < g.W + 10) s.legion.hurt(u, 1e7, s.combatNow, undefined, 0, true);

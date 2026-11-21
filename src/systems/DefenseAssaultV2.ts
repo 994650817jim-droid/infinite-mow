@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { DEPTH, FONT, GAME_WIDTH, actorDepth } from '../config';
-import { DEFENSE_V2, climbSpeed, spotAt, v2Engines, v2Phase, v2Spots, v2WaveReward, walkSegment, type Pt, type V2Geo, type V2SpotKind } from '../data/defenseV2';
+import { DEFENSE_V2, climbSpeed, nextWaypoint, spotAt, v2Engines, v2Phase, v2Spots, v2WaveReward, walkSegment, type Pt, type V2Geo, type V2SpotKind } from '../data/defenseV2';
 import { isRangedSpawn } from '../data/gateSpawn';
 import type { Enemy } from '../entities/Enemy';
 import type { Ally } from '../entities/Ally';
@@ -55,6 +55,8 @@ export interface AssaultHost {
   fx: (key: string, x: number, y: number, size: number, depth: number) => void;
   /** Space 是否刚按下（喘息时跳过）。 */
   skipPressed: () => boolean;
+  /** 全屏大横幅（城门被破这种一场只有一次的大事）。 */
+  bigBanner: (title: string, caption: string) => void;
 }
 type LadderState = 'drive' | 'warn' | 'up' | 'down';
 interface Ladder { seg: number; x: number; cart: Enemy; life: number; state: LadderState; until: number; img: Phaser.GameObjects.Image | null; ring: Phaser.GameObjects.Image | null; label: Phaser.GameObjects.Text; next: number; climbers: Set<Enemy> }
@@ -92,7 +94,7 @@ export class DefenseAssaultV2 {
   /** F 位的小字签（滚木 / 热油 / 修门）：主将走近时收起，头顶只留当前会触发的那一个提示（b 段验收第 4 条）。 */
   private spotLabels: Array<{ o: Phaser.GameObjects.Text; x: number; y: number }> = [];
   /** 测试读。 */
-  readonly stats = { ladders: 0, raised: 0, climbs: 0, landed: 0, pushed: 0, logs: 0, oil: 0, repairs: 0, rams: 0, ramHits: 0, gateHits: 0, fell: 0, captures: 0, retakes: 0, carts: 0, ramsBroken: 0, rewardFood: 0, sorties: 0, sortieKills: 0, passed: 0, keepHits: 0 };
+  readonly stats = { ladders: 0, raised: 0, climbs: 0, landed: 0, pushed: 0, logs: 0, oil: 0, repairs: 0, rams: 0, ramHits: 0, gateHits: 0, fell: 0, captures: 0, retakes: 0, carts: 0, ramsBroken: 0, rewardFood: 0, sorties: 0, sortieKills: 0, passed: 0, keepHits: 0, chopDmg: 0, ramDmg: 0, bossDmg: 0, gateShots: 0, gateBrokeAt: -1, wallDown: 0 };
 
   constructor(private readonly h: AssaultHost) {
     const A = DEFENSE_V2.assault, s = h.scene, g = h.g;
@@ -101,10 +103,10 @@ export class DefenseAssaultV2 {
     this.keep = { hp: DEFENSE_V2.keep.hp[h.tier], max: DEFENSE_V2.keep.hp[h.tier] };
     // 背面冲车（美术组 ram_back：一行 4 格，帧 0 / 1 行进、2 撞击预备、3 撞击前冲，车轮底边在格内 y = 244）
     if (!s.textures.exists(RAM_BACK.key)) { s.load.spritesheet(RAM_BACK.key, RAM_BACK.file, { frameWidth: 256, frameHeight: 256 }); if (!s.load.isLoading()) s.load.start(); }
-    const sp = v2Spots(g), label = (x: number, y: number, t: string) => { const o = s.add.text(x, y, t, { fontFamily: FONT, fontSize: '13px', color: '#ffd28a', resolution: 2, stroke: '#1a120b', strokeThickness: 3 }).setOrigin(.5).setDepth(DEPTH.dmgText - 2); this.objs.push(o); return o; };
+    const sp = v2Spots(g), label = (x: number, y: number, t: string, size = 13) => { const o = s.add.text(x, y, t, { fontFamily: FONT, fontSize: size + 'px', color: '#ffd28a', resolution: 2, stroke: '#1a120b', strokeThickness: 3 }).setOrigin(.5).setDepth(DEPTH.dmgText - 2); this.objs.push(o); return o; };
     // 滚木架（瓮城套件帧 5 滚木堆）、油锅位、修门位：一个小字签，不加框
     for (const r of sp.racks) { if (s.textures.exists('siege_mid_barb')) this.objs.push(s.add.image(r.x, r.y + 14, 'siege_mid_barb', 5).setOrigin(.5, .8).setDisplaySize(84, 84).setDepth(actorDepth(r.y)).setName('defv2-rack')); this.spotLabels.push({ o: label(r.x, r.y + 30, '滚木').setName('defv2-rack-label'), x: r.x, y: r.y }); }
-    this.spotLabels.push({ o: label(sp.oil.x, sp.oil.y + 26, '热油').setName('defv2-oil-label'), x: sp.oil.x, y: sp.oil.y }, { o: label(sp.gate.x, sp.gate.y + 22, '修门').setName('defv2-gate-label'), x: sp.gate.x, y: sp.gate.y });
+    this.spotLabels.push({ o: label(sp.oil.x, sp.oil.y + 26, '热油').setName('defv2-oil-label'), x: sp.oil.x, y: sp.oil.y }, { o: label(sp.gate.x, g.top + DEFENSE_V2.layout.band + 10, '修门', 11).setName('defv2-gate-label'), x: sp.gate.x, y: sp.gate.y });
     this.prompt = s.add.text(0, 0, '', { fontFamily: FONT, fontSize: '15px', color: '#ffe9bd', fontStyle: 'bold', resolution: 2, stroke: '#140d07', strokeThickness: 4 }).setOrigin(.5).setDepth(DEPTH.dmgText + 1).setVisible(false).setName('defv2-prompt');
     this.bar = s.add.graphics().setDepth(DEPTH.dmgText - 1).setName('defv2-gate-bar');
     this.barText = s.add.text(g.gx, g.F - 212, '', { fontFamily: FONT, fontSize: '13px', color: '#ffe1a0', resolution: 2, stroke: '#1a120b', strokeThickness: 3 }).setOrigin(.5).setDepth(DEPTH.dmgText - 1).setName('defv2-gate-text');
@@ -141,7 +143,7 @@ export class DefenseAssaultV2 {
 
   // ———— 场景接口 ————
   /** 不受碰撞（正在爬 / 正在摔的，人在墙面上）。 */
-  ghost(e: Enemy): boolean { return this.climbing.has(e) || this.falling.has(e); }
+  ghost(e: Enemy): boolean { const c = this.climbing.get(e); return (!!c && c.life === e.spawnId) || this.falling.get(e) === e.spawnId; } // 敌兵对象是池子里复用的：按 spawnId 认（不然新刷的兵顶着上一个的「在爬梯」不受碰撞、推不下城）
   /** 这段被占着（测试 / 舆图用）。 */
   get segmentsCaptured(): readonly boolean[] { return this.captured; }
   /** 屏边指示：在撞门的冲车、被占的段。 */
@@ -149,6 +151,7 @@ export class DefenseAssaultV2 {
     const out: Array<{ key: string; x: number; y: number; label: string }> = [];
     for (const r of this.rams) if (r.atGate && this.alive(r.e, r.life)) out.push({ key: 'ram', x: r.e.x, y: r.e.y - 60, label: '冲车撞门' });
     this.captured.forEach((c, i) => { if (c) out.push({ key: 'seg' + i, x: this.h.g.segs[i].ladderX, y: this.h.g.W - 100, label: '城头失守' }); });
+    if (this.gate.open) out.push({ key: 'gate', x: this.h.g.gx, y: this.h.g.F - 40, label: '城门已破 · 敌兵入城' });
     return out;
   }
   snapshot() {
@@ -162,7 +165,7 @@ export class DefenseAssaultV2 {
     this.updateWaves(el);
     if (this.done) return;
     for (const q of [...this.queue]) if (el >= q.at) { this.queue.splice(this.queue.indexOf(q), 1); const ok = q.kind === 'ladder' ? this.spawnLadder() : this.spawnRam(); if (!ok && this.phase !== 'rest') this.queue.push({ at: el + 3, kind: q.kind }); } // 没地方（四段都有梯 / 冲车满了）：3 秒后再看
-    this.updateLadders(now, dt); this.updateRams(now, dt); this.updateBurning(now); this.updateChannel(now); this.updateSortie(now);
+    this.updateLadders(now, dt); this.updateRams(now, dt); this.updateBurning(now); this.updateChannel(now); this.updateSortie(now); this.gateShots(now); this.brokenFx(now);
     if (now >= this.checkAt) { this.checkAt = now + A.capture.checkMs; this.checkSegments(); }
     if (!this.gate.open && this.gate.hp <= 0) this.breakGate();
     if (!this.keepBlocked) { const img = this.h.scene.children.getByName('defv2-keep') as Phaser.GameObjects.Image | null; if (img) { this.keepBlocked = true; this.h.block(img, 'siege_mid_hall#0'); } } // 府衙大堂挡人（墙图异步载入，等它摆出来）
@@ -225,16 +228,23 @@ export class DefenseAssaultV2 {
   /** 走到门洞，穿过去（门洞在城楼底下看不见：淡出，在城门内侧淡入）。 */
   private toArch(e: Enemy, dt: number): boolean {
     const g = this.h.g, K = DEFENSE_V2.keep, ax = g.gx + ((e.spawnId % 5) - 2) * 14, ay = g.F + 8;
-    if (Math.hypot(ax - e.x, ay - e.y) > K.passR) return this.walk(e, ax, ay, dt, 2);
+    if (Math.hypot(ax - e.x, ay - e.y) > K.passR && !(Math.abs(e.x - g.gx) <= K.passHalf && e.y <= g.F + K.passDepth)) return this.walk(e, ax, ay, dt, 2); // 门前一片都算到了门洞（被停在门前的车挡住也能进）
     const s = this.h.scene, life = e.spawnId; e.sprite.setPosition(ax, g.innerTop - K.insideDy).setAlpha(0); this.stats.passed++;
     s.tweens.add({ targets: e.sprite, alpha: 1, duration: 260, onUpdate: tw => { if (e.spawnId !== life) { tw.stop(); e.sprite.setAlpha(1); } } });
     return true;
+  }
+  /** 走道上的敌兵：站在失守段、离主将远（> raidDist）的，走马道下城去砍府衙；其余照常追人。 */
+  private onWall(e: Enemy, dt: number): boolean {
+    const g = this.h.g, p = this.h.player(), seg = walkSegment(g, e);
+    if (seg < 0 || !this.captured[seg] || e.isSupplySlot || e.kind === 'boss' || Math.hypot(p.x - e.x, p.y - e.y) <= DEFENSE_V2.keep.raidDist) return false;
+    const wp = nextWaypoint(g, e, { x: g.keep.x, y: g.keep.y + 30 }); if (this.downIds.get(e) !== e.spawnId) { this.downIds.set(e, e.spawnId); this.stats.wallDown++; }
+    return this.walk(e, wp.x, wp.y, dt, 6);
   }
   /** 城里：离主将远（> raidDist）的去砍府衙（同时最多 cap 个），近的照常和主将打。 */
   private raid(e: Enemy, dt: number): boolean {
     const K = DEFENSE_V2.keep, g = this.h.g, p = this.h.player(); if (e.isSupplySlot || e.kind === 'boss' || Math.hypot(p.x - e.x, p.y - e.y) <= K.raidDist) return false;
     const kx = g.keep.x + ((e.spawnId % 7) - 3) * 22, ky = g.keep.y + 30, d = Math.hypot(kx - e.x, ky - e.y);
-    if (d <= K.reach) { const now = this.h.now(); let n = 0; for (const [k, t] of this.atKeep) { if (!k.active || now - t >= 250) this.atKeep.delete(k); else if (k !== e) n++; } if (n < K.cap) { this.atKeep.set(e, now); this.keep.hp -= e.def.damage * K.contactMul * dt; this.stats.keepHits++; } e.moveVx = e.moveVy = 0; this.h.advance(e, 0, 0, dt); return true; }
+    if (d <= K.reach) { const now = this.h.now(); let n = 0; for (const [k, t] of this.atKeep) { if (!k.active || now - t >= 250) this.atKeep.delete(k); else if (k !== e) n++; } if (n < K.cap) { this.atKeep.set(e, now); this.keep.hp -= this.keep.max * K.chopPct * dt; this.stats.keepHits++; } /* 按满耐久的比例磨（和城门一样，跟敌兵伤害无关） */ e.moveVx = e.moveVy = 0; this.h.advance(e, 0, 0, dt); return true; }
     return this.walk(e, kx, ky, dt, 6);
   }
 
@@ -343,12 +353,12 @@ export class DefenseAssaultV2 {
     if (this.falling.has(e)) { e.moveVx = e.moveVy = 0; return true; }
     const g = this.h.g;
     if (e.y < g.innerTop - 4) return this.raid(e, dt); // 城里：离主将远的去砍府衙
-    if (e.y < g.F - 24) return false; // 走道上：照常追人
+    if (e.y < g.F - 24) return this.onWall(e, dt); // 走道上：照常追人；失守段离主将远的下城去砍府衙
     const A = DEFENSE_V2.assault;
-    if (e.kind === 'cavalry' && e.active && !e.isSupplySlot) return this.gate.open ? this.toArch(e, dt) : this.toGate(e, dt, A.gate.contactMul); // 骑兵不爬梯：砍门；门破了穿门洞进城
+    if (e.kind === 'cavalry' && e.active && !e.isSupplySlot) return this.gate.open ? this.toArch(e, dt) : this.toGate(e, dt); // 骑兵不爬梯：砍门；门破了穿门洞进城
     if (!this.climbable(e)) return false;
     if (this.gate.open && e.spawnId % 3 !== 0) return this.toArch(e, dt); // 门破了：三个里两个走门洞进城，一个照旧爬梯
-    if (!this.gate.open && e.spawnId % A.gate.share === 0) return this.toGate(e, dt, A.gate.contactMul);
+    if (!this.gate.open && e.spawnId % A.gate.share === 0) return this.toGate(e, dt);
     // 排云梯：最近一架已经到墙脚的梯子，梯脚两侧排开等着
     let lad: Ladder | null = null, ld = Infinity; for (const l of this.ladders) if (l.state !== 'drive') { const d = Math.abs(l.x - e.x) + (l.state === 'up' ? 0 : 200); if (d < ld) { ld = d; lad = l; } }
     if (!lad) return false; // 还没有梯子：照常往主将那边挤（挤在墙脚）
@@ -360,11 +370,11 @@ export class DefenseAssaultV2 {
     if (d <= stop) { e.moveVx = e.moveVy = 0; this.h.advance(e, 0, 0, dt); return true; }
     e.moveVx = dx / d * e.def.speed; e.moveVy = dy / d * e.def.speed; this.h.advance(e, dx / d, dy / d, dt); return true;
   }
-  /** 去门前砍门（门前同时最多 cap 个，多的在后面等）。 */
-  private toGate(e: Enemy, dt: number, mul: number): boolean {
+  /** 去门前砍门（门前同时最多 cap 个，多的在后面等；每人每秒扣满耐久的 chopPct，喘息 / 出城开着门时不砍）。 */
+  private toGate(e: Enemy, dt: number): boolean {
     const A = DEFENSE_V2.assault.gate, g = this.h.g, spread = ((e.spawnId % 9) - 4) * 20, gx = g.gx + spread, gy = g.F + 26 + (e.spawnId % 2) * 14;
     const d = Math.hypot(gx - e.x, gy - e.y);
-    if (d <= A.reach) { if (this.slot(e, A.cap)) { this.atGate.set(e, this.h.now()); this.gate.hp -= e.def.damage * mul * dt; this.stats.gateHits++; } e.moveVx = e.moveVy = 0; this.h.advance(e, 0, 0, dt); return true; }
+    if (d <= A.reach) { if (!this.resting && !this.sortie.open && this.slot(e, A.cap)) { this.atGate.set(e, this.h.now()); const k = this.gate.max * A.chopPct * dt; this.gate.hp -= k; this.stats.chopDmg += k; this.stats.gateHits++; } e.moveVx = e.moveVy = 0; this.h.advance(e, 0, 0, dt); return true; }
     return this.walk(e, gx, gy, dt, 4);
   }
   private slot(e: Enemy, cap: number): boolean {
@@ -377,7 +387,7 @@ export class DefenseAssaultV2 {
     if (e.y < this.h.g.F - 24) return false;
     if (this.gate.open) return this.toArch(e, dt); // 门破了：攻城主将穿门洞进城，进城后交回原招式
     const A = DEFENSE_V2.assault.gate, g = this.h.g, d = Math.hypot(g.gx - e.x, g.F + 40 - e.y);
-    if (d <= A.reach + 10) { this.gate.hp -= e.def.damage * A.contactMul * A.bossMul * dt; e.moveVx = e.moveVy = 0; this.h.advance(e, 0, 0, dt); return true; }
+    if (d <= A.reach + 10) { if (!this.resting && !this.sortie.open) { const k = this.gate.max * A.bossPct * dt; this.gate.hp -= k; this.stats.bossDmg += k; } e.moveVx = e.moveVy = 0; this.h.advance(e, 0, 0, dt); return true; }
     return this.walk(e, g.gx, g.F + 40, dt, 4);
   }
   /** 主将近战打中走道南沿的普通兵（主将在它北边）→ 推下城。返回 true = 推下去了。 */
@@ -414,7 +424,7 @@ export class DefenseAssaultV2 {
         r.e.sprite.setPosition(r.x, r.y + bob).setDepth(actorDepth(r.y)); if (back) r.e.sprite.setFrame(Math.floor(now / 190) % 2); r.label.setPosition(r.x, r.y - A.size - 8); if (r.y <= ty) { r.atGate = true; this.h.guide('ram'); } continue;
       }
       if (this.gate.open || this.resting || this.sortie.open || now < r.next) continue; // 门破了 / 喘息 / 出城开着门：不撞
-      r.next = now + A.hitMs; this.gate.hp -= A.damage; this.stats.ramHits++; this.h.sfx('bossHit');
+      r.next = now + A.hitMs; { const k = this.gate.max * A.hitPct; this.gate.hp -= k; this.stats.ramDmg += k; } this.stats.ramHits++; this.h.sfx('bossHit');
       if (back) { // 撞门：帧 2 预备 → 帧 3 往城门短促前冲 lunge 像素再回弹，门上木屑（手绘序列帧）
         const sp = r.e.sprite, life = r.life; sp.setFrame(2);
         s.tweens.add({ targets: sp, y: r.y - RAM_BACK.lunge, duration: 110, delay: 120, ease: 'Quad.easeIn', yoyo: true, hold: 60, onStart: () => { if (r.e.spawnId === life) sp.setFrame(3); }, onComplete: () => { if (r.e.spawnId === life) sp.setFrame(0).setY(r.y); } });
@@ -430,8 +440,33 @@ export class DefenseAssaultV2 {
   }
   private breakGate(): void {
     const g = this.h.g; this.gate.open = true; this.gate.hp = 0; this.h.sfx('gong'); if (this.sortie.open) this.endSortie(true);
+    for (const r of this.rams) { const sp = r.e.sprite, e = r.e; r.label.destroy(); this.h.scene.tweens.add({ targets: sp, y: sp.y + 120, alpha: 0, duration: 1200, onComplete: () => { if (e.active) e.deactivate(); sp.setAlpha(1); } }); } this.rams = []; // 城门撞开了：冲车往后退走（不挡门洞）
     for (const dx of [-60, 0, 60]) this.h.fx('fx_collapse_dust', g.gx + dx, g.F - 40, 170, actorDepth(g.F) + .2); // 城门塌（手绘尘土序列帧）
-    this.h.banner('城门被破！', true, '敌军要从门洞冲进城——退守府衙（门楼内侧按 F 下城）', '城门被破'); this.h.guide('gate');
+    this.stats.gateBrokeAt = this.h.elapsed(); this.h.bigBanner('城门已破！', '敌兵入城——退守府衙（门楼内侧按 F 下城）'); this.h.guide('gate');
+  }
+
+  // ———— 门楼放箭（主将站门楼上，往门前一片打）————
+  private shotAt = 0; /** 从失守段下城的敌兵（测试数人头）。 */ private downIds = new Map<Enemy, number>();
+  private gateShots(now: number): void {
+    const G = DEFENSE_V2.assault.gateShot, g = this.h.g, p = this.h.player(), s = this.h.scene;
+    if (now < this.shotAt || this.gate.open || this.sortie.open || Math.abs(p.x - g.gx) > DEFENSE_V2.layout.gateHalf || p.y < g.top || p.y > g.W) return;
+    const zone = (e: Enemy) => e.active && e.hp > 0 && Math.abs(e.x - g.gx) <= G.halfW && e.y >= g.F - 30 && e.y <= g.F + G.depth;
+    const ts = [...this.h.enemies()].filter(zone).sort((a, b) => Math.hypot(a.x - g.gx, a.y - g.F) - Math.hypot(b.x - g.gx, b.y - g.F)).slice(0, G.targets); if (!ts.length) return;
+    this.shotAt = now + G.everyMs; const k = Math.sqrt(Math.max(1, this.h.hpScale()));
+    for (const t of ts) {
+      const life = t.spawnId; this.stats.gateShots++;
+      if (!s.textures.exists('arrow')) { this.h.hit(t, G.damage * k); continue; }
+      const a = s.add.image(p.x, p.y - 30, 'arrow').setDisplaySize(26, 5).setRotation(Math.atan2(t.y - 10 - (p.y - 30), t.x - p.x)).setDepth(DEPTH.projectile ?? DEPTH.fx).setName('defv2-gate-arrow');
+      s.tweens.add({ targets: a, x: t.x, y: t.y - 10, duration: 220, onComplete: () => { a.destroy(); if (t.active && t.spawnId === life) this.h.hit(t, G.damage * k); } });
+    }
+  }
+  /** 门破了：门洞处持续冒尘土（手绘序列帧）、两团地火一直烧。 */
+  private dustAt = 0; private brokenFires: Phaser.GameObjects.Sprite[] = [];
+  private brokenFx(now: number): void {
+    if (!this.gate.open) return; const g = this.h.g, B = DEFENSE_V2.assault.broken, s = this.h.scene;
+    if (!this.brokenFires.length && s.textures.exists('ground_fire')) for (let i = 0; i < B.fires; i++) { const f = s.add.sprite(g.gx + (i - (B.fires - 1) / 2) * 110, g.F + 18, 'ground_fire', 0).setOrigin(.5, .85).setDisplaySize(110, 110).setDepth(actorDepth(g.F + 18) + .05).setName('defv2-broken-fire'); this.brokenFires.push(f); this.objs.push(f); }
+    this.brokenFires.forEach((f, i) => f.setFrame(Math.floor(now / 120 + i * 3) % 8));
+    if (now >= this.dustAt) { this.dustAt = now + B.dustMs; this.h.fx('fx_collapse_dust', g.gx + (Math.random() - .5) * 80, g.F - 30, 150, actorDepth(g.F) + .2); }
   }
 
   // ———— 一键 F ————

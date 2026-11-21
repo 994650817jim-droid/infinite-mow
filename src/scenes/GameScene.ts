@@ -227,6 +227,7 @@ import { EnemyTraits } from '../systems/EnemyTraits';
 import { LuoyangCamps } from '../systems/LuoyangCamps';
 import { EnemyFlowField, type FlowBox } from '../systems/EnemyFlowField';
 import { AllySeparation, type SepBody } from '../systems/AllySeparation';
+import { AllyRejoin } from '../systems/AllyRejoin';
 import { HitFeel, BossStagger } from '../systems/HitFeel';
 /** 武将序列帧的透明度与时长（缺省 1 / 450 毫秒）。2026-11-17 用户：「张飞攻击特效有点太夸张」「魏延也是」→ 张飞声浪 / 断桥怒吼、魏延劈地 / 裂波 / 谁敢杀我 调淡、调短。 */
 const HERO_FX_TONE: Record<string, { alpha: number; ms: number }> = {
@@ -767,6 +768,8 @@ export class GameScene extends Phaser.Scene {
     e.sprite.x+=this.flowTmp.x*70;e.sprite.y+=this.flowTmp.y*70;this.bossGuard.nudges++;s.x=e.x;s.y=e.y;s.t=this.combatNow;
   }
   /** 我方互相避让（用户试玩「我方自己的兵会重叠一起」，systems/AllySeparation）：主将固定，部曲 / 名将随从 / 义军 / 攻城友军互相推开到 半径之和 + 间隙。 */
+  /** 我方兜底换位（屏外直接换、屏内淡出淡入），stats.visibleInstant 恒为 0。 */
+  allyRejoin!:AllyRejoin;
   readonly allySep=new AllySeparation();private readonly sepBodies:SepBody[]=[];
   private separateAllies(dt:number):void{
     const out=this.sepBodies;out.length=0;const P=this.player;
@@ -931,6 +934,8 @@ export class GameScene extends Phaser.Scene {
     this.legion = new Legion(this, this.allies, this.player);
     // 我方绕障（用户试玩「关于我自己的兵也会被围栏卡住」）：部曲接敌兵绕障导航（以主将为终点），去阵位 / 目标被挡时绕路、阵位压墙挪到可走点、掉队卡住淡入归队
     this.legion.flowRoute=(x,y,tx,ty)=>this.enemyFlow.route(x,y,tx,ty);this.legion.freeAt=(x,y)=>this.enemyFlow.free(x,y);
+    // 兜底换位不让玩家看见（用户「为什么我感觉我自己的兵有时候在瞬移」）：屏外直接换、屏内淡出 → 换位 → 尘土淡入（systems/AllyRejoin）
+    this.allyRejoin=new AllyRejoin(this);this.legion.relocate=(u,x,y)=>{this.allyRejoin.move(u,u.view?.sprite,u,{x,y},()=>u.setPosition(x,y));};
     this.legion.onDeath = (_u, now) => { if (this.runConfig.character !== 'mengde') return; this.player.passive.onAllyDeath(now); this.player.heal(this.player.maxHp * (MENGDE.healPct + MENGDE.wangmei * this.player.growth.masteries.wangmei)); }; // 曹操「奸雄」
     this.legion.onHurt = (u, now) => { if (Math.hypot(u.x - this.player.x, u.y - this.player.y) <= TAISHICI.allyR) this.player.passive.onAllyHurt(now); }; // 太史慈「信义」
     this.legion.attackSound = kind => { const k = TROOP_ATTACK_SFX[kind]; if (k) this.sfx.play(k); };
@@ -1442,7 +1447,8 @@ export class GameScene extends Phaser.Scene {
     this.rebuildGrid();
     if(time>=this.navigationAt){this.navigationAt=time+250;const boxes=[...(this.sishuiObstacles?.footprints??[]),...(this.terrain?(this.terrain.stats.burnt?(this.terrainNav=this.terrain.navBoxes()):this.terrainNav):[])];this.supplies?.appendNavigationBoxes(boxes);this.legion.navigation.setBoxes(boxes);}
     this.legion.update(dt, time, this.enemies, this.grid, (enemy, amount) => this.hitEnemy(enemy, amount, this.combatNow, 'melee', true));
-    if (this.followers && !this.followers.nav) this.followers.nav = this.allyNav; // 随行接绕障导航（开局 / 降将来投两处创建，这里统一挂）
+    if (this.followers && !this.followers.nav) this.followers.nav = this.allyNav;
+    if (this.followers && !this.followers.rejoin) this.followers.rejoin = (f, x, y) => { this.allyRejoin.move(f, f.sprite, f, { x, y }, () => f.place(x, y)); }; // 随行接绕障导航（开局 / 降将来投两处创建，这里统一挂）
     this.followers?.update(dt, this.combatNow);
     this.formationRt?.update(dt, this.combatNow); this.formationFx?.update(dt, this.combatNow); this.enemyForms?.update(dt, this.combatNow);
     this.updateBossRage(dt);

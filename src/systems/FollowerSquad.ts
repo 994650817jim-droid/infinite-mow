@@ -190,6 +190,8 @@ export class Follower {
   }
 }
 
+/** 随从追阵位的最高速度 = 行走速度 × 这个倍数（跟不上时快跑，不瞬移）。 */
+export const CATCHUP_MUL = 2.4;
 export class FollowerSquad {
   readonly members: Follower[] = [];
   private readonly fx: Fx[] = [];
@@ -218,6 +220,8 @@ export class FollowerSquad {
    * route：去阵位 / 追击点的连线被挡时给绕路路点（null = 直走）；free：瞬移归位落点压在栅栏 / 城墙里时挪到最近可走点（不卡墙后、不穿墙）。
    */
   nav: { route(x: number, y: number, tx: number, ty: number): { x: number; y: number } | null; free(x: number, y: number): { x: number; y: number } } | null = null;
+  /** 兜底换位（用户「为什么我感觉我自己的兵有时候在瞬移」）：GameScene 接 AllyRejoin——屏外直接换、屏内淡出 → 换位 → 尘土淡入。 */
+  rejoin: ((f: Follower, x: number, y: number) => void) | null = null;
   /** 我方避让（AllySeparation）：没倒下的随从作为碰撞体（半径 14）。 */
   bodies(out: Array<{ id: number; x: number; y: number; r: number; move(dx: number, dy: number): void }>, base: number): void {
     this.members.forEach((f, i) => { if (f.downed) return; out.push({ id: base + i, get x() { return f.x; }, get y() { return f.y; }, r: 14, move: (dx, dy) => { f.sprite.setPosition(f.x + dx, f.y + dy); f.lastX = f.x; f.lastY = f.y; } }); });
@@ -280,7 +284,7 @@ export class FollowerSquad {
       f.chasing = false;
       if (f.recalling) this.recall(f, gx, gy, d, dt, now);
       else {
-      if (d > FOLLOW.snap) this.teleport(f, gx, gy);
+      if (d > FOLLOW.snap) { f.recalling = true; f.recallAt = now; f.recallBest = d; f.recallBestAt = now; this.stats.recalls++; } // 落后太多：跑回去（原来直接瞬移到阵位）
       const w = this.nav?.route(f.x, f.y, gx, gy);
       if (w) this.walkTo(f, w.x, w.y, f.walkSpeed * RECALL.speedMul, dt, now); else this.move(f, gx, gy, dt, now);
       }
@@ -423,7 +427,7 @@ export class FollowerSquad {
     }
     if (moved) f.sprite.setPosition(x, y);
   }
-  private teleport(f: Follower, x: number, y: number): void { if (this.nav) ({ x, y } = this.nav.free(x, y)); f.place(x, y); f.target = null; this.stats.teleports++; f.sprite.setAlpha(.3); this.scene.tweens.add({ targets: f.sprite, alpha: 1, duration: 220 }); }
+  private teleport(f: Follower, x: number, y: number): void { if (this.nav) ({ x, y } = this.nav.free(x, y)); if (this.rejoin) { this.rejoin(f, x, y); f.target = null; this.stats.teleports++; return; } f.place(x, y); f.target = null; this.stats.teleports++; f.sprite.setAlpha(.3); this.scene.tweens.add({ targets: f.sprite, alpha: 1, duration: 220 }); }
   /**
    * 护阵收回（RECALL）：正在播的出手 / 受伤动作先播完；之后转身朝阵位、播行走帧、以 行走速度 × RECALL.speedMul 跑回去。
    * 回到 doneDist 以内恢复紧贴跟随。兜底：收回超过 fallbackMs 仍离阵位超过 farPx（约 1.5 屏）或 stuckMs 内没再靠近，直接归位。
@@ -448,7 +452,10 @@ export class FollowerSquad {
   }
   /** 指数平滑追阵位（与帧率无关），走路距离推动行走帧，朝向跟随移动方向（出手后短时间朝向目标）。 */
   private move(f: Follower, gx: number, gy: number, dt: number, now: number) {
-    const k = 1 - Math.exp(-FOLLOW.followK * dt), dx = (gx - f.x) * k, dy = (gy - f.y) * k, step = Math.hypot(dx, dy);
+    // 指数平滑追阵位，但速度封顶（行走速度 × CATCHUP_MUL）：被主将冲刺 / 七进七出甩远时原来按距离成比例地「嗖」回来（300 像素外每秒两三千像素，看着像瞬移，
+    // 用户「为什么我感觉我自己的兵有时候在瞬移」）；现在是看得见的快跑追上来。近身紧跟时步子本来就小，不受影响。
+    const k = 1 - Math.exp(-FOLLOW.followK * dt), cap = f.walkSpeed * CATCHUP_MUL * dt; let dx = (gx - f.x) * k, dy = (gy - f.y) * k, step = Math.hypot(dx, dy);
+    if (step > cap && step > 0) { dx *= cap / step; dy *= cap / step; step = cap; }
     f.sprite.setPosition(f.x + dx, f.y + dy);
     if (step > .25) {
       f.walk += step; f.passive?.onMove(now);

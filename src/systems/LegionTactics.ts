@@ -17,6 +17,8 @@ export function createTacticState(x = 0, y = 0): TacticState {
 }
 /** Cached decisions; all candidate searches use the existing grids, never an all-enemy scan. */
 export class LegionTactics {
+  /** 收回兜底换位（Legion 接 AllyRejoin：屏外直接换、屏内淡出淡入）；没接时直接换。 */
+  relocate: ((u: Ally, x: number, y: number) => void) | null = null;
   private readonly enemies: Enemy[] = [];
   private readonly densityScratch: Enemy[] = [];
   private readonly friends: Ally[] = [];
@@ -106,7 +108,7 @@ export class LegionTactics {
         if (!a.recallAt) { a.recallAt = now; a.recallBest = d; a.recallBestAt = now; }
         if (d < a.recallBest - RECALL.progressPx) { a.recallBest = d; a.recallBestAt = now; }
         if (d <= RECALL.doneDist * 2) a.recall = false;
-        else if (now - a.recallAt > RECALL.fallbackMs && (d > RECALL.farPx || now - a.recallBestAt > RECALL.stuckMs)) { u.setPosition(home.x, home.y); a.recall = false; }
+        else if (now - a.recallAt > RECALL.fallbackMs && (d > RECALL.farPx || now - a.recallBestAt > RECALL.stuckMs)) { if (this.relocate) this.relocate(u, home.x, home.y); else u.setPosition(home.x, home.y); a.recall = false; }
         else { a.mode = 'advance'; a.target = null; a.x = home.x; a.y = home.y; return; }
       }
     }

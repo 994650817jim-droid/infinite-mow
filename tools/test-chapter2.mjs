@@ -75,7 +75,8 @@ const info = p => p.evaluate(() => { const s = window.__S, en = s.enemies.filter
   ck('2-3：横幅小字不再与「目标 · 营寨」行重叠（有目标行时横幅下移一行）', bn.objective && !bn.overlap, bn);
   const lbl = await p.evaluate(async () => { const s = window.__S, D = await import('/src/data/chapters.ts'); const c = D.getBattleChapter('hulao', 1, 3); return { wave: s.hudTexts.wave.text, title: c.victoryTitle, text: c.victoryText }; });
   ck('2-3：不分波的关 HUD 不写「第 1/1 波」；告捷文字是「国贼伏诛 · 吕布斩董卓」（与流程一致）', lbl.wave === '洛阳城外' && lbl.title === '国贼伏诛' && /吕布斩董卓/.test(lbl.text), lbl);
-  await p.evaluate(() => { const s = window.__S; for (const e of [...s.objective.standing]) { e.invulnerable = false; s.hitEnemy(e, 1e6, s.combatNow, 'melee', false, false); } });
+  // 营寨进了营寨攻坚（CampSiege：每座至少打 15 秒，单下伤害被每秒上限截住）——一下 1e6 拆不掉；测试直接按击毁处理（血清零走 killEnemy），只验证「营寨尽毁 → 吕布跃下」
+  await p.evaluate(() => { const s = window.__S; for (const e of [...s.objective.standing]) { e.invulnerable = false; e.hp = 0; s.killEnemy(e); } });
   for (let i = 0; i < 10; i++) { await p.waitForTimeout(400); await p.evaluate(() => window.__calm()); }
   const d1 = await p.evaluate(() => { const s = window.__S, z = s.dzLubu?.snapshot(); return { phase: z?.phase, lubu: z?.lubu, leaps: s.dzLubu?.metrics?.leaps }; });
   await p.evaluate(() => { const s = window.__S, l = s.dzLubu?.lubu; if (l) s.player.sprite.setPosition(l.x, l.y + 220); }); await p.waitForTimeout(600);

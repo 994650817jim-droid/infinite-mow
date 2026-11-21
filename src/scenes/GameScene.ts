@@ -1097,7 +1097,7 @@ export class GameScene extends Phaser.Scene {
     this.buildHud();
     this.buildOverlays();
     if(preview&&encounter==='sishui'&&!this.customChapter())this.add.image(48,180,'huaxiong_portrait').setDisplaySize(42,42).setScrollFactor(0).setDepth(901);
-    this.legionUI = new LegionUI(this, () => { if (this.mode === 'none' && !this.over) this.legion.cycleOrder(); }, (kind, train) => this.buyTroops(kind, train), () => {
+    this.legionUI = new LegionUI(this, () => { if (this.mode === 'none' && !this.over && !this.legionOrderOverride()) this.legion.cycleOrder(); }, (kind, train) => this.buyTroops(kind, train), () => {
       if (this.mode === 'rest') this.departRest();
       else if (this.mode === 'recruit') { this.recruitedWaves.add(this.waveIndex); this.freeRecruit = false; this.resumePendingChoices(); }
     }, () => this.takeRecruitPotion(), () => canOfferRejuvenation(this.player));
@@ -1300,7 +1300,7 @@ export class GameScene extends Phaser.Scene {
     const hotkeyHost = {
       scene: this as Phaser.Scene, mode: () => this.mode as string, over: () => this.over,
       togglePause: () => this.togglePause(), usePotion: () => this.usePotion(), useJinnang: () => this.useJinnang(),
-      order: () => this.legion.order, cycleOrder: () => { if (mechOpen('squad')) this.legion.cycleOrder(); }, switchFormation: () => this.formationRt?.switch(this.combatNow) ?? false,
+      order: () => this.legion.order, cycleOrder: () => { if (this.legionOrderOverride()) return; if (mechOpen('squad')) this.legion.cycleOrder(); }, switchFormation: () => this.formationRt?.switch(this.combatNow) ?? false,
       openBag: () => this.openBattleBag(), canAttributes: () => this.player.growth.unallocated > 0 && mechOpen('attributes'),
       openAttributes: (from: 'none' | 'pause') => { this.attributeReturn = from; this.renderAttributePanel(); this.setMode('attributes'); },
       openBuild: () => this.openBuildPanel(), chooseUpgrade: (i: number) => { if (this.upgradeCardShown(i)) this.chooseUpgrade(i); }, chooseBranch: (i: number) => this.chooseBranch(i),
@@ -1506,6 +1506,10 @@ export class GameScene extends Phaser.Scene {
     this.ground.setTilePosition(x / this.ground.tileScaleX, y / this.ground.tileScaleY);
   }
 
+  /** 场景自定的镜头竖向偏移（守城 v2：主将在城头时往城外让）。 */
+  protected cameraBiasY(): number { return 0; }
+  /** E / 护阵键的场景覆盖（守城 v2：叫预备队来主将这段）；返回 true 表示已处理。 */
+  protected legionOrderOverride(): boolean { return false; }
   protected updateCamera(dt: number): void {
     if (this.cutscene?.active) return; // 过场动画时镜头归过场管
     const cam = this.cameras.main;
@@ -1517,7 +1521,7 @@ export class GameScene extends Phaser.Scene {
     const hw = cam.width / (2 * cam.zoom), hh = cam.height / (2 * cam.zoom);
     const targetX = (dualCam ? dualCam.x + GAME_WIDTH / 2 - hw : this.player.x - hw) + (look?.x ?? 0);
     // 2-3 洛阳：董卓 / 吕布在城头时，主将走近城墙镜头往上让一点，城头的人才看得见（城墙图约 230 高，不让的话城头在画面外）
-    const targetY = (dualCam ? dualCam.y + GAME_HEIGHT / 2 - hh : this.player.y - hh) + (look?.y ?? 0) + (this.dzLubu?.cameraBias(this.player.y) ?? 0);
+    const targetY = (dualCam ? dualCam.y + GAME_HEIGHT / 2 - hh : this.player.y - hh) + (look?.y ?? 0) + (this.dzLubu?.cameraBias(this.player.y) ?? 0) + this.cameraBiasY();
     const k = 1 - Math.exp(-11 * dt);
     cam.scrollX += (targetX - cam.scrollX) * k;
     cam.scrollY += (targetY - cam.scrollY) * k;
@@ -3830,7 +3834,7 @@ export class GameScene extends Phaser.Scene {
     if (button === PAD.BACK && this.mode === 'none' && !this.over) { this.openBattleBag(); return true; }
     if (this.mode === 'none' && !this.over) {
       if (button === PAD.X) { this.usePotion(); return true; }
-      if (button === PAD.Y) { this.legion.cycleOrder(); return true; }
+      if (button === PAD.Y) { if (!this.legionOrderOverride()) this.legion.cycleOrder(); return true; }
       // RB：轮流锁定附近的敌营 / 粮草（由近到远）；LB：取消锁定
       if (button === PAD.RB) { const list = this.padTargets().sort((a, b) => a.dist - b.dist); if (!list.length) return false; const i = list.findIndex(t => t.current); this.padClearTargets(); list[(i + 1) % list.length].select(); return true; }
       if (button === PAD.LB) { this.padClearTargets(); return true; }

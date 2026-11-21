@@ -32,6 +32,8 @@ export class Legion {
   campTarget?:(u:Ally)=>Enemy|null;
   /** 第八章夺高地：占着山头时远程射程、部曲伤害倍率（HanzhongHills）。 */
   rangeMul=1;damageMul=1;
+  /** 守城 v2（systems/DefenseWallV2）：给了就按岗位站（不跟主将、不退），postRangeMul 是岗位上的射程倍率（垛口远程兵够得到墙脚）。 */
+  postOf?:(u:Ally)=>{x:number;y:number}|null;postRangeMul?:(u:Ally)=>number;
   /** 军阵（systems/FormationRuntime）：入阵士兵的伤害 / 受伤 / 射程倍率；没有 = 1。 */
   fm?:{dmg(u:Ally,e:Enemy):number;taken(u:Ally):number;range(u:Ally):number};
   /** 护阵 / 出击切换后（军阵的出击打法）。 */
@@ -231,7 +233,7 @@ export class Legion {
   /** 掉队卡住（离阵位 260 以外、2 秒没靠近 40 像素）：在阵位旁的可走点淡入归队（不穿墙：落点由 freeAt 挑主将走得到的格）。出击追敌时不管。 */
   private rejoinIfStuck(u: Ally, now: number): void {
     if (this.order === 'sortie' && this.tactics.canAttack(u)) { this.stuck.delete(u); return; }
-    const p = this.formation.position(u), d = Math.hypot(p.x - u.x, p.y - u.y); let s = this.stuck.get(u);
+    const p = this.postOf?.(u) ?? this.formation.position(u), d = Math.hypot(p.x - u.x, p.y - u.y); let s = this.stuck.get(u);
     if (d < 260) { if (s) this.stuck.delete(u); return; }
     if (!s || d < s.best - 40) { this.stuck.set(u, { best: d, at: now }); return; }
     if (now - s.at < 2000) return;
@@ -260,6 +262,7 @@ export class Legion {
       u.simDebt += dt; const nearPlayer = Math.hypot(u.x - this.player.x, u.y - this.player.y) < 900;
       if (!nearPlayer && u.simDebt < LEGION.farStep) continue;
       const step = nearPlayer ? dt : u.simDebt; u.simDebt = 0;
+      this.tactics.postOf = this.postOf;
       this.tactics.think(u, now, this.order, enemyGrid, this.grid);
       this.tactics.move(u, step, now, this.grid);
       u.cooldown = Math.max(0, u.cooldown - step);
@@ -270,7 +273,7 @@ export class Legion {
       this.combatClock = 0;
       for (const u of this.units) {
         if (!u.active || u.cooldown > 0 || u.kind === 'rider' && u.ai.mode === 'return' || u.ai.recall || this.arriving.has(u)) continue;
-        const range = u.def.range * (u.def.ranged ? stats.range : u.kind === 'halberdier' && u.level === 3 ? 1.25 : 1) * (this.fm?.range(u) ?? 1);
+        const range = u.def.range * (u.def.ranged ? stats.range : u.kind === 'halberdier' && u.level === 3 ? 1.25 : 1) * (this.fm?.range(u) ?? 1) * (this.postRangeMul?.(u) ?? 1);
         if (u.kind === 'medic') {
           const wounded = this.grid.query(u.x, u.y, range, this.friends).filter(a => a.active && a.hp < a.maxHp && Math.hypot(a.x - u.x, a.y - u.y) <= range).sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp);
           for (const friend of wounded.slice(0, u.level === 3 ? 3 : 1)) { u.act(friend.x, friend.y, now, 480); this.heals.push({ owner: u, life: u.lifeId, target: friend, targetLife: friend.lifeId, amount: u.def.damage * (1 + .35 * (u.level - 1)) * this.healingMultiplier * this.drillMultiplier, due: now + 240 }); }

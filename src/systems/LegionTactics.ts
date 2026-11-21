@@ -21,6 +21,8 @@ export class LegionTactics {
   private readonly densityScratch: Enemy[] = [];
   private readonly friends: Ally[] = [];
   private friendGrid: SpatialGrid<Ally> | null = null;
+  /** 守城 v2 岗位（Legion.postOf 每帧同步过来）：有岗位的兵守岗位，不跟主将、不退。 */
+  postOf?: (u: Ally) => { x: number; y: number } | null;
   constructor(private readonly player: Player,private readonly preferred:(u:Ally)=>Enemy|null=()=>null,private readonly anchor?:(u:Ally)=>{x:number;y:number},private readonly extent:(order?:Order)=>number=()=>0,private readonly navigate?:(u:Ally,x:number,y:number,now:number)=>{x:number;y:number}) {}
   private dangerAt(x: number, y: number, grid: SpatialGrid<Enemy>): number {
     let danger = 0;
@@ -46,6 +48,7 @@ export class LegionTactics {
     return score;
   }
   select(u: Ally, grid: SpatialGrid<Enemy>, search: number, leash: number): Enemy | null {
+    if (this.postOf?.(u)) { let best: Enemy | null = null, bd = Infinity; for (const e of grid.query(u.x, u.y, search, this.enemies)) { if (!e.active || e.invulnerable) continue; const d = Math.hypot(e.x - u.x, e.y - u.y); if (d <= search && d < bd) { bd = d; best = e; } } return best; } // 岗位上：打身边 / 射程内的，不按主将拴
     const marked=this.preferred(u);if(marked&&u.kind!=='medic'&&!['retreat','regroup','return'].includes(u.ai.mode)&&Math.hypot(marked.x-this.player.x,marked.y-this.player.y)<=leash&&Math.hypot(marked.x-u.x,marked.y-u.y)<=search)return marked;
     let best: Enemy | null = null, score = Infinity;
     for (const e of grid.query(u.x, u.y, search, this.enemies)) {
@@ -68,6 +71,7 @@ export class LegionTactics {
   }
   think(u: Ally, now: number, order: Order, grid: SpatialGrid<Enemy>, friends: SpatialGrid<Ally>): void {
     this.friendGrid=friends;
+    { const post = this.postOf?.(u); if (post) { if (now < u.ai.nextThink) return; u.ai.nextThink = now + TACTICS.thinkMs + (u.id * 53) % 97; this.thinkPost(u, post, grid); return; } }
     const epoch = Math.floor(now / TACTICS.thinkMs);
     if (epoch !== this.epoch) { this.epoch = epoch; this.clusterCache.clear(); }
     const a = u.ai, ratio = u.hp / u.maxHp, leash = (order === 'guard' ? TACTICS.guardLeash : TACTICS.sortieLeash)+this.extent(order);
@@ -145,6 +149,15 @@ export class LegionTactics {
     }
   }
   /** 阵位（编队锚点；没有编队时按槽位排在主将身后）。 */
+  /** 守城 v2 岗位：守在岗位上；远程打射程内的，近战离岗位 110 以内的才上前（打完回岗），不退、不回主将身边。 */
+  private thinkPost(u: Ally, post: { x: number; y: number }, grid: SpatialGrid<Enemy>): void {
+    const a = u.ai; a.mode = 'advance'; a.recall = false; a.x = post.x; a.y = post.y;
+    const reach = u.def.ranged ? u.def.range * 1.6 : 110; let best: Enemy | null = null, bd = Infinity;
+    for (const e of grid.query(post.x, post.y, reach, this.enemies)) { if (!e.active || e.invulnerable) continue; const d = Math.hypot(e.x - post.x, e.y - post.y); if (d <= reach && d < bd) { bd = d; best = e; } }
+    a.target = best; a.spawn = best?.spawnId ?? 0; if (!best) return;
+    if (!u.def.ranged) { const dx = best.x - post.x, dy = best.y - post.y, d = Math.hypot(dx, dy) || 1; a.x = best.x - dx / d * 24; a.y = best.y - dy / d * 24; }
+    const fx = best.x - u.x, fy = best.y - u.y, fd = Math.hypot(fx, fy) || 1; a.faceX = fx / fd; a.faceY = fy / fd;
+  }
   private home(u: Ally): { x: number; y: number } { return this.anchor?.(u)??{x:this.player.x+(u.slot%5-2)*38,y:this.player.y+70+Math.floor(u.slot/5)*38}; }
   move(u: Ally, dt: number, now: number, friends: SpatialGrid<Ally>): void {
     const a = u.ai;

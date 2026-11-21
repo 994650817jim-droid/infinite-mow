@@ -23,6 +23,8 @@ export class ItemDrops {
   readonly ground: GroundItem[] = [];
   readonly chests: Chest[] = [];
   private chestIndex = 0;
+  /** 宝箱落点修正（守城 v2：别落在墙面上 / 城外）；不给就原地。 */
+  place?: (x: number, y: number) => { x: number; y: number };
   private lastElapsed = 0;
   rng: () => number = Math.random;
   /** 保底计数：开局从存档读入，结算时随 depositRunLoot 写回（测试战斗不写）。 */
@@ -158,7 +160,8 @@ export class ItemDrops {
     if (this.chestIndex < CHESTS_PER_STAGE.length && e >= CHESTS_PER_STAGE[this.chestIndex]) {
       this.chestIndex++;
       const a = this.rng() * Math.PI * 2, d = 200 + this.rng() * 80;
-      this.spawnChest(this.player.x + Math.cos(a) * d, this.player.y + Math.sin(a) * d * .7);
+      const q = this.place?.(this.player.x + Math.cos(a) * d, this.player.y + Math.sin(a) * d * .7) ?? { x: this.player.x + Math.cos(a) * d, y: this.player.y + Math.sin(a) * d * .7 };
+      this.spawnChest(q.x, q.y);
     }
     if (!this.player.alive) return;
     const px = this.player.x, py = this.player.y, reach = Math.max(36, this.player.stats.pickupRadius * (1 + this.player.growth.gear.pickup) * .6);

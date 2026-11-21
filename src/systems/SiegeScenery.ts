@@ -12,7 +12,7 @@ import {paintV2Road} from './EnvGround';
  */
 export const SIEGE_GATE = {x: 0, y: -280, size: 300} as const;
 /** opts.mid：中城样板（SiegeMidCity）自己布城墙城门，这里不放装饰城门。opts.liveTowers：攻城时两座箭楼改由战斗场景生成为可摧毁目标，这里不放装饰箭楼与碰撞框。 */
-export function siegeScenery(scene: Phaser.Scene, city: CityDef, spawnProp?: (frame: number, x: number, y: number, size: number) => void, opts: {liveTowers?: boolean; mid?: boolean} = {}) {
+export function siegeScenery(scene: Phaser.Scene, city: CityDef, spawnProp?: (frame: number, x: number, y: number, size: number) => void, opts: {liveTowers?: boolean; mid?: boolean; /** 只铺地面（守城 v2 自己摆城墙 / 营帐，不要冲车路、营地物件、箭楼） */ bare?: boolean} = {}) {
   const south = city.y > 600, key = 'siege_ground_' + (south ? 's' : 'n');
   if (!scene.textures.exists(key)) {
     const tex = scene.textures.createCanvas(key, 512, 512)!; const g = tex.context; g.imageSmoothingEnabled = false;
@@ -20,6 +20,7 @@ export function siegeScenery(scene: Phaser.Scene, city: CityDef, spawnProp?: (fr
     if (!south) { g.globalCompositeOperation = 'color'; g.fillStyle = 'rgba(160,132,84,.22)'; g.fillRect(0, 0, 512, 512); g.globalCompositeOperation = 'source-over'; }
     tex.refresh(); tex.setFilter(Phaser.Textures.FilterMode.NEAREST);
   }
+  if (opts.bare) return {key, roadKey: '', boxes: [] as Array<{left: number; right: number; top: number; bottom: number}>, camps: [] as CampPoint[]};
   // 冲车路：v2 手绘路面（用户 11-17「这里的路不符合画风」）——小城夯土车辙路，中 / 大城半埋泥草的旧石板官道；缺图才退回程序画的石板路
   const v2Road = city.tier === 'small' ? 'road_v2_dirt' : 'road_v2_stone', v2Width = 300; // 11-19 城内主街加宽（siegeCity CITY_WIDEN），路面 220 → 300
   if (paintV2Road(scene, 'siege_road_' + v2Road, v2Road, v2Width)) {

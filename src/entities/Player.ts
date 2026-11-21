@@ -430,11 +430,13 @@ export class Player {
     this.baseOriginY = this.walkOriginY; this.sprite.setOrigin(.5, this.baseOriginY);
   }
 
+  /** 首领震怒时主将受到的伤害倍率（GameScene.updateBossRage 每帧写；data/bossStall.ts）。 */
+  rageTakenMul = 1;
   takeDamage(raw: number, now: number): boolean {
     if (!this.alive || this.damageImmune || now < this.invulnUntil || this.passive.isInvulnerable(now)) return false; // 马超锦马冲锋中无敌
     if (Math.random() < this.growth.dodgeChance()) return false; // 敏捷·游刃：闪避
     const afterArmor = Math.max(1, raw - this.stats.armor);
-    const unguarded = Math.max(1, Math.round(afterArmor * this.stats.damageTakenMul * this.armyDamageTakenMul * this.formationTakenMul * this.growth.incomingDamageMultiplier() * this.passive.damageTakenMultiplier(now) * (now < this.propGuardUntil ? this.propGuardMul : 1)));
+    const unguarded = Math.max(1, Math.round(afterArmor * this.stats.damageTakenMul * this.armyDamageTakenMul * this.formationTakenMul * this.rageTakenMul * this.growth.incomingDamageMultiplier() * this.passive.damageTakenMultiplier(now) * (now < this.propGuardUntil ? this.propGuardMul : 1)));
     const ridden=this.mountGuard?this.mountGuard(unguarded,now):unguarded;if(ridden<=0)return false;
     const dmg=Math.max(1,this.damageGuard?.(ridden,now)??ridden);
     (this.scene as unknown as {sfx?:{play(k:string):void}}).sfx?.play('playerHurt');

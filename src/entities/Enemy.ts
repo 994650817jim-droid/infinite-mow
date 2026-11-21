@@ -108,6 +108,8 @@ export class Enemy {
   zhenshe = 0; zhensheAt = 0; routUntil = 0; trampleAt = 0;
   /** 首领登场「鸣金让道」（data/bossClear.ts）：退开到此时刻撤走；退开速度。0 = 没在退。 */
   withdrawUntil = 0; withdrawVx = 0; withdrawVy = 0;
+  /** 首领震怒（data/bossStall.ts）：可交战的累计毫秒、已叠层数。 */
+  rageMs = 0; rageStacks = 0;
   /** 曹操「军令」标记到期时间（weapons/mengdeWeapon.ts；受伤加成在 CharacterPassives.vulnerability）。 */
   junlingUntil = 0;
   /** P3：甘宁铁索钩钩过的到期时间（被钩过的被击杀才攒「锦帆」）；P3 火攻（甘宁 / 祝融）着火标记到期时间。 */
@@ -157,7 +159,7 @@ export class Enemy {
     def = this.def;
     this.kind = def.kind;
     this.martialSlow=1;this.martialSlowUntil=0;this.gapSlowMul=1;this.gapSlowUntil=0;
-    this.spawnId = (Enemy.spawnSeq += 1);
+    this.spawnId = (Enemy.spawnSeq += 1); this.rageMs = 0; this.rageStacks = 0;
     this.breakable = false; this.ward = false;
     this.hp = Math.round(def.hp * hpScale);
     this.shieldHp = this.shieldMax = 0;

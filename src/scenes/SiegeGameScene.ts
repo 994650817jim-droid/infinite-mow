@@ -406,7 +406,8 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
       if (this.defend && enemy === this.boss) showBarkCard(this, { side: 'left', name: this.chapter.bossName.replace(/^.*·\s*/, ''), text: defenseBossLine('fall', this.city.name, enemy.spawnId) });
       if (enemy.kind !== 'boss' && this.unpaid.delete(enemy.spawnId) && enemy.active && !enemy.isSupplySlot) {
         const drops = this.itemDrops, elite = enemy.kind === 'elite'; this.noLoot = true; this.itemDrops = null;
-        try { super.killEnemy(enemy); } finally { this.noLoot = false; this.itemDrops = drops; } if (elite) this.runMerit.elite = Math.max(0, this.runMerit.elite - 1); return;
+        const m0 = this.runMerit.elite; /* 首领阶段超额的精锐本来就没计战功（data/bossStall.ts），只扣真记上的 */
+        try { super.killEnemy(enemy); } finally { this.noLoot = false; this.itemDrops = drops; } if (elite && this.runMerit.elite > m0) this.runMerit.elite -= 1; return;
       }
       super.killEnemy(enemy);
     }

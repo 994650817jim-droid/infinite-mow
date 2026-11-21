@@ -1,4 +1,5 @@
 import { BOSS_CLEAR, pickWithdraw, withdrawXp } from '../data/bossClear';
+import { BOSS_STALL, BossQuota, GRANT_FULL, enrageMul, enrageStacks, enrageStartSec, type KillGrant } from '../data/bossStall';
 import { EnemyFormations } from '../systems/EnemyFormations';
 import { safeWorldPoint } from '../ui/SafeLabel';
 import { SIGIL_LABEL, formationSigil, setFormationSigil, type FormationSigil } from '../systems/BattleSettings';
@@ -1155,7 +1156,7 @@ export class GameScene extends Phaser.Scene {
   protected resetState(): void {
     this.phaseRunner?.clear();this.battleTrack?.destroy();this.phaseRunner=null;this.battleTrack=null;this.phasePlan=null;this.phasedFor=null;this.fortunes?.clear();this.fortunes=null;this.fortuneQueue=[];this.fortuneTaken={};this.beaconCalmUntil=0;this.jinnang=null;this.jinnangButton=undefined;this.resetStageCards();this.branchRt?.clear();this.branchRt=null;this.branchFor=null;
     this.relicWaves=[];this.runMerit={elite:0,boss:0};this.picksGiven=0;this.militaryPending=0; // 场景实例会被重复使用：每场重置
-    this.firstBossAt=-1;this.bossQuietUntil=0;this.bossClearPending=null;this.settledFrontlineKills=0;this.frontlineNextSettlement=1;this.frontlineVictories.clear();this.frontlineStarts.clear();this.chasingBosses=[];this.enemyFlow.clear();this.bossStuck.clear();this.bossGuard.detours=this.bossGuard.nudges=this.bossGuard.resets=0;this.storyHolds=0;this.deadBossControllers=[];for(const c of this.bossChests)c.clear();this.bossChests=[];this.lootContinue=null;this.relicHits=0;this.relicFireAt=0;this.relicHealAt=0;
+    this.firstBossAt=-1;this.bossQuietUntil=0;this.bossClearPending=null;this.bossQuota.reset();this.killGrant=GRANT_FULL;this.bossRage=0;this.bossRageAnnounced=false;this.settledFrontlineKills=0;this.frontlineNextSettlement=1;this.frontlineVictories.clear();this.frontlineStarts.clear();this.chasingBosses=[];this.enemyFlow.clear();this.bossStuck.clear();this.bossGuard.detours=this.bossGuard.nudges=this.bossGuard.resets=0;this.storyHolds=0;this.deadBossControllers=[];for(const c of this.bossChests)c.clear();this.bossChests=[];this.lootContinue=null;this.relicHits=0;this.relicFireAt=0;this.relicHealAt=0;
     this.rerolls=0;this.warfeedCount=0;this.pointsButton=undefined;this.pointsBadge=undefined;this.potionButton=undefined;this.potionBadge=undefined;this.potionIcon=undefined;this.potionGlow=undefined;this.rerollButton=undefined;
     this.crowdSteering = true; this.freeRecruit = false; this.resting = false; this.restIntroPlayed = false; this.restIntroSkip = undefined; this.recruitedWaves.clear();
     this.pendingGrowthNotices.length = 0;
@@ -1392,7 +1393,7 @@ export class GameScene extends Phaser.Scene {
       fireArrow:(e,tx,ty,d,sp)=>this.fireBolt(this.bullets,e.x,e.y,tx,ty,d*(this.env?.damageMul(e)??1),0,false,sp,enemyArrowTexture(this,e.sprite.texture.key)),hurtTroops:(x,y,r,d)=>this.legion.hurtArea(x,y,r,d,this.combatNow),
       move:(e,nx,ny,dt)=>{e.moveVx=nx*e.def.speed;e.moveVy=ny*e.def.speed;this.advanceEnemy(e,nx,ny,dt);},sfx:k=>this.sfx.play(k),
       ringDistance:()=>this.spawnRingDistance(),inWater:(x,y)=>this.terrain?.inWater(x,y)??false,waterPoint:(px,py)=>{const t=this.terrain;if(!t)return null;for(let i=0;i<40;i++){const a=Math.random()*Math.PI*2,d=420+Math.random()*560,x=px+Math.cos(a)*d,y=py+Math.sin(a)*d;if(t.inWater(x,y))return{x,y};}return null;},
-      gainFood:n=>{this.legion.food+=n;},boss:()=>this.boss,farPoint:(x,y)=>{const g=this.arena?.info.gates;if(!g?.length)return null;const p=this.player;return [...g].sort((a,b)=>Math.hypot(b.x-p.x,b.y-p.y)-Math.hypot(a.x-p.x,a.y-p.y))[0]??null;void x;void y;}}); // 机制自己定方向（保持距离 / 绕圈）：不用群体寻路的追击速度
+      gainFood:n=>{if(this.killGrant.food)this.legion.food+=n;}, /* 押粮卒被截的粮：首领阶段超额不给 */boss:()=>this.boss,farPoint:(x,y)=>{const g=this.arena?.info.gates;if(!g?.length)return null;const p=this.player;return [...g].sort((a,b)=>Math.hypot(b.x-p.x,b.y-p.y)-Math.hypot(a.x-p.x,a.y-p.y))[0]??null;void x;void y;}}); // 机制自己定方向（保持距离 / 绕圈）：不用群体寻路的追击速度
     if(!this.arenaInit&&this.player&&this.terrainInit){this.arenaInit=true;const def=stageMapFor(this.hardKey(),this.hardStage());if(def)this.arena=new StageArena({scene:this,player:this.player,allies:()=>this.allies,enemies:()=>this.enemies,now:()=>this.combatNow,
       spawnTarget:(x,y,hp,size)=>{const e=this.supplies?.spawnGate(x,y,hp,size)??null;e?.sprite.setAlpha(0);return e;},hitEnemy:(e,d,src)=>{this.hitEnemy(e,d,this.combatNow,src??'melee',true,false);},spawnEnemy:(k,x,y)=>this.spawnEnemy(k,x,y,undefined,true),breakBridgeNear:(x,y)=>{const t=this.terrain as unknown as {rivers?:Array<{bridges:Array<{x:number;y:number}>}>;setBridgeBroken?:(i:number,b?:boolean)=>boolean}|null;const all=t?.rivers?.flatMap(r=>r.bridges)??[];let bi=-1,bd=300;all.forEach((b,i)=>{const d=Math.hypot(b.x-x,b.y-y);if(d<bd){bd=d;bi=i;}});return bi>=0&&!!t?.setBridgeBroken?.(bi,true);},
       hurtTroops:(x,y,r,d)=>this.legion.hurtArea(x,y,r,d,this.combatNow),banner:(t,d,c)=>this.showWaveBanner(t,!!d,c),sfx:k=>this.sfx.play(k),purge:pred=>{this.supplies?.purge(pred);}},def);}
@@ -1406,6 +1407,7 @@ export class GameScene extends Phaser.Scene {
     this.legion.update(dt, time, this.enemies, this.grid, (enemy, amount) => this.hitEnemy(enemy, amount, this.combatNow, 'melee', true));
     this.followers?.update(dt, this.combatNow);
     this.formationRt?.update(dt, this.combatNow); this.formationFx?.update(dt, this.combatNow); this.enemyForms?.update(dt, this.combatNow);
+    this.updateBossRage(dt);
     // 鸣金让道撤完：撤走的兵经验折半一次性给，出「敌军溃退」
     { const c = this.bossClearPending; if (c && this.combatNow >= c.at && !this.over) { this.bossClearPending = null; const gained = c.xp > 0 ? this.player.gainXp(this.player.growth.scaleXp(c.xp, this.heroXpRate())) : 0; if (gained > 0) this.onHeroLevelUp(gained); this.showWaveBanner('敌军溃退', false, `${c.n} 名残兵撤走 · 经验 +${c.xp}`); } }
     if (this.over) return;
@@ -1682,19 +1684,41 @@ export class GameScene extends Phaser.Scene {
     return this.spawnEnemy(kind, x, y, undefined, force);
   }
 
+  /**
+   * 首领震怒（data/bossStall.ts）：首领可交战（不无敌、不在城头 / 过场）累计满本关起点秒数还没打倒，每 20 秒一层；
+   * 每层首领移速按比例加（def.speed，与狂怒等其他改速叠乘）；主将受到的伤害倍率取在场首领里最高的一层。双首领、追兵首领都算。
+   */
+  protected updateBossRage(dt: number): void {
+    const list: Enemy[] = [];
+    if (this.boss?.active) list.push(this.boss);
+    for (const x of this.dual?.alive ?? []) if (x.enemy.active && !list.includes(x.enemy)) list.push(x.enemy);
+    for (const t of this.chasingBosses) if (t.enemy.active && t.enemy.spawnId === t.life && !list.includes(t.enemy)) list.push(t.enemy);
+    let top = 0;
+    for (const e of list) {
+      if (!e.invulnerable && !this.cutscene?.active && !(e === this.boss && this.dzLubu?.hidesBossBar)) e.rageMs += dt * 1000;
+      const n = enrageStacks(e.rageMs / 1000, this.bossRageStart);
+      if (n > e.rageStacks) { const k = enrageMul(n).speed / enrageMul(e.rageStacks).speed; e.def = { ...e.def, speed: e.def.speed * k }; e.rageStacks = n; }
+      top = Math.max(top, e.rageStacks);
+    }
+    this.player.rageTakenMul = enrageMul(top).damage;
+    if (top > 0 && !this.bossRageAnnounced) { this.bossRageAnnounced = true; this.showWaveBanner('首领震怒', true, '久战不下 · 首领越战越凶'); this.sfx.play('gong'); }
+    this.bossRage = top; if (this.bossHud) this.bossHud.rage = top;
+  }
+
   protected updateSpawner(dt: number, time: number): void {
     // 末位首领倒地后等主将捡宝箱：不再刷兵
     if (this.awaitingChest) return;
     this.spawnTimer -= dt;
     // 首领在场：杂兵上限减半、刷兵间隔加倍、每次数量减半（BALANCE.bossSpawn）
     const bossOn = !!this.boss?.active, B = BALANCE.bossSpawn;
-    const cap = bossOn ? Math.round(BALANCE.enemyCap * B.capMul) : BALANCE.enemyCap;
+    const spent = bossOn && this.bossQuota.spent, S = BOSS_STALL.spent; // 首领阶段收益额度用完：刷兵再降一档（data/bossStall.ts）
+    const cap = bossOn ? Math.round(BALANCE.enemyCap * B.capMul * (spent ? S.capMul : 1)) : BALANCE.enemyCap;
     if (this.spawnTimer <= 0 && this.activeEnemyCount() < cap && this.combatNow >= this.bossQuietUntil) { /* 首领登场静场（BOSS_CLEAR.quietMs）期间不刷 */
       // 刷怪时间轴按关卡节奏加速（stageTuning.pace）：原来第 N 波的刷怪强度在新的第 N 波出现
       const paced = this.elapsed * (this.chapter.pace ?? 1);
       const easy = this.tutorial?.easy(this.elapsed); // 新手引导：开局 30 秒刷兵放缓
-      this.spawnTimer = this.chapter.spawnInterval(paced) * (this.phaseRunner?.calm() || this.combatNow < this.beaconCalmUntil ? PHASES.calmIntervalMul : 1) * (this.phaseRunner?.intervalMul() ?? 1) * (easy?.interval ?? 1) * (this.sishuiPass?.spawnMul ?? 1) * (bossOn ? B.intervalMul : 1) * (this.dual?.spawnIntervalMul ?? 1); // 汜水关西凉营帐全塌后变稀；双首领在场再 ×0.7
-      const rawBurst = this.chapter.spawnBurst(paced), burst0 = easy && easy.burstDiv > 1 ? Math.max(1, Math.ceil(rawBurst / easy.burstDiv)) : rawBurst, burst = bossOn ? Math.max(1, Math.ceil(burst0 * B.burstMul)) : burst0;
+      this.spawnTimer = this.chapter.spawnInterval(paced) * (this.phaseRunner?.calm() || this.combatNow < this.beaconCalmUntil ? PHASES.calmIntervalMul : 1) * (this.phaseRunner?.intervalMul() ?? 1) * (easy?.interval ?? 1) * (this.sishuiPass?.spawnMul ?? 1) * (bossOn ? B.intervalMul : 1) * (this.dual?.spawnIntervalMul ?? 1) * (spent ? S.intervalMul : 1); // 汜水关西凉营帐全塌后变稀；双首领在场再 ×0.7
+      const rawBurst = this.chapter.spawnBurst(paced), burst0 = easy && easy.burstDiv > 1 ? Math.max(1, Math.ceil(rawBurst / easy.burstDiv)) : rawBurst, burst = bossOn ? Math.max(1, Math.ceil(burst0 * B.burstMul * (spent ? S.burstMul : 1))) : burst0;
       for (let i = 0; i < burst; i += 1) {
         if (this.activeEnemyCount() >= cap) break;
         // 配兵表（data/enemyRoster STAGE_MIX / ROSTER_MIX）：新兵种按权重混进来、受占比和同类上限管；底层兵种不配就用本章原刷怪表
@@ -1735,6 +1759,12 @@ export class GameScene extends Phaser.Scene {
   }
   /** 鸣金让道的统计（测试读）。 */
   bossClearStats = { withdrawn: 0, before: 0, skipped: '', xp: 0 };
+  /** 首领阶段收益额度（data/bossStall.ts）：首领登场时清零，首领在场时每个杂兵 / 精锐击杀记一次。 */
+  readonly bossQuota = new BossQuota();
+  /** 本次击杀给哪些收益（killEnemy 开头算；押粮卒被截的粮也看它）。 */
+  private killGrant: KillGrant = GRANT_FULL;
+  /** 首领震怒：在场首领里最高的层数（测试读）、本关起点（秒）、横幅只出一次。 */
+  bossRage = 0; private bossRageStart: number = BOSS_STALL.enrage.startSec; private bossRageAnnounced = false;
   /** 静场到何时：撤兵后这段时间主刷兵与刷兵帐篷都不出普通兵（BOSS_CLEAR.quietMs）。 */
   bossQuietUntil = 0;
   /** 撤完时（退开结束）结算：经验折半一次性给、出「敌军溃退」横幅。 */
@@ -1774,6 +1804,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.boss = boss;
     this.bossClearStage(boss); // 鸣金让道：首领登场时普通小兵往两侧退开撤走一部分（data/bossClear.ts）
+    this.bossQuota.reset(); this.bossRageStart = enrageStartSec(this.hardKey() + '.' + this.hardStage()); this.bossRageAnnounced = false; // 首领阶段防拖：收益额度清零、震怒起点按关（data/bossStall.ts）
     this.startParley(boss);
     preloadBossDeath(this, this.chapter.bossStyle); // 倒地帧（张角 / 张梁 / 张宝 / 董卓 / 吕布）提前载好
     this.firstBossAt=this.combatNow;
@@ -2715,6 +2746,8 @@ export class GameScene extends Phaser.Scene {
     if (!this.persuadeKill && this.parley?.preventKill(enemy)) return; // 首领招降：没表态前不死
     if (!this.persuadeKill && this.dual?.preventKill(enemy)) return; // 双首领：每人一个招降窗
     if (!enemy.active) return;
+    // 首领阶段收益额度（data/bossStall.ts）：首领在场时前 60 杂兵 / 2 精锐照常给，超出后粮、兵装 / 残卷、战功都不给，经验 ×0.25
+    const grant = this.boss?.active && !enemy.isSupplySlot && enemy.def.behavior !== 'wall' ? this.bossQuota.onKill(enemy.kind) : GRANT_FULL; this.killGrant = grant;
     if (this.phasePlan) this.onStageCardKill(enemy);
     this.branchRt?.onKill(enemy);
     this.traits?.onKilled(enemy); // 纵火兵爆燃、驯兽师倒下猛兽狂暴
@@ -2741,10 +2774,10 @@ export class GameScene extends Phaser.Scene {
     if (p3Kill) this.player.passive.p3Gain(this.combatNow);
     this.buildCombat.onKill(enemy,this.combatNow);
     this.controlBuild?.onKill(enemy,this.combatNow);
-    this.legion.onKill(enemy);
-    this.itemDrops?.onKill(enemy);
+    if (grant.food) this.legion.onKill(enemy); // 首领阶段超额：随军粮 0
+    if (grant.drops) this.itemDrops?.onKill(enemy); // 超额：不掉兵装、不掉残卷
     if(kind==='elite')this.battleHeal?.onEliteDown(enemy.x,enemy.y); // 精锐：概率掉军中伤药（保底）
-    if(enemy.kind==='boss')this.runMerit.boss++;else if(enemy.kind==='elite')this.runMerit.elite++; // 战功：精英 / 首领
+    if(enemy.kind==='boss')this.runMerit.boss++;else if(enemy.kind==='elite'&&grant.merit)this.runMerit.elite++; // 战功：精英 / 首领（首领阶段超额的精锐不计）
     this.relics?.onKill();
     if(this.player.growth.gear.specials.includes('bloodthirst')&&this.combatNow>=this.player.growth.killHealAt){this.player.growth.killHealAt=this.combatNow+500;this.player.heal(this.player.maxHp*.01);}
     const jade=this.player.growth.charmLegend.army_jade;if(jade!==undefined&&this.combatNow>=this.relicHealAt){const k=CHARM_LEGEND.charm_army_jade.heal[jade];this.relicHealAt=this.combatNow+1000;this.player.heal(k);this.artEffects.show(5,this.player.x,this.player.y-12,35,this.combatNow,260);for(const u of this.allies.filter(u=>u.active&&u.hp<u.maxHp).slice(0,2)){u.hp=Math.min(u.maxHp,u.hp+2*k);this.artEffects.show(5,u.x,u.y-10,30,this.combatNow,260);}}
@@ -2765,7 +2798,7 @@ export class GameScene extends Phaser.Scene {
       // 倒地后原地掉宝箱，主将捡起遗物才进下一阶段（原来的三选一遗物卡改成宝箱）
       this.spawnBossChest(enemy.x,enemy.y,()=>{if(this.bossKilled&&this.chasingBosses.length===0){this.afterPendingPicks(()=>{if(this.storyDir)this.storyDir.chapterClose(()=>this.finish(true,'boss'));else this.finish(true,'boss');});}else{this.resumePendingChoices();if(this.bossKilled)this.showGrowthNotice('当前首领已败 · 仍有'+this.chasingBosses.length+'名追击首领');}});return;
     }
-    this.spawnGem(enemy.x, enemy.y, enemy.def.xp * (this.boss?.active && enemy.kind !== 'boss' ? BALANCE.bossSpawn.xpMul : 1)); // 首领在场：杂兵经验 ×2（BALANCE.bossSpawn.xpMul）
+    this.spawnGem(enemy.x, enemy.y, enemy.def.xp * (grant.xpMul ?? (this.boss?.active && enemy.kind !== 'boss' ? BALANCE.bossSpawn.xpMul : 1))); // 首领在场：杂兵经验 ×2（BALANCE.bossSpawn.xpMul）；超额 ×0.25（BOSS_STALL.over）
   }
 
   /**

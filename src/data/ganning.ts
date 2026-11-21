@@ -16,4 +16,6 @@ export const GANNING = {
   yexi: { r: 72, mul: 1.2, finalFireMul: 1.5, finalRMul: 1.3 },
   jieying: { dashMs: 200, invulnMs: 320, rMul: 1.25, secondDelayMs: 260 },
   lingMoveMs: 800, ling: .15, tiesuo: .1,
+  /** 2026-11-20 平衡（P3 复核）：钩 / 横扫打首领 ×bossMul（首领用时 0.45 倍中位数；火线叠加已另修）。 */
+  bossMul: .6,
 } as const;

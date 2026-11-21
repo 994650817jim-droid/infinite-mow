@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { boxDist, propFootprint, type Box } from './PropFootprint';
 import { DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, actorDepth } from '../config';
-import { DEFENSE, defenseWaveStarts, type DefenseTier } from '../data/defenseBattle';
+import { DEFENSE, defenseWaveStarts, type DefenseTier, prepCost, defensePrepGuide, DEFENSE_PREP_GUIDE_KEY } from '../data/defenseBattle';
 import { isRangedSpawn } from '../data/gateSpawn';
 import type { CityTier } from '../world/WorldCities';
 import type { Enemy } from '../entities/Enemy';
@@ -33,8 +33,9 @@ export interface DefenseHost {
   /** 登城：主将在城头带里时武器范围加成（1 = 没有）。 */ rampart?: (mul: number) => void;
   /** 部曲守门（formation-design.md §3）：p = 城门内锚点、朝城外；null = 随主将。 */ guardGate?: (p: { x: number; y: number; facing: number } | null) => void;
   win: () => void; lose: () => void;
+  /** 第一次守城的喘息引导卡（只一次）。 */ guide?: (text: string) => void;
 }
-export interface DefenseOpts { tier: CityTier; dtier: DefenseTier; office: number; muster: number; start: { x: number; y: number }; wallLine: number; gateX: number }
+export interface DefenseOpts { tier: CityTier; dtier: DefenseTier; office: number; muster: number; start: { x: number; y: number }; wallLine: number; gateX: number; /** 章节（喘息布防按章涨价，prepCost）。 */ chapter?: number }
 type Phase = 'attack' | 'rest' | 'final';
 interface Engine { e: Enemy; life: number; kind: 'ram' | 'ladder'; x: number; y: number; next: number; label: Phaser.GameObjects.Text; up?: boolean; warn?: Phaser.GameObjects.Graphics }
 interface Archer { img: Phaser.GameObjects.Image; x: number; y: number; hp: number; next: number }
@@ -53,7 +54,7 @@ export class DefenseBattle {
   /** 正在砍城门 / 府衙的人（最后一次贴上来的时刻）：超过 gateCap / keepCap 的在后面排着。 */
   private atGate = new Map<Enemy, number>(); private atKeep = new Map<Enemy, number>();
   /** 测试用。 */
-  readonly stats = { archerShots: 0, gateHits: 0, keepHits: 0, rams: 0, ladders: 0, climbers: 0, logs: 0, oil: 0, repairs: 0, phaseLog: [] as string[] };
+  readonly stats = { prepSpent: 0, archerShots: 0, gateHits: 0, keepHits: 0, rams: 0, ladders: 0, climbers: 0, logs: 0, oil: 0, repairs: 0, phaseLog: [] as string[] };
 
   constructor(private readonly h: DefenseHost, private readonly o: DefenseOpts) {
     const D = DEFENSE, mul = 1 + D.officeBonus * Math.max(0, o.office - 1);
@@ -118,15 +119,22 @@ export class DefenseBattle {
     }
     if (phase === 'rest' && this.spaceKey && Phaser.Input.Keyboard.JustDown(this.spaceKey)) this.skipRest();
     if (!this.gate.open && this.gate.hp <= 0) { this.gate.open = true; this.gate.hp = 0; this.h.openGate(); this.h.banner('城门被破！', true, '敌军涌进瓮城——守住府衙'); this.h.sfx('gong'); }
-    if (this.keep.hp <= 0) { this.done = true; this.h.lose(); return; }
-    if (phase === 'final' && el >= this.starts[this.waves - 1] + D.finalSec) { this.done = true; this.h.win(); return; }
+    if (this.keep.hp <= 0) { this.done = true; this.closePrep(); this.h.lose(); return; }
+    if (phase === 'final' && el >= this.starts[this.waves - 1] + D.finalSec) { this.done = true; this.closePrep(); this.h.win(); return; }
     this.paint(el);
   }
 
   private enterPhase(p: Phase, i: number): void {
     this.stats.phaseLog.push(p + (i + 1));
     this.ui?.destroy(); this.ui = null;
-    if (p === 'rest') { this.freeRepairUsed = false; this.channel = 0; this.h.banner(`第 ${i + 1} 波击退 · 喘息`, false, '修城门、补设施、补弓手（随军粮）· Space 跳过'); this.openPrep(); return; }
+    if (p === 'rest') {
+      this.freeRepairUsed = false; this.channel = 0; const pct = this.gate.open ? 0 : Math.round(this.gate.hp / this.gate.max * 100);
+      this.h.banner('第 ' + (i + 1) + ' 波击退 · 喘息', pct < 70 && !this.gate.open, (this.gate.open ? '城门已破 · 补设施、补弓手' : '城门 ' + pct + '% · 修城门、补设施、补弓手') + '（随军粮）· Space 跳过'); this.openPrep();
+      // 第一次守城的第一次喘息：引导卡强调修城门（总制作人第四轮：新手不知道要修，城门第 3 波就破）
+      let first = false; try { first = localStorage.getItem(DEFENSE_PREP_GUIDE_KEY) !== '1'; if (first) localStorage.setItem(DEFENSE_PREP_GUIDE_KEY, '1'); } catch { /* 存储不可用 */ }
+      if (first && !this.gate.open) this.h.guide?.(defensePrepGuide(pct));
+      return;
+    }
     this.h.banner(p === 'final' ? '末波 · 敌将来攻' : `第 ${i + 1}/${this.waves} 波 · 攻城`, true, p === 'final' ? '守住城门，击败攻城主将' : i === 0 ? '守住城门；府衙被破即失守' : '敌军再次攻城');
     // 中档起：每波来冲车、云梯
     const D = DEFENSE, rams = D.rams[this.o.dtier] ?? 0, ladders = D.ladders[this.o.dtier] ?? 0;
@@ -221,25 +229,31 @@ export class DefenseBattle {
   }
 
   // ———— 喘息 · 布防 ————
+  /** 收掉喘息布防面板（失守 / 守住 / 主将阵亡结算时；总制作人第四轮：失守时面板和结算叠在一起）。 */
+  closePrep(): void { this.ui?.destroy(); this.ui = null; }
   private openPrep(): void {
     const s = this.h.scene, P = DEFENSE.prep, W = GAME_WIDTH, y = GAME_HEIGHT - 120;
     const root = s.add.container(0, 0).setScrollFactor(0).setDepth(DEPTH.hud + 3).setName('defense-prep'); this.ui = root;
     const bg = s.add.rectangle(W / 2, y, 560, 92, 0x120c08, .82).setStrokeStyle(1.5, 0xc9a35d, .9); root.add(bg);
     const head = s.add.text(W / 2, y - 30, '', { fontFamily: FONT, fontSize: '14px', color: '#f0d79e', resolution: 2 }).setOrigin(.5).setName('defense-prep-head'); root.add(head);
-    const btn = (x: number, label: string, cost: number, name: string, fn: () => boolean) => {
+    // 价格按章 / 喘息次数涨，同一次喘息里同一项再买更贵（prepCost）；先看做不做得成再扣粮（原来门已破 / 没有阵亡弓手也照扣）
+    const bought: Record<string, number> = {}, paints: Array<() => void> = [];
+    const btn = (x: number, label: string, base: number, name: string, fn: () => boolean) => {
+      const cost = (): number => prepCost(base, this.o.chapter ?? 2, this.wave, bought[name] ?? 0);
       const b = s.add.rectangle(x, y + 12, 160, 40, 0x5a1f14, .95).setStrokeStyle(1.2, 0xf0c070).setInteractive({ useHandCursor: true }).setName(name);
-      const t = s.add.text(x, y + 12, `${label} · ${cost} 粮`, { fontFamily: FONT, fontSize: '14px', color: '#ffe9bd', resolution: 2 }).setOrigin(.5);
-      b.on('pointerup', () => { if (this.h.spend(cost) && fn()) this.h.sfx('uiClick'); else this.h.sfx('playerHurt'); });
+      const t = s.add.text(x, y + 12, '', { fontFamily: FONT, fontSize: '14px', color: '#ffe9bd', resolution: 2 }).setOrigin(.5).setName(name + '-label');
+      const paint = (): void => { const c = cost(); t.setText(label + ' · ' + c + ' 粮').setColor(this.h.food() >= c ? '#ffe9bd' : '#9a8a70'); }; paints.push(paint); paint();
+      b.on('pointerup', () => { const c = cost(); if (this.h.food() >= c && fn() && this.h.spend(c)) { bought[name] = (bought[name] ?? 0) + 1; this.stats.prepSpent += c; this.h.sfx('uiClick'); } else this.h.sfx('playerHurt'); for (const f of paints) f(); });
       root.add([b, t]);
     };
-    btn(W / 2 - 180, '修城门 +25%', P.repairCost, 'defense-prep-repair', () => { if (this.gate.open) return false; this.gate.hp = Math.min(this.gate.max, this.gate.hp + this.gate.max * P.repair); this.stats.repairs++; return true; });
+    btn(W / 2 - 180, '修城门 +' + Math.round(P.repair * 100) + '%', P.repairCost, 'defense-prep-repair', () => { if (this.gate.open) return false; this.gate.hp = Math.min(this.gate.max, this.gate.hp + this.gate.max * P.repair); this.stats.repairs++; return true; });
     btn(W / 2, '补滚木 / 热油', P.refillCost, 'defense-prep-refill', () => { this.facility.logs.charges++; this.facility.oil.charges++; return true; });
     // 部曲守门 / 随主将：一行字签（不另加按钮）
     const gg = s.add.text(W / 2, y + 40, '', { fontFamily: FONT, fontSize: '12px', color: '#e8d3a6', resolution: 2 }).setOrigin(.5).setName('defense-prep-guard').setInteractive({ useHandCursor: true });
     const ggPaint = () => gg.setText(this.gateGuard ? '部曲 · 守城门（点此改为随主将）' : '部曲 · 随主将（点此改为守城门）');
     gg.on('pointerup', () => { this.setGateGuard(!this.gateGuard); ggPaint(); this.h.sfx('uiClick'); }); ggPaint(); root.add(gg);
     btn(W / 2 + 180, '补城头弓手', P.archerCost, 'defense-prep-archer', () => { const dead = this.archers.find(a => a.hp <= 0); if (dead) { dead.hp = DEFENSE.archerHp; dead.img.setAlpha(1).clearTint(); return true; } return false; });
-    const tick = () => { if (!root.active) return; head.setText(`喘息 · 布防　随军粮 ${Math.floor(this.h.food())}　·　站在城门内读条免费修一点　·　Space 跳过`); };
+    const tick = () => { if (!root.active) return; for (const f of paints) f(); head.setText(`喘息 · 布防　随军粮 ${Math.floor(this.h.food())}　·　站在城门内读条免费修一点　·　Space 跳过`); };
     tick(); const ev = s.time.addEvent({ delay: 500, loop: true, callback: tick, callbackScope: this }); root.once('destroy', () => ev.remove());
   }
   private channelRepair(dt: number): void {

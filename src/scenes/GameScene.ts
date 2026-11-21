@@ -23,6 +23,7 @@ import { MOUNT_VISUAL, isHorseCavalry } from '../data/mounts';
 import { buildSettingsPanel, type SettingSpec } from '../ui/SettingsPanel';
 import {FollowerSquad,type Follower} from '../systems/FollowerSquad';
 import {showBarkCard} from '../ui/StoryBarkCard';
+import { BATTLE_LOOT_CAP, type BattleCapKind } from '../data/battleLootCap';
 import { POINTS_GUIDE_KEY, pointsGuideText, pointsHint } from '../data/pointsHint';
 import { DEFEAT, buildCarryNote, defeatTip, defeatLines } from '../data/defeatFlow';
 import { battlePoint, retreatTarget, type RetreatTarget } from '../world/DefeatRetreat';
@@ -967,6 +968,7 @@ export class GameScene extends Phaser.Scene {
     {const horse=heroHorse(this.runConfig.character);this.mount=horse?new HeroMount({barDy:()=>this.passiveGauge?.showing?FOOT_HUD.barBelowGauge:FOOT_HUD.bar,scene:this,player:this.player,enemies:this.enemies,hit:(e,d,now)=>this.hitEnemy(e,d,now,'melee',false,false),notice:t=>this.showGrowthNotice(t)},{base:horse.id,name:horse.name},this.runConfig.character,this.player.growth.gear.specials.includes('hubao')?{trampleMul:RELIC.hubaoTrample,remountMs:RELIC.hubaoRemountMs}:{}):null;this.player.mountGuard=this.mount?(n,now)=>this.mount?.guard(n,now)??n:undefined;this.mountHint=MountRideHint.maybeShow(this,!!this.mount);this.events.once('shutdown',()=>{this.mount?.clear();this.mount=null;});}
     this.bossPace=new BossPace(this as unknown as ConstructorParameters<typeof BossPace>[0]); // 首领走路提速 / 追击（BALANCE.bossPace）
     this.itemDrops=new ItemDrops(this,this.player,this.itemTier(),this.lootChapter(),()=>this.elapsed,()=>this.isFinalBoss(),()=>{this.sfx.play('pickup');this.mechEvent('gear');},()=>this.bossRelicKey());this.itemDrops.deferBossRelic=true; // 首领遗珍由首领宝箱发（BossChest）
+    {const c=BATTLE_LOOT_CAP[this.battleCapKind()];if(this.itemDrops)this.itemDrops.cap={scrolls:c.scrolls,drops:c.drops};} // 单场收益上限（总制作人第四轮：一场守城精锐 83 个 → 兵装 10 件、残卷 +6）
     this.tentHints?.destroy();this.tentHints=null;this.battleHeal?.clear();this.battleHeal=new BattleHeal({block:(b,on)=>this.blockBoxes(b,on),scene:this,player:()=>this.player,enemies:()=>this.enemies,elapsed:()=>this.elapsed,now:()=>this.combatNow,place:(x,y)=>this.fieldPlace(x,y),dropPotion:(x,y,a,n,f)=>this.supplies?.dropPotion(x,y,a,n,f)??false,overlay:()=>this.mode!=='none'||this.over,sfx:k=>this.sfx.play(k),notice:t=>this.showGrowthNotice(t),moveDir:()=>this.moveDir,potionAt:(x,y)=>!!this.supplies?.potions.some(q=>q.active&&Math.hypot(q.image.x-x,q.image.y-y)<12)});if(this.supplies)this.supplies.landing=(x,y)=>this.battleHeal?.landing(x,y)??{x,y,moved:false};this.battleHeal.setPlan(this.phasePlan);this.events.once('shutdown',()=>{this.battleHeal?.clear();this.battleHeal=null;});
     this.relics=new BossRelics({scene:this,player:this.player,enemies:()=>this.enemies,hit:(e,d,now)=>{this.hitEnemy(e,d,now,'melee',false,false);},notice:t=>this.showGrowthNotice(t)},this.player.growth.gear.specials,this.combatNow);
     this.syncRelicShips();
@@ -2860,7 +2862,7 @@ export class GameScene extends Phaser.Scene {
     if (grant.food) this.legion.onKill(enemy); // 首领阶段超额：随军粮 0
     if (grant.drops) this.itemDrops?.onKill(enemy); // 超额：不掉兵装、不掉残卷
     if(kind==='elite')this.battleHeal?.onEliteDown(enemy.x,enemy.y); // 精锐：概率掉军中伤药（保底）
-    if(enemy.kind==='boss')this.runMerit.boss++;else if(enemy.kind==='elite'&&grant.merit)this.runMerit.elite++; // 战功：精英 / 首领（首领阶段超额的精锐不计）
+    if(enemy.kind==='boss')this.runMerit.boss++;else if(enemy.kind==='elite'&&grant.merit&&this.runMerit.elite<BATTLE_LOOT_CAP[this.battleCapKind()].merit)this.runMerit.elite++; // 战功：精英 / 首领（首领阶段超额的精锐不计）
     this.relics?.onKill();
     if(this.player.growth.gear.specials.includes('bloodthirst')&&this.combatNow>=this.player.growth.killHealAt){this.player.growth.killHealAt=this.combatNow+500;this.player.heal(this.player.maxHp*.01);}
     const jade=this.player.growth.charmLegend.army_jade;if(jade!==undefined&&this.combatNow>=this.relicHealAt){const k=CHARM_LEGEND.charm_army_jade.heal[jade];this.relicHealAt=this.combatNow+1000;this.player.heal(k);this.artEffects.show(5,this.player.x,this.player.y-12,35,this.combatNow,260);for(const u of this.allies.filter(u=>u.active&&u.hp<u.maxHp).slice(0,2)){u.hp=Math.min(u.maxHp,u.hp+2*k);this.artEffects.show(5,u.x,u.y-10,30,this.combatNow,260);}}
@@ -3779,6 +3781,8 @@ export class GameScene extends Phaser.Scene {
    * 于是这些仗的缴获、行营军需商人买的兵装全显示「测试战斗不入行囊」并丢掉（new-content-intel.md 11-15 发现，没人改；总制作人第二轮第 8 条「行营买的兵装有没有丢」一并修）。
    */
   protected lootDebug(): boolean { return isChapterTestRun() || this.debugModified || this.debugJumped || !!this.player.damageImmune || this.encounterPreview; }
+  /** 单场收益上限按哪一档（data/battleLootCap.ts）；攻城 / 守城场景覆盖。 */
+  protected battleCapKind(): BattleCapKind { return 'stage'; }
   protected saveRestPoint(): void {
     if (!this.resting || this.mode !== 'rest' || this.campaignReplay || isChapterTestRun() || this.debugModified || this.debugJumped || this.player.damageImmune) return;
     saveCampaignBuild(this.runConfig.character, packCampaign(this.runConfig.character, this.player, this.legion, this.followers));
@@ -4474,14 +4478,15 @@ export class GameScene extends Phaser.Scene {
     return (!debug || !!(globalThis as Record<string, unknown>).__IM_DEFEAT_LIVE) && !this.encounterPreview && worldUnlocked();
   }
   /** 战败：惩罚（存档点主将 / 随行负伤、部曲折损，营寨军粮）、撤回目标、慢动作压暗 + 对话卡、结算面板晚出、按钮改「退守 X」。 */
-  protected runDefeatFlow(): void {
+  /** reason：只有主将阵亡（death）才「主将 / 随行负伤、部曲折损」；守城府衙失守（keep）、超时撤军（timeout）主将还活着，只按各自规则（守城：城池被围；营寨军粮照扣）。 */
+  protected runDefeatFlow(reason: RunEndReason = 'death'): void {
     const key = this.hardKey(), stage = this.hardStage(), city = this.scene.key === 'SiegeGameScene' ? String(this.registry.get('siegeCity') ?? '') : null;
     // 守城战败：退到最近的「另一座」我方城池或营寨（原来退回刚没守住、仍在告急的那座城本身）
     const defending = !!city && (this.registry.get('siegeMode') === 'defense' || this.registry.get('siegeMode') === 'intercept');
     this.defeatRetreat = worldUnlocked() && !this.encounterPreview ? retreatTarget(battlePoint(key, city), defending ? city : null) : null;
     const notes: string[] = [];
     if (this.defeatLive()) {
-      const fids = (this.followers?.members ?? []).map(m => m.recruit.id), camp = patchCampaignDefeat(this.runConfig.character, { hpFrac: DEFEAT.hpFrac, followerFrac: DEFEAT.followerFrac, troopLoss: DEFEAT.troopLoss, followerIds: fids });
+      const fids = (this.followers?.members ?? []).map(m => m.recruit.id), camp = reason !== 'death' ? null : patchCampaignDefeat(this.runConfig.character, { hpFrac: DEFEAT.hpFrac, followerFrac: DEFEAT.followerFrac, troopLoss: DEFEAT.troopLoss, followerIds: fids });
       if (camp) { notes.push('主将负伤 · 下次出征生命 ' + Math.round(DEFEAT.hpFrac * 100) + '%（军医可治）'); if (fids.length) notes.push('随行负伤 · 生命 ' + Math.round(DEFEAT.followerFrac * 100) + '%'); if (camp.troops) notes.push('部曲折损 ' + camp.troops + ' 人'); }
       const g = loseProvisionsPct(DEFEAT.grainPct, DEFEAT.grainCap); if (g) notes.push('营寨军粮 −' + g);
     }
@@ -4634,7 +4639,7 @@ export class GameScene extends Phaser.Scene {
         row('随军粮', String(this.legion.food)), // 11-21 用户试玩：资源数字从 1-1 起就要看得到
         ...(mechOpen('squad') ? [row('部曲战损', `${this.legion.count}存活 / ${this.legion.dead}阵亡`)] : []),
         row(this.chapter.bossName, stats.bossKilled ? '已击败' : '未击败'),
-        row('结局', victory ? '讨伐成功' : reason === 'timeout' ? '超时' : '阵亡'),
+        row('结局', victory ? '讨伐成功' : reason === 'timeout' ? '超时' : reason === 'keep' ? '府衙失守' : '阵亡'),
       ].join('\n'),
     );
     // 兵装缴获：胜利或坚持 60 秒带回全部，速败只带回一半；测试 / 调试战斗不入行囊
@@ -4695,7 +4700,7 @@ export class GameScene extends Phaser.Scene {
       else {this.registry.set('menuChapterPicker',true);this.scene.start('MenuScene');}
     });
     mechRefresh();
-    if (!victory) this.runDefeatFlow();
+    if (!victory) this.runDefeatFlow(reason);
     this.layoutResultButtons?.();
     // 电脑版结算展示：子类 finish 还会追加结算文字，等本轮调用结束再解析
     if (IS_DESKTOP) queueMicrotask(() => { if (this.sys?.isActive() && this.mode === 'result') this.presentResult(victory); });

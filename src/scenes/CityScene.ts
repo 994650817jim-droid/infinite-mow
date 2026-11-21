@@ -85,7 +85,7 @@ export class CityScene extends Phaser.Scene {
   for(const id of CAMP_ART_IDS)worldAssets(this,`city_camp_${id}`,`assets/city/camp_${id}.webp`);
   const ids=Object.keys(TOWN_BUILDINGS) as TownBuildingId[];
   for(const lv of CITY_ART_LEVELS)for(const id of ids)if(lv<=(TOWN_BUILDINGS[id].maxLevel??3)){const a=ART_ALIAS[id]??id;worldAssets(this,`city_${a}_${lv}`,`assets/city/${a}_${lv}.webp`);}}
- create(){playMenuMusic(this, 'camp'); /* 武将来投（systems/HeroUnlocks）：按进度补查、弹没看过的揭幕 */this.time.delayedCall(500,()=>checkHeroJoins(this));startCityAmbient(this,k=>uiSfx().play(k));this.registry.remove('hardChapter');
+ create(){playMenuMusic(this, 'camp'); /* 武将来投（systems/HeroUnlocks）：按进度补查、弹没看过的揭幕 */this.joinBusy=true;this.time.delayedCall(500,()=>checkHeroJoins(this,()=>{this.joinBusy=false;})); /* 来投揭幕播完前不让开建筑卡（2026-11-21：卡片和揭幕叠在一起） */startCityAmbient(this,k=>uiSfx().play(k));this.registry.remove('hardChapter');
   if(!worldUnlocked()&&!isChapterTestRun()){this.registry.set('loadBattle',true);this.scene.start(this.registry.get('battleReady')?'MenuScene':'BootScene');return;}
   // 战斗图集已在 preload 开头卸掉（下次出征重新加载，不与战略界面美术同时常驻）
   saveWorld();
@@ -224,7 +224,7 @@ export class CityScene extends Phaser.Scene {
    const hit=this.add.rectangle(x,y-h/2,Math.max(w*.8,60),Math.max(h,50),0xffffff,.001).setName('bld-'+id).setInteractive({useHandCursor:true});
    // 按下和抬起都落在这块地上才算点建筑：弹窗「返回」按下时就关闭了，抬起不会再穿透到下面的城墙等地块（手柄也是先发按下再发抬起）
    hit.on('pointerdown',()=>{this.pressedSlot=id;});
-   hit.on('pointerup',()=>{const own=this.pressedSlot===id;this.pressedSlot=null;if(!own||this.drag?.moved)return;this.openCard(id);});
+   hit.on('pointerup',()=>{const own=this.pressedSlot===id;this.pressedSlot=null;if(!own||this.drag?.moved||this.joinBusy)return;this.openCard(id);});
    const base=art?{x:art.scaleX,y:art.scaleY}:null;
    hit.on('pointerover',()=>{tag.setColor('#ffe08a').setScale(1.18/this.z);glow?.setFillStyle(0xffe39a,.5);if(art&&base&&this.popId!==id)art.setScale(base.x*1.04,base.y*1.04);})
     .on('pointerout',()=>{tag.setColor(lv>0?'#fff1cf':'#f6e2ae').setScale(1/this.z);glow?.setFillStyle(0xffe39a,0);if(art&&base)art.setScale(base.x,base.y);});
@@ -357,6 +357,8 @@ export class CityScene extends Phaser.Scene {
   return{root,x:(W-w)/2,y,w,h};
  }
  /** 建筑面板：现状、下一级效果、花费、前提，建造 / 升级，以及建筑功能（招募、研究、换马、开仓）。 */
+ /** 武将来投揭幕（含载图）期间为真：不开建筑卡 / 说明。 */
+ private joinBusy=false;
  private openCard(id:TownBuildingId){
   const s=loadWorld(),t=s.town,def=TOWN_BUILDINGS[id],lv=levelOf(t,id),cost=nextCost(t,id),block=buildBlockers(t,id,townProgress(s)),ok=cost!==null&&!block.length&&s.provisions>=cost;
   const size=citySize(t),title=id==='hall'?`${CITY_TITLE[size]}主帐`:`${def.name} · ${lv?'Lv'+lv:'未建'}`;

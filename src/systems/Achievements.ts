@@ -107,12 +107,12 @@ export function checkWorld(w: WorldSave): void {
   if (Object.values(w.reserve).reduce((n, v) => n + (v || 0), 0) >= 20) unlock('reserve_20');
 }
 
-/** 右上角解锁提示（当前最上层场景，约 3 秒）。 */
+/** 解锁提示（顶部居中、计时下方；当前最上层场景，约 2.6 秒）。 */
 function toast(def: AchievementDef): void {
   const scene = game?.scene.getScenes(true).at(-1); if (!scene) return;
   // 同时解锁多个时往下排，不重叠
   const stack = scene.children.list.filter(o => o.name === 'achievement-toast').length;
-  const W = GAME_WIDTH, /* HUD 在 UI 镜头上，按设计宽度排（主镜头可拉远） */ w = 260, x = W - w / 2 - 14, y = 52 + stack * 68;
+  const W = GAME_WIDTH, /* HUD 在 UI 镜头上，按设计宽度排（主镜头可拉远） */ w = 260, x = W / 2, y = 132 + stack * 66; // 2026-11-21 总制作人：原在右上，盖住行营「下一关 / 行囊」、战斗里的设置 / 舆图——挪到顶部居中、计时与关名下面
   const root = scene.add.container(x, y - 20).setScrollFactor(0).setDepth(1e6).setAlpha(0).setName('achievement-toast');
   root.add(scene.add.rectangle(0, 0, w, 60, 0x1a120b, .94).setStrokeStyle(1.5, 0xd9b46a));
   // 有成就图标时用图标，否则用“功”字印
@@ -122,7 +122,7 @@ function toast(def: AchievementDef): void {
   root.add(scene.add.text(-w / 2 + 58, 12, def.desc, { fontFamily: FONT, fontSize: '12px', color: '#cfc3a6', resolution: 2 }).setOrigin(0, .5));
   for (const o of root.list) (o as unknown as Phaser.GameObjects.Components.ScrollFactor).setScrollFactor(0);
   const start = performance.now();
-  const tick = (): void => { const t = performance.now() - start; root.setAlpha(t < 250 ? t / 250 : t > 3200 ? Math.max(0, 1 - (t - 3200) / 400) : 1).setY(y - 20 + Math.min(1, t / 250) * 20); if (t > 3650 || !root.active) { scene.events.off(Phaser.Scenes.Events.POST_UPDATE, tick); root.destroy(); } };
+  const tick = (): void => { const t = performance.now() - start; root.setAlpha(t < 250 ? t / 250 : t > 2600 ? Math.max(0, 1 - (t - 2600) / 400) : 1).setY(y - 20 + Math.min(1, t / 250) * 20); if (t > 3050 || !root.active) { scene.events.off(Phaser.Scenes.Events.POST_UPDATE, tick); root.destroy(); } };
   scene.events.on(Phaser.Scenes.Events.POST_UPDATE, tick);
   scene.events.once('shutdown', () => { scene.events.off(Phaser.Scenes.Events.POST_UPDATE, tick); });
 }

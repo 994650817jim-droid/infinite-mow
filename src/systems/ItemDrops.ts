@@ -39,10 +39,27 @@ export class ItemDrops {
     ensureLootBeam(scene); // 手绘品质光柱（LootBeam.ts；未载入时 drop() 仍画旧光柱）
   }
 
+  /**
+   * 拾取飘字排队（2026-11-21 总制作人：「武学残卷 +3」「获得 · 紫 · …」和首领台词挤在同一处、叠成重影）：
+   * 新的一条排在还没散的上一条上面（每条 26），压到台词（名字带 bark 的对象）就再往上让到台词上沿。
+   */
+  private floats: Phaser.GameObjects.Text[] = [];
+  private placeFloat(t: Phaser.GameObjects.Text): void {
+    this.floats = this.floats.filter(f => f.active);
+    let y = this.player.y - 60 - this.floats.length * 26;
+    const barks = this.scene.children.list.filter(o => /bark/i.test(o.name ?? '') && (o as unknown as { visible?: boolean }).visible) as unknown as Array<{ getBounds?: () => Phaser.Geom.Rectangle }>;
+    for (let k = 0; k < 4; k++) {
+      t.setY(y); const b = t.getBounds();
+      const hit = barks.find(o => o.getBounds && Phaser.Geom.Intersects.RectangleToRectangle(o.getBounds(), b)); if (!hit) break;
+      y = hit.getBounds!().top - b.height / 2 - 6;
+    }
+    t.setY(y); this.floats.push(t);
+  }
   /** 获得残卷：记数并在主将头上飘字。 */
   gainScrolls(n: number): void {
     this.scrolls += n; const s = this.scene;
     const t = s.add.text(this.player.x, this.player.y - 84, `武学残卷 +${n}`, { fontFamily: FONT, fontSize: '15px', color: '#e8d6a4', fontStyle: 'bold', stroke: '#140d07', strokeThickness: 4, resolution: 2 }).setOrigin(.5).setDepth(actorDepth(this.player.y) + 50).setName('scroll-pickup-text');
+    this.placeFloat(t);
     s.tweens.add({ targets: t, y: t.y - 26, alpha: 0, delay: 800, duration: 600, onComplete: () => t.destroy() });
   }
 
@@ -130,6 +147,7 @@ export class ItemDrops {
     const q = QUALITIES[item.quality], s = this.scene;
     const t = s.add.text(this.player.x, this.player.y - 60, `获得 · ${q.label} · ${itemName(item)}`, { fontFamily: FONT, fontSize: item.quality === 'orange' || item.quality === 'purple' ? '17px' : '15px', color: q.css, fontStyle: 'bold', stroke: '#140d07', strokeThickness: 4, resolution: 2 })
       .setOrigin(.5).setDepth(actorDepth(this.player.y) + 50).setName('item-pickup-text');
+    this.placeFloat(t);
     s.tweens.add({ targets: t, y: t.y - 28, alpha: 0, delay: 700, duration: 600, onComplete: () => t.destroy() });
   }
 

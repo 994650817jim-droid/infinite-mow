@@ -58,7 +58,13 @@ ck(`额度用完：同屏上限 ${capBoss} → ${capSpent}、间隔 ×${S.spent.
 const src = p => readFileSync(join(root, p), 'utf8');
 const G = src('src/scenes/GameScene.ts'), P = src('src/entities/Player.ts'), H = src('src/ui/BossHud.ts'), SG = src('src/scenes/SiegeGameScene.ts'), CF = src('src/config.ts'), BP = src('src/systems/BossPresence.ts'), SP = src('src/systems/StagePhases.ts');
 ck('config.ts 首领在场的刷兵 / 经验倍率与本测试一致', /enemyCap: 150,/.test(CF) && /bossSpawn: \{ capMul: \.5, intervalMul: 2, burstMul: \.5, xpMul: 2 \}/.test(CF));
-ck('首领登场（spawnBoss）：额度 / 震怒起点按章 / 关取', /this\.bossClearStage\(boss\);[^\n]*\n\s*this\.bossStallCfg = stallFor\(this\.phasePlan\?\.chapter \?\? CHAPTER_INDEX\[this\.hardKey\(\)\] \?\? 2, this\.hardStage\(\)\);/.test(G));
+ck('首领登场（spawnBoss）：主线关按章 / 关取；攻城 / 军情 / 挑战 / 支线按已开放章节数取章默认值（关序传 0，不套按关覆盖）', /this\.bossClearStage\(boss\);[^\n]*\n\s*\{ const sc = this\.stageChapter\(\); this\.bossStallCfg = stallFor\(sc \?\? chaptersOpen\(\), sc \? this\.hardStage\(\) : 0\);/.test(G) && /protected lootChapter\(\): number \{ return this\.stageChapter\(\) \?\? chaptersOpen\(\); \}/.test(G));
+ck('第 12 章开放后的攻城 / 军情：用第 12 章默认 90 / 180 秒，不是 12-3 的 150 / 240', C.stallFor(12, 0).quotaSec === 90 && C.stallFor(12, 0).enrageSec === 180, C.stallFor(12, 0));
+// 覆盖范围（平衡会话 boss-farm-guard.md 第 0 节）：只有 1-1、1-2、2-1、2-2 走 90 秒战线推进（frontlineBoss），其余都加额度 / 震怒
+{ const sc = n => src('src/scenes/' + n + '.ts');
+  const enc = ['ThirdGameScene', 'GuanduGameScene', 'IntelGameScene', 'SiegeGameScene'].filter(n => !/encounter:\s*'qunxiong'/.test(sc(n)));
+  const st3 = ['LubuGameScene', 'SideRouteGameScene'].filter(n => !/chapter: 'hulao', westStage: 3/.test(sc(n)));
+  ck('第 3–12 章（ThirdGameScene 一系）/ 军情 / 攻城都设 encounter、挑战 / 支线按第 3 关：都不是战线推进关，额度 / 震怒照加', enc.length === 0 && st3.length === 0 && /protected frontlineBoss\(\):boolean\{return this\.battleStage\(\)<3&&!this\.runConfig\.encounter;\}/.test(G), { enc, st3 }); }
 ck('killEnemy：首领在场（双首领的主首领 / 攻城守将 / 守城都是 this.boss；战线推进关不管）按首领的钟发收益，副将豁免，城墙 / 补给位不算', /const grant = this\.boss\?\.active && !this\.frontlineBoss\(\) && !enemy\.isSupplySlot && enemy\.def\.behavior !== 'wall' \? killGrant\(enemy\.kind, this\.bossClockMs\(\) \/ 1000, this\.bossStallCfg\.quotaSec, !!this\.phaseRunner\?\.isLieutenant\(enemy\)\) : GRANT_FULL; this\.killGrant = grant;/.test(G) && /isLieutenant\(e: Enemy\): boolean \{ const t = this\.lt; return !!t && !t\.down && t\.e === e && e\.spawnId === t\.life; \}/.test(SP));
 ck('粮 / 掉落 / 战功 / 经验都看 grant', /if \(grant\.food\) this\.legion\.onKill\(enemy\);/.test(G) && /if \(grant\.drops\) this\.itemDrops\?\.onKill\(enemy\);/.test(G) && /else if\(enemy\.kind==='elite'&&grant\.merit\)this\.runMerit\.elite\+\+/.test(G) && /enemy\.def\.xp \* \(grant\.xpMul \?\? \(this\.boss\?\.active && enemy\.kind !== 'boss' \? BALANCE\.bossSpawn\.xpMul : 1\)\)/.test(G));
 ck('押粮卒被截的粮（EnemyTraits gainFood）看 killGrant', /gainFood:n=>\{if\(this\.killGrant\.food\)this\.legion\.food\+=n;\}/.test(G));

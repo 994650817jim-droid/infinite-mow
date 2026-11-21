@@ -1822,7 +1822,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.boss = boss;
     this.bossClearStage(boss); // 鸣金让道：首领登场时普通小兵往两侧退开撤走一部分（data/bossClear.ts）
-    this.bossStallCfg = stallFor(this.phasePlan?.chapter ?? CHAPTER_INDEX[this.hardKey()] ?? 2, this.hardStage()); this.bossRageAnnounced = false; // 首领阶段防拖：额度 / 震怒起点按章 / 关（data/bossStall.ts）
+    { const sc = this.stageChapter(); this.bossStallCfg = stallFor(sc ?? chaptersOpen(), sc ? this.hardStage() : 0); this.bossRageAnnounced = false; } // 首领阶段防拖：额度 / 震怒起点按章 / 关（data/bossStall.ts）；攻城 / 军情 / 挑战 / 支线按已开放章节数取章默认值，不套「12-3」这类按关覆盖
     this.startParley(boss);
     preloadBossDeath(this, this.chapter.bossStyle); // 倒地帧（张角 / 张梁 / 张宝 / 董卓 / 吕布）提前载好
     this.firstBossAt=this.combatNow;
@@ -3986,13 +3986,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** 掉落按的章节（1–12）：章节场景按场景；攻城、军情、挑战关等不属于某章的，按已开放的章节数（2026-11-19 掉落品质随章节，data/items.ts lootBand）。 */
-  protected lootChapter(): number {
+  protected lootChapter(): number { return this.stageChapter() ?? chaptersOpen(); }
+  /** 本关是哪一章的主线关（1–12）；攻城、军情、挑战关、支线等不属于某章的返回 null（lootChapter 按已开放章节数，首领阶段防拖不套按关覆盖）。 */
+  protected stageChapter(): number | null {
     const key = this.scene.key, arc = (this.runConfig as { arc?: string }).arc;
     const byKey: Record<string, number> = { ThirdGameScene: 3, GuanduGameScene: 4, ChibiGameScene: 5, JingnanGameScene: 6, ShuGameScene: 7, HanzhongGameScene: 8, XiangfanGameScene: 9, YilingGameScene: 10, NanzhengGameScene: 11, BeifaGameScene: 12 };
     if (arc === 'chibi') return 5;
     if (byKey[key]) return byKey[key];
     if (key === 'GameScene' && !this.runConfig.encounter && !this.customChapter()) return this.chapter.id === 'hulao' ? 2 : 1;
-    return chaptersOpen();
+    return null;
   }
   /** 道具掉落的品质段（0 一、二章 … 4 十一、十二章；乱世 +1）：品质表与封顶见 data/items.ts。也用于开局免费招兵数。 */
   protected itemTier(): number { return lootBand(this.lootChapter(), this.hardMode); }

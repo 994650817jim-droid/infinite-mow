@@ -80,5 +80,6 @@ export function drawFormationPanel(h: FormationPanelHost, x0: number, y0: number
   g.lineStyle(1.5, 0xd9b46a, .6).lineBetween(cx, cy - 18, cx, cy - 34).lineBetween(cx, cy - 34, cx - 5, cy - 28).lineBetween(cx, cy - 34, cx + 5, cy - 28);
   const inN = pts.filter(q => q.on).length;
   T(cx, y0, (sample ? '示意（尚无部曲）· ' : '') + `入阵 ${inN} / ${units.length} 人（8 + 2 × 统御 ${Math.floor(h.command)} = ${cap}）`, 12, '#b9a47a').setOrigin(.5, 0).setName('formation-cap');
-  T(cx, y0 + 18, '★ 主将（朝上为前）· ◆ 随从 · ■ 近战 · ▲ 远程 · ● 军医 · 灰 = 后军', 11, '#8e7f62').setOrigin(.5, 0);
+  // 图例靠右对齐到页面右沿（原来以示意图为中心向左伸，和左边第一排字签「长蛇阵 · 擅」撞在一起；2026-11-21 UI 审查）
+  T(x0 + w, y0 + 18, '★ 主将（朝上为前）· ◆ 随从 · ■ 近战 · ▲ 远程 · ● 军医 · 灰 = 后军', 11, '#a8956c').setOrigin(1, 0).setName('formation-legend');
 }

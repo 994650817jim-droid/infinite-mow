@@ -4068,7 +4068,7 @@ export class GameScene extends Phaser.Scene {
   private paintJinnang(): void {
     const id = this.jinnang;
     if (!this.jinnangButton) {
-      const root = this.add.container(GAME_WIDTH - 58, IS_DESKTOP ? GAME_HEIGHT - 368 : GAME_HEIGHT - 420).setScrollFactor(0).setDepth(DEPTH.hud + 4).setName('jinnang-button').setVisible(false);
+      const root = this.add.container(IS_DESKTOP ? GAME_WIDTH - 136 : GAME_WIDTH - 58, IS_DESKTOP ? GAME_HEIGHT - 288 : GAME_HEIGHT - 420) /* 电脑版：右列（行囊 / 药囊 / 加点 / 护阵）放不下，原位置压住「行囊」字；挪到药囊左边一列（2026-11-21 UI 审查） */.setScrollFactor(0).setDepth(DEPTH.hud + 4).setName('jinnang-button').setVisible(false);
       const glow = this.add.circle(0, 0, 33, 0xf0c060, 0).setStrokeStyle(3, 0xf3d48a, .55);
       const disc = this.add.circle(0, 0, 29, 0x1b120b, .95).setStrokeStyle(2.5, 0xc9a35e, 1);
       const icon = this.add.image(0, -1, 'icon_passive').setName('jinnang-icon');

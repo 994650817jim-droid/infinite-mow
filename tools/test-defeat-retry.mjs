@@ -30,7 +30,11 @@ let sum = null;
 for (let i = 0; i < 40; i++) { sum = await ev(s => { const card = s.children.getByName('rest-summary-card'); if (!card) return null; const vis = []; const walk = l => { for (const o of l) { if (o.visible && /^(camp-(medic|merchant)-art-(bubble|line)|camp-talk)$/.test(o.name ?? '')) vis.push(o.name); if (o.list) walk(o.list); } }; walk(s.children.list); return { card: true, framed: false, shownUnder: vis, detail: s.campUI?.detail?.visible ?? null }; }); if (sum) break; await p.waitForTimeout(250); }
 await hide(); await p.waitForTimeout(300); await p.screenshot({ path: `${OUT}/rest-summary.png` });
 ck('入营战报出现时：军医气泡 / 新玩法说明 / 营中闲话都先收起', !!sum && sum.shownUnder.length === 0 && sum.detail !== true, sum);
-await ev(s => s.children.getByName('rest-summary')?.emit('pointerdown'));
+// 不点：约 4 秒自己收起（2026-11-21 总制作人：原来压在卡片上不走、也没提示）
+const tipShown = await ev(s => s.children.getByName('rest-summary-card')?.list.some(o => o.type === 'Text' && /点击任意处收起/.test(o.text)) ?? false);
+await p.waitForTimeout(4400);
+const gone = await ev(s => !s.children.getByName('rest-summary-card') && !s.children.getByName('rest-summary'));
+ck('入营战报：有「点击任意处收起」提示，约 4 秒自己收起', tipShown && gone, { tipShown, gone });
 await p.waitForTimeout(900);
 const after = await ev(s => { const vis = []; const walk = l => { for (const o of l) { if (o.visible && /^(camp-(medic|merchant)-art-(bubble|line)|camp-talk)$/.test(o.name ?? '')) vis.push(o.name); if (o.list) walk(o.list); } }; walk(s.children.list); const t = s.children.getByName('camp-talk'); return { vis, detail: s.campUI?.detail?.visible ?? null, talkX: t ? Math.round(t.x) : null }; });
 await hide(); await p.screenshot({ path: `${OUT}/rest-after-summary.png` });

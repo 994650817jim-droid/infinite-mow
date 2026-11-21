@@ -3958,6 +3958,7 @@ export class GameScene extends Phaser.Scene {
   }
   /** 电脑版入营「战报」：漆卷小窗（书法「战报」+ 经验条 + 战功 / 残卷格 + 首通 / 随行小字），约 5 秒后自动收起，点一下收起。 */
   private showRestSummaryDesk(lines: string[]): void {
+    for (const o of [...this.children.list]) if (o.name === 'rest-summary-card' || o.name === 'rest-summary') o.destroy(); // 防重复叠两张（2026-11-21：收起一张、底下还压着一张）
     const cx = GAME_WIDTH / 2, w = 470;
     const view = buildRewardView(this, { lines, width: w, only: /武将等级|本场战功|武学残卷/ });
     const notes = lines.filter(l => /^(首次通关|随行)/.test(l)).map(l => l.replace(/\s{2,}/g, ' '));
@@ -3975,14 +3976,17 @@ export class GameScene extends Phaser.Scene {
     for (const c of card.list) (c as unknown as { setScrollFactor: (v: number) => void }).setScrollFactor(0);
     for (const c of view.root.list) (c as unknown as { setScrollFactor: (v: number) => void }).setScrollFactor(0);
     const skip = playResultAnims(this, [{ start: 0, dur: 260, step: p => card.setAlpha(p) }, ...view.anims], () => {}, () => card.active);
-    const close = () => { skip(); if (hit.active) hit.destroy(); if (card.active) card.destroy(); };
+    const close = () => { try { skip(); } catch { /* 动画已结束 */ } if (hit.active) hit.destroy(); if (card.active) card.destroy(); };
     // 1-3 告捷：章节告捷弹窗与战报同时出现会叠在一起——先看战报，收起后再显示告捷弹窗
     const heldUi = held; // 战报收起后放回军医气泡 / 新玩法说明 / 营中闲话
     const notice = this.children.getByName('chapter1-volunteers') as Phaser.GameObjects.Container | null, heldNotice = !!notice?.visible;
     if (heldNotice) notice!.setVisible(false);
     hit.on('pointerdown', close).on('destroy', () => { if (card.active) card.destroy(); if (heldNotice && notice?.active) notice.setVisible(true); for (const o of heldUi) if (o.active) (o as unknown as { setVisible: (v: boolean) => void }).setVisible(true); });
     if (view.levelUp) this.sfx.level();
-    window.setTimeout(() => { if (hit.active) close(); }, 5600);
+    // 约 4 秒自动收起；点画面任意处也收起（底下一行提示）
+    const tip = this.add.text(cx, top + h + 16, '点击任意处收起', { fontFamily: FONT, fontSize: '12px', color: '#a8956c', resolution: 2 }).setOrigin(.5, 0).setScrollFactor(0).setStroke(RESULT_STROKE, 3); card.add(tip);
+    const dimHit = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0, .001).setOrigin(0).setScrollFactor(0).setDepth(DEPTH.overlay + 59).setInteractive(); dimHit.on('pointerdown', close); hit.once('destroy', () => dimHit.destroy());
+    window.setTimeout(() => { if (hit.active) close(); else if (card.active) card.destroy(); }, 4000);
   }
   /**
    * 首领宝箱补发的三选一（grantBossChest → ensurePicks force）先选完再往下走（2026-11-20 夜间回归：三选一原来盖在章末卷轴上）。

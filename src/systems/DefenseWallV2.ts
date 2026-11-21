@@ -18,8 +18,13 @@ export interface DefenseWallV2Host {
 /** auto = 按威胁自动派去的增援（威胁没了就回预备队）；E 叫来的不算 auto。 */
 interface Slot { post: Post; life: number; auto?: boolean }
 
-const KEY = { seg: 'luoyang_wall_seg', corner: 'luoyang_wall_corner', gate: 'defv2_gate_v2', gateBroken: 'defv2_gate_v2_broken', walkA: 'defv2_walkway_a', walkB: 'defv2_walkway_b' } as const;
-const FILE: Record<keyof typeof KEY, string> = { seg: DEFENSE_V2.art.seg.file, corner: DEFENSE_V2.art.corner.file, gate: DEFENSE_V2.art.gate.file, gateBroken: DEFENSE_V2.art.gateBroken.file, walkA: DEFENSE_V2.art.walkway.a, walkB: DEFENSE_V2.art.walkway.b };
+const KEY = { seg: 'luoyang_wall_seg', gate: 'defv2_gate_v2', gateBroken: 'defv2_gate_v2_broken', walkA: 'defv2_walkway_a', walkB: 'defv2_walkway_b', endR: 'defv2_wallend_r', endL: 'defv2_wallend_l', stair: 'defv2_stair_down' } as const;
+const FILE: Record<keyof typeof KEY, string> = { seg: DEFENSE_V2.art.seg.file, gate: DEFENSE_V2.art.gate.file, gateBroken: DEFENSE_V2.art.gateBroken.file, walkA: DEFENSE_V2.art.walkway.a, walkB: DEFENSE_V2.art.walkway.b, endR: DEFENSE_V2.art.wallend.right, endL: DEFENSE_V2.art.wallend.left, stair: DEFENSE_V2.art.stair.file };
+/**
+ * 守城 v2 场地图在场景 preload 里先排进去（总制作人走查 G：加载慢时开打 9 秒城墙才建出来，只有地面、士兵和滚木悬在空地上）：
+ * 有了这一步，DefenseWallV2 建场时图都在，同一帧建好，计时 / 刷兵 / 引导卡都在城墙建好之后。
+ */
+export function preloadDefenseV2Wall(scene: Phaser.Scene): void { for (const k of Object.keys(KEY) as Array<keyof typeof KEY>) if (!scene.textures.exists(KEY[k])) scene.load.image(KEY[k], FILE[k]); }
 
 export class DefenseWallV2 {
   readonly g: V2Geo;
@@ -138,7 +143,7 @@ export class DefenseWallV2 {
     const s = this.h.scene, g = this.g, A = DEFENSE_V2.art; if (!s.sys || s.sys.settings.status >= Phaser.Scenes.SHUTDOWN) return;
     const sc = (g.F - (g.W - A.crenelOver)) / (A.seg.ground - A.seg.crenel); // 墙段缩放：外侧城垛顶在 W − crenelOver、墙脚在 F
     const pieceW = A.seg.w * sc, step = pieceW - 40;
-    // 走道：walkway_a / b 横拼成一张（a、b 交替），1:1 横铺；图上沿（内侧女墙顶）对齐走道北沿，多出的 16 像素压在外侧城垛后面
+    // 走道：walkway_a / b 横拼成一张（a、b 交替），1:1 横铺；图上沿（内侧女墙顶）对齐门楼后排女墙顶 walkTop（≈ 端头后排矮城垛顶，三条线之一），多出的压在外侧城垛后面
     const WK = A.walkway, walkKey = this.walkKey;
     if (!s.textures.exists(walkKey)) {
       const tex = s.textures.createCanvas(walkKey, WK.w * 2, WK.h)!, c = tex.context;
@@ -146,11 +151,14 @@ export class DefenseWallV2 {
     }
     // 城门楼那一截不铺（门楼图自带楼前平台；后排女墙垛口缺口里该看见城里的地，不是走道的女墙顶），两段的纹理接着 X0 对齐
     const gHalf = A.gate.w * ((g.F - (g.W - A.crenelOver)) / (A.gate.ground - A.gate.crenel)) / 2 - 12;
-    const E = DEFENSE_V2.layout.ends;
-    for (const [x0, x1] of [[g.X0 - E.under, g.gx - gHalf], [g.gx + gHalf, g.X1 + E.under]]) this.art.push(s.add.tileSprite((x0 + x1) / 2, g.top + WK.h / 2, x1 - x0, WK.h, walkKey).setTilePosition(x0 - g.X0, 0).setDepth(DEPTH.ground + 2).setName('defv2-walk'));
-    // 马道口：女墙带在缺口处换成路面（同一张走道图往下取路面那几行盖上去），看得出这里能上下城
-    // （原来缺口北边摆的石阶图 siege_mid_city 帧 4 高的一头朝城里，和「城头高、城里低」反了——人站上去像贴在台阶图上，去掉；等美术组出下城马道图。往城里再铺一截石板试过，像贴了块补丁，也不铺。）
-    for (const r of g.ramps) { const half = DEFENSE_V2.layout.rampHalf; this.art.push(s.add.tileSprite(r, g.top + WK.band / 2, half * 2, WK.band, walkKey).setTilePosition(r - half - g.X0, WK.band + 60).setDepth(DEPTH.ground + 2.5).setName('defv2-ramp-gap')); }
+    const under = DEFENSE_V2.layout.endUnder;
+    for (const [x0, x1] of [[g.X0 - under, g.gx - gHalf], [g.gx + gHalf, g.X1 + under]]) this.art.push(s.add.tileSprite((x0 + x1) / 2, g.walkTop + WK.h / 2, x1 - x0, WK.h, walkKey).setTilePosition(x0 - g.X0, 0).setDepth(DEPTH.ground + 2).setName('defv2-walk'));
+    // 下城直梯（美术组 stair_down）：女墙带在缺口处让开（栏墙外缘那么宽，换成路面），直梯图底边对齐走道石板上沿 stairB、往城里（上方）伸；画在地面层，人都在它上面（深度按 y 正常排）
+    { const S = A.stair, cw = S.rail[1] - S.rail[0];
+      for (const r of g.ramps) {
+        this.art.push(s.add.tileSprite(r, g.walkTop + WK.band / 2, cw, WK.band, walkKey).setTilePosition(r - cw / 2 - g.X0, WK.band + 60).setDepth(DEPTH.ground + 2.5).setName('defv2-ramp-gap'));
+        this.art.push(s.add.image(r, g.stairB, KEY.stair).setOrigin(S.cx / S.w, 1).setDepth(DEPTH.ground + 2.6).setName('defv2-stair'));
+      } }
     // 外墙立面：墙段图从外侧城垛顶往下裁（城垛盖住走道南沿上站着的人的腿），墙脚对齐 F；从城门楼两侧往外排
     // 墙段从城门楼图的两边往外排（按图的实际半宽，和段的几何一致）
     const gs = (g.F - (g.W - A.crenelOver)) / (A.gate.ground - A.gate.crenel), gateHalf = Math.min(DEFENSE_V2.layout.gateHalf, A.gate.w * gs / 2);
@@ -158,16 +166,25 @@ export class DefenseWallV2 {
     const reach = DEFENSE_V2.layout.half + 40;
     for (const side of [-1, 1]) for (let a = gateHalf - 20; a < reach; a += step) {
       const tw = Math.min(pieceW, reach - a) / sc, im = s.add.image(g.gx + side * a, g.F, KEY.seg).setOrigin(side > 0 ? 0 : 1, A.seg.ground / A.seg.h).setScale(sc).setFlipX(side > 0).setDepth(actorDepth(g.W)).setName('defv2-face');
-      im.setCrop(A.seg.w - tw, A.seg.crenel, tw, A.seg.h - A.seg.crenel); // 两边都裁原图右端那截：右边这几块是翻转的（实测 Phaser 翻转后裁剪框按原图算），左边不翻、贴门楼的是右端 this.art.push(im);
+      im.setCrop(A.seg.w - tw, A.seg.crenel, tw, A.seg.h - A.seg.crenel); /* 两边都裁原图右端那截：右边这几块是翻转的（实测 Phaser 翻转后裁剪框按原图算），左边不翻、贴门楼的是右端 */ this.art.push(im);
     }
     // 城门楼（可通行版）：墙脚对齐 F，外侧城垛和墙段齐平。画两层：整张在走道上所有人身后（楼阁、后排女墙、楼前平台），
     // 从外侧城垛往下裁一层盖在墙段和走道南沿的人前面（门楼正面不被墙段盖住、城垛挡住腿）——人从楼前平台走过，楼阁在人后面
     { this.gateBack = s.add.image(g.gx, g.F, KEY.gate).setOrigin(.5, A.gate.ground / A.gate.h).setScale(gs).setDepth(actorDepth(g.top) - .01).setName('defv2-gate'); this.art.push(this.gateBack);
       const front = s.add.image(g.gx, g.F, KEY.gate).setOrigin(.5, A.gate.ground / A.gate.h).setScale(gs).setDepth(actorDepth(g.W) + .005).setName('defv2-gate-front');
-      front.setCrop(0, A.gate.crenel, A.gate.w, A.gate.h - A.gate.crenel); this.art.push(front); this.gateFront = front; if (this.gateBroken) this.setGateBroken(true); }
-    // 角楼：贴在走道端头外侧（右缘离走道端 towerGap，人走到走道端头不会站进角楼图里）；顶上城垛和墙段城垛齐平；角楼背后的走道北半截 / 城里那角由地形层山崖收满（v2EndCliffs）
-    { const cs = (g.F - (g.W - A.crenelOver)) / (A.corner.ground - A.corner.crenel), half = A.corner.w * cs / 2;
-      for (const [x, flip] of [[g.X0 - half - E.towerGap, false], [g.X1 + half + E.towerGap, true]] as const) this.art.push(s.add.image(x, g.F, KEY.corner).setOrigin(.5, A.corner.ground / A.corner.h).setScale(cs).setFlipX(flip).setDepth(actorDepth(g.W) + .01).setName('defv2-corner')); }
+      front.setCrop(0, A.gate.crenel, A.gate.w, A.gate.h - A.gate.crenel); this.art.push(front); this.gateFront = front; if (this.gateBroken) this.setGateBroken(true);
+      // 门楼后排女墙（楼阁两侧）原图带垛口、走道图是平压顶，接缝处一边垛口一边平顶——两侧盖一条走道图的女墙带，内侧女墙一路平顶接过去（楼阁不盖）
+      const half = A.gate.w * gs / 2, pav = (A.gate.pavR - A.gate.pavL) / 2 * gs;
+      for (const [x0, x1] of [[g.gx - half, g.gx - pav], [g.gx + pav, g.gx + half]]) this.art.push(s.add.tileSprite((x0 + x1) / 2, g.walkTop + WK.band / 2, x1 - x0, WK.band, walkKey).setTilePosition(x0 - g.X0, 0).setDepth(actorDepth(g.top) - .009).setName('defv2-gate-parapet')); }
+    // 城墙端头（美术组 wallend_left / right，替掉原来压在走道端头上的独立角楼）：接在走道两端，和墙段同缩放（图下沿对齐墙脚）。
+    // 画两层（同门楼）：整张在走道上所有人身后（平台、后排矮城垛、角楼），从外侧城垛往下裁一层盖在人前面（城垛挡腿）。端头外沿就是场地左右边，再往外是边带山崖。
+    { const W2 = A.wallend, es = (g.F - (g.W - A.crenelOver)) / (W2.h - W2.crenel);
+      for (const side of [-1, 1] as const) {
+        const key = side > 0 ? KEY.endR : KEY.endL, x = side > 0 ? g.X1 : g.X0, ox = side > 0 ? 0 : 1;
+        const back = s.add.image(x, g.F, key).setOrigin(ox, 1).setScale(es).setDepth(actorDepth(g.top) - .01).setName('defv2-end');
+        const front = s.add.image(x, g.F, key).setOrigin(ox, 1).setScale(es).setDepth(actorDepth(g.W) + .005).setName('defv2-end-front');
+        front.setCrop(0, W2.crenel, W2.w, W2.h - W2.crenel); this.art.push(back, front);
+      } }
     // 城内：府衙（siege_mid_hall 帧 0）
     if (s.textures.exists('siege_mid_hall')) this.art.push(s.add.image(g.keep.x, g.keep.y, 'siege_mid_hall', 0).setOrigin(.5, .85).setDisplaySize(280, 280).setDepth(actorDepth(g.keep.y)).setName('defv2-keep'));
     // 城外：敌营（siege_mid_ram 帧 7 营帐）

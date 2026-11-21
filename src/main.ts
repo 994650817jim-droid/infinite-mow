@@ -37,7 +37,9 @@ installCjkWrap();
 
 // 高清渲染：画布放大 RENDER_SCALE 倍，每个相机以左上角为原点同倍缩放，
 // 所有场景继续使用 540×960 / 960×540 的设计坐标；文字内部画布同倍率绘制以免发糊。
-if (RENDER_SCALE !== 1) {
+// 相机左上原点在 RENDER_SCALE = 1 时也一样用（总制作人走查 A：原来只在高清时改原点，1 倍时相机还是居中原点，
+// 战场镜头拉远（×0.88 / 守城 ×0.82）后可见区域比 scrollX 往左偏 (宽 − 宽/zoom)/2——按左上原点算的镜头居中、地面对齐、场地夹边全错开，画布左边露出一条底色）。
+{
   const cameraAdd = Phaser.Cameras.Scene2D.CameraManager.prototype.add;
   Phaser.Cameras.Scene2D.CameraManager.prototype.add = function (this: Phaser.Cameras.Scene2D.CameraManager, ...args: Parameters<typeof cameraAdd>) {
     return cameraAdd.apply(this, args).setOrigin(0, 0).setZoom(RENDER_SCALE);
@@ -61,6 +63,12 @@ if (RENDER_SCALE !== 1) {
     this.midPoint.set(x, y);
     return this;
   } as typeof centerOn;
+  // 镜头边界（StageArena.setBounds）：Phaser 的 clampX / clampY 按居中原点算，左上原点拉远时左边多看、右边少看 (显示宽 − 宽)/2（RENDER_SCALE 2 时约 295）；按左上原点重算
+  const clampX = Camera.clampX, clampY = Camera.clampY;
+  Camera.clampX = function (this: Phaser.Cameras.Scene2D.Camera, x: number) { if (this.originX !== 0) return clampX.call(this, x); const b = this.getBounds(), dw = this.width / this.zoomX; return Phaser.Math.Clamp(x, b.x, Math.max(b.x, b.right - dw)); } as typeof clampX;
+  Camera.clampY = function (this: Phaser.Cameras.Scene2D.Camera, y: number) { if (this.originY !== 0) return clampY.call(this, y); const b = this.getBounds(), dh = this.height / this.zoomY; return Phaser.Math.Clamp(y, b.y, Math.max(b.y, b.bottom - dh)); } as typeof clampY;
+}
+if (RENDER_SCALE !== 1) {
   const setStyle = Phaser.GameObjects.TextStyle.prototype.setStyle;
   Phaser.GameObjects.TextStyle.prototype.setStyle = function (this: Phaser.GameObjects.TextStyle, ...args: Parameters<typeof setStyle>) {
     const out = setStyle.apply(this, args);

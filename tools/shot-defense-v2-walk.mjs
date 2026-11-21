@@ -18,10 +18,10 @@ const hold = async (key, ms) => { await p.keyboard.down(key); await wait(ms); aw
 const shot = async name => { await p.screenshot({ path: `${OUT}/${name}.png` }); };
 /** 主将位置 + 镜头 / 地面覆盖 */
 const look = () => ev(() => {
-  const s = window.__S, g = s.defenseV2.g, c = s.cameras.main, vw = c.width / c.zoom, vh = c.height / c.zoom, gr = s.ground, B = g.bounds, P = 220;
-  return { x: Math.round(s.player.x), y: Math.round(s.player.y), r: s.player.radius, W: g.W, top: g.top, innerTop: g.innerTop, X0: g.X0, X1: g.X1, gx: g.gx,
-    ground: gr.x <= c.scrollX + 1 && gr.x + gr.width >= c.scrollX + vw - 1 && gr.y <= c.scrollY + 1 && gr.y + gr.height >= c.scrollY + vh - 1,
-    cam: c.scrollX >= B.left - P - 1 && c.scrollX + vw <= B.right + P + 1 && c.scrollY >= B.top - P - 1 && c.scrollY + vh <= B.bottom + P + 1, view: [Math.round(c.scrollX), Math.round(c.scrollX + vw)], gw: gr.width };
+  const s = window.__S, g = s.defenseV2.g, c = s.cameras.main, wv = c.worldView, vw = wv.width, vh = wv.height, gr = s.ground, B = g.bounds, P = 220; /* 相机实际看到的世界（worldView） */
+  return { x: Math.round(s.player.x), y: Math.round(s.player.y), r: s.player.radius, W: g.W, top: g.top, innerTop: g.innerTop, X0: g.X0, X1: g.X1, WX0: Math.round(g.WX0), WX1: Math.round(g.WX1), gx: g.gx,
+    ground: gr.x <= wv.x + 1 && gr.x + gr.width >= wv.x + vw - 1 && gr.y <= wv.y + 1 && gr.y + gr.height >= wv.y + vh - 1,
+    cam: wv.x >= B.left - P - 1 && wv.x + vw <= B.right + P + 1 && wv.y >= B.top - P - 1 && wv.y + vh <= B.bottom + P + 1, view: [Math.round(wv.x), Math.round(wv.x + vw)], gw: gr.width };
 });
 const put = (x, y) => ev(([x, y]) => { const s = window.__S; s.player.sprite.setPosition(x, y); }, [x, y]);
 try {
@@ -47,10 +47,10 @@ try {
 
   // ———— 最左端：一直往左走，停在走道端头（不进角楼）；镜头不露黑
   await hold('KeyA', 3600); const left = await look();
-  ck('u1 最左端：走到走道端头停下（不走进角楼图里），地面盖满镜头、镜头在场地 + 边带以内', left.x >= left.X0 + left.r - 2 && left.x <= left.X0 + 40 && left.ground && left.cam, left);
+  ck('u1 最左端：走到走道端头停下（不走进角楼图里），地面盖满镜头、镜头在场地 + 边带以内', left.x >= left.WX0 + left.r - 2 && left.x <= left.WX0 + 40 && left.ground && left.cam, left);
   await shot('w-3-left-end');
   await hold('KeyW', 1500); const leftN = await look();
-  ck('u1 最左端往北：走不进角楼背后的山崖（停在女墙带以南）', leftN.y >= leftN.top + 40 && leftN.x >= leftN.X0 + leftN.r - 2, leftN);
+  ck('u1 最左端往北：走不进角楼背后的山崖（停在女墙带以南）', leftN.y >= leftN.top + 40 && leftN.x >= leftN.WX0 + leftN.r - 2, leftN);
   await p.setViewportSize({ width: 900, height: 900 }); await wait(700); const leftNarrow = await look(); await shot('w-4-left-end-narrow');
   ck('窄窗口（900×900）最左端：地面盖满镜头、镜头在场地 + 边带以内', leftNarrow.ground && leftNarrow.cam, leftNarrow);
   await p.setViewportSize({ width: 1280, height: 720 }); await wait(500);
@@ -61,7 +61,7 @@ try {
   ck('u2 缺口以外的内侧女墙过不去（停在女墙带以南）', wall.y >= wall.top + 40 + wall.r - 2, wall);
   await put(rampL, g0.top + 120); await hold('KeyW', 520); await shot('w-5-ramp-down-mid'); const mid = await look();
   await hold('KeyW', 900); const city = await look(); await shot('w-6-ramp-city');
-  ck('u2 西马道：从缺口走下城（只能沿马道方向，x 在缺口里）、到了城里', city.y < city.innerTop - 4 && Math.abs(mid.x - rampL) <= 50 - mid.r + 2, { mid, city });
+  ck('u2 西马道：从缺口走下城（只能沿马道方向，x 在缺口里）、到了城里', city.y < city.innerTop - 4 && Math.abs(mid.x - rampL) <= 45 - mid.r + 2, { mid, city });
   await hold('KeyS', 1400); const back = await look();
   ck('u2 西马道：从城里走回走道', back.y > back.top + 40, back);
 
@@ -75,8 +75,8 @@ try {
   ck('门楼平台后沿：走到楼阁台基前停下（不走进楼阁图里）', gr.y >= pavBot + gr.r - 3 && gr.y < pavBot + gr.r + 20, { ...gr, pavBot });
 
   // ———— 最右端 + 东马道
-  await put(g0.X1 - 220, g0.W - 120); await hold('KeyD', 2200); const right = await look(); await shot('w-10-right-end');
-  ck('u3 最右端：走到走道端头停下（不进角楼），地面盖满镜头（不露黑）、镜头在场地 + 边带以内', right.x <= right.X1 - right.r + 2 && right.x >= right.X1 - 60 && right.ground && right.cam, right);
+  await put(g0.WX1 - 220, g0.W - 120); await hold('KeyD', 2200); const right = await look(); await shot('w-10-right-end');
+  ck('u3 最右端：走到走道端头停下（不进角楼），地面盖满镜头（不露黑）、镜头在场地 + 边带以内', right.x <= right.WX1 - right.r + 2 && right.x >= right.WX1 - 60 && right.ground && right.cam, right);
   await p.setViewportSize({ width: 900, height: 900 }); await wait(700); const rightNarrow = await look(); await shot('w-11-right-end-narrow');
   ck('窄窗口（900×900）最右端：地面盖满镜头、镜头在场地 + 边带以内', rightNarrow.ground && rightNarrow.cam, rightNarrow);
   await p.setViewportSize({ width: 1600, height: 700 }); await wait(700); const rightWide = await look();

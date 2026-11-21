@@ -66,7 +66,7 @@ export const STORY_CAST: Record<string, { name: string; portrait?: string }> = {
   // 第一、二章（2026-11-18 夜 ChatGPT 补，按游戏首领造型画：originals/sheet_l 黄巾三兄弟、sheet_m 董卓 / 吕布 / 华雄、sheet_n 徐荣 / 简雍 / 张世平）
   jianyong: { name: '简雍', portrait: 'ink_cast_jianyong' },
   // 第一章 v2（11-20）：卢植（刘备之师，1-1 简报）、皇甫嵩（1-3 合围广宗）——立绘待补，先只显示名字章
-  luzhi: { name: '卢植' }, huangfusong: { name: '皇甫嵩' },
+  luzhi: { name: '卢植', portrait: 'ink_cast_luzhi' }, huangfusong: { name: '皇甫嵩' },
   // 曹操、袁绍、蔡阳：2026-11-18 即梦 Seedream 5.5 补的水墨立绘（originals/sheet_g）
   caocao: { name: '曹操', portrait: 'ink_cast_caocao' }, yuanshao: { name: '袁绍', portrait: 'ink_cast_yuanshao' },
   zhangliang: { name: '张梁', portrait: 'ink_cast_zhangliang' }, zhangbao: { name: '张宝', portrait: 'ink_cast_zhangbao' }, zhangjiao: { name: '张角', portrait: 'ink_cast_zhangjiao' },
@@ -93,7 +93,7 @@ export const STORY_CAST: Record<string, { name: string; portrait?: string }> = {
   wangping: { name: '王平', portrait: 'ink_cast_wangping' }, jiangwei: { name: '姜维', portrait: 'ink_cast_jiangwei' }, haozhao: { name: '郝昭', portrait: 'ink_cast_haozhao' }, simayi: { name: '司马懿', portrait: 'ink_cast_simayi' },
 };
 /** 第一、二章还没有对白立绘的（通用角色只显示名字章）。人物立绘 2026-11-18 夜已全部补齐。 */
-export const MISSING_PORTRAITS = ['旁白卷首图（通用）', '斥候（通用）', '卢植', '皇甫嵩'];
+export const MISSING_PORTRAITS = ['旁白卷首图（通用）', '斥候（通用）', '皇甫嵩'];
 export const MISSING_PORTRAITS_CH3: string[] = []; // 2026-11-18 九人立绘已补齐（assets/ink-cast/）
 export const MISSING_PORTRAITS_CH4: string[] = []; // 2026-11-18 十人立绘已补齐（蔡阳最后补，即梦）
 /** 第五、六章：徐庶、刘贤、邢道荣 2026-11-18 夜补了台词和立绘，已补齐。 */

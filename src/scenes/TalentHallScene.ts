@@ -138,7 +138,7 @@ export class TalentHallScene extends Phaser.Scene {
       this.content.add(worldText(this, W / 2, bottom - 4, `${this.page + 1}/${pages}`, 13, '#e6c88e').setOrigin(.5));
       this.small(W / 2 + 90, bottom - 4, 70, '下页', () => { this.page = (this.page + 1) % pages; this.render(); }, 'talent-next');
     }
-    this.content.add((D ? worldText(this, W - MX, 70, this.message, 13, '#ffd98a').setOrigin(1, 0).setWordWrapWidth(W / 2, true) : worldText(this, 24, bottom + 28, this.message, 13, '#ffd98a').setWordWrapWidth(W - 48)).setName('talent-message'));
+    this.content.add((D ? worldText(this, W / 2, 84, this.message, 15, '#ffe2a0').setOrigin(.5).setBackgroundColor(this.message ? '#2a1a0ee6' : '#00000000').setPadding(14, 5).setStroke('#0c0805', 3) /* 居中、加底，操作结果一眼看得到（2026-11-21：升级后「没反应」） */ : worldText(this, 24, bottom + 28, this.message, 13, '#ffd98a').setWordWrapWidth(W - 48)).setName('talent-message'));
   }
   private offerRow(o: Offer, i: number, captive: boolean, y: number, h: number) {
     const D = W > 600, x0 = D ? MX : 16, w = W - x0 * 2, q = QUALITIES[o.quality];

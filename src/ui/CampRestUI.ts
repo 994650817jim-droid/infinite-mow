@@ -20,7 +20,7 @@ export class CampRestUI {
  private header:Phaser.GameObjects.Text;
  private resources:Phaser.GameObjects.Text;
  private next:Phaser.GameObjects.Text;
- private detail:Phaser.GameObjects.Text;
+ private detail:Phaser.GameObjects.Text;private resTip!:Phaser.GameObjects.Text;
  private tabs:Phaser.GameObjects.Text[]=[];
  private tabFrames:Phaser.GameObjects.Image[]=[];
  private buildSection=0;private buildOffset=0;private modal?:Phaser.GameObjects.Container;
@@ -115,7 +115,11 @@ export class CampRestUI {
   const slide=():void=>{if(!this.root.active){scene.events.off('postupdate',slide);return;}if(!this.root.visible||!this.lineTo)return;const k=Math.min(1,scene.game.loop.delta/90),l=this.tabLine;l.x+=(this.lineTo.x-l.x)*k;l.width+=(this.lineTo.w-l.width)*k;};
   scene.events.on('postupdate',slide);scene.events.once('shutdown',()=>scene.events.off('postupdate',slide));
   this.body=scene.add.container(0,0);this.root.add(this.body);
-  this.detail=this.text(D?W/2:28,D?H-103:H-176,'',D?13:15).setWordWrapWidth(W-(D?120:56),true);if(D)this.detail.setOrigin(.5,0).setAlign('center');/* 电脑版居中，左右各留 60，长句不会贴边被切 */this.detail.setMaxLines(D?3:5);this.root.add(this.detail);
+  // 2026-11-21 总制作人（「缴获的兵装还没穿上…」这类全局提示浮在屏幕中下方，压住将帅帐属性条、布阵说明）：电脑版放到顶栏中间空位（资源行右边、「下一关 / 行囊」左边），任何页签都不压内容
+  this.detail=this.text(D?600:28,D?50:H-176,'',D?12:15).setWordWrapWidth(D?330:W-56,true);if(D)this.detail.setOrigin(.5,0).setAlign('center').setColor('#e8cf94');this.detail.setMaxLines(D?3:5);this.root.add(this.detail);
+  // 资源行悬停说明（属性点去哪加）
+  this.resTip=this.text(D?40:28,D?80:100,'',11).setColor('#b9a57a').setVisible(false);this.root.add(this.resTip);
+  this.resources.setInteractive({useHandCursor:false}).on('pointerover',()=>{if(this.resTip.text)this.resTip.setVisible(true);}).on('pointerout',()=>this.resTip.setVisible(false));
   const command=homeCommand(scene,W/2,H-(D?33:48),D?236:W-96,D?44:52,'率军出征',true); /* 全页唯一一处水墨笔刷，缩小一号 */[command.g,command.caption,command.hit].forEach(o=>o.setScrollFactor(0));command.hit.setName('camp-depart').setData('padDefault',true).on('pointerdown',depart);this.root.add([command.g,command.caption,command.hit]);
  }
  /** 电脑版「回营寨」：墨迹底随文字宽度伸缩；点第一次（待确认）换成朱墨主按钮。 */
@@ -169,7 +173,7 @@ export class CampRestUI {
    if(on){const to={x:t.x+18,w:w-36};if(!this.lineTo){this.tabLine.setX(to.x);this.tabLine.width=to.w;}this.lineTo=to;}});
   // 兵装（总制作人第一章试玩：20 件兵装一件没穿、全程没提示）：有更好的没穿 → 「行囊」小红点；第一次还在下方提示一句
   {const ups=this.gearUpgrades?.()??0;this.bagDot?.setVisible(ups>0);if(ups>0&&!this.notice&&!gearGuideSeen())this.notice='缴获的兵装还没穿上（'+ups+' 件更好）：点右上「行囊」，再点「一键穿戴」';}
-  {const ph=this.pointsHint?.();this.resources.setText('随军粮 '+this.army.food+' · 兵力 '+this.army.count+(ph?' · 属性点 '+ph.n+' 未加（'+ph.where+'）':''));}this.next.setText(this.preBattle?'出征 · '+this.preBattle:'下一关 · '+this.destination);this.header.setText(this.preBattle?'出征整军':'行营休整');this.detail.setText(this.notice);
+  {const ph=this.pointsHint?.();this.resources.setText('随军粮 '+this.army.food+' · 兵力 '+this.army.count+(ph?' · 属性点 '+ph.n+' 未加 ⓘ':''));this.resTip.setText(ph?'加点：'+ph.where:''); /* 2026-11-21：资源行太长、快顶到「下一关」——说明放悬停 */}this.next.setText(this.preBattle?'出征 · '+this.preBattle:'下一关 · '+this.destination);this.header.setText(this.preBattle?'出征整军':'行营休整');this.detail.setText(this.notice);
   {const side=D&&(this.tab===2||this.tab===4),l=CampRestUI.STATION_LEFT;this.detail.setX(side?l+(W-40-l)/2:D?W/2:28).setWordWrapWidth(side?W-40-l-16:W-(D?120:56),true);}
   if(this.tab===0)this.renderRecruit();if(this.tab===2)this.renderMarket();if(this.tab===3)this.renderBuild(D?154:229);if(this.tab===4)this.renderMedic();if(this.tab===5)this.renderFormation();
   this.onChanged?.();

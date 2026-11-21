@@ -17,7 +17,7 @@ import {GameScene} from './GameScene';
 import {GuanduBoss} from '../systems/GuanduBoss';
 import {GUANDU_ATLAS_FILES} from '../data/guanduChapter';
 import {SIEGE, SIEGE_GOALS as SG, FIRST_CAPTURE_BONUS, siegeBattle, defenseBattle, siegeLargeKit, siegeSourceKeys} from '../data/siege';
-import {actorDepth, DEPTH, GAME_HEIGHT, GAME_WIDTH, IS_DESKTOP} from '../config';
+import {actorDepth, BATTLE_ZOOM_DESKTOP, DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, IS_DESKTOP, RENDER_SCALE} from '../config';
 import {warText} from '../ui/WarStyle';
 import {isChapterTestRun} from '../systems/ChapterProgress';
 import {beginSiege, beginDefense, loadWorld, permanentEffects, settleSiege, settleDefense, takeExpeditionReserve, abandonExpedition} from '../world/WorldStore';
@@ -42,7 +42,8 @@ import type {EnemyKind} from '../types';
 import {SIEGE_TIMER} from '../data/siegeTimer';
 import {EdgeGuide} from '../ui/EdgeGuide';
 import {DefenseWallV2} from '../systems/DefenseWallV2';
-import {defenseV2On} from '../data/defenseV2';
+import {DEFENSE_V2, defenseV2On, onWalk} from '../data/defenseV2';
+import {DefenseAssaultV2} from '../systems/DefenseAssaultV2';
 
 /**
  * 攻城战（WORLD_MAP_PLAN.md · W2）：按城市档位的短战。胜利（击败守将 / 大将）即占领该城。
@@ -60,7 +61,7 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
     /** 守城战（守城重做 · systems/DefenseBattle）：城墙在北、城门有耐久、府衙最后防线；迎击不用。 */
     private defend: DefenseBattle | null = null;
     /** 守城 v2（data/defenseV2.ts 开关 defenseV2On，默认关）：视角翻转的新守城；开着时不建旧的 DefenseBattle。 */
-    private defV2: DefenseWallV2 | null = null; private defInside = false; private defTier: DefenseTier = 'early'; private receipt = ''; private test = false;
+    private defV2: DefenseWallV2 | null = null; /** 守城 v2 b 段：云梯 / 冲车 / 一键 F / 占段。 */ private assault: DefenseAssaultV2 | null = null; private v2Rampart = false; private defInside = false; private defTier: DefenseTier = 'early'; private receipt = ''; private test = false;
     private enemyCamps?: EnemyCamps; private controller?: GuanduBoss;
     private gate: Enemy | null = null; private gateLife = 0; private gateLabel?: Phaser.GameObjects.Text; private gateWarned = false;
     /** 攻城目标：帅旗 / 箭楼（可摧毁）→ 占领府衙。 */
@@ -126,7 +127,7 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
       if (!this.defense) this.setupGoals();
       this.defV2?.clear(); this.defV2 = null;
       if (this.defense && !this.intercept) { if (v2) this.setupDefenseV2(); else this.setupDefense(); }
-      this.events.once('shutdown', () => { this.defV2?.clear(); this.defV2 = null; this.legion.postOf = undefined; this.legion.postRangeMul = undefined; this.mid?.clear(); this.mid = undefined; this.enemyCamps?.clear(); this.enemyCamps = undefined; this.controller?.clear(); this.controller = undefined; this.gateLabel?.destroy(); this.gateLabel = undefined; this.gate = null; });
+      this.events.once('shutdown', () => { this.assault?.clear(); this.assault = null; if (this.v2Rampart) { this.player.passive.rampartMul = 1; this.v2Rampart = false; } this.defV2?.clear(); this.defV2 = null; this.legion.postOf = undefined; this.legion.postRangeMul = undefined; this.mid?.clear(); this.mid = undefined; this.enemyCamps?.clear(); this.enemyCamps = undefined; this.controller?.clear(); this.controller = undefined; this.gateLabel?.destroy(); this.gateLabel = undefined; this.gate = null; });
     }
     /** 攻城目标布置：小城帅旗，中大城两座可摧毁箭楼（会放箭）。 */
     private setupGoals() {
@@ -274,11 +275,21 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
     private scriptedSpawn<T>(f: () => T): T { this.scripted = true; try { return f(); } finally { this.scripted = false; } }
     /** 横幅（「冲车被毁」「吊桥已落」等）出现时，顶部目标行 / 守军行和场上说明字先淡出，免得叠字。 */
     protected showWaveBanner(text: string, danger = false, captionText?: string) {
-      super.showWaveBanner(text, danger, captionText);
+      if (this.defV2) this.v2Notice(text, danger, captionText); else super.showWaveBanner(text, danger, captionText);
       // 顶部目标行 / 守军行，加上场上的城门血量 / 绳索 / 营地说明字（吊桥已落时横幅正压在城门字上）
       const lines = [this.goalText, this.garrisonText, this.defend?.hudText, ...(this.mid?.floatLabels ?? [])].filter((t): t is Phaser.GameObjects.Text => !!t?.active); if (!lines.length) return;
       this.tweens.killTweensOf(lines); for (const t of lines) t.setAlpha(0);
       this.tweens.add({ targets: lines, alpha: 1, delay: 2600, duration: 300 });
+    }
+    /** 守城 v2 的横幅（总制作人 a 段验收第 4 条：开局两行字叠在主将头上）：只出一行，放在外墙面的高度（主将在城头、画面上部，不挡人）。 */
+    private v2Notice(text: string, danger: boolean, caption?: string) {
+      this.sfx?.play(danger ? 'gong' : 'waveDrum');
+      for (const n of this.children.list.filter(o => o.name === 'combat-notice')) { this.tweens.killTweensOf(n); n.destroy(); }
+      const line = caption ? text + '　' + caption : text, g = this.defV2!.g, v = this.cameras.main.worldView;
+      const sy = v.height > 0 ? ((g.W + g.F) / 2 - v.y) / v.height * GAME_HEIGHT : GAME_HEIGHT * .5, y = Phaser.Math.Clamp(sy, GAME_HEIGHT * .36, GAME_HEIGHT * .66);
+      const t = this.add.text(GAME_WIDTH / 2, y, line, { fontFamily: FONT, fontSize: IS_DESKTOP ? '17px' : '16px', color: danger ? '#f6b29c' : '#f4e4b9', fontStyle: 'bold', align: 'center', resolution: 2, stroke: '#241d12', strokeThickness: 4, wordWrap: { width: GAME_WIDTH - 40 } })
+        .setOrigin(.5).setScrollFactor(0).setDepth(DEPTH.overlay - 10).setName('combat-notice').setVisible(this.mode === 'none');
+      this.tweens.add({ targets: t, alpha: 0, y: y - 8, delay: 1700, duration: 350, onComplete: () => t.destroy() });
     }
     protected spawnGem(x: number, y: number, value: number) { if (!this.noLoot) super.spawnGem(x, y, value); }
     /** 测试用：中城控制器。 */
@@ -292,6 +303,7 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
     }
     /** 中城：一半敌兵在冲车附近时转去打冲车。 */
     protected customEnemyStep(enemy: Enemy, dt: number, now: number, target: {x: number; y: number}) {
+      if (this.assault?.step(enemy, dt)) return true; // 守城 v2：爬云梯 / 摔下城 / 城外排梯、砍门
       if (this.mid?.steer(enemy, dt)) return true;
       if (this.defend?.step(enemy, dt)) return true; // 守城：城外近战去砍门 / 穿门洞，城内的去打府衙
       return super.customEnemyStep(enemy, dt, now, target);
@@ -348,10 +360,22 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
       this.legion.postOf = u => this.defV2?.postOf(u) ?? null; this.legion.postRangeMul = u => this.defV2?.rangeMul(u) ?? 1;
       w.assignAll(true);
       if (this.itemDrops) this.itemDrops.place = (x, y) => this.fieldPlace(x, y); // 宝箱别落在墙面上
-      this.time.delayedCall(600, () => { if (!this.over) this.showWaveBanner('守城 · ' + this.city.name, true, '敌军从城外（下方）攻来 · 守住城头 · E 叫预备队来这段'); });
+      this.player.sprite.setPosition(start.x, w.g.W - DEFENSE_V2.layout.heroDy); // 开打站在垛口后面（走道南半边）
+      this.hudTexts.chapter.setAlpha(0); // 计时器下的关名（「守城 · 某城」）正好压在城头主将头上；城名开场横幅里有（HUD 每帧重设可见性，所以用透明度）
+      // 电脑布局：战场镜头再拉远一点（墙脚以下要看得到城外列阵、云梯车开过来）；HUD 在 UI 镜头上不受影响
+      if (IS_DESKTOP) this.cameras.main.setZoom(RENDER_SCALE * BATTLE_ZOOM_DESKTOP * DEFENSE_V2.camera.zoomMul);
+      this.assault = new DefenseAssaultV2({ scene: this, g: w.g, player: () => this.player, units: () => this.legion.units, enemies: () => this.enemies, now: () => this.combatNow, elapsed: () => this.elapsed, tier: this.city.tier,
+        spawnTarget: (x, y, hp, size, tex, frame) => { const e = this.supplies?.spawnGate(x, y, hp, size) ?? null; e?.sprite.setTexture(tex, frame).setOrigin(.5, 1).setDisplaySize(size, size).setAlpha(1); return e; },
+        hit: (e, d) => this.hitEnemy(e, d, this.combatNow, 'arrow', true, false), kill: e => { if (!e.active) return; e.hp = 0; this.killEnemy(e); },
+        advance: (e, nx, ny, dt) => this.advanceEnemy(e, nx, ny, dt), hpScale: () => this.chapter.hpScale(this.elapsed),
+        banner: (t, d, c) => this.showWaveBanner(t, d, c), sfx: k => this.sfx.play(k as never), walkKey: w.walkKey });
+      this.sishuiObstacles.pass = e => this.assault?.ghost(e) ?? false; // 爬梯 / 摔下城的人在墙面上，不受墙身碰撞
+      if (this.supplies) this.supplies.pass = e => this.assault?.ghost(e) ?? false; // 也不受梯脚云梯车的碰撞（车就停在梯子底下）
+      this.time.delayedCall(600, () => { if (!this.over) this.showWaveBanner('守城 · ' + this.city.name, true, '敌军从下方城外攻来，守住城头'); });
     }
-    /** 测试用：守城 v2 场地。 */
+    /** 测试用：守城 v2 场地 / b 段攻防。 */
     get defenseV2() { return this.defV2; }
+    get defenseAssault() { return this.assault; }
     /** 守城：关墙（借 2-1 汜水关那套，无箭楼 / 营帐）、城门耐久、府衙、城头弓手与设施、攻城器械（systems/DefenseBattle）。 */
     private setupDefense() {
       const start = {x: this.player.x, y: this.player.y}, lv = cityLevels(this.city.id);
@@ -394,7 +418,9 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
     /** 守城 v2：宝箱 / 回血点 / 机缘这些要主将去捡的，落在墙面上或城外就挪到城头走道（墙面上捡不到；城外要等出城冲阵）。 */
     protected fieldPlace(x: number, y: number) { const p = super.fieldPlace(x, y), w = this.defV2?.g; if (!w || p.y < w.W - 20) return p; return { x: Math.max(w.X0 + 60, Math.min(w.X1 - 60, p.x)), y: (w.top + w.W) / 2 }; }
     /** 守城 v2：主将在城头时镜头往城外让（墙面 + 墙脚在画面里）。 */
-    protected cameraBiasY() { return this.defV2?.cameraBias(this.player) ?? 0; }
+    protected cameraBiasY() { return this.defV2?.cameraBias(this.player, this.cameras.main.zoom / RENDER_SCALE, GAME_HEIGHT) ?? 0; }
+    /** 守城 v2：F = 一键互动（推梯 / 滚木 / 泼油 / 修门），不再当「出击」。 */
+    protected interactOverride() { if (!this.assault) return false; if (this.mode === 'none' && !this.over) this.assault.interact(); return true; }
     /** 守城 v2：E = 叫预备队来主将所在这段。 */
     protected legionOrderOverride() { if (!this.defV2 || this.mode !== 'none' || this.over) return false; this.defV2.callReserve(this.player.x); return true; }
     /** 守城喘息时不刷兵。 */
@@ -434,6 +460,7 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
     protected customBossStep(enemy: Enemy, dt: number, now: number) {
       if (enemy !== this.boss) return false;
       if (this.defend?.bossStep(enemy, dt)) return true; // 守城：攻城主将先砍门、穿门洞进城
+      if (this.assault?.bossStep(enemy, dt)) return true; // 守城 v2：攻城主将先砍门
       if (this.mid?.stepBoss(enemy, dt, now)) return true;
       if (this.controller) { this.controller.update(dt, now); return true; }
       const dx = this.player.x - enemy.x, dy = this.player.y - enemy.y, d = Math.hypot(dx, dy) || 1, nx = d > 48 ? dx / d : 0, ny = d > 48 ? dy / d : 0;
@@ -441,7 +468,13 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
       enemy.moveVx = nx * enemy.def.speed; enemy.moveVy = ny * enemy.def.speed;
       this.advanceEnemy(enemy, nx, ny, dt); return true;
     }
-    protected hitEnemy(enemy: Enemy, raw: number, now: number, source: 'melee' | 'arrow' | 'fire' = 'melee', ally = false, weaponHit = true) { if (enemy === this.boss && this.controller) { raw *= this.controller.incoming(ally); this.controller.hit(now); } if (enemy === this.boss && this.mid) raw *= this.mid.bossDamageMul(); if (this.mid) raw *= this.mid.outgoingMul(); /* 城内武库已占：我军伤害 +8% */ return super.hitEnemy(enemy, raw, now, source, ally, weaponHit); }
+    protected hitEnemy(enemy: Enemy, raw: number, now: number, source: 'melee' | 'arrow' | 'fire' = 'melee', ally = false, weaponHit = true) { if (enemy === this.boss && this.controller) { raw *= this.controller.incoming(ally); this.controller.hit(now); } if (enemy === this.boss && this.mid) raw *= this.mid.bossDamageMul(); if (this.mid) raw *= this.mid.outgoingMul(); /* 城内武库已占：我军伤害 +8% */
+      // 守城 v2：主将近战往下打墙面 / 墙脚 ×0.6（箭矢 / 投射不打折）；打中走道南沿的普通兵 → 推下城摔死
+      const v2Melee = !!this.assault && !!this.defV2 && !ally && source === 'melee';
+      if (v2Melee && enemy.y > this.defV2!.g.W && !enemy.isSupplySlot) raw *= DEFENSE_V2.assault.hero.belowMelee;
+      const r = super.hitEnemy(enemy, raw, now, source, ally, weaponHit);
+      if (v2Melee && enemy.active && enemy.hp > 0) this.assault!.tryPushOff(enemy, this.player);
+      return r; }
     protected bossHasDeathArt() { return !!this.controller; }
     protected killEnemy(enemy: Enemy) {
       this.mid?.onKilled(enemy);
@@ -460,7 +493,9 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
     update(time: number, delta: number) {
       const before = this.combatNow; super.update(time, delta);
       if (this.defend && !this.over) this.defend.update(delta / 1000);
-      if (this.defV2 && !this.over && this.mode === 'none') this.defV2.update(this.combatNow);
+      if (this.defV2 && !this.over && this.mode === 'none') { this.defV2.update(this.combatNow, delta / 1000); this.assault?.update(delta / 1000);
+        const on = onWalk(this.defV2.g, this.player); if (on !== this.v2Rampart) { this.v2Rampart = on; this.player.passive.rampartMul = on ? DEFENSE_V2.assault.hero.rampartMul : 1; } } // 登城：武器范围加成
+      if (this.assault) { this.edgeGuide ??= new EdgeGuide(this); this.edgeGuide.update(this.assault.guideTargets(), this.player, this.mode === 'none' && !this.over); } // 屏外：撞门的冲车、失守的段
       // 城门 / 吊桥一破（城外段结束）：援军跟进 SIEGE_ALLIES.gateWave 队（2026-11-20 用户「攻城战我方兵生成太快了」：平时少、破城后再加一波）
       const midPhase = this.mid?.phase; if (midPhase && midPhase !== this.lastMidPhase) { if (this.lastMidPhase === 'outside' && this.allyPush) { for (let i = 0; i < SIEGE_ALLIES.gateWave; i++) this.allyPush.spawn(); this.showWaveBanner('援军跟进', false, '城门已破 · 义军随后杀入'); } this.lastMidPhase = midPhase; }
       if (this.combatNow > before && !this.over && this.mode === 'none') { if (!this.awaitingChest) this.enemyCamps?.update(this.combatNow); if (!this.defense) this.updateGoals((this.combatNow - before) / 1000); }

@@ -24,6 +24,8 @@ export interface HotkeyHost {
   /** 锦囊（R 键，战斗中；三选一面板里 R 仍是换一批）。 */
   useJinnang?(): boolean;
   order(): 'guard' | 'sortie';
+  /** 场景互动键（守城 v2 的一键 F：推梯 / 滚木 / 泼油 / 修门）；返回 true 表示已处理，不再当「出击」。 */
+  interact?(): boolean;
   cycleOrder(): void;
   /** 军阵：变阵（X）。没开放 / 冷却中返回 false。 */
   switchFormation?(): boolean;
@@ -120,7 +122,7 @@ export class BattleHotkeys {
         case 'potion': h.usePotion(); return true;
         case 'reroll': return h.useJinnang?.() ?? false;
         case 'order': h.cycleOrder(); return true;
-        case 'sortie': if (h.order() === 'guard') h.cycleOrder(); return true;
+        case 'sortie': if (h.interact?.()) return true; if (h.order() === 'guard') h.cycleOrder(); return true;
         case 'formation': return h.switchFormation?.() ?? false;
         case 'bag': h.openBag(); return true;
         case 'attributes': if (!h.canAttributes()) return false; h.openAttributes('none'); return true;

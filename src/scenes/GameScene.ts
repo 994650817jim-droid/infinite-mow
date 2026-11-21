@@ -1300,7 +1300,7 @@ export class GameScene extends Phaser.Scene {
     const hotkeyHost = {
       scene: this as Phaser.Scene, mode: () => this.mode as string, over: () => this.over,
       togglePause: () => this.togglePause(), usePotion: () => this.usePotion(), useJinnang: () => this.useJinnang(),
-      order: () => this.legion.order, cycleOrder: () => { if (this.legionOrderOverride()) return; if (mechOpen('squad')) this.legion.cycleOrder(); }, switchFormation: () => this.formationRt?.switch(this.combatNow) ?? false,
+      order: () => this.legion.order, interact: () => this.interactOverride(), cycleOrder: () => { if (this.legionOrderOverride()) return; if (mechOpen('squad')) this.legion.cycleOrder(); }, switchFormation: () => this.formationRt?.switch(this.combatNow) ?? false,
       openBag: () => this.openBattleBag(), canAttributes: () => this.player.growth.unallocated > 0 && mechOpen('attributes'),
       openAttributes: (from: 'none' | 'pause') => { this.attributeReturn = from; this.renderAttributePanel(); this.setMode('attributes'); },
       openBuild: () => this.openBuildPanel(), chooseUpgrade: (i: number) => { if (this.upgradeCardShown(i)) this.chooseUpgrade(i); }, chooseBranch: (i: number) => this.chooseBranch(i),
@@ -1510,6 +1510,8 @@ export class GameScene extends Phaser.Scene {
   protected cameraBiasY(): number { return 0; }
   /** E / 护阵键的场景覆盖（守城 v2：叫预备队来主将这段）；返回 true 表示已处理。 */
   protected legionOrderOverride(): boolean { return false; }
+  /** F（出击键）的场景覆盖（守城 v2：一键 F 推梯 / 滚木 / 泼油 / 修门）；返回 true 表示已处理。 */
+  protected interactOverride(): boolean { return false; }
   protected updateCamera(dt: number): void {
     if (this.cutscene?.active) return; // 过场动画时镜头归过场管
     const cam = this.cameras.main;

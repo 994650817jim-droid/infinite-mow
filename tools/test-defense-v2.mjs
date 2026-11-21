@@ -1,5 +1,6 @@
 // 守城 v2 试玩版（共享笔记 defense-redesign-v2.md v2.2）· a 段：纯 node，不开浏览器。
 // 开关默认关；场地几何（城外在下、走道 3.5 身位、墙身挡人只留马道缺口、四面封边）；分段与岗位；自动站位；马道寻路；镜头；接线。
+// b 段：镜头锁墙脚（城外留 ≥ 240 截图像素）、一键 F 站位与优先级、占段判定、爬梯速度、门楼半透明、单行横幅、推下城、只用手绘图。
 // 用法：node tools/test-defense-v2.mjs（NODE_PATH 指向有 esbuild 的 node_modules）
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -45,15 +46,45 @@ ck('城里的兵去城头：先去最近的马道口（不穿墙）', g.ramps.in
 const w2 = V.nextWaypoint(g, { x: w1.x, y: w1.y }, crenel);
 ck('到了马道口：穿过缺口上城头', w2.x === w1.x && w2.y > g.top, w2);
 ck('已在城头：直接去岗位', JSON.stringify(V.nextWaypoint(g, { x: crenel.x + 300, y: (g.top + g.W) / 2 }, crenel)) === JSON.stringify(crenel));
-ck('镜头：主将在城头往城外让 ' + D.camera.onWall + '，在城里不让', D.camera.onWall > 80 && V.onWalk(g, g.start) && !V.onWalk(g, { x: g.gx, y: g.innerTop - 100 }));
+{ // 电脑布局：设计画面 960×540、战场倍率 0.88 × zoomMul；截图 1280 宽 = 设计 ×4/3
+  const z = .88 * D.camera.zoomMul, H = 540, scr = (wy, c) => (wy - c) * z + H / 2;
+  const at = y => V.cameraCenterY(g, { x: g.gx - 500, y }, z, H), mid = (g.top + g.W) / 2;
+  const c0 = at(mid), cS = at(g.W - 30), cN = at(g.top + 20);
+  const outPx = c => (H - scr(g.F, c)) * 4 / 3, heroPx = (y, c) => scr(y, c) * 4 / 3;
+  ck('镜头（a 段验收第 2 条）：主将在走道中线 / 南沿时，墙脚以下的城外地面 ≥ 240 截图像素；主将脚下离屏幕顶 ≥ ' + D.camera.heroMin + ' 设计像素',
+    outPx(c0) >= 240 && outPx(cS) >= 240 && scr(mid, c0) >= D.camera.heroMin - .5 && scr(g.top + 20, cN) >= D.camera.heroMin - .5 && D.camera.zoomMul < 1,
+    { mid: { out: Math.round(outPx(c0)), hero: Math.round(heroPx(mid, c0)) }, south: { out: Math.round(outPx(cS)) }, north: { out: Math.round(outPx(cN)), hero: Math.round(heroPx(g.top + 20, cN)) } });
+  ck('镜头：主将下城进城不让（回正）', at(g.innerTop - 100) === null && V.cameraCenterY(g, { x: g.gx, y: g.innerTop - 100 }, z, H) === null);
+}
 
 // ———— 接线
 const S = src('src/scenes/SiegeGameScene.ts'), G = src('src/scenes/GameScene.ts'), L = src('src/systems/Legion.ts'), T = src('src/systems/LegionTactics.ts'), W = src('src/systems/DefenseWallV2.ts');
 ck('攻城场景：守城且开关开 → 新守城（只铺地面、不建旧 DefenseBattle）；关 → 旧守城照旧', /const v2 = this\.defense && !this\.intercept && defenseV2On\(\);/.test(S) && /bare: v2\}\);/.test(S) && /if \(this\.defense && !this\.intercept\) \{ if \(v2\) this\.setupDefenseV2\(\); else this\.setupDefense\(\); \}/.test(S));
 ck('刷兵只在城外（不在城外的落点挪到城外敌营），首领在城外', /if \(this\.defV2 && kind !== 'boss' && !this\.defInside && !this\.defV2\.isOutside\(\{x, y\}\)\) \{ const sp = this\.defV2\.spawnPoint\(\);/.test(S) && /if \(this\.defV2\) \{ const p = this\.defV2\.spawnPoint\(\); return this\.spawnEnemy/.test(S) && /const bp = this\.defV2\.bossPoint\(\); b\.sprite\.setPosition\(bp\.x, bp\.y\);/.test(S));
-ck('镜头偏移、E 叫预备队走场景钩子（护阵键 / 手柄 Y / 部曲按钮都先问 legionOrderOverride）', /\+ this\.cameraBiasY\(\);/.test(G) && /protected cameraBiasY\(\) \{ return this\.defV2\?\.cameraBias\(this\.player\) \?\? 0; \}/.test(S) && /cycleOrder: \(\) => \{ if \(this\.legionOrderOverride\(\)\) return;/.test(G) && /if \(button === PAD\.Y\) \{ if \(!this\.legionOrderOverride\(\)\) this\.legion\.cycleOrder\(\); return true; \}/.test(G) && /this\.defV2\.callReserve\(this\.player\.x\); return true;/.test(S));
+ck('镜头偏移、E 叫预备队走场景钩子（护阵键 / 手柄 Y / 部曲按钮都先问 legionOrderOverride）', /\+ this\.cameraBiasY\(\);/.test(G) && /protected cameraBiasY\(\) \{ return this\.defV2\?\.cameraBias\(this\.player, this\.cameras\.main\.zoom \/ RENDER_SCALE, GAME_HEIGHT\) \?\? 0; \}/.test(S) && /cycleOrder: \(\) => \{ if \(this\.legionOrderOverride\(\)\) return;/.test(G) && /if \(button === PAD\.Y\) \{ if \(!this\.legionOrderOverride\(\)\) this\.legion\.cycleOrder\(\); return true; \}/.test(G) && /this\.defV2\.callReserve\(this\.player\.x\); return true;/.test(S));
 ck('部曲岗位钩子：Legion.postOf → 战术按岗位站 / 选敌不按主将拴、垛口射程 ×1.6、卡住按岗位归位', /this\.tactics\.postOf = this\.postOf;/.test(L) && /\* \(this\.postRangeMul\?\.\(u\) \?\? 1\);/.test(L) && /const p = this\.postOf\?\.\(u\) \?\? this\.formation\.position\(u\)/.test(L) && /private thinkPost\(u: Ally, post:/.test(T) && /if \(this\.postOf\?\.\(u\)\) \{ let best/.test(T));
-ck('墙图复用 2-3 洛阳 2.5D 城墙（正面朝城外）：墙段从外侧城垛往下裁、城门楼两层、走道用同图石板带往上铺（手绘拼接）', /setCrop\(0, A\.seg\.crenel, A\.seg\.w, A\.seg\.h - A\.seg\.crenel\)/.test(W) && /defv2-gate-front/.test(W) && /c\.drawImage\(segImg, 0, A\.seg\.walkTop/.test(W));
+ck('墙图复用 2-3 洛阳 2.5D 城墙（正面朝城外）：墙段从外侧城垛往下裁、城门楼两层、走道用同图石板带往上铺（手绘拼接）', /setCrop\(0, A\.seg\.crenel, A\.seg\.w, A\.seg\.h - A\.seg\.crenel\)/.test(W) && /defv2-gate-front/.test(W) && /c\.drawImage\(segImg, B\.x0, B\.y0, bw, bh/.test(W));
+// ———— b 段
+const Asl = src('src/systems/DefenseAssaultV2.ts'), O = src('src/systems/SishuiObstacles.ts'), K = src('src/systems/BattleHotkeys.ts'), AA = D.assault, AR = D.art;
+ck('走道过渡贴图（a 段验收第 3 条）：只取石板带中间（去掉两端斜边和上沿阴影线），每条错开 + 左右 / 上下镜像交替', AR.walkBand.x0 >= 40 && AR.walkBand.x1 <= AR.seg.w - 40 && AR.walkBand.y0 > AR.seg.walkTop && /c\.scale\(fx \? -1 : 1, fy \? -1 : 1\)/.test(W) && /r % 2 === 1/.test(W));
+ck('城门楼过渡（a 段验收第 1 条）：主将 / 士兵进门楼范围楼阁淡到 ' + D.gateFade.alpha + '，离开恢复；人画在楼阁上层', D.gateFade.alpha <= .4 && /const target = busy \? F\.alpha : 1;/.test(W) && /this\.h\.units\(\)\.some\(u => u\.active && inside\(u\)\)/.test(W) && /setDepth\(actorDepth\(g\.top\) - \.01\)/.test(W));
+ck('横幅（a 段验收第 4 条）：守城 v2 只出一行（标题 + 说明拼成一行），放在外墙面高度、不压主将', /if \(this\.defV2\) this\.v2Notice\(text, danger, captionText\); else super\.showWaveBanner/.test(S) && /const line = caption \? text \+ '　' \+ caption : text/.test(S) && /Phaser\.Math\.Clamp\(sy, GAME_HEIGHT \* \.36, GAME_HEIGHT \* \.66\)/.test(S));
+// 一键 F 的站位与优先级
+const SP = V.v2Spots(g), up = () => true, none = () => false;
+ck('一键 F 站位：每段梯口在梯子顶端（走道南沿）、滚木架在梯口东侧、油锅在门楼前沿、修门在门楼内侧；都在走道上', SP.ladders.length === 4 && SP.racks.length === 4 && [...SP.ladders, ...SP.racks, SP.oil, SP.gate].every(p => p.y > g.top && p.y < g.W) && SP.oil.x === g.gx && SP.gate.y < SP.oil.y);
+ck('站梯口：梯子立着 → 推梯；梯子没立 → 不算梯口', V.spotAt(g, SP.ladders[1], up)?.kind === 'ladder' && V.spotAt(g, SP.ladders[1], none) === null);
+ck('站滚木架 → 滚木（是这一段的）；站门楼前沿 → 泼油；站门楼内侧 → 修门；空地 → 没有', V.spotAt(g, SP.racks[2], up)?.kind === 'rack' && V.spotAt(g, SP.racks[2], up)?.seg === 2 && V.spotAt(g, SP.oil, up)?.kind === 'oil' && V.spotAt(g, SP.gate, up)?.kind === 'gate' && V.spotAt(g, { x: g.segs[0].x0 + 20, y: g.top + 20 }, up) === null);
+ck('优先级 梯口 > 滚木架（两处都够得着时推梯）', V.spotAt(g, { x: (SP.ladders[0].x + SP.racks[0].x) / 2, y: (SP.ladders[0].y + SP.racks[0].y) / 2 }, up)?.kind === 'ladder');
+ck('城头分段判定：走道上按段的 x 范围；墙面 / 城外 / 城里不算', V.walkSegment(g, { x: g.segs[3].ladderX, y: g.W - 20 }) === 3 && V.walkSegment(g, { x: g.segs[3].ladderX, y: g.F - 10 }) === -1 && V.walkSegment(g, { x: g.gx, y: (g.top + g.W) / 2 }) === -1 && V.walkSegment(g, { x: g.segs[0].ladderX, y: g.innerTop - 40 }) === -1);
+ck('爬梯：从墙脚爬到翻上垛口用 ' + AA.ladder.climbSec + ' 秒；占段后 ×' + AA.capture.fastMul, Math.abs((g.F - (g.W - 26)) / V.climbSpeed(g) - AA.ladder.climbSec) < 1e-6 && AA.capture.fastMul === 2 && AA.capture.minFoes === 3);
+// 接线
+ck('爬梯 / 摔下城的人不受墙身碰撞（SishuiObstacles.pass），F 走场景钩子（守城 v2 不再当「出击」）', /pass\?:\(e:Enemy\)=>boolean;/.test(O) && /!this\.pass\?\.\(e\)/.test(O) && /case 'sortie': if \(h\.interact\?\.\(\)\) return true;/.test(K) && /interact: \(\) => this\.interactOverride\(\)/.test(G) && /protected interactOverride\(\) \{ if \(!this\.assault\) return false; if \(this\.mode === 'none' && !this\.over\) this\.assault\.interact\(\); return true; \}/.test(S) && /this\.sishuiObstacles\.pass = e => this\.assault\?\.ghost\(e\) \?\? false;/.test(S));
+ck('敌兵步进：爬梯 / 城外排梯、砍门走 assault.step；攻城主将先砍门', /if \(this\.assault\?\.step\(enemy, dt\)\) return true;/.test(S) && /if \(this\.assault\?\.bossStep\(enemy, dt\)\) return true;/.test(S));
+ck('主将近战往下打墙面 / 墙脚 ×' + AA.hero.belowMelee + '，打中走道南沿普通兵 → 推下城；精英 / 首领推不下', /raw \*= DEFENSE_V2\.assault\.hero\.belowMelee;/.test(S) && /this\.assault!\.tryPushOff\(enemy, this\.player\);/.test(S) && /e\.kind === 'elite' \|\| e\.kind === 'boss'/.test(Asl));
+ck('镜头拉远只在电脑布局（HUD 在 UI 镜头上不受影响）；登城武器范围 ×' + AA.hero.rampartMul, /if \(IS_DESKTOP\) this\.cameras\.main\.setZoom\(RENDER_SCALE \* BATTLE_ZOOM_DESKTOP \* DEFENSE_V2\.camera\.zoomMul\);/.test(S) && /this\.player\.passive\.rampartMul = on \? DEFENSE_V2\.assault\.hero\.rampartMul : 1;/.test(S));
+ck('特效只用现有手绘图 / 序列帧（云梯车、冲车、滚木堆、地火、水墨圈），不画代码像素特效', ['siege_mid_ladder', 'siege_mid_ram', 'siege_mid_barb', 'ground_fire', 'siege_capture'].every(k => Asl.includes("'" + k + "'")) && !/fillCircle|fillEllipse|strokeEllipse|add\.circle|add\.ellipse|particles/.test(Asl));
+ck('数值都在 data/defenseV2.ts（云梯 / 冲车 / 城门 / 占段 / 推下城 / 滚木 / 热油 / 修门）', ['ladder', 'ram', 'gate', 'capture', 'push', 'hero', 'spots', 'logs', 'oil', 'repair'].every(k => k in AA) && AA.ladder.segCap === 8 && AA.gate.hp.medium > 0);
+ck('开打主将站在垛口后（走道南半边），计时器下的关名透明（不压城头主将头顶）', D.layout.heroDy < D.layout.walk / 2 && S.includes('this.player.sprite.setPosition(start.x, w.g.W - DEFENSE_V2.layout.heroDy);') && S.includes('this.hudTexts.chapter.setAlpha(0);'));
 const I = src('src/systems/ItemDrops.ts');
 ck('定时宝箱落点走钩子（守城 v2 挪回走道，别落在墙面 / 城外）；其它关不给钩子照旧', /place\?: \(x: number, y: number\) => \{ x: number; y: number \};/.test(I) && /const q = this\.place\?\.\(/.test(I) && /this\.itemDrops\.place = \(x, y\) => this\.fieldPlace\(x, y\);/.test(S));
 console.log(fail ? `\n${fail} 项失败` : '\n全部通过'); process.exit(fail ? 1 : 0);

@@ -291,11 +291,13 @@ export class BattlefieldSupplies {
   if(hurt())contacts.set(unit,life);
  }
  appendNavigationBoxes(out:Array<{left:number;right:number;top:number;bottom:number}>):void{for(const c of this.crates)if(c.enemy.active){const x=c.enemy.x+c.offsetX,y=c.enemy.y+(c.offsetY??-c.halfH*.5);out.push({left:x-c.halfW,right:x+c.halfW,top:y-c.halfH,bottom:y+c.halfH});}}
+ /** 不受物件碰撞的敌兵（守城 v2：正在爬云梯 / 摔下城的；云梯车就停在梯脚）。 */
+ pass?:(e:Enemy)=>boolean;
  resolveBodies(allies:readonly Ally[],hurtAlly:(ally:Ally,damage:number,now:number)=>boolean=()=>false,hurtEnemy:(enemy:Enemy,damage:number,now:number)=>boolean=()=>false):void {
   for(const c of this.crates){if(!c.enemy.active)continue;
    if(this.blocked(this.player.x,this.player.y,this.player.radius,c)){this.spike(c,this.player,1,()=>this.player.takeDamage(8,this.now()));this.player.sprite.x+=this.pushX;this.player.sprite.y+=this.pushY;}
    for(const a of allies)if(a.active&&this.blocked(a.x,a.y,a.radius,c)){this.spike(c,a,a.lifeId,()=>hurtAlly(a,8,this.now()));a.push(this.pushX,this.pushY);}
-   for(const e of this.enemies)if(e.active&&!e.isSupplySlot&&!e.invulnerable&&!e.controlImmune&&this.blocked(e.x,e.y,e.radius,c)){this.spike(c,e,e.spawnId,()=>hurtEnemy(e,8,this.now()));e.sprite.x+=this.pushX;e.sprite.y+=this.pushY;}
+   for(const e of this.enemies)if(e.active&&!e.isSupplySlot&&!e.invulnerable&&!e.controlImmune&&!this.pass?.(e)&&this.blocked(e.x,e.y,e.radius,c)){this.spike(c,e,e.spawnId,()=>hurtEnemy(e,8,this.now()));e.sprite.x+=this.pushX;e.sprite.y+=this.pushY;}
   }
  }
  clear():void {this.spikeContacts.clear();this.coals.clear();for(const image of this.debrisImages)image.setVisible(false);this.remains.length=0;for(const f of this.breakFx){f.active=false;f.image.setVisible(false);}for(const image of this.brazierBreak)image.setVisible(false);for(const image of this.groundFlame)image.setVisible(false);this.fires.length=0;this.burnCooldown.clear();this.allyBurn.clear();this.playerBurnAt=0;for(const c of this.crates){c.enemy.deactivate();c.shadow.setVisible(false);}for(const p of this.potions){p.active=false;p.image.setVisible(false);}this.healRemaining=0;}

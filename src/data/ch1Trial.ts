@@ -9,7 +9,7 @@
  */
 export const CH1_TRIAL_ID = 'ch1v6';
 export const CH1_TRIAL: boolean = (() => {
-  if (!import.meta.env.DEV) return false;
+  if (!import.meta.env?.DEV) return false; // 纯 node 测试里没有 import.meta.env：按「关」处理
   try { return new URLSearchParams(window.location.search).get('balance') === CH1_TRIAL_ID; } catch { return false; }
 })();
 

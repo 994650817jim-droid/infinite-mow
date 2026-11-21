@@ -36,7 +36,7 @@ ck('撤走的兵经验折一半：46 个各 2 点 → 46；没撤 → 0；零头
 ck('静场 quietMs 6–8 秒、比退开时间长', C.BOSS_CLEAR.quietMs >= 6000 && C.BOSS_CLEAR.quietMs <= 8000 && C.BOSS_CLEAR.quietMs > C.BOSS_CLEAR.ms, C.BOSS_CLEAR.quietMs);
 
 const G = readFileSync(join(root, 'src/scenes/GameScene.ts'), 'utf8');
-ck('GameScene.spawnBoss：首领一出场就调 bossClearStage', /this\.boss = boss;\s*\n\s*this\.bossClearStage\(boss\);/.test(G));
+ck('GameScene.spawnBoss：首领一出场就调 bossClearStage', /this\.boss = boss;\s*\n(?:\s*this\.battleHeal\?\.bossEntryAid\([^\n]*\n)?\s*this\.bossClearStage\(boss\);/.test(G));
 ck('跳过：攻城 / 守城（SiegeGameScene）、目标没完成的目标型关卡；双首领不跳过', /bossClearAllowed\(\): string \{ if \(this\.scene\.key === 'SiegeGameScene'\) return '攻城 \/ 守城'; if \(this\.objective && !this\.objective\.done\) return '目标型关卡'; return ''; \}/.test(G));
 ck('退开中的兵：不出手、往两侧走、最后淡出、到点撤走（deactivate，不走击杀结算）', /if \(enemy\.withdrawUntil\) \{[^}]*left <= 0\) \{ enemy\.sprite\.setAlpha\(1\); enemy\.deactivate\(\); continue; \}[^\n]*contactCd = Math\.max\(enemy\.contactCd, \.3\)/.test(G));
 ck('有撤兵才静场：bossQuietUntil = combatNow + quietMs，经验按撤走的兵算、退开结束时结算', /if \(picks\.length\) \{[^}]*this\.bossQuietUntil = this\.combatNow \+ BOSS_CLEAR\.quietMs;[^}]*withdrawXp\(picks\.map\(p => list\[p\.index\]\.def\.xp\)\)[^}]*this\.bossClearPending = \{ at: this\.combatNow \+ BOSS_CLEAR\.ms/.test(G));

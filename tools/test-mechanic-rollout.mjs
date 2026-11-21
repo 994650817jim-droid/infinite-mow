@@ -89,7 +89,7 @@ const rest = (p, key) => p.evaluate(async key => {
   const p = await open(ch1done, '&mech=real');
   const st = await states(p);
   ck('第一章通关后：部曲 / 舆图 / 锦囊 / 军医 / 行囊 / 军需商人 / 机缘开放；副将（2-2）/ 四维（2-3）/ 攻城（第二章后）/ 劝降 / 专职（3-1）/ 合击（3-2）未开',
-    ['squad', 'atlas', 'jinnang', 'medic', 'gear', 'merchant', 'fortune'].every(i => st[i]) && ['lieutenant', 'attributes', 'siege', 'parley', 'branch', 'combo'].every(i => !st[i]), st);
+    ['squad', 'atlas', 'jinnang', 'medic', 'gear', 'merchant', 'fortune', 'attributes'].every(i => st[i]) && ['lieutenant', 'siege', 'parley', 'branch', 'combo'].every(i => !st[i]), st);
   const mapIds = await p.evaluate(async () => { const M = await import('/src/data/mechanicUnlocks.ts'); const ids = Object.keys(M.MECHANICS); return ids.filter(id => M.MECHANICS[id].when === 'after' && M.MECHANICS[id].chapter === 1); });
   ck('张世平（军需商人）走「第一章通关后」：在天下地图（2-1 前）播，不在 2-1 开打时播', mapIds.includes('merchant') && mapIds.includes('jinnang'), mapIds);
   await p.evaluate(() => { const s0 = window.__game.scene.getScene('GameScene'); s0.registry.remove('campaignTransfer'); s0.registry.set('runConfig', { character: 'zhaoyun', chapter: 'hulao', westStage: 1 }); s0.scene.restart(); });

@@ -1,6 +1,6 @@
 // 第二章「讨伐董卓」全面检查（用户 11-20「开始检查第二章」；共享笔记 chapter2-review.md）：
 // 2-1 汜水关 / 2-2 荥阳 / 2-3 洛阳 —— 五段节奏、首领出场、城墙城门（墙内只刷远程）、营帐 / 伏营、副将专属形象、西凉兵外观、
-// 2-3 董卓城头打不到 / 营寨尽毁吕布跃下；玩法开放（?mech=real 按进度）：2-1 兵装 + 机缘、2-2 副将、2-3 四维、第二章后攻城、劝降 3-1。
+// 2-3 董卓城头打不到 / 营寨尽毁吕布跃下；玩法开放（?mech=real 按进度）：2-1 兵装 + 机缘、2-2 副将、四维 1-3（2026-11-21 从 2-3 提前）、第二章后攻城、劝降 3-1。
 // 截图 assets/review/chapter2/。用法：BASE=http://127.0.0.1:5241/ node tools/test-chapter2.mjs
 import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
@@ -88,7 +88,7 @@ const info = p => p.evaluate(() => { const s = window.__S, en = s.enemies.filter
   const p = await stage(1, '&mech=real', W(3, 0)); await p.waitForTimeout(4500);
   const g = await p.evaluate(async () => { const M = await import('/src/data/mechanicUnlocks.ts'); M.mechRefresh(); const s = window.__S; return { fortune: !!s.fortunes, gear: M.mechOpen('gear'), parley: M.mechOpen('parley'), lieutenant: M.mechOpen('lieutenant'), attributes: M.mechOpen('attributes'), siege: M.mechOpen('siege'), cards: (s.data.get('__storyBarkCardLog') ?? []).filter(x => x.startsWith('新玩法')) }; });
   await p.screenshot({ path: OUT + '/2-1-unlocks.png' });
-  ck('2-1（第一章通关后）：兵装、机缘开放；劝降、四维、攻城未开；新玩法卡一关不超过 2 张', g.fortune && g.gear && !g.parley && !g.attributes && !g.siege && g.cards.length <= 2, g);
+  ck('2-1（第一章通关后）：兵装、机缘、四维（1-3 起）开放；劝降、攻城未开；新玩法卡一关不超过 2 张', g.fortune && g.gear && !g.parley && g.attributes && !g.siege && g.cards.length <= 2, g);
   await p.close();
   const q = await stage(2, '&mech=real', W(3, 1)); await q.waitForTimeout(1500);
   const h = await q.evaluate(async () => { const M = await import('/src/data/mechanicUnlocks.ts'); M.mechRefresh(); return { lieutenant: M.mechOpen('lieutenant'), parley: M.mechOpen('parley'), lt: window.__S.phasePlan?.lieutenant }; });

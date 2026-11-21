@@ -238,8 +238,34 @@ Object.assign(CONTENT_SFX, <Record<string, Recipe>>{
   bossbar_shatter: (v, t, p) => { for (let i = 0; i < 5; i++) glint(v, t + i * .04 + Math.random() * .03, (1800 + Math.random() * 1600) * p, .015); v.noise(t, .3, 'highpass', 3500, .03, 6000); v.metal(t, 700 * p, .012, .4); return .9; },
 });
 
+// ———— 觉醒音效（2026-11-21 用户「关于觉醒音效触发优化一下」）————
+// 一局的高光：起（约 0.3 秒涌起）→ 爆（大鼓 + 低钟 + 号角三和弦，对上横幅弹出）→ 余韵（钟声 + 低吟约 2 秒淡出）；
+// 六派共用骨架，各换一层音色点缀（火 / 谋 / 弓 / 骑 / 武 / 阵）。和合击提示（短鼓 + 三声叮）、升级明显区分。
+const awakenCore = (v: SfxVoice, t: number, p: number, bellF: number): void => {
+  v.swell(t, .32, 'lowpass', 150, 1300, .05, .8, .9); // 起
+  const h = t + .3;
+  v.drum(h, 95, 42, .12, .5); thud(v, h, 55 * p, .08, .7); // 爆：大鼓
+  bell(v, h, bellF * p, .045, 2); // 低钟
+  for (const [f, g] of [[147, .02], [220, .016], [294, .012]] as const) v.tone(h + .02, .7, 'sawtooth', f * p, g, f * p * 1.01, .03); // 号角三和弦
+  v.tone(h + .1, 1.9, 'sine', 98 * p, .022, 98 * p, .3); v.tone(h + .1, 1.9, 'sine', 147.5 * p, .014, 147.5 * p, .35); // 余韵低吟
+};
+Object.assign(CONTENT_SFX_CONFIG, {
+  awaken_fire: F(2.4, 1500, 1, 2, 0), awaken_stratagem: F(2.4, 1500, 1, 2, 0), awaken_archery: F(2.4, 1500, 1, 2, 0),
+  awaken_cavalry: F(2.4, 1500, 1, 2, 0), awaken_warrior: F(2.4, 1500, 1, 2, 0), awaken_formation: F(2.4, 1500, 1, 2, 0),
+});
+Object.assign(CONTENT_SFX, <Record<string, Recipe>>{
+  awaken_fire: (v, t, p) => { crackle(v, t, 8, .3, .02); awakenCore(v, t, p, 110); flare(v, t + .3, 1.1, .06, 220, 2000); crackle(v, t + .4, 10, 1, .022); return 2.4; },
+  awaken_stratagem: (v, t, p) => { for (let i = 0; i < 4; i++) glint(v, t + i * .07, PENTA[i + 2] * 2 * p, .014); awakenCore(v, t, p, 131); for (let i = 0; i < 3; i++) bell(v, t + .4 + i * .18, PENTA[[4, 2, 0][i]] * p, .018, 1.2); return 2.4; },
+  awaken_archery: (v, t, p) => { v.tone(t, .3, 'triangle', 120 * p, .025, 160 * p, .2); awakenCore(v, t, p, 123); for (let i = 0; i < 6; i++) whoosh(v, t + .32 + i * .05, .22, 1800 * p, 5200 * p, .02, 2); return 2.4; },
+  awaken_cavalry: (v, t, p) => { for (let i = 0; i < 4; i++) drum(v, t + i * .075, .045 + i * .01, 140); awakenCore(v, t, p, 110); whoosh(v, t + .3, .6, 300 * p, 1800 * p, .05, .8); return 2.4; },
+  awaken_warrior: (v, t, p) => { v.swell(t, .3, 'bandpass', 2500 * p, 900 * p, .02, 1.6, .9); awakenCore(v, t, p, 98); v.metal(t + .3, 260 * p, .03, .6); thud(v, t + .32, 48 * p, .06, .6); return 2.4; },
+  awaken_formation: (v, t, p) => { for (let i = 0; i < 3; i++) { v.metal(t + i * .09, 320 * p, .012, .15); v.noise(t + i * .09, .04, 'bandpass', 1200, .02, 700, 1.3); } awakenCore(v, t, p, 117); drum(v, t + .5, .07, 100); drum(v, t + .66, .07, 100); return 2.4; },
+});
+
 /** 响度校准倍数（tools/render-sfx.mjs 实测后填；未列出的 = 1）。 */
 const LEVEL: Record<string, number> = {
+  // 觉醒（2026-11-21，峰值约 -14 dBFS：低于首领倒下、高于命中与升级）
+  awaken_fire: 0.79, awaken_stratagem: 0.81, awaken_archery: 0.90, awaken_cavalry: 0.83, awaken_warrior: 0.77, awaken_formation: 0.86,
   // 音效第二批（2026-11-20 夜）
   camp_burn: 3.98, camp_captain: 1.88, camp_collapse: 1.40, heal_spring: 1.80, kneel: 2.14, tutorial_tip: 1.53, scroll_open: 2.48, uiPage: 1.97, bossbar_open: 1.95, bossbar_shatter: 1.04,
   // 音效审计补齐（2026-11-19）

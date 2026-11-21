@@ -205,6 +205,7 @@ assets/raw/*
 !/tools/flood-magenta.mjs
 !/tools/erase-grey.mjs
 !/tools/build-ink-bust.mjs
+!/tools/cut-epic-home.mjs
 !/tools/shot-story-portraits.mjs
 !/tools/resize-image.mjs
 !/tools/shot-boss-still.mjs

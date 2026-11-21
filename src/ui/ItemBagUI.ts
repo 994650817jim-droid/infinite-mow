@@ -133,7 +133,8 @@ export class ItemBagUI {
     if (s.legacy.length) this.button(x0 + pw - (D ? 170 : 176), y0 + (D ? 32 : 40), `旧物 ${s.legacy.length}`, 'item-legacy', () => this.select('legacy'), { size: D ? 14 : 15 });
 
     const pageY = D ? this.renderDesk(s, x0, y0, pw, ph) : this.renderMobile(s, x0, y0, pw, ph);
-    if (this.notice) { const n = this.text(W / 2, pageY - (D ? 34 : 40), this.notice, 14, '#f3d48a').setOrigin(.5, 1).setAlign('center').setBackgroundColor('#1b120bcc').setPadding(10, 4).setName('item-notice'); this.notice = ''; this.scene.time.delayedCall(2600, () => n.active && n.setVisible(false)); }
+    // 电脑版提示放在顶栏中间（标题行空处；原来在左下「兵装加成」说明上面，把字压住了，2026-11-21 总制作人）
+    if (this.notice) { const n = this.text(W / 2, D ? y0 + 28 : pageY - 40, this.notice, 14, '#f3d48a').setOrigin(.5, D ? .5 : 1).setAlign('center').setBackgroundColor('#1b120bcc').setPadding(10, 4).setName('item-notice'); this.notice = ''; this.scene.time.delayedCall(2600, () => n.active && n.setVisible(false)); }
 
     if (this.selected === 'stable') this.renderStable();
     else if (this.selected === 'legacy') this.renderLegacy();

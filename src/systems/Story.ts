@@ -340,7 +340,7 @@ export function campTalkStrip(scene: Phaser.Scene, x: number, y: number, w: numb
     i++; if (i >= talk.lines.length) { root.destroy(); return; }
     const l = talk.lines[i], s = speaker(l.who, ctx);
     who.setText(s.name ? s.name + '：' : ''); say.setX(12 + who.width + (s.name ? 4 : 0)).setText(l.text);
-    const room = w - 40 - say.x; if (say.width > room) say.setScale(Math.max(.75, room / say.width)); else say.setScale(1);
+    const room = w - 40 - say.x; if (say.width > room) say.setScale(Math.max(.62, room / say.width)); else say.setScale(1); // 长句多缩一点，别截断
     timer?.remove(); timer = scene.time.delayedCall(2800, show);
   };
   hit.on('pointerup', show); close.on('pointerup', () => root.destroy());

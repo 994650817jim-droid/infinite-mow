@@ -140,7 +140,7 @@ import { HERO_XP_RATE, OVERFLOW_XP_PER_GRAIN, PICK_GUARANTEE, PICK_PACE, XP_SHIF
 import { attributePointsBetween } from '../systems/RunGrowth';
 import { starMapOn } from '../data/starMap';
 import { heroStars, lightHeroStar } from '../systems/HeroProgress';
-import { StarMapDevPanel } from '../ui/StarMapDevPanel';
+import { StarMapUI } from '../ui/StarMapUI';
 import { vigorHp } from '../data/attributes';
 import { CHAPTER_INDEX, PHASES, PHASE_BARKS, buildPhasePlan, phasedPace, planLen, stageLieutenant, withPhases, type PhaseKind, type PhasePlan, type StagePhase } from '../data/stagePhases';
 import { StagePhaseRunner } from '../systems/StagePhases';
@@ -5396,15 +5396,17 @@ export class GameScene extends Phaser.Scene {
     this.player.passive.areaMul=g.areaMultiplier();if(g.heroFree>0){g.heroFree--;if(!isChapterTestRun())allocateHeroAttr(this.runConfig.character,id);}
     this.renderAttributePanel();this.updateHud();return true;
   }
-  /** 星图 · 临时界面（程序占位，ui/StarMapDevPanel）：开关 starMapOn() 打开时顶替属性面板（C 键 / 暂停菜单进）。 */
-  private starPanel?: StarMapDevPanel;
+  /** 星图正式界面（ui/StarMapUI）：开关 starMapOn() 打开时顶替属性面板（C 键 / 暂停菜单进，游戏暂停）。战斗内不提供洗点。 */
+  private starPanel?: StarMapUI;
   protected renderStarPanel(): void {
-    this.attributePauseText?.setText(`星图（临时界面）· ${this.player.growth.unallocated}`);
+    this.attributePauseText?.setText(`星图 · ${this.player.growth.unallocated}`);
     if(this.starPanel&&!this.starPanel.root.scene)this.starPanel=undefined; // 场景重开后旧面板已随属性面板销毁
-    this.starPanel??=(()=>{const p=new StarMapDevPanel(this,{x:16,y:12,w:GAME_WIDTH-32,h:GAME_HEIGHT-24,
-      state:()=>{const g=this.player.growth;return{heroName:getCharacter(g.character).name,level:this.heroLv,gate:g.starGate,lit:g.stars,free:g.unallocated};},
+    this.starPanel??=(()=>{const p=new StarMapUI(this,{
+      state:()=>{const g=this.player.growth;return{hero:this.runConfig.character,heroName:getCharacter(g.character).name,level:this.heroLv,gate:g.starGate,lit:g.stars,free:g.unallocated};},
       onLight:star=>{const g=this.player.growth;if(!g.lightStar(this.player,star))return false;this.player.passive.areaMul=g.areaMultiplier();if(g.heroFree>0){g.heroFree--;if(!isChapterTestRun())lightHeroStar(this.runConfig.character as HeroKey,star);}this.updateHud();return true;},
       close:{label:()=>this.attributeReturn==='none'?'继续战斗':'返回暂停菜单',act:()=>this.setMode(this.attributeReturn)}});this.attributePanel.add(p.root);return p;})();
+    // 原属性面板的零件（命中区、按钮）在输入排序里会压在星图上面、吞掉点击：星图开着时全部藏起、关掉交互
+    {const off=(l:Phaser.GameObjects.GameObject[]):void=>{for(const o of l){o.disableInteractive?.();const c=o as Phaser.GameObjects.Container;if(c.list)off(c.list);}};for(const o of this.attributePanel.list)if(o!==this.starPanel.root){(o as Phaser.GameObjects.GameObject&{setVisible?:(v:boolean)=>unknown}).setVisible?.(false);off([o]);}}
     this.starPanel.render();
   }
   protected renderAttributePanel(): void {

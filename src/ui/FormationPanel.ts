@@ -71,8 +71,14 @@ export function drawFormationPanel(h: FormationPanelHost, x0: number, y0: number
   T(tx, cy0 + pad + 30, learned ? CN_ROLE[id] + ' · 呼应「' + SCHOOLS[d.echo].name + '」' + (p.echo ? '（主修 · ×1.5）' : '') + (p.favored ? ' · 擅阵 ×1.25' : '') : '未学会 · ' + HOW_TO_LEARN[id], 12, learned ? (p.echo ? '#cfe3b0' : '#b9a47a') : '#d8a890').setName('formation-focus-sub');
   const rows: Array<[string, string, string]> = [['阵势', d.main, '#e8dcc0'], ['代价', d.cost, '#d8a890'], ['主将', d.hero, '#e8dcc0'], ['出击', d.sortie.replace(/^出击：/, ''), '#e8dcc0'], ['适用', d.fit, '#cfe3b0']];
   if (p.half) rows.push(['半效', '靠诸葛亮随行布八阵，阵势减半', '#d8a890']);
-  let ry = cy0 + pad + 58;
-  for (const [k, v, c] of rows) { T(x0 + pad, ry, k, 13, '#b9a47a', true); const t = T(x0 + pad + 42, ry, v, 13, learned ? c : '#8e8270'); t.setWordWrapWidth(lw - pad * 2 - 42, true); ry += Math.max(21, t.height + 5); }
+  // 五行说明排不下（会压到卡底的「护阵（E）生效…」，2026-11-21 总制作人截图）就缩字号 / 行距重排
+  const limit = cy0 + ch - pad - 20;
+  for (const [fs, gap, minH] of [[13, 5, 21], [12, 3, 18], [11, 2, 16]] as const) {
+    let ry = cy0 + pad + 58; const made: Phaser.GameObjects.Text[] = [];
+    for (const [k, v, c] of rows) { made.push(T(x0 + pad, ry, k, fs, '#b9a47a', true)); const t = T(x0 + pad + 42, ry, v, fs, learned ? c : '#8e8270'); t.setWordWrapWidth(lw - pad * 2 - 42, true); made.push(t); ry += Math.max(minH, t.height + gap); }
+    if (ry <= limit || fs === 11) break;
+    for (const m of made) m.destroy();
+  }
   T(x0 + pad, cy0 + ch - pad - 14, '护阵（E）生效 · 出击时散阵 · 战斗中 X 变阵（冷却 ' + FORMATION.switchMs / 1000 + ' 秒，主修兵阵 ' + FORMATION.switchMsFormation / 1000 + ' 秒）', 11, '#8e7f62').setName('formation-help');
 
   // 右：站位（手绘阵纹淡底 + 用现在的部曲按这个阵排；UI 示意，不是战场特效）

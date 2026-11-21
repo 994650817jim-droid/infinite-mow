@@ -1101,7 +1101,7 @@ export class GameScene extends Phaser.Scene {
     }, () => this.takeRecruitPotion(), () => canOfferRejuvenation(this.player));
     this.campUI=new CampRestUI(this,this.player,this.legion,()=>this.departRest());
     // 行营休整在本关结算之后：买下的兵装直接收入行囊（2026-11-18 用户报「休整买的装备背包没显示」——原先推进已结算的 runLoot，背包看不到、下一关重建时还会丢）。测试 / 调试战斗同结算规则不入行囊。
-    this.campUI.onBuyItem=item=>{const debug=this.lootDebug();if((this.over||this.preCamp)&&!debug)addItems([item]); /* 整军页（还没开打）买的也直接入行囊，不算本局缴获（败退会丢一半） */else this.itemDrops?.runLoot.push(item);};
+    this.campUI.onBuyItem=item=>{const debug=this.lootBlocked();if((this.over||this.preCamp)&&!debug)addItems([item]); /* 整军页（还没开打）买的也直接入行囊，不算本局缴获（败退会丢一半） */else this.itemDrops?.runLoot.push(item);};
     // 军医（2026-11-18）：按章定价；治疗后把存档里的征程构筑血量也改掉（存档点是打赢那一刻存的，治疗在之后；重打旧关不存档也不改）
     this.campUI.chapterNo=medicChapter(this.scene.key,this.chapter.id,worldMedicChapter());
     // 重整构筑：退回与每次重选后都把存档点改成当前构筑（含待补选次数），关页面再进不会多出或少掉强化；重打旧关 / 测试战斗不写
@@ -4597,7 +4597,7 @@ export class GameScene extends Phaser.Scene {
     if ((this.over && !atRest) || this.children.getByName('item-bag')) return;
     const fromPlay = this.mode === 'none';
     if (fromPlay) this.togglePause();
-    const debug = this.lootDebug();
+    const debug = this.lootBlocked();
     new ItemBagUI(this, {
       hero: this.runConfig.character, battle: true, atRest, runLoot: this.over ? [] : this.itemDrops?.runLoot ?? [],
       // 已结算时缴获都收进行囊了，不再单列「本局缴获」
@@ -4663,7 +4663,7 @@ export class GameScene extends Phaser.Scene {
       ].join('\n'),
     );
     // 兵装缴获：胜利或坚持 60 秒带回全部，速败只带回一半；测试 / 调试战斗不入行囊
-    {const loot=this.itemDrops?.runLoot??[],debug=this.lootDebug(),dep=depositRunLoot(loot,{victory,elapsed:victory?this.elapsed:0,debug,pity:this.itemDrops?.pity}); /* 战败（data/defeatFlow.ts）：只带回一半，品质高的留下 */
+    {const loot=this.itemDrops?.runLoot??[],debug=this.lootBlocked(),dep=depositRunLoot(loot,{victory,elapsed:victory?this.elapsed:0,debug,pity:this.itemDrops?.pity}); /* 战败（data/defeatFlow.ts）：只带回一半，品质高的留下 */
      if(loot.length)this.resultTexts.body.setText(this.resultTexts.body.text+'\n缴获兵装  '+loot.length+' 件（'+this.itemDrops!.summary()+'）'+(debug?' · 测试战斗不入行囊':dep.lost?' · 败退遗失 '+dep.lost+' 件':' · 已收入行囊'));}
     // 结算：属性点没加 → 写一行（第一次能加时另弹引导卡）
     if(!(isChapterTestRun()||this.debugModified||this.debugJumped||this.player.damageImmune)){const ph=this.pointsHint();if(ph){this.resultTexts.body.setText(this.resultTexts.body.text+'\n属性点  '+ph.n+' 点未加 · 去'+ph.where+'加点');this.pointsGuide();}}

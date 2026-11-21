@@ -734,6 +734,27 @@ export class GameScene extends Phaser.Scene {
   private relicWaveGfx!:Phaser.GameObjects.Graphics;private relicWaves:Array<{x:number;y:number;at:number}>=[];
   private firstBossAt=-1;private settledFrontlineKills=0;private frontlineNextSettlement=1;
   private frontlineVictories=new Map<number,{elapsed:number}>();private frontlineStarts=new Map<number,number>();
+  /**
+   * 首领绕障 + 卡住保护（2026-11-20 用户「刚刚测试张角卡住不动」：1-3 由 1-2 推进而来，下曲阳法坛营木栅还在场上，张角直线朝主将走、顶在木栅后不动）。
+   * 各首领控制器自己推位移（都是直线朝主将）；这里在它们之后统一处理，不改控制器：
+   *  ① 绕障：本帧是常规步幅、朝主将方向的位移，而去主将的连线被挡 → 同样步幅改走绕障导航方向（冲锋 / 跳跃等大位移不动）；
+   *  ② 卡住保护：离主将 180 以外、3 秒没挪过 14 像素——路被挡就沿绕路方向挪 70；路没挡却 9 秒不动（招式状态没退出）就重置招式（unstick）再朝主将挪一步。
+   * 不处理：无敌中的首领（2-3 城头董卓等）、2-3 董卓 / 吕布段、攻城城内段（守将在府衙等人）、演出中。
+   */
+  private readonly bossStuck=new Map<Enemy,{x:number;y:number;t:number;life:number}>();private readonly flowTmp={x:0,y:0};
+  readonly bossGuard={detours:0,nudges:0,resets:0};
+  private bossDetour(e:Enemy,dt:number):void{
+    if(this.dzLubu||(this as unknown as {siegeMid?:unknown}).siegeMid||e.invulnerable||this.cutscene?.active||e.def.speed<=0)return;
+    const P=this.player,tx=P.x-e.x,ty=P.y-e.y,d=Math.hypot(tx,ty)||1,mx=e.x-e.frameStartX,my=e.y-e.frameStartY,m=Math.hypot(mx,my);
+    if(m>.01&&m<=e.def.speed*dt*2.2+1&&d>120&&mx*tx+my*ty>0&&this.enemyFlow.steer(e.x,e.y,this.flowTmp)){e.sprite.x=e.frameStartX+this.flowTmp.x*m;e.sprite.y=e.frameStartY+this.flowTmp.y*m;this.bossGuard.detours++;}
+    let s=this.bossStuck.get(e);if(!s||s.life!==e.spawnId){s={x:e.x,y:e.y,t:this.combatNow,life:e.spawnId};this.bossStuck.set(e,s);}
+    if(d<180||Math.hypot(e.x-s.x,e.y-s.y)>14){s.x=e.x;s.y=e.y;s.t=this.combatNow;return;}
+    const idle=this.combatNow-s.t;if(idle<3000)return;
+    const blocked=this.enemyFlow.steer(e.x,e.y,this.flowTmp);
+    if(!blocked&&idle<9000)return;
+    if(!blocked){this.flowTmp.x=tx/d;this.flowTmp.y=ty/d;if(e===this.boss)this.zhangjiao?.unstick(this.combatNow);this.bossGuard.resets++;}
+    e.sprite.x+=this.flowTmp.x*70;e.sprite.y+=this.flowTmp.y*70;this.bossGuard.nudges++;s.x=e.x;s.y=e.y;s.t=this.combatNow;
+  }
   /** 敌兵绕障导航（栅栏 / 营栅 / 城墙等挡住的近战兵绕到缺口）。 */
   readonly enemyFlow=new EnemyFlowField();
   /** 导航用碰撞框：关墙 / 营栅 / 城墙（sishuiObstacles，攻城 / 官渡 / 军情 / 北伐等都放这里）、2-3 城头、战场拒马 / 栅栏等物件（supplies crates，1-3 栏杆）。 */
@@ -1132,7 +1153,7 @@ export class GameScene extends Phaser.Scene {
   protected resetState(): void {
     this.phaseRunner?.clear();this.battleTrack?.destroy();this.phaseRunner=null;this.battleTrack=null;this.phasePlan=null;this.phasedFor=null;this.fortunes?.clear();this.fortunes=null;this.fortuneQueue=[];this.fortuneTaken={};this.beaconCalmUntil=0;this.jinnang=null;this.jinnangButton=undefined;this.resetStageCards();this.branchRt?.clear();this.branchRt=null;this.branchFor=null;
     this.relicWaves=[];this.runMerit={elite:0,boss:0};this.picksGiven=0;this.militaryPending=0; // 场景实例会被重复使用：每场重置
-    this.firstBossAt=-1;this.settledFrontlineKills=0;this.frontlineNextSettlement=1;this.frontlineVictories.clear();this.frontlineStarts.clear();this.chasingBosses=[];this.enemyFlow.clear();this.storyHolds=0;this.deadBossControllers=[];for(const c of this.bossChests)c.clear();this.bossChests=[];this.lootContinue=null;this.relicHits=0;this.relicFireAt=0;this.relicHealAt=0;
+    this.firstBossAt=-1;this.settledFrontlineKills=0;this.frontlineNextSettlement=1;this.frontlineVictories.clear();this.frontlineStarts.clear();this.chasingBosses=[];this.enemyFlow.clear();this.bossStuck.clear();this.bossGuard.detours=this.bossGuard.nudges=this.bossGuard.resets=0;this.storyHolds=0;this.deadBossControllers=[];for(const c of this.bossChests)c.clear();this.bossChests=[];this.lootContinue=null;this.relicHits=0;this.relicFireAt=0;this.relicHealAt=0;
     this.rerolls=0;this.warfeedCount=0;this.pointsButton=undefined;this.pointsBadge=undefined;this.potionButton=undefined;this.potionBadge=undefined;this.potionIcon=undefined;this.potionGlow=undefined;this.rerollButton=undefined;
     this.crowdSteering = true; this.freeRecruit = false; this.resting = false; this.restIntroPlayed = false; this.restIntroSkip = undefined; this.recruitedWaves.clear();
     this.pendingGrowthNotices.length = 0;
@@ -1750,6 +1771,9 @@ export class GameScene extends Phaser.Scene {
     else if(this.chapter.id==='huangjin'&&this.chapter.stage===3)this.sishuiPass?.openGate(); // 1-3 广宗：张角出场城门破开（原来一直不开，城里的兵出不来）
     if(this.chapter.bossStyle==='huaxiong'){this.huaxiong=new HuaxiongBoss({scene:this,boss,player:this.player,army:this.legion,hurtTroops:(x,y,r,d,n,a,arc)=>this.legion.hurtArea(x,y,r,d,n,a,arc),sfx:()=>this.sfx.play('allySlash')},this.combatNow);}
     // 首领招式框架（第一章张梁 / 张宝）与已有控制器首领的坐骑（吕布赤兔、华雄）
+    // 2026-11-20 用户「刚刚测试张角卡住不动」：1-2 张宝的招式组在首领追击推进到 1-3 后还留着；首领分派里 moveset 排在张角控制器前面且只认 enemy === this.boss，
+    // 张角就被交给张宝的招式组（它只推张宝本人），张角自己的移动 / 出招一帧都不跑——站着不动。新首领出阵先收掉上一个首领的招式组。
+    this.moveset?.clear();this.moveset=null;
     {const mv=BOSS_MOVES[this.chapter.bossStyle];if(mv&&!BOSS_OLD&&(this.chapter.bossStyle==='zhangliang'||this.chapter.bossStyle==='zhangbao'))this.moveset=new BossMoveset({scene:this,boss,player:this.player,army:this.legion,spawn:(kind,x,y,def)=>this.spawnEnemy(kind,x,y,1,true,def),def:k=>this.chapter.enemies[k],banner:(t,c)=>this.showWaveBanner(t,true,c),sfx:k=>this.sfx.play(k)},boss.sprite.texture.key,this.combatNow,mv,'walk');
      const md=BOSS_MOUNTS[this.chapter.bossStyle];if(md&&!BOSS_OLD)this.bossMount=new BossMount(this,boss,md,()=>{const c=(this.lubu??this.huaxiong) as unknown as {state?:string}|null,st=c?.state??'';return !!c&&(st==='warn'||st==='attack'||st==='windup'||st==='charge'||(!!this.lubu&&(/Windup$/.test(st)||['combo','zig','sweep','dash','aim','shot','spin','hop','recover'].includes(st))));});}
     if (this.chapter.bossStyle === 'zhangjiao' && !BOSS_OLD) {
@@ -1935,6 +1959,7 @@ export class GameScene extends Phaser.Scene {
           enemy.sprite.y += ny * enemy.def.speed * dt;
           this.updateBossAbilities(dt);
         }
+        this.bossDetour(enemy, dt);
       } else {
         this.advanceEnemy(enemy, nx, ny, dt);
       }

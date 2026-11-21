@@ -27,8 +27,8 @@ const trial = (useFlow, kinds) => p.evaluate(([S0, useFlow, kinds, L]) => { cons
   window.__T = kinds.map((k, i) => { const e = s.spawnEnemy(k, cx - 90 + (i % 4) * 60, L.top - 110 - Math.floor(i / 4) * 55, 1, true); e.hp = e.maxHp = 1e7; return e; });
   return window.__T.length; }, [S, useFlow, kinds, L]);
 const measure = () => p.evaluate(([S0, L]) => { const s = eval(S0), P = s.player; if (s.mode !== 'none' && !s.over) { s.pendingRecruit = false; s.pendingLevels = 0; s.children.getByName('recruit-panel')?.destroy?.(); s.setMode('none'); } /* 招兵 / 三选一弹窗会暂停战斗：测试期间清掉 */ return window.__T.map(e => ({ kind: e.kind, d: Math.round(Math.hypot(e.x - P.x, e.y - P.y)), north: e.y < L.top, inFence: e.x > L.left + 4 && e.x < L.right - 4 && e.y > L.top + 4 && e.y < L.bottom - 4 })); }, [S, L]);
-const watch = async (ms, shotName) => { let inFence = 0, n = 0; const t0 = Date.now(); while (Date.now() - t0 < ms) { const m = await measure(); inFence += m.filter(x => x.inFence).length;
-  if (process.env.GIF && shotName) await p.screenshot({ path: `${out}/frames/${shotName}-${String(n).padStart(3, '0')}.png`, clip: { x: 240, y: 60, width: 800, height: 600 } }); n++; await p.waitForTimeout(process.env.GIF ? 120 : 250); } return { last: await measure(), inFence }; };
+let gifN = 0; const watch = async (ms, shotName) => { let inFence = 0; const t0 = Date.now(); while (Date.now() - t0 < ms) { const m = await measure(); inFence += m.filter(x => x.inFence).length;
+  if (process.env.GIF && shotName) await p.screenshot({ path: `${out}/frames/${shotName}-${String(gifN++).padStart(3, '0')}.png`, clip: { x: 240, y: 60, width: 800, height: 600 } }); await p.waitForTimeout(process.env.GIF ? 120 : 250); } return { last: await measure(), inFence }; };
 if (process.env.GIF) mkdirSync(out + '/frames', { recursive: true });
 const MELEE = ['infantry', 'infantry', 'infantry', 'infantry', 'shield', 'shield', 'infantry', 'infantry'];
 

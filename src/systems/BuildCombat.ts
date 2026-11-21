@@ -34,6 +34,9 @@ export class BuildCombat {
  /** 手绘特效钩子（GameScene 接 BuildVfx）：style = 图集里的额外样式 ember / stun_burst / sunder_hit / heavy。 */
  onFx?:(style:string,x:number,y:number,size:number)=>void;
  onNapalm?:(x:number,y:number,r:number,tickDamage:number,level:number)=>void;
+ /** 火油罐出手（只管画面）：起点 / 落点 / 飞行毫秒；落地起火仍走 onNapalm。 */
+ onNapalmThrow?:(sx:number,sy:number,x:number,y:number,ms:number)=>void;
+ private napalmFlying:Array<{at:number;x:number;y:number;dmg:number;burn:number;lv:number}>=[];
  onGust?:(x:number,y:number,angle:number,len:number)=>void;
  /** 合击「烈马」：脚下一小团火（GameScene 用 MartialFields 画火、扣血）。 */
  onFirePatch?:(x:number,y:number,r:number,tickDamage:number,ms:number)=>void;
@@ -204,9 +207,12 @@ export class BuildCombat {
   for(const [e,v] of this.shoves){if(!e.active||e.spawnId!==v.spawn||now>=v.until){this.shoves.delete(e);continue;}const k=(v.until-now)/250,sec=dt/1000;e.sprite.x+=v.vx*k*sec;e.sprite.y+=v.vy*k*sec;}
   const raw=this.rawBase(),pos=this.position();
   // 火油罐：每 9/8/7 秒往身边敌人最密处扔（320 内），地上烧 3 秒（GameScene 用 MartialFields 画火、扣血），落点内的人先点燃
+  // 飞行中的罐子落地：这时才起火 / 点燃（2026-11-20 用户「火油罐没看到扔出的动画」：原来扔出的瞬间就地起火；视觉飞行见 systems/PotThrow，用同一个飞行时间对齐）
+  for(let i=this.napalmFlying.length-1;i>=0;i--){const p=this.napalmFlying[i];if(now<p.at)continue;this.napalmFlying.splice(i,1);this.onNapalm?.(p.x,p.y,70,p.dmg,p.lv);for(const t of this.targets(p,70))this.burn(t,p.burn,now,true);}
   const np=this.lv('napalm');if(np&&now>=this.napalmAt){const near=this.targets(pos,320);if(near.length){this.napalmAt=now+[9000,8000,7000][np-1];this.stats.napalm++;
    let best=near[0],bn=-1;for(const c of near.slice(0,40)){let n=0;for(const o of near)if(Math.hypot(o.x-c.x,o.y-c.y)<=70)n++;if(n>bn){bn=n;best=c;}}
-   this.onNapalm?.(best.x,best.y,70,raw*.25*fireMul,np);for(const t of this.targets(best,70))this.burn(t,raw*.1,now,true);}}
+   const ms=Math.round(Math.max(400,Math.min(700,380+Math.hypot(best.x-pos.x,best.y-pos.y)*.8))); // 与 PotThrow.potFlightMs 同一公式（0.4–0.7 秒）
+   this.napalmFlying.push({at:now+ms,x:best.x,y:best.y,dmg:raw*.25*fireMul,burn:raw*.1,lv:np});this.onNapalmThrow?.(pos.x,pos.y,best.x,best.y,ms);}}
   // 疾风：每 10/9/8 秒朝最近的敌人方向吹一阵风，一条线（长 280、宽 70）上的普通敌人被推开
   const gs=this.lv('gust');if(gs&&now>=this.gustAt){const near=this.targets(pos,280);if(near.length){this.gustAt=now+[10000,9000,8000][gs-1];this.stats.gust++;
    const tgt=near.sort((a,b)=>Math.hypot(a.x-pos.x,a.y-pos.y)-Math.hypot(b.x-pos.x,b.y-pos.y))[0],ang=Math.atan2(tgt.y-pos.y,tgt.x-pos.x),ux=Math.cos(ang),uy=Math.sin(ang),len=280,push=[80,100,120][gs-1];

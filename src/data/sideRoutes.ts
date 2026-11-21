@@ -233,18 +233,27 @@ export function sideMoves(src: Record<string, BossMovesetDef>): Record<string, B
   return out;
 }
 
+/**
+ * 支线关时长（总制作人第五轮：下邳第 1 关 101 秒就打完——首领约 90 秒出场、十几秒打死）：首领出场时刻按关序（第 1～4 关 150 / 180 / 210 / 240 秒），
+ * 波次时间轴按比例拉长、刷兵强度曲线跟着放慢（同主线 phasedPace：pace × 原首领时刻 ÷ 新首领时刻，不低于 1）；首领生命 × bossHpMul，
+ * 和平衡会话的首领加血（×1.6 / ×2 在测）对齐，初值 1.6。白门楼（吕布战场景）不走这里。
+ */
+export const SIDE_TIMING = { bossAt: [150, 180, 210, 240] as readonly number[], bossHpMul: 1.6 } as const;
+export function sideBossAt(stage: number): number { const a = SIDE_TIMING.bossAt; return a[Math.max(0, Math.min(a.length - 1, stage - 1))]; }
 /** 支线战斗：基础章节数值（base）+ 首领 / 波次 / 文案换成本关。 */
 export function sideBattle(r: SideRouteDef, stage: number, base: ChapterDef, look?: ChapterDef): ChapterDef {
   const d = r.stages[stage - 1], hp = ({ xiapi: [1900, 2100, 2300, 2600], nanjun: [3000, 3400], caowei: [3400, 3600, 3800, 4200] } as Partial<Record<SideRouteId, number[]>>)[r.id]?.[stage - 1] ?? Math.round(base.enemies.boss.hp * (d.kind === 'final' ? 1.15 : 1)); // 新支线：按基础章节同关首领生命，终局 ×1.15
   const enemies = look ? Object.fromEntries(Object.entries(base.enemies).map(([k, e]) => {
     const v = (look.enemies as Record<string, typeof e>)[k]; return [k, k === 'boss' || !v ? e : { ...v, hp: e.hp, speed: e.speed, damage: e.damage }];
   })) as ChapterDef['enemies'] : base.enemies;
+  const oldAt = base.waves[base.waves.length - 1]?.start ?? 0, newAt = sideBossAt(stage), k = oldAt > 0 && newAt > oldAt ? newAt / oldAt : 1;
   return {
     ...base,
+    pace: k > 1 ? Math.max(1, (base.pace ?? 1) / k) : base.pace,
     name: `${r.faction} · ${d.name}`, label: `讨伐令 · ${r.name} · ${d.name}`, description: d.story, bossName: d.boss.name,
     bossStyle: d.boss.id as ChapterDef['bossStyle'],
-    waves: base.waves.map((w, i) => ({ ...w, name: d.waves[i] ?? w.name })),
-    enemies: { ...enemies, boss: { ...base.enemies.boss, texture: sideTexture(d.boss.id), walkVisual: undefined, attackVisual: undefined, hp } },
+    waves: base.waves.map((w, i) => ({ ...w, start: Math.round(w.start * k), name: d.waves[i] ?? w.name })),
+    enemies: { ...enemies, boss: { ...base.enemies.boss, texture: sideTexture(d.boss.id), walkVisual: undefined, attackVisual: undefined, hp: Math.round(hp * SIDE_TIMING.bossHpMul) } },
     victoryTitle: d.boss.name + '败退', victoryText: d.kind === 'final' ? `${r.name} · 讨伐告成` : `${d.name}告捷 · 进入军营休整`,
   };
 }

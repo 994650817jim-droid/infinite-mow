@@ -158,7 +158,7 @@ import { BattleTrack } from '../ui/BattleTrack';
 import { addProvisions, gainProvisions } from '../world/WorldStore';
 import { medicChapter } from '../data/campMedic';
 import { worldMedicChapter } from '../town/CampMedic';
-import { applyCarriedHp, patchCampaignHp, patchCampaignBuild, loadCampaignBuild, packCampaign, restoreCampaign, saveCampaignBuild, type CampaignTransfer } from '../systems/Campaign';
+import { applyCarriedHp, patchCampaignHp, patchCampaignBuild, patchCampaignMuster, loadCampaignBuild, packCampaign, restoreCampaign, saveCampaignBuild, type CampaignTransfer } from '../systems/Campaign';
 import { TROOP_KINDS, INITIAL_TROOPS, LEGION, FREE_RECRUIT_BY_TIER, type TroopKind } from '../data/legion';
 import { DEFAULT_RUN_CONFIG, getCharacter, type RunConfig , HERO_TINT, HERO_FX, type CharacterId } from '../data/characters';
 import { Music } from '../systems/Music';
@@ -1021,9 +1021,11 @@ export class GameScene extends Phaser.Scene {
     this.charmInfo=applyCharms(this.player,wornTokens(this.runConfig.character));
     this.campaignLoaded = !!carriedState && !chained;
     // 出征前整军（总制作人试玩 + 测试组 honest-journey：重进本关 0 兵开局，攒着上千随军粮却没有行营可花）：从存档点开打的主线关先进行营再出征
-    this.preCampDue = this.campaignLoaded && !this.campaignReplay && this.worldCampaign && !isChapterTestRun() && mechOpen('squad'); this.preCampArmed = false; this.preCamp = false;
+    // 第五轮：攻城 / 守城 / 军情 / 支线攻城关（只读继承征程构筑）也先整军——原来直接开打，兵力 0、主将带着上一场战败的伤；整军花费只写增量（saveMusterDelta）
+    this.preCampDue = this.campaignLoaded && (this.campaignReplay ? this.inheritsCampaign() : this.worldCampaign) && !isChapterTestRun() && !this.encounterPreview && mechOpen('squad'); this.preCampArmed = false; this.preCamp = false; this.musterBase = null;
     // 篇章没有关前剧情（没调 setupStory 带章节 id）时：开打第一帧直接进整军
-    if (this.preCampDue) this.events.once(Phaser.Scenes.Events.UPDATE, () => { if (this.preCampDue && !this.preCampArmed && !this.over) { this.preCampDue = false; this.openPreCamp(() => {}); } });
+    if (this.preCampDue) { const tryOpen = (): void => { if (!this.preCampDue || this.preCampArmed || this.over) { this.events.off(Phaser.Scenes.Events.UPDATE, tryOpen); return; } if (this.mode !== 'none') return; /* 军情卷轴等先放完 */ this.events.off(Phaser.Scenes.Events.UPDATE, tryOpen); this.preCampDue = false; this.openPreCamp(() => {}); };
+      this.events.on(Phaser.Scenes.Events.UPDATE, tryOpen); this.events.once('shutdown', () => this.events.off(Phaser.Scenes.Events.UPDATE, tryOpen)); }
     this.applyHeroLevel(!!carriedState);
     this.syncHeroLevel();
     if(carriedState)applyCarriedHp(carriedState,this.player,this.followers); // 2026-11-18 用户：前一关受的伤带到下一关（主将按比例、名将随从同样；部曲在 Legion 存档里本来就带血量）
@@ -3758,6 +3760,7 @@ export class GameScene extends Phaser.Scene {
    */
   protected openPreCamp(after: () => void): void {
     this.preCamp = true; this.preCampAfter = after; this.resting = true; this.pendingRecruit = false; this.freeRecruit = false;
+    if (this.campaignReplay) this.musterBase = { food: this.legion.food, kinds: this.soldierKinds() }; // 只读继承：整军前的底（开局已加的援军 / 后备不算新招）
     if (this.campUI) this.campUI.preBattle = this.chapter.name;
     this.restIntroPlayed = true; // 入营水墨过场写的是「某关 · 平定 · 捷」，整军时还没打，不播（出征时复位，打赢进行营照播）
     this.renderRecruit(); this.setMode('rest'); // 同打赢进行营：renderRecruit 只开页面，模式要另外切（战斗冻结、营中闲话）
@@ -3787,8 +3790,19 @@ export class GameScene extends Phaser.Scene {
   protected lootDebug(): boolean { return isChapterTestRun() || this.debugModified || this.debugJumped || !!this.player.damageImmune || this.encounterPreview; }
   /** 单场收益上限按哪一档（data/battleLootCap.ts）；攻城 / 守城场景覆盖。 */
   protected battleCapKind(): BattleCapKind { return 'stage'; }
+  /** 只读继承出征的整军底：随军粮、各兵种在编（非后备）人数。 */
+  private musterBase: { food: number; kinds: Record<string, number> } | null = null;
+  private soldierKinds(): Record<string, number> { const out: Record<string, number> = {}; for (const s of this.legion.exportState().soldiers) if (!s.reserveSoldier) out[s.kind] = (out[s.kind] ?? 0) + 1; return out; }
+  /** 只读继承出征的整军：把这次以来的增减（花的粮、新招的兵、治的血）写回存档点，写完把底挪到当前。 */
+  private saveMusterDelta(): void {
+    const b = this.musterBase; if (!b) return; const now = this.soldierKinds(), recruits: Record<string, number> = {};
+    for (const [k, n] of Object.entries(now)) if (n > (b.kinds[k] ?? 0)) recruits[k] = n - (b.kinds[k] ?? 0);
+    const fh: Record<string, number> = {}; for (const m of this.followers?.members ?? []) fh[m.recruit.id] = m.downed ? 0 : m.hp / Math.max(1, m.maxHp);
+    if (patchCampaignMuster(this.runConfig.character, { foodSpent: b.food - this.legion.food, recruits, hpFrac: this.player.hp / Math.max(1, this.player.maxHp), followerHp: fh })) this.musterBase = { food: this.legion.food, kinds: now };
+  }
   protected saveRestPoint(): void {
-    if (!this.resting || this.mode !== 'rest' || this.campaignReplay || isChapterTestRun() || this.debugModified || this.debugJumped || this.player.damageImmune) return;
+    if (!this.resting || this.mode !== 'rest' || isChapterTestRun() || this.debugModified || this.debugJumped || this.player.damageImmune) return;
+    if (this.campaignReplay) { if (this.preCamp && this.inheritsCampaign()) this.saveMusterDelta(); return; } // 只读继承（攻城 / 守城 / 军情 / 支线攻城）：整军只写增量；重打旧关不写
     saveCampaignBuild(this.runConfig.character, packCampaign(this.runConfig.character, this.player, this.legion, this.followers));
   }
   protected continueCampaign(): void {

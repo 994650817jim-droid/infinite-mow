@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { safeWorldPoint } from '../ui/SafeLabel';
 import { GameScene } from './GameScene';
 import { thirdGameSceneClass, type ArcSceneConfig } from './ThirdGameScene';
+import { ARC_FORTS, sideFort, type ArcFort } from '../data/arcForts';
 import { SIDE_ROUTES, SIDE_SCENE_KEY, SIDE_STAGE_KEY, sideBattle, sideRoute, sideTexture, type SideBaseId, type SideBoss, type SideRouteDef, type SideRouteId } from '../data/sideRoutes';
 import { thirdBattle, thirdPalette, type ThirdStage } from '../data/thirdChapter';
 import { chibiBattle } from '../data/chibiChapter';
@@ -121,6 +122,8 @@ export function sideGameSceneClass(Base: typeof GameScene, r: SideRouteDef) {
       if (r.base === 'guandu' || r.look === 'guandu') ensureYuanTextures(this, guanduYuanSourceKeys());
       super.create();
     }
+    /** 支线关的关隘 / 城池：ARC_FORTS 没列的按关的类型补（data/arcForts.ts sideFort：攻城关 = 城墙 + 城门，其余去掉孤城门）。 */
+    get fort(): ArcFort | undefined { const st = this.arcStage; return ARC_FORTS[r.id + '.' + st] ?? sideFort(r.stages[st - 1]?.kind); }
     /** 支线攻城关（kind siege）带上当前征程构筑（只读，打完不写回；2026-11-20）；野战 / 终局照旧空构筑。 */
     protected inheritsCampaign(): boolean { return r.stages[((this.registry.get(cfg.stageKey) as number | undefined) ?? 1) - 1]?.kind === 'siege'; }
     protected dualSetup(first: BossMoveset): boolean {

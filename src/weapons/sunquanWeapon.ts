@@ -22,7 +22,7 @@ const FOREVER = 1e12;
 
 export const SUNQUAN_DEF = {
   id: 'guding_dao' as const, name: '古锭刀 · 令箭', maxLevel: 5,
-  damage: (level: number, stats: PlayerStats) => [16, 18, 21, 24, 28][lv(level)] * stats.damageMul * stats.meleeMul,
+  damage: (level: number, stats: PlayerStats) => [20, 23, 26, 30, 35][lv(level)] /* 2026-11-20 平衡（P3 复核）：原 [16, 18, 21, 24, 28]，整局 DPS 约平均的 0.7、首领用时 1.89 倍中位数，+25% */ * stats.damageMul * stats.meleeMul,
   cooldown: (level: number, stats: PlayerStats) => [.8, .76, .72, .68, .64][lv(level)] * stats.cooldownMul,
   desc: '近身扇形刀斩，每第 4 斩令江东弓手朝最密处齐射',
 };

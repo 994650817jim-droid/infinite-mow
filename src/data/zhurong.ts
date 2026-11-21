@@ -15,7 +15,9 @@ export const ZHURONG = {
   fire: { tickMs: 500, ms: 2500, mul: .2, r: 36, step: 64, burnMarkMs: 1500 },
   fanEvery: 3, fan: 5, spread: .9, knifeRange: 260, knifeSpeed: 760, knifeW: 22, knifeMul: .6,
   need: 12, orbit: { n: 8, r: 90, ms: 1200, mul: .8, out: 300 },
-  huoshen: { rMul: 1.4, msMul: 1.5, spreadR: 70, spreadMul: .5, finalMul: 1.5 },
+  huoshen: { rMul: 1.4, msMul: 1.5, spreadR: 70, spreadMul: .5, finalMul: 1.5, spreadDelayMs: 130, spreadPerFrame: 6, spreadQueueMax: 40 }, // 蔓延延后、不连锁、每帧上限（平衡会话报的连锁 bug）
   feidao: { every: 2, fan: 7 },
   huoshenM: .15,
+  /** 2026-11-20 平衡（P3 复核）：火枪 / 飞刀直击打首领 ×bossMul（首领用时 0.38 倍中位数、整局 DPS 约平均 2 倍；火线叠加已另修）。 */
+  bossMul: .7, // 暂定：火神祝融的蔓延连锁（击杀 → zhurongSpread 同步打死邻居 → 再蔓延）修好后重测
 } as const;

@@ -7,6 +7,8 @@ import { GANNING as G } from '../data/ganning';
 import { smartTarget } from './heroWeapons2';
 import { playSheet } from '../systems/SkillFxSheets';
 import { branchTier } from '../data/weaponBranches';
+/** 2026-11-20 平衡（P3 复核）：一条条火线叠在首领身上不叠加——同一首领每 fire.tickMs 只被火线烧一次。 */
+const BOSS_FIRE_AT = new WeakMap<object, number>();
 
 /**
  * 甘宁 · 锦帆铁索钩（P3 第二批可玩武将，数值 data/ganning.ts）：甩钩 → 钩线上的敌兵吃伤害并被拉到身边 → 原地横扫；每第 3 钩铁索烧红沿索留火。
@@ -53,7 +55,7 @@ function chainFx(host: WeaponHost, ax: number, ay: number, tx: number, ty: numbe
 
 function sweep(host: WeaponHost, st: GnState, x: number, y: number, r: number, dmg: number, time: number, burst?: { r: number; dmg: number }): void {
   const s = sceneOf(host);
-  for (const e of host.grid.query(x, y, r + 40)) if (e.active && !e.isSupplySlot && Math.hypot(e.x - x, e.y - y) <= r + e.radius) host.hitEnemy(e, dmg, time, 'melee');
+  for (const e of host.grid.query(x, y, r + 40)) if (e.active && !e.isSupplySlot && Math.hypot(e.x - x, e.y - y) <= r + e.radius) host.hitEnemy(e, e.kind === 'boss' ? dmg * G.bossMul : dmg, time, 'melee');
   st.sweeps++;
   playSheet(s, 'fx_lvbu_sweep', x, y - 6, { size: r * 2.3, ms: 300, depth: 41, add: true, tint: 0xffc890, name: 'gn-sweep' });
   if (burst) {
@@ -89,7 +91,7 @@ export function ganningBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
   // 火：每跳伤害、标记着火
   for (const f of st.fires) {
     f.img?.setFrame(Math.floor(time / 90) % 6).setAlpha(Math.min(.85, (f.until - time) / 400));
-    if (time >= f.next) { f.next += G.fire.tickMs; for (const e of host.grid.query(f.x, f.y, f.r + 30)) if (e.active && !e.isSupplySlot && Math.hypot(e.x - f.x, e.y - f.y) <= f.r + e.radius) { host.hitEnemy(e, f.dmg, time, 'fire'); e.p3BurnUntil = time + G.fire.burnMarkMs; } }
+    if (time >= f.next) { f.next += G.fire.tickMs; for (const e of host.grid.query(f.x, f.y, f.r + 30)) if (e.active && !e.isSupplySlot && Math.hypot(e.x - f.x, e.y - f.y) <= f.r + e.radius) { if (e.kind === 'boss') { if (time - (BOSS_FIRE_AT.get(e) ?? -1e9) < G.fire.tickMs) continue; BOSS_FIRE_AT.set(e, time); } host.hitEnemy(e, f.dmg, time, 'fire'); e.p3BurnUntil = time + G.fire.burnMarkMs; } }
   }
   for (const f of st.fires) if (time >= f.until) f.img?.destroy();
   st.fires = st.fires.filter(f => time < f.until);
@@ -114,7 +116,7 @@ export function ganningBehavior(host: WeaponHost, weapon: WeaponState, dt: numbe
   for (const e of host.grid.query((ax + bx) / 2, (ay + by) / 2, len / 2 + G.width + 30)) {
     if (!e.active || e.isSupplySlot || e.def.behavior === 'wall' || segDist(e.x, e.y, ax, ay, bx, by) > G.width / 2 + e.radius) continue;
     if (e.p3BurnUntil > time) burning = true;
-    host.hitEnemy(e, base * G.hookMul * kk, time, 'melee'); if (!e.active) continue;
+    host.hitEnemy(e, base * G.hookMul * kk * (e.kind === 'boss' ? G.bossMul : 1), time, 'melee'); if (!e.active) continue;
     e.hookedUntil = time + G.hookMarkMs;
     if (!jieying && e.kind !== 'boss' && !e.controlImmune) { const ex = e.x - pl.x, ey = e.y - pl.y, ed = Math.hypot(ex, ey) || 1, pull = Math.max(0, ed - G.pullStop); host.knockEnemy?.(e, -ex / ed * pull, -ey / ed * pull, G.pullMs); st.pulled++; }
   }

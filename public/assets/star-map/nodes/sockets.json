@@ -1,0 +1,22 @@
+{
+ "gate": {
+  "canvas": 128,
+  "diameter": 88,
+  "socketRadius": 24.3
+ },
+ "small": {
+  "canvas": 58,
+  "diameter": 40,
+  "socketRadius": 17.5
+ },
+ "notable": {
+  "canvas": 128,
+  "diameter": 88,
+  "socketRadius": 29.4
+ },
+ "keystone": {
+  "canvas": 186,
+  "diameter": 128,
+  "socketRadius": 48.1
+ }
+}

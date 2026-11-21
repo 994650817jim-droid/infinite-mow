@@ -218,6 +218,7 @@ assets/raw/*
 !/tools/match-wallend.mjs
 !/tools/cut-star-bases.mjs
 !/tools/cut-star-icons.mjs
+!/tools/cut-star-bases2.mjs
 !/tools/compose-star-map.mjs
 !/tools/shot-story-portraits.mjs
 !/tools/resize-image.mjs

@@ -218,6 +218,7 @@ import { enemyArrowTexture } from '../systems/ArrowPalette';
 import { EnemyTraits } from '../systems/EnemyTraits';
 import { LuoyangCamps } from '../systems/LuoyangCamps';
 import { EnemyFlowField, type FlowBox } from '../systems/EnemyFlowField';
+import { AllySeparation, type SepBody } from '../systems/AllySeparation';
 import { HitFeel, BossStagger } from '../systems/HitFeel';
 /** 武将序列帧的透明度与时长（缺省 1 / 450 毫秒）。2026-11-17 用户：「张飞攻击特效有点太夸张」「魏延也是」→ 张飞声浪 / 断桥怒吼、魏延劈地 / 裂波 / 谁敢杀我 调淡、调短。 */
 const HERO_FX_TONE: Record<string, { alpha: number; ms: number }> = {
@@ -755,6 +756,15 @@ export class GameScene extends Phaser.Scene {
     if(!blocked&&idle<9000)return;
     if(!blocked){this.flowTmp.x=tx/d;this.flowTmp.y=ty/d;if(e===this.boss)this.zhangjiao?.unstick(this.combatNow);this.bossGuard.resets++;}
     e.sprite.x+=this.flowTmp.x*70;e.sprite.y+=this.flowTmp.y*70;this.bossGuard.nudges++;s.x=e.x;s.y=e.y;s.t=this.combatNow;
+  }
+  /** 我方互相避让（用户试玩「我方自己的兵会重叠一起」，systems/AllySeparation）：主将固定，部曲 / 名将随从 / 义军 / 攻城友军互相推开到 半径之和 + 间隙。 */
+  readonly allySep=new AllySeparation();private readonly sepBodies:SepBody[]=[];
+  private separateAllies(dt:number):void{
+    const out=this.sepBodies;out.length=0;const P=this.player;
+    if(P?.alive)out.push({id:0,x:P.x,y:P.y,r:P.radius,fixed:true,move:()=>{}});
+    for(const u of this.allies)if(u.active)out.push({id:u.id,get x(){return u.x;},get y(){return u.y;},r:u.radius,move:(dx,dy)=>u.push(dx,dy)});
+    this.followers?.bodies(out,1_000_000);this.allyPush?.bodies(out,2_000_000);this.reinforce?.bodies(out,3_000_000);
+    if(out.length>1)this.allySep.resolve(out,dt);
   }
   /** 我方单位（名将随从等）共用的绕障接口：去阵位 / 追击点被挡时给绕路路点，瞬移落点挪到可走点。 */
   readonly allyNav={route:(x:number,y:number,tx:number,ty:number)=>this.enemyFlow.route(x,y,tx,ty),free:(x:number,y:number)=>this.enemyFlow.free(x,y)};
@@ -1414,6 +1424,7 @@ export class GameScene extends Phaser.Scene {
     this.rebuildGrid();
     this.separateEnemies();
     this.separateAlliesFromEnemies(dt);
+    this.separateAllies(dt); // 我方互相避让（部曲 / 随从 / 义军 / 友军 / 主将）：在障碍推开之前，墙最后推、不会被挤进墙里
     this.supplies?.resolveBodies(this.allies,(a,d,n)=>this.legion.hurt(a,d,n),(e,d,n)=>this.hitEnemy(e,d,n,'melee',false,false));
     this.sishuiObstacles?.resolve(this.player,this.allies,this.enemies);
     if(this.terrain){this.terrain.resolve(this.player,this.allies,this.enemies);this.terrain.updateCanopy(this.player,this.enemies.filter(e=>e.active&&!e.isSupplySlot&&(e.kind==='boss'||e.kind==='elite')));}

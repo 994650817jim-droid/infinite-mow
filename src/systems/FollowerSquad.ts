@@ -1,7 +1,7 @@
 import type { FormationFollowerHooks } from './FormationRuntime';
 import Phaser from 'phaser';
 import { heroAttrs, heroLevel, type HeroKey } from './HeroProgress';
-import { BALANCE, DEPTH, FONT } from '../config';
+import { BALANCE, DEPTH, FONT, actorDepth } from '../config';
 import { getCharacter } from '../data/characters';
 import { QUALITIES, type ItemQuality } from '../data/items';
 import { FOLLOW, TEMPLATES, type FollowerTemplate } from '../data/recruits';
@@ -218,6 +218,10 @@ export class FollowerSquad {
    * route：去阵位 / 追击点的连线被挡时给绕路路点（null = 直走）；free：瞬移归位落点压在栅栏 / 城墙里时挪到最近可走点（不卡墙后、不穿墙）。
    */
   nav: { route(x: number, y: number, tx: number, ty: number): { x: number; y: number } | null; free(x: number, y: number): { x: number; y: number } } | null = null;
+  /** 我方避让（AllySeparation）：没倒下的随从作为碰撞体（半径 14）。 */
+  bodies(out: Array<{ id: number; x: number; y: number; r: number; move(dx: number, dy: number): void }>, base: number): void {
+    this.members.forEach((f, i) => { if (f.downed) return; out.push({ id: base + i, get x() { return f.x; }, get y() { return f.y; }, r: 14, move: (dx, dy) => { f.sprite.setPosition(f.x + dx, f.y + dy); f.lastX = f.x; f.lastY = f.y; } }); });
+  }
   /** 无名之辈招式 / 被动的统计（测试 / 平衡用）。 */
   readonly skillStats = { sweep: 0, thrust: 0, thrustHits: 0, volley: 0, heal: 0, healed: 0, block: 0, crit: 0, formation: 0, rally: 0 };
   /** 降将专属招式统计：casts 出招次数、hits 命中人次、damage 伤害；byBoss[首领 id] = 出招次数（测试 / 平衡用）。 */
@@ -666,7 +670,7 @@ export class FollowerSquad {
     f.shadow.setPosition(f.x, f.y + 2); f.label.setPosition(f.x, f.y - 66);
     // 站得离主将太近时隐藏名牌和血条（用户 2026-11-18 截图：随行名牌 / 血条压在主将身上，和「主将」标记叠在一起）
     const pl = this.player, near = Math.hypot(f.x - pl.x, f.y - pl.y) < 96; f.label.setAlpha(near && !f.recruit.id.startsWith('fortune_defector_') ? 0 : 1); // 机缘降将（临时随从）一直挂名牌
-    f.sprite.setDepth(DEPTH.player - 1 + f.y / 100000);
+    f.sprite.setDepth(actorDepth(f.y + 2)); // 和主将 / 部曲 / 敌兵同一套按脚底 y 排序（原来固定在主将层，站得近时总压在部曲身上）
     const w = 36, r = Math.max(0, f.hp / f.maxHp); f.bar.clear();
     if (r < 1 && !near) { f.bar.fillStyle(0x1a0f08, .8).fillRect(f.x - w / 2, f.y - 58, w, 4); f.bar.fillStyle(r > .4 ? 0x6fd06a : 0xe0603a, 1).fillRect(f.x - w / 2, f.y - 58, w * r, 4); }
   }

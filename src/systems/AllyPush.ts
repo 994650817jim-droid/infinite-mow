@@ -58,6 +58,10 @@ export class AllyPush {
     h.scene.events.on('update', this.tick, this);
     h.scene.events.once('shutdown', () => this.clear());
   }
+  /** 我方避让（AllySeparation）：活着的兵作为碰撞体（半径 13）；base 让 id 不和别的单位撞。 */
+  bodies(out: Array<{ id: number; x: number; y: number; r: number; move(dx: number, dy: number): void }>, base: number): void {
+    let k = 0; for (const s of this.squads) for (const m of s.members) { k++; if (m.dead) continue; out.push({ id: base + k, get x() { return m.x; }, get y() { return m.y; }, r: 13, move: (dx, dy) => { m.x += dx; m.y += dy; } }); }
+  }
   get alive(): number { let n = 0; for (const s of this.squads) for (const m of s.members) if (!m.dead) n++; return n; }
 
   /** 出一队：营寨里离主将最近的那座；出生在它正南方、镜头下沿外 rearPad。 */

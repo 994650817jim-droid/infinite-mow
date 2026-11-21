@@ -2,7 +2,7 @@
 // 主将站木栅南侧，部曲（Legion）和名将随从（FollowerSquad）摆在木栅北侧：
 // ① 关掉我方绕障（旧行为：只有局部绕角）：部曲贴在木栅后过不来（复现）；
 // ② 打开：护阵状态下部曲 N 秒内绕到主将身边（或卡住 2 秒后在主将旁可走点淡入归队）；随从回到主将身边；
-// ③ 全程没有我方单位站进木栅碰撞框；④ 出击状态也能绕回；⑤ 无报错。
+// ③ 全程没有我方单位站进木栅碰撞框；④ 出击状态也能绕回；⑤ 我方任意两人不重叠（间距 ≥ 半径之和 − 6）；⑥ 无报错。
 // 用法：BASE=http://127.0.0.1:5187/ node tools/test-ally-detour.mjs [截图目录]
 import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
@@ -51,6 +51,11 @@ const on = await watch(9000);
 ck('护阵：部曲绕过木栅回到主将身边（全部在南侧、200 以内）', on.last.al.length >= 1 && on.last.al.every(x => !x.north && x.d < 200), { setup: s1, al: on.last.al.map(x => x.d), nav: on.last.nav });
 ck('随从回到主将身边（南侧、200 以内）', on.last.fo.every(x => !x.north && x.d < 200), { fo: on.last.fo });
 await p.screenshot({ path: `${out}/after-guard.png` });
+// ②b 我方互相避让（用户「我方自己的兵会重叠一起」）：站定后任意两名我方单位（部曲 / 随从 / 主将）的间距 ≥ 半径之和 − 6（软碰撞允许一点点挤）
+await p.waitForTimeout(1500);
+const gap = await p.evaluate(S0 => { const s = eval(S0), b = [{ n: '主将', x: s.player.x, y: s.player.y, r: s.player.radius }, ...s.allies.filter(a => a.active).map(a => ({ n: 'u' + a.id, x: a.x, y: a.y, r: a.radius })), ...(s.followers?.members ?? []).filter(f => !f.downed).map(f => ({ n: f.recruit.name, x: f.x, y: f.y, r: 14 }))];
+  let worst = { g: 1e9 }; for (let i = 0; i < b.length; i++) for (let j = i + 1; j < b.length; j++) { const g = Math.hypot(b[i].x - b[j].x, b[i].y - b[j].y) - b[i].r - b[j].r; if (g < worst.g) worst = { g: Math.round(g), a: b[i].n, b: b[j].n }; } return { n: b.length, worst, sep: { ...s.allySep.stats } }; }, S);
+ck('我方互不重叠：任意两人间距 ≥ 半径之和 − 6', gap.worst.g >= -6, gap);
 // ③ 出击：同样能绕回（没有敌人时出击也回主将附近）
 await setup(true, 'sortie');
 const so = await watch(9000);

@@ -17,7 +17,7 @@ import { HINT_MOCK, groundScar } from '../ui/HintStyle';
 import { playSheet } from './SkillFxSheets';
 
 /** 战场支援援兵入场（用户 2026-11-17：「支援的兵不要立刻出现在武将脚下，而是场外进入到武将那里」）：比平时跑得快一点，3 秒还没到就直接归位。 */
-export const ARRIVAL = { speedMul: 1.25, maxSeconds: 3, joinDist: 34, dustEvery: .16 } as const;
+export const ARRIVAL = { speedMul: 1.25, maxSeconds: 3, joinDist: 34, dustEvery: .16, /** 超时后冲刺：移速倍率、再给几秒；还到不了才走兜底换位（AllyRejoin：屏外直接换、屏内淡出淡入） */ sprintMul: 2.2, sprintSeconds: 3 } as const;
 export interface LegionState { training?:CampTraining;groups?:Partial<Record<TroopKind,CampGroup>>; food: number; dead: number; recruited: number; levels: Record<TroopKind, number>; soldiers: Array<{ kind: TroopKind; hp: number;reserveSoldier?:boolean;/** 生命上限（营寨 / 城池军医判断伤兵用；旧档没有） */max?:number }> }
 
 export class Legion {
@@ -50,6 +50,9 @@ export class Legion {
    * flowRoute：去阵位 / 目标的连线被挡时给绕路路点（null = 直走或交回 navigation 局部绕角）；freeAt：阵位点压在栅栏 / 城墙里时挪到最近可走点。
    */
   flowRoute:((x:number,y:number,tx:number,ty:number)=>{x:number;y:number}|null)|null=null;
+  /** 兜底换位（用户「为什么我感觉我自己的兵有时候在瞬移」）：GameScene 接 AllyRejoin——屏外直接换、屏内淡出 → 换位 → 尘土淡入；没接时退回直接换。 */
+  relocate:((u:Ally,x:number,y:number)=>void)|null=null;
+  private place(u:Ally,x:number,y:number):void{if(this.relocate)this.relocate(u,x,y);else u.setPosition(x,y);}
   freeAt:((x:number,y:number)=>{x:number;y:number})|null=null;
   /** 掉队卡住：离阵位 > STUCK.far 且 STUCK.ms 内没再靠近 → 在阵位旁可走点淡入归队。 */
   private readonly stuck=new Map<Ally,{best:number;at:number}>();readonly navStats={routed:0,rejoined:0};
@@ -82,7 +85,7 @@ export class Legion {
   /** 下一次 recruit 的入场点（场外）；用一次就清掉。没设时照旧出现在主将脚下（军营 / 开局 / 读档）。 */
   arriveFrom: { x: number; y: number } | null = null;
   /** 正在从场外跑来入列的援兵：剩余秒数、扬尘计时。跑来途中照常挨打，到了才入列（跟随 / 出击）。 */
-  private readonly arriving = new Map<Ally, { left: number; dust: number; life: number }>();
+  private readonly arriving = new Map<Ally, { left: number; dust: number; life: number ;sprint?:boolean}>();
   get arrivingCount(): number { return this.arriving.size; }
   isArriving(u: Ally): boolean { return this.arriving.has(u); }
   private readonly views: AllyView[] = [];
@@ -100,6 +103,7 @@ export class Legion {
     this.command=new CommandBuild(scene,player.growth.build,units,player,(u,now)=>this.fx(u,u.x,u.y,now,true));
     this.gfx = scene.add.graphics().setDepth(DEPTH.fx);
     this.projectiles = new LegionProjectiles(scene); this.tactics = new LegionTactics(this.centerProxy(player),u=>this.command.target(u)??(this.focus?.active&&this.focus.spawnId===this.focusLife?this.focus:null)??this.campTarget?.(u)??null,u=>{const p=this.formation.position(u);return this.freeAt?this.freeAt(p.x,p.y):p;},o=>this.formation.extent+(o==='guard'?this.formation.leashAdj:0),(u,x,y,now)=>{const w=this.flowRoute?.(u.x,u.y,x,y);if(w){this.navStats.routed++;return w;}return this.navigation.steer(u.id,u.x,u.y,x,y,u.radius,now);});
+    this.tactics.relocate=(u,x,y)=>this.place(u,x,y); // 收回兜底也走统一换位（屏外直接换、屏内淡出淡入）
   }
   get count(): number { let n = 0; for (const u of this.units) if (u.active) n++; return n; }
   recover(): void { for (const u of this.units) if (u.active) u.hp = u.maxHp; }
@@ -226,9 +230,12 @@ export class Legion {
   private stepArrival(u: Ally, dt: number): void {
     const a = this.arriving.get(u)!; if (!u.active || u.lifeId !== a.life) { this.arriving.delete(u); return; }
     const p = this.formation.position(u); a.left -= dt; a.dust -= dt;
-    u.moveTo(p.x, p.y, dt, u.def.speed * ARRIVAL.speedMul);
+    // 超时没到：先冲刺（移速 ×sprintMul、再给 sprintSeconds 秒，被挡时沿绕障导航），还到不了才兜底换位（不再直接瞬移到阵位）
+    if (a.left <= 0 && !a.sprint) { a.sprint = true; a.left = ARRIVAL.sprintSeconds; }
+    const w = this.flowRoute?.(u.x, u.y, p.x, p.y), gx = w?.x ?? p.x, gy = w?.y ?? p.y;
+    u.moveTo(gx, gy, dt, u.def.speed * (a.sprint ? ARRIVAL.sprintMul : ARRIVAL.speedMul));
     if (a.dust <= 0) { a.dust = ARRIVAL.dustEvery; playSheet(this.scene, 'fx_collapse_dust', u.x, u.y + 8, { size: 46, depth: DEPTH.ground + 4, ms: 420, alpha: .42 }); }
-    if (Math.hypot(p.x - u.x, p.y - u.y) <= ARRIVAL.joinDist || a.left <= 0) { if (a.left <= 0) u.setPosition(p.x, p.y); u.ai.x = p.x; u.ai.y = p.y; u.ai.nextThink = 0; this.arriving.delete(u); }
+    if (Math.hypot(p.x - u.x, p.y - u.y) <= ARRIVAL.joinDist || a.left <= 0) { if (a.left <= 0) { const q = this.freeAt?.(p.x, p.y) ?? p; this.place(u, q.x, q.y); } u.ai.x = p.x; u.ai.y = p.y; u.ai.nextThink = 0; this.arriving.delete(u); }
   }
   /** 掉队卡住（离阵位 260 以外、2 秒没靠近 40 像素）：在阵位旁的可走点淡入归队（不穿墙：落点由 freeAt 挑主将走得到的格）。出击追敌时不管。 */
   private rejoinIfStuck(u: Ally, now: number): void {
@@ -237,8 +244,7 @@ export class Legion {
     if (d < 260) { if (s) this.stuck.delete(u); return; }
     if (!s || d < s.best - 40) { this.stuck.set(u, { best: d, at: now }); return; }
     if (now - s.at < 2000) return;
-    const q = this.freeAt!(p.x, p.y); u.setPosition(q.x, q.y); u.ai.x = q.x; u.ai.y = q.y; u.ai.nextThink = 0; this.stuck.delete(u); this.navStats.rejoined++;
-    const sp = u.view?.sprite; if (sp) { sp.setAlpha(.3); this.scene.tweens.add({ targets: sp, alpha: 1, duration: 260 }); }
+    const q = this.freeAt!(p.x, p.y); this.place(u, q.x, q.y); u.ai.x = q.x; u.ai.y = q.y; u.ai.nextThink = 0; this.stuck.delete(u); this.navStats.rejoined++;
   }
   update(dt: number, now: number, enemies: Enemy[], enemyGrid: SpatialGrid<Enemy>, damage: (e: Enemy, n: number) => void): void {
     this.corpses.update(now);

@@ -161,10 +161,9 @@ export class BossHud {
       this.seal.setVisible(false); this.breakT.setVisible(false);
       const t = (now - this.dieAt) / B.dieMs, L = this.last;
       if (!L || t >= 1) { this.portrait.setVisible(false); this.last = null; return; }
-      // 授首：血条从中间裂开，两半向外滑开、淡出；头像跟着淡出
-      const a = 1 - t, e = Phaser.Math.Easing.Cubic.Out(t), off = 34 * e, bx = x0 + B.barX, bw = R.w - B.barX - 14, by = y0 + B.hpY, half = bw / 2;
-      this.hpBar(bx - off, by + 6 * e, half - 3, B.hpH, 0, 1 - t * .6, a);
-      this.hpBar(bx + half + 3 + off, by - 4 * e, half - 3, B.hpH, 0, 1 - t * .6, a);
+      // 授首：空血条闪一下白、整条淡出，头像跟着淡出（2026-11-21 总制作人：原来从中间裂成两半向外滑，截到半途像两条并排的重复血条）
+      const a = 1 - t, bx = x0 + B.barX, bw = R.w - B.barX - 14, by = y0 + B.hpY;
+      this.hpBar(bx, by, bw, B.hpH, 0, Math.max(0, 1 - t * 2.5), a);
       this.drawMedal(this.portrait, L.id, x0 + 30, y0 + R.h / 2, B.r, a);
       return;
     }

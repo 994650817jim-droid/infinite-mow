@@ -1265,7 +1265,7 @@ export class GameScene extends Phaser.Scene {
       order: () => this.legion.order, cycleOrder: () => { if (mechOpen('squad')) this.legion.cycleOrder(); }, switchFormation: () => this.formationRt?.switch(this.combatNow) ?? false,
       openBag: () => this.openBattleBag(), canAttributes: () => this.player.growth.unallocated > 0 && mechOpen('attributes'),
       openAttributes: (from: 'none' | 'pause') => { this.attributeReturn = from; this.renderAttributePanel(); this.setMode('attributes'); },
-      openBuild: () => this.openBuildPanel(), chooseUpgrade: (i: number) => this.chooseUpgrade(i), chooseBranch: (i: number) => this.chooseBranch(i),
+      openBuild: () => this.openBuildPanel(), chooseUpgrade: (i: number) => { if (this.upgradeCardShown(i)) this.chooseUpgrade(i); }, chooseBranch: (i: number) => this.chooseBranch(i),
       ...(IS_DESKTOP ? {toggleMap: () => this.battleMap?.toggleBig(), mapOpen: () => !!this.battleMap?.bigOpen, toggleOrders: () => this.ordersPanel?.toggleFold()} : {}),
     };
     this.hotkeys = new BattleHotkeys(hotkeyHost); this.hotkeyHints = new HotkeyHints(hotkeyHost);
@@ -3316,16 +3316,20 @@ export class GameScene extends Phaser.Scene {
 
   /** 三选一动画：卡片依次自下滑入淡入，悬停上浮 6px。升级时计时器与补间暂停，因此逐帧手动推进。 */
   private upgradeAnimAt = 0;
+  /** 第一章败走：结算主按钮是「再战此关」。 */
+  private resultRetry = false;
   protected animateUpgradeCards(): void {
     if (!this.levelPanel?.visible) return;
     const now = performance.now();
     this.cardViews.forEach((v, i) => {
-      const k = Phaser.Math.Clamp((now - this.upgradeAnimAt - i * 70) / 240, 0, 1), ease = 1 - Math.pow(1 - k, 3);
+      const k = Phaser.Math.Clamp((now - this.upgradeAnimAt - i * 50) / 160, 0, 1), ease = 1 - Math.pow(1 - k, 3);
       v.lift += ((v.hover ? -6 : 0) - v.lift) * .3;
       v.root.setY(v.baseY + (1 - ease) * 36 + v.lift).setAlpha(ease);
     });
   }
 
+  /** 三选一卡片浮现过半才接受按键 / 点击（逐张浮现时，2、3 号卡还没出来就按 2 / 3 会选到看不见的卡；2026-11-21 总制作人试玩）。 */
+  protected upgradeCardShown(i: number): boolean { const v = this.cardViews?.[i]; return !v || this.mode !== 'levelup' || v.root.alpha >= .5; }
   protected chooseUpgrade(index: number): void {
     if(this.mode==='bossloot'){
       const option=this.upgradeOptions[index],done=this.lootContinue;if(!option||!done)return;
@@ -4427,7 +4431,9 @@ export class GameScene extends Phaser.Scene {
      if(loot.length)this.resultTexts.body.setText(this.resultTexts.body.text+'\n缴获兵装  '+loot.length+' 件（'+this.itemDrops!.summary()+'）'+(debug?' · 测试战斗不入行囊':dep.lost?' · 败退遗失 '+dep.lost+' 件':' · 已收入行囊'));}
     if(this.worldCampaign){const reward=settleExpedition(this.expeditionId,{...stats,kills:Math.max(0,stats.kills-this.settledFrontlineKills),chapter:this.chapter.id,returned:this.allies.filter(a=>a.active&&a.reserveSoldier).map(a=>a.kind),debug:isChapterTestRun()||this.debugModified||this.debugJumped||this.player.damageImmune});
       this.resultTexts.body.setFontSize(IS_DESKTOP?14:16).setLineSpacing(IS_DESKTOP?5:8).setText(this.resultTexts.body.text+`\n永久奖励  军粮 +${reward.provisions}`+cityIncomeLine(reward));
-      this.resultTexts.subtitle.setText(victory&&this.chapter.id==='huangjin'&&this.chapter.stage===3&&worldUnlocked()?'黄巾平定 · 三国天下开启':victory?this.chapter.victoryText:reward.message);
+      // 败走副标题说人话（2026-11-21 总制作人：第一次失败就写「未超过本章失败最佳成绩，无新增奖励」看不懂）
+      const defeatSub=/^未超过/.test(reward.message)?'乱军之中，力战而退':reward.message==='已自动入库'?'所得战功已入库':reward.message;
+      this.resultTexts.subtitle.setText(victory&&this.chapter.id==='huangjin'&&this.chapter.stage===3&&worldUnlocked()?'黄巾平定 · 三国天下开启':victory?this.chapter.victoryText:defeatSub);
     }
     // 讨董告捷：回天下地图并聚焦新解锁的「群雄割据」（地图自第一章起已开放，不再重复「天下开启」揭幕）
     if(victory&&!this.runConfig.encounter&&this.chapter.id==='hulao'&&this.chapter.westStage===3&&worldUnlocked())this.registry.set('mapFocusNode','qunxiong');
@@ -4458,10 +4464,13 @@ export class GameScene extends Phaser.Scene {
     const canAdvance=!!nextWest&&dongzhuoStageUnlocked(nextWest);
     const openedMap=victory&&this.worldCampaign&&this.chapter.id==='hulao'&&(this.chapter.westStage??3)===3&&worldUnlocked();
     const homeLink=this.resultPanel.getByName('result-home') as Phaser.GameObjects.Text|null;
-    {const again=victory&&(REPLAY_CLEARED||isChapterTestRun());/* 打过的关不能再打（data/replayRules.ts） */this.resultPanel.getByName('result-restart')?.setActive(again);(this.resultPanel.getByName('result-restart') as Phaser.GameObjects.Image)?.setVisible(again);(this.resultPanel.getByName('result-restart-text') as Phaser.GameObjects.Text)?.setVisible(again);}
-    homeLink?.setText(!victory?'返回主菜单':canAdvance?`下一关 · ${nextWest===1?'汜水关':nextWest===2?'荥阳':'虎牢关'}`:openedMap?(openChapterCount(loadWorldState())>loadWorldState().chapterSeen?'天下地图 · 新篇解锁':'返回天下地图'):this.worldCampaign&&worldUnlocked()?"返回营寨":'返回选关');
+    // 第一章败走（天下未开、没有退守去处）：主按钮「再战此关」= 回主页并直接「匡扶汉室」（同原来手动两步；第一章不扣东西），次按钮「返回主菜单」
+    const retry=!victory&&!worldUnlocked()&&!this.runConfig.encounter&&!this.encounterPreview;this.resultRetry=retry;
+    {const again=victory&&(REPLAY_CLEARED||isChapterTestRun());/* 打过的关不能再打（data/replayRules.ts） */this.resultPanel.getByName('result-restart')?.setActive(again);(this.resultPanel.getByName('result-restart') as Phaser.GameObjects.Image)?.setVisible(again);(this.resultPanel.getByName('result-restart-text') as Phaser.GameObjects.Text)?.setVisible(again);
+     if(retry){this.resultPanel.getByName('result-restart')?.setActive(true);(this.resultPanel.getByName('result-restart') as Phaser.GameObjects.Image)?.setVisible(true);(this.resultPanel.getByName('result-restart-text') as Phaser.GameObjects.Text)?.setVisible(true).setText('返回主菜单');}}
+    homeLink?.setText(!victory?(retry?'再战此关':'返回主菜单'):canAdvance?`下一关 · ${nextWest===1?'汜水关':nextWest===2?'荥阳':'虎牢关'}`:openedMap?(openChapterCount(loadWorldState())>loadWorldState().chapterSeen?'天下地图 · 新篇解锁':'返回天下地图'):this.worldCampaign&&worldUnlocked()?"返回营寨":'返回选关');
     homeLink?.removeAllListeners('pointerdown').on('pointerdown',()=>{
-      if(!victory){this.registry.remove('campaignTransfer');this.registry.remove('menuChapterPicker');this.scene.start('MenuScene');return;}
+      if(!victory){this.registry.remove('campaignTransfer');this.registry.remove('menuChapterPicker');if(retry)this.registry.set('autoCampaignEntry',true);this.scene.start('MenuScene');return;}
       if(canAdvance){this.registry.remove('campaignTransfer');const {encounter:_preview,...config}=this.runConfig;this.registry.set('runConfig',{...config,chapter:'hulao',stage:undefined,westStage:nextWest});this.scene.restart();return;}
       if(this.worldCampaign&&worldUnlocked())this.scene.start(openedMap||this.registry.get('worldReveal')?'WorldMapScene':'CityScene');
       else {this.registry.set('menuChapterPicker',true);this.scene.start('MenuScene');}
@@ -4822,7 +4831,7 @@ export class GameScene extends Phaser.Scene {
       // 子元素也必须固定在屏幕上，否则命中检测按相机滚动偏移（点不中卡片）。
       for(const o of [bg,rule,icon,tag,name,desc,hint,rich,scope])o.setScrollFactor(0);root.add([bg,rule,icon,tag,name,desc,rich,scope,hint]);root.setScrollFactor(0);this.levelPanel.add(root);
       const view:CardView={bg,icon,name,desc,tag,root,rule,hint,rich,scope,w,h,baseY:y,medal,accent:UPGRADE_ACCENT.passive,rare:false,hover:false,lift:0};
-      bg.on('pointerdown',()=>bg.setTint(0xe0cfa8)).on('pointerup',()=>{bg.clearTint();this.chooseUpgrade(i);}).on('pointerover',()=>{view.hover=true;this.paintUpgradeCard(view);}).on('pointerout',()=>{bg.clearTint();view.hover=false;this.paintUpgradeCard(view);});
+      bg.on('pointerdown',()=>bg.setTint(0xe0cfa8)).on('pointerup',()=>{bg.clearTint();if(this.upgradeCardShown(i))this.chooseUpgrade(i);}).on('pointerover',()=>{view.hover=true;this.paintUpgradeCard(view);}).on('pointerout',()=>{bg.clearTint();view.hover=false;this.paintUpgradeCard(view);});
       this.cardViews.push(view);
     }
 
@@ -4959,13 +4968,14 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.resultPanel = this.add.container(0, 0).setScrollFactor(0).setDepth(DEPTH.overlay).setVisible(false);
-    const rDim = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x0c0805, 0.84).setOrigin(0, 0).setInteractive();
+    const rDim = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x0c0805, d ? 0.9 : 0.84).setOrigin(0, 0).setInteractive();
     // 结算卷：漆底双层描金（同告捷弹窗），按钮为漆金按钮，有悬停 / 按下态；按钮仍是原来的命名对象。
     // 电脑版（2026-11-17 用户「打败boss后结算ui也要优化一下」）：书法大标题 + 「X-X 告捷」小标题、奖励图标格与经验条（presentResult）、一行战况、水墨按钮；手机版不变
     const rpw = d ? 640 : GAME_WIDTH - 48, rph = d ? 500 : 700, px0 = (GAME_WIDTH - rpw) / 2, py0 = d ? Math.round((GAME_HEIGHT - rph) / 2) : 120, pcx = GAME_WIDTH / 2;
     this.resultTop = py0; this.resultH = rph;
     rDim.on('pointerdown', () => this.resultAnimSkip?.()); // 点空白处跳过动画
-    const resultFrame = this.add.graphics(); lqPanel(resultFrame, px0, py0, rpw, rph);
+    // 2026-11-21 总制作人试玩：电脑版不要整块金边大框（同剧情卡 / 劝降面板）——压暗画面，内容浮在上面，上下两道细金线
+    const resultFrame = this.add.graphics(); if (d) { resultFrame.fillStyle(LQ.goldHi, .85); lqDivider(resultFrame, pcx, py0 + 4, rpw / 2 - 20); lqDivider(resultFrame, pcx, py0 + rph - 4, rpw / 2 - 20); } else lqPanel(resultFrame, px0, py0, rpw, rph);
     const rTitle = this.add
       .text(pcx, py0 + (d ? 74 : 78), '', { fontFamily: d ? TITLE_FONT : HEADING_FONT, fontSize: d ? '44px' : '46px', color: '#e8c76a' })
       .setOrigin(0.5).setStroke(d ? RESULT_STROKE : '#2a170b', 6).setShadow(0, 3, '#000000', 6, true, true);
@@ -4993,7 +5003,7 @@ export class GameScene extends Phaser.Scene {
       .text(pcx, rby, '再来一局', { fontFamily: HEADING_FONT, fontSize: d ? '20px' : '22px', color: '#ffe9bd' })
       .setOrigin(0.5).setStroke('#2a170b', 3);
     btn.setName('result-restart');btnText.setName('result-restart-text');
-    btn.on('pointerdown', () => {if(this.victory)this.scene.restart();});
+    btn.on('pointerdown', () => {if(this.victory)this.scene.restart();else if(this.resultRetry){this.registry.remove('campaignTransfer');this.registry.remove('menuChapterPicker');this.scene.start('MenuScene');}});
     const selectChapter = this.add.text(pcx, rby, this.worldCampaign&&worldUnlocked()?this.chapter.stage===3&&this.victory?'三国天下开启':"返回营寨":'返回选关', { fontFamily: HEADING_FONT, fontSize: d ? '19px' : '21px', color: '#ffe9bd' })
       .setOrigin(.5).setStroke('#2a170b', 3).setInteractive({ useHandCursor: true });
     selectChapter.setName('result-home').on('pointerdown', () => this.scene.start(this.worldCampaign&&worldUnlocked()?(this.registry.get('worldReveal')?'WorldMapScene':'CityScene'):'MenuScene'));

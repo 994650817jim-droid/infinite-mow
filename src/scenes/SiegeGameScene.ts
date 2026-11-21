@@ -328,7 +328,7 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
         advance: (e, nx, ny, dt) => this.advanceEnemy(e, nx, ny, dt),
         food: () => this.legion.food, spend: n => { if (this.legion.food < n) return false; this.legion.food -= n; return true; },
         banner: (t, d, c) => this.showWaveBanner(t, d, c), sfx: k => this.sfx.play(k as never),
-        openGate: () => pass.openGate(), skipTo: sec => { this.elapsed = Math.max(this.elapsed, sec); },
+        openGate: () => pass.openGate(), block: b => { this.sishuiObstacles?.footprints.push(...b); }, skipTo: sec => { this.elapsed = Math.max(this.elapsed, sec); },
         hpScale: () => this.chapter.hpScale(this.elapsed),
         guardGate: p => { this.legion.formation.anchor = p; for (const u of this.legion.units) u.ai.nextThink = 0; },
         rampart: mul => { this.player.passive.rampartMul = mul; if (mul > 1) this.showWaveBanner('登城', false, `城头上武器范围 +${Math.round((mul - 1) * 100)}%`); },

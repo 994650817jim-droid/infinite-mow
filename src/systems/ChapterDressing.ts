@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { drawSideWall, loadSideWallArt, sideWallReady } from './SideWall';
 import { DEPTH, actorDepth } from '../config';
 import { MID_SIEGE_FILES } from './SiegeMidArt';
+import { propFootprint } from './PropFootprint';
 
 /**
  * 场景审查 P3 的关卡布景（全部复用现成手绘图，不画替代图形；实心部分进场景碰撞框，画面和碰撞一致、刷兵避开）：
@@ -24,14 +25,16 @@ const img = (s: Phaser.Scene, x: number, y: number, key: string, frame: number |
 /** 1-2 下曲阳 · 张宝法坛营：法坛居中（实心）、两侧木栅（实心，中间留营门）、营帐黄旗。p = 开局主将位置。 */
 export function xiaquyangAltarCamp(scene: Phaser.Scene, p: Pt, boxes: Box[]): void {
   const y = p.y - 760, x = p.x;
-  if (scene.textures.exists('zhang_bao_altar')) { img(scene, x, y + 40, 'zhang_bao_altar', 0 as unknown as string, 340, 276, 'xiaquyang-altar'); boxes.push({ left: x - 120, right: x + 120, top: y - 30, bottom: y + 30 }); }
+  // 法坛：碰撞按石台底座（几块框叠成圆台轮廓，原来只有台前一条 240×60，台后半圆能走上去站到石碑边）；深度按台心排序线，台后的人被石碑挡住
+  if (scene.textures.exists('zhang_bao_altar')) propFootprint(img(scene, x, y + 40, 'zhang_bao_altar', 0 as unknown as string, 340, 276, 'xiaquyang-altar'), 'zhang_bao_altar', boxes);
   if (!scene.textures.exists('yellow_props')) return;
   // 木栅：法坛前一排，中间留 240 宽营门
   for (const side of [-1, 1]) for (let k = 0; k < 4; k++) { const sx = x + side * (200 + k * 118); img(scene, sx, y + 150, 'yellow_props', 12, 128, 128, 'xiaquyang-fence'); }
   for (const side of [-1, 1]) boxes.push({ left: side < 0 ? x - 200 - 3 * 118 - 64 : x + 200 - 64, right: side < 0 ? x - 200 + 64 : x + 200 + 3 * 118 + 64, top: y + 120, bottom: y + 150 });
-  // 营帐、黄旗（布景，不挡：在木栅后面）
-  for (const [dx, dy, f, s] of [[-430, -60, 0, 170], [430, -50, 1, 170], [-250, -120, 2, 150], [260, -130, 3, 150], [-120, 60, 4, 110], [130, 60, 5, 110], [-560, 80, 6, 110], [560, 90, 7, 110]] as const)
-    img(scene, x + dx, y + dy, 'yellow_props', f, s, s, 'xiaquyang-camp');
+  // 营帐（实心：从营门 / 木栅两头都走得进营里，原来能穿帐而过）、黄旗（细杆布景，不挡）
+  for (const [dx, dy, f, s] of [[-430, -60, 0, 170], [430, -50, 1, 170], [-250, -120, 2, 150], [260, -130, 3, 150], [-120, 60, 4, 110], [130, 60, 5, 110], [-560, 80, 6, 110], [560, 90, 7, 110]] as const) {
+    const im = img(scene, x + dx, y + dy, 'yellow_props', f, s, s, 'xiaquyang-camp'); if (f <= 3) propFootprint(im, 'yellow_tent', boxes);
+  }
 }
 
 /** 2-3 洛阳 · 火城：两翼烧毁的民居 / 残墙（实心）+ 房上地火。 */

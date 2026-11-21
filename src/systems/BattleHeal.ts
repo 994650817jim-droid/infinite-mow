@@ -5,6 +5,7 @@ import type { PhasePlan } from '../data/stagePhases';
 import type { PropLootKind } from '../data/propLoot';
 import type { Enemy } from '../entities/Enemy';
 import { playSheet } from './SkillFxSheets';
+import { propFootprint, type Box } from './PropFootprint';
 
 /**
  * 战场回血（data/battleHeal.ts；用户 2026-11-19「我感觉地图上也需要更多回血手段」）：
@@ -14,6 +15,8 @@ import { playSheet } from './SkillFxSheets';
  * 美术：泉眼 / 水井用 scene-v2/waterpoints.png（手绘），干粮 / 酒肉先借营地道具图，回血特效用手绘 fx_heal_fushui。
  */
 export interface BattleHealHost {
+  /** 水井立着、有碰撞（统筹 11-21 大件布景碰撞）：登记 / 撤掉场景碰撞框。 */
+  block?: (boxes: Box[], on: boolean) => void;
   scene: Phaser.Scene;
   player: () => { x: number; y: number; hp: number; maxHp: number; alive: boolean; heal(n: number): void };
   enemies: () => readonly Enemy[];
@@ -38,6 +41,7 @@ interface Spot {
   arrow: Phaser.GameObjects.Container;
   /** 剩余水量（0–1，乘 spot.charge 的最大生命比例）；冷却到什么时刻（elapsed 秒）。 */
   left: number; readyAt: number; fxAt: number; boss: boolean;
+  /** 水井的碰撞框（泉眼 / 药草贴地，没有）。 */ boxes?: Box[];
 }
 
 export class BattleHeal {
@@ -146,6 +150,13 @@ export class BattleHeal {
   /** 测试 / 调试：在主将旁边立刻放一处。 */
   forceSpot(dx = 160, dy = 0, kind?: HealSpotKind): Spot | null { const P = this.h.player(); return this.spawnSpot(P.x + dx, P.y + dy, false, kind); }
   get liveSpots(): readonly Spot[] { return this.spots; }
+  /** 后立起来的大件布景（首领出阵时的法坛）压住了回血点 / 地上的干粮：回血点换个地方再放（同一种），干粮挪到最近的空地（统筹 11-21）。 */
+  evict(blocked: (x: number, y: number) => boolean): number {
+    let n = 0;
+    for (const sp of [...this.spots]) if (blocked(sp.x, sp.y) || blocked(sp.img.x, sp.img.y)) { const { kind, boss } = sp; this.removeSpot(sp); const p = this.spotPoint(); this.spawnSpot(p.x, p.y, boss, kind); n++; }
+    for (const f of this.foods) if (f.active && blocked(f.x, f.y)) { const p = this.h.place(f.x, f.y); f.x = p.x; f.y = p.y; f.img.setPosition(p.x, p.y); n++; }
+    return n;
+  }
 
   private pickKind(): HealSpotKind {
     const s = this.h.scene, kinds: HealSpotKind[] = ['spring', 'well'];
@@ -171,11 +182,12 @@ export class BattleHeal {
     const cy = kind === 'well' ? y + 52 : y;
     const ring = s.add.graphics().setDepth(DEPTH.ground + 3.5).setName('heal-spot-ring');
     const spot: Spot = { kind, x, y: cy, img, ring, arrow: this.makeArrow(), left: 1, readyAt: 0, fxAt: 0, boss };
+    if (kind === 'well') { spot.boxes = propFootprint(img, 'heal_well'); this.h.block?.(spot.boxes, true); } // 井栏挡人（井前的回血圈照旧站得进去）
     this.spots.push(spot); this.stats.spotsSpawned++;
     this.tipOnce();
     return spot;
   }
-  private removeSpot(sp: Spot): void { sp.img.destroy(); sp.ring.destroy(); sp.arrow.destroy(); this.spots = this.spots.filter(o => o !== sp); }
+  private removeSpot(sp: Spot): void { if (sp.boxes) this.h.block?.(sp.boxes, false); sp.img.destroy(); sp.ring.destroy(); sp.arrow.destroy(); this.spots = this.spots.filter(o => o !== sp); }
   /** 第一次见到回血点：只提示一次（整个存档一次，记在 localStorage）。 */
   private tipOnce(): void {
     const K = 'im_tip_heal_spot'; let seen = false;

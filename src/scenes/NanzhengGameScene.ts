@@ -64,6 +64,7 @@ export function nanzhengGameSceneClass(Base: typeof GameScene) {
         scene: this, player: this.player, allies: () => this.allies, enemies: () => this.enemies, now: () => this.combatNow,
         hitEnemy: (e, d) => { this.hitEnemy(e, d, this.combatNow, 'fire', true, false); }, hurtTroops: (x, y, r, d) => this.legion.hurtArea(x, y, r, d, this.combatNow),
         banner: (t, danger, c) => this.showWaveBanner(t, !!danger, c), sfx: k => this.sfx.play(k), boss: () => this.boss,
+        block: b => this.blockBoxes(b, true),
       }, this.nzStage);
       if (!this.registry.get('nzNoStory')) {
         if (this.nzStage === 1) this.story('nz-opening', '第十一章 · 南征', '五月渡泸', NZ_OPENING, '渡泸水');

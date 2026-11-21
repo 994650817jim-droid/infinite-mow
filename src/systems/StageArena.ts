@@ -3,6 +3,7 @@ import { drawSidePalisade, sideWallReady, whenSideWallReady } from './SideWall';
 import { actorDepth, DEPTH } from '../config';
 import { ARENA, type StageMapDef, type Pt } from '../data/stageMaps';
 import { FACTION_PROPS } from './PropsV2';
+import { propFootprint, type Box } from './PropFootprint';
 import { MID_SIEGE_FILES } from './SiegeMidArt';
 import { playSheet } from './SkillFxSheets';
 import { warnFx } from '../ui/WarnFx';
@@ -30,6 +31,8 @@ export interface ArenaHost {
   hurtTroops: (x: number, y: number, r: number, dmg: number) => void;
   banner: (t: string, danger?: boolean, caption?: string) => void;
   sfx: (k: string) => void;
+  /** 实心布景（宛城营帐）的碰撞框登记进场景碰撞（统筹 11-21 大件布景碰撞检查）。 */
+  block?: (boxes: Box[]) => void;
   /** 收掉场外的补给箱 / 道具 */
   purge?: (pred: (x: number, y: number) => boolean) => void;
 }
@@ -210,7 +213,7 @@ export class StageArena {
   private setupTents(it: { tents: Pt[]; lit: number[] }, now: number) {
     const sc = this.h.scene, fac = this.def.faction !== undefined ? FACTION_PROPS[this.def.faction] : undefined, key = fac && sc.textures.exists(fac.key) ? fac.key : null;
     this.tents = it.tents.map(t => ({ x: t.x, y: t.y, fires: [], state: 'idle' as const, litAt: 0, tickAt: 0,
-      img: key ? (() => { const im = sc.add.image(t.x, t.y, key, 2).setOrigin(.5, 1).setDisplaySize(200, 200).setDepth(actorDepth(t.y)).setName('arena-tent'); this.objs.push(im); return im; })() : undefined }));
+      img: key ? (() => { const im = sc.add.image(t.x, t.y, key, 2).setOrigin(.5, 1).setDisplaySize(200, 200).setDepth(actorDepth(t.y)).setName('arena-tent'); this.objs.push(im); this.h.block?.(propFootprint(im, 'fort_tent')); return im; })() : undefined })); // 营帐实心（原来能穿帐而过）
     for (const i of it.lit) if (this.tents[i]) this.ignite(this.tents[i], now);
   }
   private ignite(t: Tent, now: number) {

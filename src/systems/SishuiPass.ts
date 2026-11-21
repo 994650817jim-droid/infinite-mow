@@ -181,6 +181,7 @@ export class SishuiPass {
   private towerDown(t: { x: number; y: number }): void {
     const s = this.h.scene, P = SISHUI_PASS, K = MID_SIEGE_FILES[0].key;
     if (s.textures.exists(K)) this.art.push(s.add.image(t.x, t.y, K, 4).setOrigin(.5, .97).setDisplaySize(170, 170).setDepth(actorDepth(t.y)).setName(this.tag + '-tower-ruin'));
+    this.footprints.push({ left: t.x - 52, right: t.x + 52, top: t.y - 36, bottom: t.y }); // 塌了的箭楼残基实心（统筹 11-21 大件布景碰撞检查：箭楼打塌后碰撞跟着没了，能站进瓦砾堆）
     playSheet(s, 'fx_collapse_dust', t.x, t.y, { size: 210, ms: 650, depth: DEPTH.fx, originY: .8, name: 'sishui-tower-dust' });
     s.cameras.main.shake(140, .004);
     this.h.merit(1, 0);

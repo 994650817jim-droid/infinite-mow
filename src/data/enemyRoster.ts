@@ -229,4 +229,47 @@ export const STAGE_MIX: Record<string, StageMix> = {
   'beifa.1': { traits: { qiangbing: { w: 5 }, huojian: { w: 3, wave: 3 } } }, // 街亭：原只有羌兵
   'beifa.2': { traits: { huojian: { w: 5 }, qiangbing: { w: 3, wave: 3 } } }, // 陈仓：原只有火箭手
   'beifa.3': { traits: { huwei: { w: 3 }, huojian: { w: 3, wave: 3 }, qiangbing: { w: 2, wave: 4 } } }, // 五丈原：原只有虎卫
+
+  // ———— 支线战场（data/sideRoutes，统筹 11-21：配兵审计 wave-mix-audit.md 第 5 条「支线主题兵没进配兵表」）————
+  // 键 = 支线 id + '.' + 第几关（白门楼走吕布战，不在这里）。支线不走五段（CHAPTER_INDEX 没有支线），用基础章节的三波：
+  // 1 先锋（底层兵，最多一种轻量 / 杂兵）· 2 主题兵（就是关卡第二波的波名：白马义从、先登死士……）· 3 首领段加码。权重合计约 10～12，占比 / 角色上限同主线。
+  // 没有专属兵种图的主题兵借最像的：白马义从 / 并州狼骑 = 羌胡弓骑，虎豹骑 = 魏军山地轻骑，锦帆贼 = 夜袭兵，江东水军 = 荆州水卒，鬼卒 = 流民 / 黄巾力士（张鲁支线外观借黄巾）。
+  // 吕布 · 下邳（借第三章）
+  'xiapi.1': { traits: { qianghu: { w: 6, wave: 2 }, gunshi: { w: 4, wave: 3 } } }, // 小沛：并州狼骑（弓骑）+ 守城滚石
+  'xiapi.2': { traits: { xianzhen: { w: 6, wave: 2 }, qianghu: { w: 4, wave: 3 } } }, // 辕门射戟：陷阵营压阵
+  'xiapi.3': { traits: { gunshi: { w: 5, wave: 2 }, xianzhen: { w: 3, wave: 3 }, qianghu: { w: 3, wave: 3 } } }, // 下邳：城头滚石，张辽守城时陷阵营 + 狼骑
+  // 江东 · 南郡（借第五章、外观第十章吴军）
+  'nanjun.1': { traits: { shuizu: { w: 6, wave: 2 }, danyang: { w: 4, wave: 3 } } }, // 江陵外围：水军跳帮登岸
+  'nanjun.2': { traits: { shuizu: { w: 3, wave: 1 }, danyang: { w: 5, wave: 2 }, huogong: { w: 4, wave: 3 } } }, // 南郡：江东精兵（丹阳兵），周瑜亲至时火攻
+  // 中原 · 曹魏（借第八章，底兵有青州兵）
+  'caowei.1': { traits: { qiangzhen: { w: 6, wave: 2 }, huojian: { w: 4, wave: 3 } } }, // 陈留：青州兵列阵（枪阵）+ 城头火箭
+  'caowei.2': { traits: { huwei: { w: 5, wave: 2 }, qiangzhen: { w: 3, wave: 3 }, shanqi: { w: 3, wave: 3 } } }, // 宛城旧地：虎卫军（护主）
+  'caowei.3': { traits: { shanqi: { w: 6, wave: 2 }, pili: { w: 2, wave: 3 }, huojian: { w: 3, wave: 3 } } }, // 许昌：虎豹骑巡城 + 霹雳车守城
+  'caowei.4': { traits: { shanqi: { w: 6, wave: 2 }, huwei: { w: 4, wave: 3 } } }, // 许都决战：虎豹骑出城，曹操亲至虎卫护主
+  // 公孙瓒 · 幽州（借第三章）
+  'gongsun.1': { traits: { qianghu: { w: 6, wave: 2 }, gunshi: { w: 4, wave: 3 } } }, // 平原：白马斥候
+  'gongsun.2': { traits: { qianghu: { w: 7, wave: 2 }, qiangzhen: { w: 3, wave: 3 } } }, // 界桥：白马义从往来驰射（弓骑上限 4）
+  'gongsun.3': { traits: { gunshi: { w: 5, wave: 2 }, funu: { w: 3, wave: 3 }, qianghu: { w: 3, wave: 3 } } }, // 易京楼：楼橹死守（滚石 + 伏弩）
+  // 袁绍 · 河北（借第四章）
+  'hebei.1': { traits: { daji: { w: 6, wave: 2 }, xiandeng: { w: 4, wave: 3 } } }, // 南皮：大戟士
+  'hebei.2': { traits: { xiandeng: { w: 6, wave: 2 }, daji: { w: 4, wave: 3 } } }, // 仓亭：先登死士伏弩
+  'hebei.3': { traits: { yaliang: { w: 5, wave: 2 }, xiandeng: { w: 3, wave: 3 }, daji: { w: 3, wave: 3 } } }, // 邺城：围城断粮（运粮卒截住有赏）
+  'hebei.4': { traits: { daji: { w: 6, wave: 2 }, xiandeng: { w: 5, wave: 3 } } }, // 冀州决战：袁氏亲军
+  // 荆州 · 江夏（借第四章、外观第六章荆南）
+  'jiangxia.1': { traits: { shuizu: { w: 5, wave: 1 }, yexi: { w: 5, wave: 2 } } }, // 江夏水寨（水卒开局就有）→ 锦帆贼夜袭
+  'jiangxia.2': { traits: { shuizu: { w: 6, wave: 2 }, changsha: { w: 3, wave: 3 }, yexi: { w: 2, wave: 3 } } }, // 江夏：荆州水军，黄祖亲至时强弓（上限 2）
+  // 张鲁 · 汉中（借第八章、外观第一章黄巾）
+  'zhanglu.1': { traits: { liumin: { w: 5, wave: 1 }, jijiu: { w: 3, wave: 2 }, fushui: { w: 3, wave: 3 } } }, // 五斗米道坛：鬼卒成群，祭酒（光环）、道徒（治疗）
+  'zhanglu.2': { traits: { liumin: { w: 4, wave: 1 }, lishi: { w: 3, wave: 2 }, jijiu: { w: 3, wave: 3 }, fushui: { w: 2, wave: 3 } } }, // 南郑：鬼卒道兵（力士压阵）
+  // 西凉 · 马韩（借第八章、外观第三章西凉）
+  'xiliang.1': { traits: { qianghu: { w: 6, wave: 2 }, gunshi: { w: 4, wave: 3 } } }, // 天水：羌胡骑兵
+  'xiliang.2': { traits: { qianghu: { w: 5, wave: 2 }, qiangbing: { w: 5, wave: 3 } } }, // 渭水：西凉铁骑往来驰射，阎行出阵时羌兵扑跳
+  'xiliang.3': { traits: { qiangbing: { w: 6, wave: 2 }, qianghu: { w: 4, wave: 3 } } }, // 金城：羌兵助阵
+  // 东吴 · 江东（借第十章）
+  'dongwu.1': { traits: { linfu: { w: 4, wave: 2 }, danyang: { w: 3, wave: 3 }, huogong: { w: 3, wave: 3 } } }, // 庐江：江东弓手（伏弓三连射）
+  'dongwu.2': { traits: { shuizu: { w: 6, wave: 2 }, huogong: { w: 4, wave: 3 } } }, // 濡须口：吴军水师，黄盖出阵时火攻
+  'dongwu.3': { traits: { danyang: { w: 5, wave: 2 }, zhuran: { w: 3, wave: 3 }, huogong: { w: 3, wave: 3 } } }, // 吴郡：江东子弟（丹阳兵），周泰亲军（重甲横扫）
+  // 南中 · 银坑（借第十一章）：底层兵在本章里就是蛮兵 / 藤甲（盾）/ 象兵（骑），主题兵靠底层配比出；基础章节第 1、2 关的表没有藤甲 / 象兵，这里自己给
+  'nanzhong.1': { base: { infantry: { w: 52 }, shield: { w: 30, wave: 2 }, archer: { w: 12 }, elite: { w: 6, wave: 2 } }, traits: { dujian: { w: 4, wave: 2 }, mantoushi: { w: 3, wave: 3 } } }, // 银坑洞：藤甲兵（约三成，同 11-2 审计后的 33%）
+  'nanzhong.2': { base: { infantry: { w: 42 }, shield: { w: 22 }, cavalry: { w: 16, wave: 2 }, archer: { w: 12 }, elite: { w: 8, wave: 2 } }, traits: { xunshou: { w: 3, wave: 2 }, dujian: { w: 4, wave: 3 } } }, // 秃龙洞：象兵冲阵（同 11-3 的 16%）+ 驯兽兵
 };

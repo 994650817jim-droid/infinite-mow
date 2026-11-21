@@ -1,0 +1,6 @@
+import { chromium } from 'playwright'; import fs from 'fs';
+const [src,out,W]=[process.argv[2],process.argv[3],+process.argv[4]];
+const b=await chromium.launch({channel:'chrome',headless:true});const p=await b.newPage();
+const r=await p.evaluate(async([u,W])=>{const im=new Image();im.src=u;await im.decode();const c=document.createElement('canvas');c.width=im.width;c.height=im.height;const g=c.getContext('2d',{willReadFrequently:true});g.drawImage(im,0,0);const d=g.getImageData(0,0,c.width,c.height).data;let x0=1e9,x1=0,y0=1e9,y1=0;for(let y=0;y<c.height;y++)for(let x=0;x<c.width;x++)if(d[(y*c.width+x)*4+3]>128){if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y}
+const bw=x1-x0+1,bh=y1-y0+1,s=W/bw,o=document.createElement('canvas');o.width=W;o.height=Math.round(bh*s);const og=o.getContext('2d');og.imageSmoothingEnabled=true;og.imageSmoothingQuality='high';og.drawImage(c,x0,y0,bw,bh,0,0,o.width,o.height);return{bbox:[x0,y0,x1,y1],size:[o.width,o.height],s,url:o.toDataURL('image/png')}},['data:image/png;base64,'+fs.readFileSync(src).toString('base64'),W]);
+fs.writeFileSync(out,Buffer.from(r.url.split(',')[1],'base64'));console.log(JSON.stringify({bbox:r.bbox,size:r.size,s:r.s}));await b.close();

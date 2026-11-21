@@ -194,7 +194,7 @@ export class CampRestUI {
   loadFormationArt(this.scene,()=>{if(this.root.active&&this.tab===5&&!this.formationArtSeen){this.formationArtSeen=true;this.render();}});
   drawFormationPanel({scene:this.scene,root:this.body,player:this.player,units:this.army.units,hero:g.character??'liubei',followerHeroes:fm.map(m=>m.recruit.hero).filter((x):x is string=>!!x),followers:fm.length,
    majors:g.build.majors(),command:g.pts('command'),changed:()=>{sc.formationRt?.refresh();this.render();}},D?40:24,D?158:229,D?W-80:W-48,D?H-158-66:420); /* 卡片下沿到「率军出征」上方；说明都在左卡里，下方提示行不再重复写 */
-  if(D&&!this.notice)this.detail.setText('');
+  if(!this.notice)this.detail.setText(''); // 说明都在左卡里，底部提示行不再重复（11-21 UI 审查 / 制作人验收）
  }
  private renderMedic(){
   const st=this.medicState(),p=this.player,name=this.player.growth.character?(getCharacter(this.player.growth.character)?.name??'主将'):'主将';

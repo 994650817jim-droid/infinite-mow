@@ -64,6 +64,8 @@ export class BossHud {
 
   /** 首领头像贴图：有水墨立绘用立绘，没有就用首领本人的贴图裁头肩（fallbackMedal）；都没有返回 null（画阵营色圈）。 */
   private medal(id: string): string | null { return this.inkMedal(id) ?? this.fallbackMedal(id); }
+  /** 其他界面（劝降面板）借用同一套圆形头像：返回贴图键，立绘还在加载时返回 null。 */
+  medalKey(id: string, fallbackTex?: string): string | null { if (fallbackTex) this.setFallback(id, fallbackTex); return this.medal(id); }
   private readonly fallbackTex = new Map<string, string>();
   /** 记下首领本人的贴图（update 传入的 tex），没有水墨立绘时拿来当头像。 */
   setFallback(id: string, tex: string | undefined): void { if (id && tex && this.scene.textures.exists(tex)) this.fallbackTex.set(id, tex); }

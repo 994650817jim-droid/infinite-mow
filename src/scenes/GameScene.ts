@@ -1,4 +1,5 @@
 import { EnemyFormations } from '../systems/EnemyFormations';
+import { safeWorldPoint } from '../ui/SafeLabel';
 import { SIGIL_LABEL, formationSigil, setFormationSigil, type FormationSigil } from '../systems/BattleSettings';
 import { FORMATION_IDS } from '../data/formations';
 import { FormationFx } from '../systems/FormationFx';
@@ -130,7 +131,7 @@ import { allocateHeroAttr, claimFirstClear, creditHeroXp, enlistHero, heroFreePo
 import { HERO_XP_RATE, OVERFLOW_XP_PER_GRAIN, PICK_GUARANTEE, PICK_PACE, XP_SHIFT, chapterXpMul } from '../data/heroLevels';
 import { attributePointsBetween } from '../systems/RunGrowth';
 import { vigorHp } from '../data/attributes';
-import { CHAPTER_INDEX, PHASES, PHASE_BARKS, buildPhasePlan, phasedPace, type PhaseKind, type PhasePlan } from '../data/stagePhases';
+import { CHAPTER_INDEX, PHASES, PHASE_BARKS, buildPhasePlan, phasedPace, planLen, stageLieutenant, withPhases, type PhaseKind, type PhasePlan, type StagePhase } from '../data/stagePhases';
 import { StagePhaseRunner } from '../systems/StagePhases';
 import { BattleFortunes } from '../systems/BattleFortunes';
 import { BattleHeal } from '../systems/BattleHeal';
@@ -1285,7 +1286,8 @@ export class GameScene extends Phaser.Scene {
     if (!this.boss || !this.boss.active) this.music.setDuck(1);
     this.applyPhases();
     this.tickBranch();
-    const nextWave = waveIndexAt(this.elapsed, this.chapter.waves);
+    // 按进度推进的关（7-3）：段落由关卡进度定，只进不退
+    const prog = this.phasePlan?.progress ? this.phaseProgress() : null, nextWave = prog !== null ? Math.max(this.waveIndex, Math.min(prog, (this.phasePlan?.phases.length ?? 1) - 1)) : waveIndexAt(this.elapsed, this.chapter.waves);
     if (!this.over && nextWave !== this.waveIndex) {
       this.waveIndex = nextWave;
       const ph = this.phasePlan?.phases[nextWave];
@@ -3987,6 +3989,10 @@ export class GameScene extends Phaser.Scene {
   protected pickWaves(): readonly number[] { return this.phasePlan ? PHASES.picks.waves.slice(0, this.phasePlan.phases.length - 1) : this.paceOn() ? PICK_PACE.waves : PICK_GUARANTEE.waves; }
   private phaseCaption(k: PhaseKind): string { return k === 'vanguard' ? '先锋' : k === 'elite' ? '精锐来袭' : k === 'event' ? '伏兵四起' : k === 'lieutenant' ? '副将出阵' : k === 'surge' ? '大军压境' : '首领将至'; }
   /** 主线关才套用五段：攻城 / 守城 / 军情 / 挑战、带关卡目标的关、开场即首领的关不套。 */
+  /** 本关自己的段落表（不套五段时间轴）；progress = 段落按 phaseProgress() 推进。null = 五段。 */
+  protected customPhases(_plan: PhasePlan): { phases: StagePhase[]; progress?: boolean } | null { return null; }
+  /** 按进度推进的关：现在该在第几段。 */
+  protected phaseProgress(): number | null { return null; }
   protected phaseEligible(): boolean {
     const c = this.chapter, k = this.scene.key;
     if (/Siege|Intel|Lubu|Dev/.test(k) || c.bossAtStart || c.objective || !c.waves?.length) return false;
@@ -4000,8 +4006,8 @@ export class GameScene extends Phaser.Scene {
     // 换关（战线推进 / 子类换关）：上一关的机缘事件与本关增益一并撤掉
     this.fortunes?.clear(); this.fortunes = null; this.fortuneQueue = []; this.fortuneTaken = {}; if (this.player) clearStageBuffs(this.player); this.resetStageCards();
     if (this.phaseEligible()) {
-      const base = this.chapter, plan = buildPhasePlan(this.hardKey(), this.hardStage(), base.waves, base.bossName), g = base.growth;
-      this.chapter = { ...base, waves: plan.waves, pace: phasedPace(base.pace, chapterBossTime(base), plan.bossAt), growth: { hp: g?.hp ?? 1, damage: g?.damage ?? 1, bossHp: (g?.bossHp ?? 1) * PHASES.bossHpMul(plan.chapter, plan.phases.length) } };
+      const base = this.chapter, plan0 = buildPhasePlan(this.hardKey(), this.hardStage(), base.waves, base.bossName), cp = this.customPhases(plan0), plan = cp ? withPhases(plan0, cp.phases, cp.progress) : plan0, g = base.growth; // 自定段落表（9-3 / 7-3）
+      this.chapter = { ...base, waves: plan.waves, pace: phasedPace(base.pace, chapterBossTime(base), plan.bossAt), growth: { hp: g?.hp ?? 1, damage: g?.damage ?? 1, bossHp: (g?.bossHp ?? 1) * PHASES.bossHpMul(plan.chapter, planLen(plan)) } };
       this.phasePlan = plan;
       BuildState.rankCap = BuildState.rankCapFor(plan.chapter); BuildState.slotCap = BuildState.slotCapFor(plan.chapter); RunGrowth.extraCap = RunGrowth.extraCapFor(plan.chapter); WEAPON_OVER.cap = WEAPON_OVER.capFor(plan.chapter); // 永久成长分章：精研 Lv4 / 5、第 7 格、武艺精熟
       const hard = (n: number) => this.hardMode ? n : 1;
@@ -4010,7 +4016,7 @@ export class GameScene extends Phaser.Scene {
         spawn: (kind, x, y, def) => this.spawnEnemy(kind, x, y, def ? 1 : this.chapter.hpScale(this.elapsed), true, def),
         def: kind => this.chapter.enemies[kind],
         // 副将夹血用的「参考首领生命」：去掉五段的章节加倍（bossHpMul），换成固定 bossRef（data/stagePhases.ts lieutenantHp）
-        bossHp: () => this.chapter.enemies.boss.hp * (this.chapter.growth?.bossHp ?? 1) / PHASES.bossHpMul(plan.chapter, plan.phases.length) * PHASES.lieutenantHp.bossRef * hard(HARD_MODE.bossHp),
+        bossHp: () => this.chapter.enemies.boss.hp * (this.chapter.growth?.bossHp ?? 1) / PHASES.bossHpMul(plan.chapter, planLen(plan)) * PHASES.lieutenantHp.bossRef * hard(HARD_MODE.bossHp),
         growthHp: () => (this.chapter.growth?.hp ?? 1) * hard(HARD_MODE.enemyHp),
         banner: (t, d, c) => this.showWaveBanner(t, d, c), sfx: k => this.sfx.play(k),
         onLieutenantDown: (name, x, y) => {
@@ -4068,7 +4074,7 @@ export class GameScene extends Phaser.Scene {
   private paintJinnang(): void {
     const id = this.jinnang;
     if (!this.jinnangButton) {
-      const root = this.add.container(GAME_WIDTH - 58, IS_DESKTOP ? GAME_HEIGHT - 368 : GAME_HEIGHT - 420).setScrollFactor(0).setDepth(DEPTH.hud + 4).setName('jinnang-button').setVisible(false);
+      const root = this.add.container(IS_DESKTOP ? GAME_WIDTH - 136 : GAME_WIDTH - 58, IS_DESKTOP ? GAME_HEIGHT - 288 : GAME_HEIGHT - 420) /* 电脑版：右列（行囊 / 药囊 / 加点 / 护阵）放不下，原位置压住「行囊」字；挪到药囊左边一列（2026-11-21 UI 审查） */.setScrollFactor(0).setDepth(DEPTH.hud + 4).setName('jinnang-button').setVisible(false);
       const glow = this.add.circle(0, 0, 33, 0xf0c060, 0).setStrokeStyle(3, 0xf3d48a, .55);
       const disc = this.add.circle(0, 0, 29, 0x1b120b, .95).setStrokeStyle(2.5, 0xc9a35e, 1);
       const icon = this.add.image(0, -1, 'icon_passive').setName('jinnang-icon');
@@ -4121,7 +4127,7 @@ export class GameScene extends Phaser.Scene {
     const sq = this.reinforcePush().spawnEscortAt(this.player.x, this.player.y, n, ms); if (!sq) return;
     buildVfx(this).emit('reinforce', this.player.x, this.player.y - 8, this.combatNow, 160, 0, 800, true);
     const tag = this.add.text(this.player.x, this.player.y, '来投 · ' + name, { fontFamily: FONT, fontSize: '13px', color: '#bfe8ff', resolution: 2, stroke: '#0c1a26', strokeThickness: 4 }).setOrigin(.5, 1).setDepth(DEPTH.dmgText - 1).setName('general-tag');
-    const until = this.combatNow + ms, follow = () => { const lead = sq.members.find(m => !m.dead); if (!lead || this.combatNow > until || !tag.active) { tag.destroy(); this.events.off('update', follow); return; } tag.setPosition(lead.x, lead.y - 58); };
+    const until = this.combatNow + ms, follow = () => { const lead = sq.members.find(m => !m.dead); if (!lead || this.combatNow > until || !tag.active) { tag.destroy(); this.events.off('update', follow); return; } { const q = safeWorldPoint(this, lead.x, lead.y - 58, tag.displayWidth / 2, tag.displayHeight); tag.setPosition(q.x, q.y); } };
     this.events.on('update', follow); this.events.once('shutdown', () => { this.events.off('update', follow); });
     this.showWaveBanner('名将来投 · ' + name, false, '率部随你冲阵 ' + Math.round(ms / 1000) + ' 秒');
   }

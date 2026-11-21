@@ -16,7 +16,7 @@ const WALK_STRIDES: Partial<Record<EnemyKind, number>> = { infantry: 11, shield:
  * 受击闪白：一次多久、闪完多久才能再闪（连击时不再一直是白剪影）；
  * 全场每 windowMs 最多 budget 个敌人闪白（含 DeathFx 死亡闪白）——范围技一下打中一大片时不会整群变成白剪影（2026-11-20 攻击特效检查）。
  */
-export const HIT_FLASH = { ms: 60, gapMs: 160, budget: 6, windowMs: 100 } as const;
+export const HIT_FLASH = { ms: 60, gapMs: 160, budget: 6, windowMs: 100, /** 战场物件受击：暖色着色（不刷白）。 */ propTint: 0xffc89a } as const;
 let flashWindowAt = -Infinity, flashUsed = 0;
 /** 申请一个闪白名额（受击闪白 / 死亡闪白共用）；本窗口用完返回 false。 */
 export function takeFlashSlot(now: number): boolean {
@@ -518,7 +518,10 @@ export class Enemy {
   flash(now: number): void {
     if (now < this.flashReadyAt || !takeFlashSlot(now)) return;
     this.flashUntil = now + HIT_FLASH.ms; this.flashReadyAt = now + HIT_FLASH.ms + HIT_FLASH.gapMs;
-    this.sprite.setTintFill(this.kind === 'elite' ? 0xffdddd : 0xffffff);
+    // 战场物件（栅栏 / 拒马 / 营帐 / 城门等补给格）：不整块刷白，只短暂着暖色——2026-11-20 制作人巡检截图「栅栏整个纯白剪影、像贴图丢失」：
+    // 部曲 / 主将连着打物件时每 220ms 白 60ms，截图常拍到整块白剪影。复原同样走 updateVisual（setTint(baseTint)）。
+    if (this.isSupplySlot) this.sprite.setTint(HIT_FLASH.propTint);
+    else this.sprite.setTintFill(this.kind === 'elite' ? 0xffdddd : 0xffffff);
   }
 
   /** 受击后仰：横向压扁一下再弹回；push 像素沿 angle 方向轻推（首领 / 不受控的单位只压扁不推）。 */

@@ -9,9 +9,10 @@ import type {FactionId} from '../world/WorldCities';
 /** val：明度倍率（压暗，如第三章凉州残部的「黑底土黄」）。 */
 type Target = {hue: number; sat: number; val?: number} | 'gray' | null;
 /** 势力之外的配色（不是天下地图势力）：liangzhou = 第三章李傕 / 张绣的凉州残部（用户 11-19：张绣兵沿用西凉红黑被当成友军；深铁灰 + 锈褐，和我方绿、曹军蓝青、第二章西凉红、黄巾黄都分开）。 */
-export type PaletteId = FactionId | 'liangzhou';
+export type PaletteId = FactionId | 'liangzhou' | 'jingnan';
 const TARGET: Record<PaletteId, Target> = {
-  liangzhou: {hue: 16, sat: .3, val: .6}, // 11-19 用户「4做」：土黄会被看成黄巾黄 → 深铁灰带一点锈褐（低饱和、压暗，和第二章鲜红、黄巾黄、曹军蓝青、我方绿、袁术紫都分开）
+  liangzhou: {hue: 16, sat: .3, val: .6},
+  jingnan: {hue: 176, sat: .28, val: .62}, // 第六章荆南四郡守军（统筹 11-21 定）：刘表绿压暗、偏青灰，和我方绿明显分开；营具同一套（PropsV2 FACTION_PROPS[7]） // 11-19 用户「4做」：土黄会被看成黄巾黄 → 深铁灰带一点锈褐（低饱和、压暗，和第二章鲜红、黄巾黄、曹军蓝青、我方绿、袁术紫都分开）
   player: null, dongzhuo: null,
   yuanshao: {hue: 42, sat: .82}, yellow: {hue: 52, sat: .9}, caocao: {hue: 218, sat: .7}, yuanshu: {hue: 282, sat: .6},
   liubiao: {hue: 112, sat: .42}, sun: {hue: 22, sat: .95}, mateng: {hue: 32, sat: .55}, liuzhang: {hue: 78, sat: .55},

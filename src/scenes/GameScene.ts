@@ -4416,7 +4416,8 @@ export class GameScene extends Phaser.Scene {
         row('击杀敌军', String(stats.kills)),
         row('等级', `Lv.${stats.level}`),
         row('造成伤害', String(Math.round(stats.damageDealt))),
-        row('部曲战损', `${this.legion.count}存活 / ${this.legion.dead}阵亡`),
+        row('随军粮', String(this.legion.food)), // 11-21 用户试玩：资源数字从 1-1 起就要看得到
+        ...(mechOpen('squad') ? [row('部曲战损', `${this.legion.count}存活 / ${this.legion.dead}阵亡`)] : []),
         row(this.chapter.bossName, stats.bossKilled ? '已击败' : '未击败'),
         row('结局', victory ? '讨伐成功' : reason === 'timeout' ? '超时' : '阵亡'),
       ].join('\n'),
@@ -4661,8 +4662,8 @@ export class GameScene extends Phaser.Scene {
       this.potionGlow?.setVisible(can&&low);
     }
     this.pointsBadge?.setText(String(Math.min(99,this.player.growth.unallocated)));if(this.pointsButton)this.pointsButton.setVisible(!overlay&&!this.over&&this.player.growth.unallocated>0&&mechOpen('attributes')).setData('points',this.player.growth.unallocated);
-    // 部曲（1-2 开放，mechanic-rollout #5）开放前：护阵 / 出击按钮、「随军粮 · 兵力」一行都不显示（11-21 制作人验收：1-1 开战就有「护阵 E」）
-    this.legionUI?.update(this.legion, !overlay && !this.over && mechOpen('squad'));
+    // 部曲（1-2 开放，mechanic-rollout #5）开放前：护阵 / 出击按钮与「兵力」不显示；随军粮从 1-1 起就显示（11-21 用户试玩「1-1 看不到自己军粮」）
+    this.legionUI?.update(this.legion, !overlay && !this.over, mechOpen('squad'));
     this.passiveHud.update(this.player.passive, this.combatNow, !overlay);
     { const st = branchStatus(this.player.weapons[0], s => this.player.growth.build.tags()[s] ?? 0, s => SCHOOLS[s].name); this.passiveHud.updateBranch(st); this.buffHud?.root.setY(st ? 214 : 180); } // 专职行在被动栏下，增益栏往下让
     buildVfx(this).density=this.enemies.filter(e=>e.active&&!e.isSupplySlot).length+this.legion.count;

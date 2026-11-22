@@ -14,38 +14,70 @@ export function gauntletOn(search: string = typeof location !== 'undefined' ? lo
 export type GauntletCtrl = 'native' | 'moveset' | 'yuanshu' | 'caoren' | 'guandu';
 /** 名将属于哪一篇（取首领图、首领数值用）。 */
 export type GauntletArc = 'huangjin' | 'hulao' | 'qunxiong' | 'guandu' | 'chibi' | 'jingnan' | 'shu' | 'hanzhong' | 'xiangfan' | 'yiling' | 'nanzheng' | 'beifa';
+/**
+ * 出场段（共享笔记 gauntlet-roster.md）：前 = 第 1～3 阵，中 = 第 4～6 阵，后 = 第 7～9 阵，守关 = 第 10 阵（第 8～9 阵每局最多借一次）。
+ * 某段没有打败过的名将时往前一段借（守关 → 后 → 中 → 前），再没有就往后借。
+ */
+export type GauntletTier = 'front' | 'mid' | 'late' | 'gate';
+export const GAUNTLET_TIERS: readonly GauntletTier[] = ['front', 'mid', 'late', 'gate'];
 export interface GauntletBoss {
-  id: string; name: string; chapter: number; arc: GauntletArc; stage: 1 | 2 | 3; ctrl: GauntletCtrl;
-  /** 战役里打败过他的那一关（HeroProgress.stageCleared 的键）：没打过的不抽（开发测试存档全开）。 */
+  id: string; name: string; chapter: number; arc: GauntletArc; stage: 1 | 2 | 3; ctrl: GauntletCtrl; tier: GauntletTier;
+  /** 战役里打败过他的那一关（HeroProgress.stageCleared 的键）：没打过的不抽（开发测试存档全开）。同场出现的跟着那一关。 */
   clearKey: string;
+  /** 本模式每位最多 3 招：从招式框架里去掉的招（按招名；二阶段同名加强版不另算）。 */
+  drop?: readonly string[];
   /** 换掉了本章哪位最终首领（依赖关卡机关）；关掉了他招式之外的哪些关卡机关（写进交接）。 */
   replaces?: string; off?: string;
 }
 /**
- * 名将池第一版：每章一位（优先本章最终首领）。逐个核对过：
- * - 招式框架首领（moveset）的招式只有冲锋 / 扇射 / 横扫 / 地裂 / 落点 / 突刺 / 奔射 / 隐身 / 召兵 / 插旗，都不依赖关卡机关；关卡层的机关（山头、攻城、限时突围、七擒、劝降黄忠）在本模式不建。
- * - 换人：董卓（2-3 城头 + 营寨 + 吕布双首领演出）→ 吕布；陆逊（10-3 火线 / 风向，没有招式框架）→ 朱然（10-2）；司马懿（12-3 坚守不出 → 出营 → 天象三阶段，第一阶段靠营寨）→ 郝昭（12-2）。
- * - 关掉：淳于琼「焚粮减伤」（乌巢粮仓，GuanduBoss 的 morale 钩子不接 = 不减伤）；张角 1-3 法坛 / 广宗城门（场景布景，不建）。
+ * 名将池（适配表 gauntlet-roster.md，统筹 11-21 同意；分四批接入，这里是已接入的）：
+ * - 第一版 12 位 + 第一批 10 位（纯招式框架：张梁、张宝、李傕、郭汜、张绣、曹纯、蔡瑁、赵范、刘度、黄忠）。
+ * - 招式框架首领（moveset）的招式只有冲锋 / 扇射 / 横扫 / 地裂 / 落点 / 突刺 / 奔射 / 隐身 / 召兵 / 插旗，都不依赖关卡机关；关卡层的机关（山头、攻城、限时突围、七擒、劝降）在本模式不建，第三、四批按适配表改成随身布置 / 全场险情 / 阶段。
+ * - 还没接入的（第二～四批）：华雄、徐荣、董卓、颜良、文丑、杨怀、张任、张郃、夏侯渊、庞德、孙桓、陆逊、忙牙长、兀突骨、祝融、司马懿。
  */
 export const GAUNTLET_POOL: readonly GauntletBoss[] = [
-  { id: 'zhangjiao', name: '张角', chapter: 1, arc: 'huangjin', stage: 3, ctrl: 'native', clearKey: 'huangjin-3', off: '1-3 法坛、广宗城门（场景布景）' },
-  { id: 'lubu', name: '吕布', chapter: 2, arc: 'hulao', stage: 3, ctrl: 'native', clearKey: 'hulao-3', replaces: '董卓（2-3 城头、营寨、吕布双首领演出）' },
-  { id: 'yuanshu', name: '袁术', chapter: 3, arc: 'qunxiong', stage: 3, ctrl: 'yuanshu', clearKey: 'third-3' },
-  { id: 'chunyuqiong', name: '淳于琼', chapter: 4, arc: 'guandu', stage: 3, ctrl: 'guandu', clearKey: 'guandu-3', off: '焚粮减伤（乌巢粮仓）' },
-  { id: 'caoren', name: '曹仁', chapter: 5, arc: 'chibi', stage: 3, ctrl: 'caoren', clearKey: 'chibi-3' },
-  { id: 'hanxuan', name: '韩玄', chapter: 6, arc: 'jingnan', stage: 3, ctrl: 'moveset', clearKey: 'jingnan-3', off: '先战黄忠、劝降（关卡层）' },
-  { id: 'liuzhang', name: '刘璋', chapter: 7, arc: 'shu', stage: 3, ctrl: 'moveset', clearKey: 'shu-3', off: '冲车破城、巷战、州府（关卡层）' },
-  { id: 'caocao', name: '曹操', chapter: 8, arc: 'hanzhong', stage: 3, ctrl: 'moveset', clearKey: 'hanzhong-3', off: '汉水两处山头（关卡层）' },
-  { id: 'lvmeng', name: '吕蒙', chapter: 9, arc: 'xiangfan', stage: 3, ctrl: 'moveset', clearKey: 'xiangfan-3', off: '麦城限时突围（关卡层）' },
-  { id: 'zhuran', name: '朱然', chapter: 10, arc: 'yiling', stage: 2, ctrl: 'moveset', clearKey: 'yiling-2', replaces: '陆逊（10-3 火线 / 风向，没有招式框架）', off: '连营营帐（关卡层）' },
-  { id: 'menghuo', name: '孟获', chapter: 11, arc: 'nanzheng', stage: 3, ctrl: 'moveset', clearKey: 'nanzheng-3', off: '七擒（擒而复纵，关卡层）' },
-  { id: 'haozhao', name: '郝昭', chapter: 12, arc: 'beifa', stage: 2, ctrl: 'moveset', clearKey: 'beifa-2', replaces: '司马懿（12-3 坚守不出 → 出营 → 天象，第一阶段靠营寨）', off: '陈仓城门、城头箭楼（关卡层）' },
+  // 第一章
+  { id: 'zhangliang', name: '张梁', chapter: 1, arc: 'huangjin', stage: 1, ctrl: 'moveset', tier: 'front', clearKey: 'huangjin-1' },
+  { id: 'zhangbao', name: '张宝', chapter: 1, arc: 'huangjin', stage: 2, ctrl: 'moveset', tier: 'front', clearKey: 'huangjin-2', drop: ['撒豆成兵'] },
+  { id: 'zhangjiao', name: '张角', chapter: 1, arc: 'huangjin', stage: 3, ctrl: 'native', tier: 'front', clearKey: 'huangjin-3', off: '1-3 法坛、广宗城门（场景布景）' },
+  // 第二章
+  { id: 'lubu', name: '吕布', chapter: 2, arc: 'hulao', stage: 3, ctrl: 'native', tier: 'gate', clearKey: 'hulao-3' },
+  // 第三章
+  { id: 'lijue', name: '李傕', chapter: 3, arc: 'qunxiong', stage: 1, ctrl: 'moveset', tier: 'front', clearKey: 'third-1', drop: ['西凉残部'], off: '李郭双首领（单独出场）' },
+  { id: 'guosi', name: '郭汜', chapter: 3, arc: 'qunxiong', stage: 1, ctrl: 'moveset', tier: 'front', clearKey: 'third-1', off: '李郭双首领（单独出场）' },
+  { id: 'zhangxiu', name: '张绣', chapter: 3, arc: 'qunxiong', stage: 2, ctrl: 'moveset', tier: 'front', clearKey: 'third-2', drop: ['白马突阵', '二连扇刺'] },
+  { id: 'yuanshu', name: '袁术', chapter: 3, arc: 'qunxiong', stage: 3, ctrl: 'yuanshu', tier: 'mid', clearKey: 'third-3' },
+  // 第四章
+  { id: 'chunyuqiong', name: '淳于琼', chapter: 4, arc: 'guandu', stage: 3, ctrl: 'guandu', tier: 'mid', clearKey: 'guandu-3', off: '焚粮减伤（乌巢粮仓；第三批改随身粮垛）' },
+  // 第五章
+  { id: 'caochun', name: '曹纯', chapter: 5, arc: 'chibi', stage: 1, ctrl: 'moveset', tier: 'mid', clearKey: 'chibi-1', drop: ['马刀横扫'], off: '护百姓辎重（关卡目标）' },
+  { id: 'caimao', name: '蔡瑁', chapter: 5, arc: 'chibi', stage: 2, ctrl: 'moveset', tier: 'mid', clearKey: 'chibi-2', drop: ['水军增援'], off: '水寨 / 连环船（布景）' },
+  { id: 'caoren', name: '曹仁', chapter: 5, arc: 'chibi', stage: 3, ctrl: 'caoren', tier: 'mid', clearKey: 'chibi-3' },
+  // 第六章
+  { id: 'zhaofan', name: '赵范', chapter: 6, arc: 'jingnan', stage: 1, ctrl: 'moveset', tier: 'mid', clearKey: 'jingnan-1', off: '劝降（由收为副将代替）' },
+  { id: 'liudu', name: '刘度', chapter: 6, arc: 'jingnan', stage: 2, ctrl: 'moveset', tier: 'mid', clearKey: 'jingnan-2', drop: ['军刀横扫'], off: '劝降（由收为副将代替）' },
+  { id: 'huangzhong', name: '黄忠', chapter: 6, arc: 'jingnan', stage: 3, ctrl: 'moveset', tier: 'mid', clearKey: 'jingnan-3', off: '先战黄忠 / 劝降（单独出场）' },
+  { id: 'hanxuan', name: '韩玄', chapter: 6, arc: 'jingnan', stage: 3, ctrl: 'moveset', tier: 'mid', clearKey: 'jingnan-3', off: '先战黄忠、劝降（关卡层；第三批改黄忠随行）' },
+  // 第七章
+  { id: 'liuzhang', name: '刘璋', chapter: 7, arc: 'shu', stage: 3, ctrl: 'moveset', tier: 'mid', clearKey: 'shu-3', off: '冲车破城、巷战、州府（关卡层；第三批改随身城门）' },
+  // 第八章
+  { id: 'caocao', name: '曹操', chapter: 8, arc: 'hanzhong', stage: 3, ctrl: 'moveset', tier: 'gate', clearKey: 'hanzhong-3', off: '汉水两处山头（关卡层；第四批改高地圈）' },
+  // 第九章
+  { id: 'lvmeng', name: '吕蒙', chapter: 9, arc: 'xiangfan', stage: 3, ctrl: 'moveset', tier: 'late', clearKey: 'xiangfan-3', off: '麦城限时突围（关卡层；第三批改伪装伏兵）' },
+  // 第十章
+  { id: 'zhuran', name: '朱然', chapter: 10, arc: 'yiling', stage: 2, ctrl: 'moveset', tier: 'late', clearKey: 'yiling-2', off: '连营营帐（关卡层；第三批改随身营帐）' },
+  // 第十一章
+  { id: 'menghuo', name: '孟获', chapter: 11, arc: 'nanzheng', stage: 3, ctrl: 'moveset', tier: 'gate', clearKey: 'nanzheng-3', off: '七擒（擒而复纵，关卡层；第三批改原地再起）' },
+  // 第十二章
+  { id: 'haozhao', name: '郝昭', chapter: 12, arc: 'beifa', stage: 2, ctrl: 'moveset', tier: 'late', clearKey: 'beifa-2', off: '陈仓城门、城头箭楼（关卡层；第四批改随身箭楼）' },
 ];
 
 export interface WaveScale { hp: number; dmg: number; count: number; bossHp: number; bossDmg: number }
 export const GAUNTLET = {
   /** 一局几阵；每阵割草多少秒后名将登场；斩将后清场几秒再弹战利品。 */
   waves: 10, mowSec: 70, clearSec: 10,
+  /** 守关档有两位以上时，第 8～9 阵借一位守关名将的机会（每局最多一次）。 */
+  gateBorrow: .35,
   /**
    * 每阵强度（第 1～10 阵）：杂兵生命 / 伤害 / 刷兵量（间隔除以 count、每次数量乘 count）倍率；名将生命 / 伤害按他在战役里的数值再乘。
    * 杂兵底子是第二章西凉兵（生命 22 / 伤害 6 一档），玩家带着战役成长进来，所以后几阵翻得比较多。初值，交平衡。
@@ -92,37 +124,46 @@ export function waveScale(n: number): WaveScale {
   return { hp: last.hp * E.hp ** k, dmg: last.dmg * E.dmg ** k, count: Math.min(E.countCap, last.count * E.count ** k), bossHp: last.bossHp * E.bossHp ** k, bossDmg: last.bossDmg * E.bossDmg ** k };
 }
 
-/** 能抽的名将：战役里打败过的（cleared 判断）；all = 开发测试存档全开。至少保底第一章张角。 */
+/** 能抽的名将：战役里打败过的（cleared 判断）；all = 开发测试存档全开。一个都没有时保底第一章张角。 */
 export function unlockedPool(cleared: (key: string) => boolean, all = false): GauntletBoss[] {
   const out = GAUNTLET_POOL.filter(b => all || cleared(b.clearKey));
-  return out.length ? out : [GAUNTLET_POOL[0]];
+  return out.length ? out : [GAUNTLET_POOL.find(b => b.id === 'zhangjiao') ?? GAUNTLET_POOL[0]];
 }
 
+/** 第 i 阵（从 0 起）该出哪一段：前 1～3、中 4～6、后 7～9、守关第 10 阵。 */
+export function waveTier(i: number, n: number = GAUNTLET.waves): GauntletTier { return i >= n - 1 ? 'gate' : i < 3 ? 'front' : i < 6 ? 'mid' : 'late'; }
+/** 某段缺人时的借人顺序：本段 → 往前（守关 → 后 → 中 → 前）→ 往后（不借守关档）。 */
+function tierOrder(t: GauntletTier): GauntletTier[] { const k = GAUNTLET_TIERS.indexOf(t); return [...GAUNTLET_TIERS.slice(0, k + 1).reverse(), ...GAUNTLET_TIERS.slice(k + 1).filter(x => x !== 'gate')]; }
 /**
- * 一局十阵的名将顺序：前几阵抽前几章的、后几阵抽后几章的（第 i 阵的目标章 ≈ 池子里按章排好的第 i/9 处，在 ±1 档里随机），尽量不重复；
- * 第十阵是守关名将，从池子里最后一档（章最大的三分之一）里出。池子不到十位时轮着重复（不连着两阵同一位）。
+ * 一局十阵的名将顺序（四段制，适配表 gauntlet-roster.md）：第 1～3 阵前段、4～6 中段、7～9 后段、第 10 阵守关档；
+ * 守关档有两位以上时，第 8～9 阵每局最多借一位守关名将（机会 GAUNTLET.gateBorrow），第十阵仍留一位不同的守关。
+ * 段里没有打败过的名将就按 tierOrder 借；尽量不重复，池子不够时轮着重复（不连着两阵同一位）。
  */
 export function pickBosses(pool: readonly GauntletBoss[], rand: () => number = Math.random, n: number = GAUNTLET.waves): GauntletBoss[] {
-  const sorted = [...pool].sort((a, b) => a.chapter - b.chapter), out: GauntletBoss[] = [], used = new Set<string>();
-  if (!sorted.length) return out;
-  const top = sorted.slice(Math.max(0, sorted.length - Math.max(1, Math.ceil(sorted.length / 3))));
+  const out: GauntletBoss[] = [], used = new Set<string>(); if (!pool.length) return out;
+  const by = (t: GauntletTier) => pool.filter(b => b.tier === t), gateN = by('gate').length;
+  let gateBorrowed = false;
   for (let i = 0; i < n; i++) {
     const last = out[out.length - 1];
-    let cand: GauntletBoss[];
-    if (i === n - 1) cand = top;
-    else { const at = Math.round(i / Math.max(1, n - 1) * (sorted.length - 1)); cand = sorted.slice(Math.max(0, at - 1), at + 2); }
-    let pickFrom = cand.filter(b => !used.has(b.id) && b !== last);
-    if (!pickFrom.length) pickFrom = sorted.filter(b => !used.has(b.id) && b !== last);
-    if (!pickFrom.length) pickFrom = sorted.filter(b => b !== last);
-    if (!pickFrom.length) pickFrom = sorted;
-    const b = pickFrom[Math.floor(rand() * pickFrom.length) % pickFrom.length]; out.push(b); used.add(b.id);
+    let tier = waveTier(i, n);
+    if ((i === n - 3 || i === n - 2) && !gateBorrowed && gateN >= 2 && rand() < GAUNTLET.gateBorrow) tier = 'gate';
+    let pick: GauntletBoss[] = [];
+    for (const t of tierOrder(tier)) { pick = by(t).filter(b => !used.has(b.id) && b !== last); if (pick.length) break; }
+    if (!pick.length) for (const t of tierOrder(tier)) { pick = by(t).filter(b => b !== last); if (pick.length) break; }
+    if (!pick.length) pick = pool.filter(b => b !== last);
+    if (!pick.length) pick = [...pool];
+    const b = pick[Math.floor(rand() * pick.length) % pick.length];
+    if (b.tier === 'gate' && i < n - 1) gateBorrowed = true;
+    out.push(b); used.add(b.id);
   }
   return out;
 }
-/** 无尽：再抽一位（偏后几章：池子后一半里随机，不和上一位相同）。 */
-export function endlessBoss(pool: readonly GauntletBoss[], last: GauntletBoss | null, rand: () => number = Math.random): GauntletBoss {
-  const sorted = [...pool].sort((a, b) => a.chapter - b.chapter), half = sorted.slice(Math.floor(sorted.length / 2));
-  const c = half.filter(b => b !== last); const from = c.length ? c : sorted;
+/** 无尽：全池循环——不和上一位相同，尽量避开最近斩过的（池子大小 − 1 位以内）。 */
+export function endlessBoss(pool: readonly GauntletBoss[], last: GauntletBoss | null, rand: () => number = Math.random, recent: readonly GauntletBoss[] = []): GauntletBoss {
+  const avoid = new Set(recent.slice(-Math.max(0, pool.length - 1)).map(b => b.id));
+  let from = pool.filter(b => b !== last && !avoid.has(b.id));
+  if (!from.length) from = pool.filter(b => b !== last);
+  if (!from.length) from = [...pool];
   return from[Math.floor(rand() * from.length) % from.length];
 }
 /** 结算奖励：斩了 kills 位名将；firstClear = 这一局是首次通关。 */

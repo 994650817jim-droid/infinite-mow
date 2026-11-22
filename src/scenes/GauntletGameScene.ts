@@ -4,7 +4,7 @@ import { BALANCE, HEADING_FONT } from '../config';
 import { getBattleChapter, getChapter, type ChapterDef } from '../data/chapters';
 import type { EnemyDef } from '../data/enemies';
 import { GAUNTLET, endlessBoss, gauntletReward, pickBosses, readGauntletBest, unlockedPool, waveScale, writeGauntletBest, type GauntletBoss } from '../data/gauntlet';
-import { BOSS_MOVES } from '../data/bossMoves';
+import { BOSS_MOVES, type BossMovesetDef } from '../data/bossMoves';
 import { supplyOption } from '../data/upgrades';
 import { thirdBattle } from '../data/thirdChapter';
 import { GUANDU_ATLAS_FILES, GUANDU_STAGES, guanduBattle } from '../data/guanduChapter';
@@ -30,7 +30,7 @@ import { FollowerSquad, type Follower } from '../systems/FollowerSquad';
 import { FOLLOWER_ATTACK_SFX } from '../systems/HeroSfx';
 import type { Recruit } from '../systems/RosterStore';
 import type { Enemy } from '../entities/Enemy';
-import type { RunConfig } from '../data/characters';
+import { CHARACTERS, type RunConfig } from '../data/characters';
 import type { RunEndReason, UpgradeOption } from '../types';
 import type { FollowerTemplate } from '../data/recruits';
 
@@ -40,17 +40,24 @@ interface BossArt { tex: string; sheet?: string; def: EnemyDef; style: ChapterDe
 interface GCtrl { update(dt: number, now: number): void; clear(): void; defeat?(): void; updateDeath?(delta: number): void; incoming?(ally: boolean): number; hit?(now: number): void; readonly label?: string }
 
 /** 副将用什么兵器模板（随行系统的四种出手：枪扫 / 刀扇 / 弓射 / 谋火）。 */
-const TEMPLATE: Record<string, FollowerTemplate> = { zhangjiao: 'strategist', lubu: 'spear', yuanshu: 'blade', chunyuqiong: 'blade', caoren: 'blade', hanxuan: 'blade', liuzhang: 'strategist', caocao: 'blade', lvmeng: 'blade', zhuran: 'spear', menghuo: 'blade', haozhao: 'bow' };
+const TEMPLATE: Record<string, FollowerTemplate> = { zhangliang: 'blade', zhangbao: 'strategist', lijue: 'blade', guosi: 'blade', zhangxiu: 'spear', caochun: 'blade', caimao: 'bow', zhaofan: 'bow', liudu: 'blade', huangzhong: 'bow', zhangjiao: 'strategist', lubu: 'spear', yuanshu: 'blade', chunyuqiong: 'blade', caoren: 'blade', hanxuan: 'blade', liuzhang: 'strategist', caocao: 'blade', lvmeng: 'blade', zhuran: 'spear', menghuo: 'blade', haozhao: 'bow' };
+
+/** 本模式每位最多 3 招：按适配表去掉的招（招名）从两个阶段里拿掉；某阶段删空了就保留原样。 */
+function trimMoves(d: BossMovesetDef, drop?: readonly string[]): BossMovesetDef {
+  if (!drop?.length) return d;
+  const f = (m: BossMovesetDef['p1']['moves']) => { const k = m.filter(x => !drop.includes(x.name)); return k.length ? k : m; };
+  return { ...d, p1: { ...d.p1, moves: f(d.p1.moves) }, p2: { ...d.p2, moves: f(d.p2.moves) } };
+}
 
 /** 每位名将的首领图与战役数值（从各章的数据 / 场景配置取，和战役里同一张图、同一份数值）。 */
 function bossArt(b: GauntletBoss): BossArt {
   const arc = (c: ChapterDef, tex: string, sheet: string | undefined): BossArt => ({ tex, sheet, def: { ...c.enemies.boss, texture: tex }, style: c.bossStyle, layout: 'arc' });
   switch (b.arc) {
-    case 'huangjin': { const c = getBattleChapter('huangjin', 3), d = c.enemies.boss; return { tex: d.walkVisual?.texture ?? d.texture, def: d, style: c.bossStyle, layout: 'walk' }; }
+    case 'huangjin': { const c = getBattleChapter('huangjin', b.stage), d = c.enemies.boss; return { tex: d.walkVisual?.texture ?? d.texture, def: d, style: c.bossStyle, layout: 'walk' }; }
     case 'hulao': { const c = getChapter('hulao'); return { tex: c.enemies.boss.texture, def: c.enemies.boss, style: 'lubu', layout: 'walk' }; }
-    case 'qunxiong': return arc(thirdBattle(3), 'third_' + b.id, 'assets/phase23/' + b.id + '.png');
+    case 'qunxiong': return arc(thirdBattle(b.stage), 'third_' + b.id, 'assets/phase23/' + (b.id === 'guosi' ? 'lijue' : b.id) + '.png');
     case 'guandu': { const atlas = GUANDU_STAGES[2].atlas, c = guanduBattle(3); return { ...arc(c, atlas, GUANDU_ATLAS_FILES[atlas]), def: { ...c.enemies.boss, texture: atlas } }; }
-    case 'chibi': return arc(chibiBattle(3), 'chibi_' + b.id, 'assets/chibi/' + b.id + '.png');
+    case 'chibi': return arc(chibiBattle(b.stage), 'chibi_' + b.id, 'assets/chibi/' + b.id + '.png');
     case 'jingnan': { const t = jingnanTexture(b.id); return arc(jingnanBattle(b.stage), t, JINGNAN_SHEETS[t]); }
     case 'shu': return arc(SHU_CONFIG.battle(b.stage), SHU_CONFIG.texture(b.id), SHU_CONFIG.sheet(b.id));
     case 'hanzhong': { const t = hanzhongTexture(b.id); return arc(hanzhongBattle(b.stage), t, HANZHONG_SHEETS[t]); }
@@ -89,7 +96,8 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       this.gWave = 1; this.gPhase = 'mow'; this.gAt = 0; this.gKills = []; this.gCleared = false; this.gEndless = false; this.gCtrl = null; this.gLootShown = false; this.gFollowers = []; this.gPendingReplace = null; this.gResult = null; this.gPortrait.clear();
       this.gStats = { lootPicks: [], spawned: 0, cleared: 0 };
       const test = isChapterTestRun();
-      this.gPool = unlockedPool(k => stageCleared(k), test);
+      const heroName = CHARACTERS.find(c => c.id === (saved?.character ?? 'zhaoyun'))?.name, pool = unlockedPool(k => stageCleared(k), test);
+      this.gPool = pool.filter(b => b.name !== heroName).length ? pool.filter(b => b.name !== heroName) : pool; // 本局主将同名的名将不出（主将黄忠 / 孟获 / 祝融……）
       this.gOrder = pickBosses(this.gPool);
       super.create();
       // 不带随从（副将位只给本局收的名将）、不掉战役兵装
@@ -154,9 +162,15 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       if (this.gPhase === 'boss') return `${n} · ${this.gCur?.name ?? ''}`;
       return `${n} · 斩将 ${this.gKills.length}`;
     }
+    /** 这一阵的名将：十阵名单里的；无尽时现抽一位（全池循环）并记进名单。 */
+    private waveBoss(): GauntletBoss {
+      let b = this.gOrder[this.gWave - 1];
+      if (!b) { b = endlessBoss(this.gPool, this.gKills[this.gKills.length - 1] ?? null, Math.random, this.gKills); this.gOrder[this.gWave - 1] = b; }
+      return b;
+    }
     /** 名将登场：先收掉上一位留下的控制器，按这一阵换关卡定义，再出首领（带亲兵）。 */
     startBoss(): void {
-      const b = this.gOrder[this.gWave - 1] ?? endlessBoss(this.gPool, this.gKills[this.gKills.length - 1] ?? null);
+      const b = this.waveBoss();
       this.gCur = b; this.gPhase = 'boss'; this.gAt = this.elapsed;
       this.gCtrl?.clear(); this.gCtrl = null; this.lubu?.clear(); this.lubu = null; this.zhangjiao?.clear(); this.zhangjiao = null; this.moveset?.clear(); this.moveset = null; this.bossMount?.destroy(); this.bossMount = null;
       this.boss = null; this.bossSpawned = false; this.bossKilled = false; this.bossWarned = true; this.bossPhase2 = false; this.bossEnergy = 0;
@@ -169,7 +183,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       if (GAUNTLET.stallOff) this.bossStallCfg = { quotaSec: 1e9, enrageSec: 1e9 }; // 首领防拖关掉（阵数节奏已经限住每阵长度）
       const art = bossArt(b), now = this.combatNow;
       const host: ArcHost = { scene: this, boss, player: this.player, army: this.legion, spawn: (k, x, y, def) => this.spawnEnemy(k, x, y, 1, true, def), def: k => this.chapter.enemies[k], banner: (t, c) => this.showWaveBanner(t, true, c), sfx: k => this.sfx.play(k) };
-      if (b.ctrl === 'moveset') { const mv = BOSS_MOVES[b.arc + '.' + b.id] ?? BOSS_MOVES[b.id]; if (mv) this.gCtrl = new BossMoveset(host, art.tex, now, mv, 'arc'); }
+      if (b.ctrl === 'moveset') { this.moveset?.clear(); this.moveset = null; const mv = BOSS_MOVES[b.arc + '.' + b.id] ?? BOSS_MOVES[b.id]; if (mv) this.gCtrl = new BossMoveset(host, art.layout === 'walk' ? boss.sprite.texture.key : art.tex, now, trimMoves(mv, b.drop), art.layout); }
       else if (b.ctrl === 'yuanshu') this.gCtrl = new YuanshuBoss(host, art.tex, now);
       else if (b.ctrl === 'caoren') this.gCtrl = new CaorenBoss(host, art.tex, now);
       else if (b.ctrl === 'guandu') this.gCtrl = new GuanduBoss({ scene: this, boss, player: this.player, army: this.legion, spawn: (k, x, y) => this.spawnEnemy(k, x, y, 1, true) }, 3, now) as unknown as GCtrl; // 不接 morale：焚粮减伤关掉
@@ -263,7 +277,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     }
     nextWave(): void {
       this.gWave++; this.gPhase = 'mow'; this.gAt = this.elapsed; this.gLootShown = false; this.gEliteAt = GAUNTLET.eliteFirst; this.spawnTimer = .5;
-      this.chapter = this.makeChapter(this.gOrder[this.gWave - 1] ?? endlessBoss(this.gPool, this.gKills[this.gKills.length - 1] ?? null));
+      this.chapter = this.makeChapter(this.waveBoss());
       this.showWaveBanner(this.gEndless ? `无尽 · 第 ${this.gWave} 阵` : this.gWave === GAUNTLET.waves ? `第 ${this.gWave} 阵 · 守关之战` : `第 ${this.gWave} 阵`, false, `割草 ${GAUNTLET.mowSec} 秒后名将登场`);
     }
 

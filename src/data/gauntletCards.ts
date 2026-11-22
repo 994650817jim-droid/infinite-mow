@@ -30,9 +30,10 @@ export function rollRarity(wave: number, rnd: () => number = Math.random): GRari
  * 局内 build 的规则（初值）：
  * - extraChance：三选一里三类本来就不重样时，仍有这个几率把「新卡」那张换成一张本模式专有的卡（将星 / 兵装……），让它们常出；
  * - keystoneMax：主星每局最多几颗（同星图规则 2 颗，代价照旧）；charmSlots：信物最多戴几件（同战役两格）；
+ * - qiyuWaves：这几阵斩将后（战利品之后）额外一次「奇遇」三选一（主星 / 传说坐骑 / 军阵 / 本命精进 / 传说兵装），无尽不开；
  * - extraWeights：抽本模式专有卡时先按这个权重挑一类（将星 / 兵装 / 信物 / 坐骑），再按稀有度挑这一类里的卡。
  */
-export const GAUNTLET_BUILD = { extraChance: .35, keystoneMax: STAR_RULES.keystoneMax, charmSlots: 2, extraWeights: { star: .45, gear: .25, charm: .18, horse: .12 } } as const;
+export const GAUNTLET_BUILD = { extraChance: .35, keystoneMax: STAR_RULES.keystoneMax, charmSlots: 2, qiyuWaves: [3, 6, 9] as readonly number[], extraWeights: { star: .45, gear: .25, charm: .18, horse: .12 } } as const;
 
 /** 卡归哪一类（三选一尽量三类各一）：本命 / 武艺、战法、将星、兵装（兵装 / 信物 / 坐骑）、其他新卡（锦囊、机缘、兵源……）。 */
 export type GCategory = 'own' | 'tactic' | 'star' | 'gear' | 'other';

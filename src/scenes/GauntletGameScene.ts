@@ -31,6 +31,7 @@ import { gearFromItems, horseBonusText } from '../systems/ItemEffects';
 import { AFFIXES, QUALITIES, QUALITY_ORDER, SLOTS, SPECIALS, itemName, rollCharm, rollItem, type ItemInstance, type ItemQuality } from '../data/items';
 import { charmDef } from '../data/charms';
 import { HORSES, horseQuality, type HorseDef } from '../data/mounts';
+import { FORMATIONS, FORMATION_IDS, type FormationId } from '../data/formations';
 import { ensureItemTextures, horseIcon, itemIcon } from '../ui/ItemQuality';
 import { SHU_CONFIG } from './ShuGameScene';
 import { XIANGFAN_CONFIG } from './XiangfanGameScene';
@@ -220,6 +221,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       super.create();
       // 不带随从（副将位只给本局收的名将）、不掉战役兵装
       this.followers?.clear(); this.followers = null;
+      this.gFormations = []; this.gQiyuWaves = []; this.gQiyuPending = false; this.formationRt?.setLoadout([]); // 军阵从 0：只靠奇遇拿
       this.player.growth.cardStars = true; this.gRarity.clear(); this.gBuildLog = []; this.gRarityMarks = []; ensureItemTextures(this); // 将星卡：星图开关关着也生效
       this.itemDrops = null;
       this.chapter = this.makeChapter(this.gOrder[0]);
@@ -375,6 +377,54 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     protected campaignCharms(): ReturnType<GameScene['campaignCharms']> { return [...(this.gCharms ?? [])]; }
     protected campaignHorse() { return this.gHorse; }
 
+    // ———— 奇遇（第 3 / 6 / 9 阵斩将后额外一次三选一，只出改变打法的大件）与战利品保底稀有卡 ————
+    /** 本局已拿的军阵（奇遇给；最多两个阵位，新的当主阵）。 */
+    private gFormations: FormationId[] = [];
+    /** 测试读：奇遇开过哪几阵、本局军阵。 */
+    gQiyuWaves: number[] = [];
+    get gauntletFormations() { return { held: [...this.gFormations], loadout: [...(this.formationRt?.loadout ?? [])], current: this.formationRt?.current ?? null }; }
+    /** 本命兵器的下一级卡（本命 Lv5 前 = 本命升级；之后 = 专职精进），从基类出卡里找。 */
+    private ownUpgrade(): UpgradeOption | null {
+      for (let i = 0; i < 24; i++) { const o = super.upgradeChoices().find(x => /^(signature_weapon_|weapon_over_)/.test(x.id)); if (o) return o; }
+      return null;
+    }
+    /** 奇遇的候选：主星、传说坐骑、军阵、本命精进（连升两级）、传说兵装（兜底）。每类一张，按顺序挑三类。 */
+    private qiyuOptions(): UpgradeOption[] {
+      const out: UpgradeOption[] = [], g = this.player.growth;
+      const key = starCardPool(g.stars, (a, t) => g.perk(a, t)).filter(c => c.kind === 'keystone'); if (key.length) out.push(this.starOption(key[Math.floor(Math.random() * key.length)]));
+      if (!this.gHorse?.legend) { const h = this.horseCard('legend'); if (h) out.push(h); }
+      const fs = FORMATION_IDS.filter(id => !this.gFormations.includes(id));
+      if (fs.length && this.formationRt) { const id = fs[Math.floor(Math.random() * fs.length)], F = FORMATIONS[id], oid = 'gauntlet_formation_' + id; this.gRarity.set(oid, id === 'bazhen' ? 'legend' : 'rare');
+        out.push({ id: oid, name: '军阵 · ' + F.name, desc: F.main + '\n主将：' + F.hero + '\n要带部曲（花钱币招兵）· 按 X 变阵', kind: 'rare', categoryLabel: '军阵 · ' + (this.gFormations.length ? '新阵当主阵' : '第一个阵'), scope: 'run', icon: this.textures.exists('formation_icon_' + id) ? 'formation_icon_' + id : 'growth_icon_eight_trigrams', apply: () => this.takeFormation(id) }); }
+      const w = this.ownUpgrade(); if (w) { const id = 'gauntlet_qiyu_weapon'; this.gRarity.set(id, 'rare');
+        out.push({ ...w, id, name: w.name.replace(/ · Lv\.\d+$/, '') + ' · 连升两级', desc: '本命兵器连升两级（Lv5 后为专职精进）\n' + w.desc, categoryLabel: '本命精进', apply: (p, ws, gr) => { w.apply(p, ws, gr); this.ownUpgrade()?.apply(p, ws, gr); } }); }
+      const gear = this.gearCard('legend'); if (gear) out.push(gear);
+      return out.slice(0, 3);
+    }
+    /** 拿一个军阵：新的当主阵，原来的主阵退成备阵（两个阵位）。 */
+    takeFormation(id: FormationId): void { this.gFormations = [id, ...this.gFormations.filter(x => x !== id)]; this.formationRt?.setLoadout(this.gFormations.slice(0, 2)); }
+    /**
+     * 斩将的战利品之后：第 3 / 6 / 9 阵再开一次奇遇（无尽不开）。先记下，等面板都关了（战利品之后基类会接着弹攒着的升级三选一）
+     * 再由 update 打开——直接开会被随后弹出的升级面板顶掉，选了也不生效。
+     */
+    private gQiyuPending = false;
+    private maybeQiyu(): void { if (!this.gEndless && GAUNTLET_BUILD.qiyuWaves.includes(this.gWave) && !this.gQiyuWaves.includes(this.gWave)) this.gQiyuPending = true; }
+    private openQiyu(): void {
+      this.gQiyuPending = false;
+      const opts = this.qiyuOptions(); if (!opts.length) return;
+      this.gQiyuWaves.push(this.gWave);
+      this.showLoot(`奇遇 · 第 ${this.gWave} 阵`, '只出改变打法的大件 · 选一样', opts, () => {});
+    }
+    /** 战利品第三张：保底一张稀有以上的本模式专有卡（将星 / 兵装 / 信物 / 坐骑；传说约四分之一），都没有就给军资。 */
+    private lootRareCard(): UpgradeOption | null {
+      const r: GRarity = Math.random() < .25 ? 'legend' : 'rare';
+      for (const k of ['star', 'gear', 'charm', 'horse'].sort(() => Math.random() - .5)) {
+        const o = k === 'star' ? pickByRarity(this.extraCards().filter(x => x.rarity === 'rare' || x.rarity === 'legend'), r)?.option ?? null : k === 'gear' ? this.gearCard(r) : k === 'charm' ? this.charmCard(r) : this.horseCard('legend');
+        if (o) return o;
+      }
+      return null;
+    }
+
     // ———— 换一批 / 排除（掌控感）：每局 2 次免费换一批，之后花钱币、逐次涨价；每局 1 次排除（点一张卡，本局不再出现）————
     private gRerollFree = 0; private gRerollPaid = 0; private gExcludes = 0; private gExcluded = new Set<string>(); private gExcluding = false;
     private gExcludeBtn: Phaser.GameObjects.Text | null = null;
@@ -462,7 +512,8 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       if (this.gPhase === 'mow' && this.waveT >= GAUNTLET.mowSec) this.startBoss();
       else if (this.gPhase === 'boss' && !this.boss?.active && !this.bossKilled) this.spawnBoss(); // 首领没刷出来（落点被挡）：下一帧再试
       else if (this.gPhase === 'clear') {
-        if (!this.gLootShown && this.waveT >= 1.8) { this.gLootShown = true; this.openLoot(); }
+        if (this.gQiyuPending) this.openQiyu();
+        else if (!this.gLootShown && this.waveT >= 1.8) { this.gLootShown = true; this.openLoot(); }
         else if (this.gLootShown && this.waveT >= GAUNTLET.clearSec) { if (this.gWave === GAUNTLET.waves && !this.gEndless) this.openClearChoice(); else this.nextWave(); }
       }
     }
@@ -830,9 +881,9 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       const opts: UpgradeOption[] = [
         { id: 'gauntlet_follow', name: '收为副将 · ' + fb.name, desc: `${fb.name}本局跟着你打（用他自己的形象，名将招式能用的照用）\n副将最多 ${GAUNTLET.followerMax} 位${full ? ' · 已满，选了再挑替换谁' : ''}`, kind: 'foundation', categoryLabel: '战利品', scope: 'run', icon: this.portrait(fb), apply: () => this.takeFollower(fb) },
         { id: 'gauntlet_spoils', name: '取其辎重', desc: `钱币 +${food}\n立刻回满生命`, kind: 'foundation', categoryLabel: '战利品', scope: 'once', icon: 'growth_icon_pickup', apply: () => { this.coinBurst(this.player.x, this.player.y, food); this.legion.food += food; this.player.heal(this.player.maxHp); } }, // 钱不飘字：铜钱从主将处飞进行囊（coins.md）
-        supplyOption(b.chapter),
+        this.lootRareCard() ?? supplyOption(b.chapter), // 第三张：保底一张稀有以上（统筹 11-21 局内 build 第 3 条）
       ];
-      this.showLoot(`斩将 · ${b.name} · 战利品三选一`, '本局有效 · 选一样', opts, () => { if (this.gPendingReplace) { const nb = this.gPendingReplace; this.gPendingReplace = null; this.openReplace(nb); } });
+      this.showLoot(`斩将 · ${b.name} · 战利品三选一`, '本局有效 · 选一样', opts, () => { if (this.gPendingReplace) { const nb = this.gPendingReplace; this.gPendingReplace = null; this.openReplace(nb); } else this.maybeQiyu(); });
     }
     private showLoot(title: string, hint: string, opts: UpgradeOption[], after: () => void): void {
       this.sfx.level();
@@ -857,7 +908,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       const opts: UpgradeOption[] = this.gFollowers.slice(0, 3).map(({ f, boss }) => ({ id: 'gauntlet_replace_' + boss.id, name: '换下 ' + boss.name, desc: `${boss.name}离队，${nb.name}入队`, kind: 'foundation' as const, categoryLabel: '副将', scope: 'run' as const, icon: this.portrait(boss),
         apply: () => { this.dropFollower(f); this.takeFollower(nb); } }));
       opts.push({ id: 'gauntlet_keep', name: '不收 ' + nb.name, desc: '副将不变', kind: 'foundation', categoryLabel: '副将', scope: 'once', icon: this.portrait(nb), apply: () => {} });
-      this.showLoot(`副将已满 · 收 ${nb.name} 换下谁`, '选一位离队，或者不收', opts, () => {});
+      this.showLoot(`副将已满 · 收 ${nb.name} 换下谁`, '选一位离队，或者不收', opts, () => this.maybeQiyu());
     }
     private dropFollower(f: Follower): void {
       const sq = this.followers; if (!sq) return; const i = sq.members.indexOf(f); if (i >= 0) { f.destroy(); sq.members.splice(i, 1); sq.members.forEach((m, k) => { m.slot = k; }); }

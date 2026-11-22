@@ -94,7 +94,7 @@ if (BASE) {
   const wait = ms => p.waitForTimeout(ms), ev = (f, a) => p.evaluate(f, a);
   const until = async (f, ms, a) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (await ev(f, a)) return true; await wait(200); } return false; };
   /** 升级三选一 / 战斗支援之类的弹窗先关掉（战利品面板 bossloot 不动，测试自己选）。 */
-  const unblock = () => ev(() => { const s = window.__S; for (let i = 0; i < 6 && s.mode !== 'none' && s.mode !== 'bossloot' && !s.over; i++) { if (s.mode === 'levelup') s.chooseUpgrade(0); else s.setMode('none'); } });
+  const unblock = () => ev(() => { const s = window.__S, qiyu = () => s.mode === 'bossloot' && /^奇遇/.test(s.levelPanel.getByName('upgrade-title')?.text ?? ''); for (let i = 0; i < 6 && s.mode !== 'none' && (s.mode !== 'bossloot' || qiyu()) && !s.over; i++) { if (s.mode === 'levelup' || qiyu()) s.chooseUpgrade(0); else s.setMode('none'); } }); /* 奇遇面板也选掉 */
   try {
     // 战役存档里赵云 30 级（从 0 开局：进名将连战应是 1 级，打完也不改这条记录）
     await p.addInitScript(() => { if (!sessionStorage.getItem('seeded')) { localStorage.setItem('im_story', 'off'); localStorage.setItem('im_home_seen', '1'); localStorage.removeItem('im_gauntlet_best_test'); const h = JSON.parse(localStorage.getItem('im_heroes_v1') ?? 'null') ?? { version: 1, heroes: {}, migrated: true, firstClears: [], attrSet: 4 }; h.heroes.zhaoyun = { level: 30, xp: 100, attributes: {} }; localStorage.setItem('im_heroes_v1', JSON.stringify(h)); sessionStorage.setItem('seeded', '1'); } });
@@ -138,7 +138,7 @@ if (BASE) {
       const k = s.gauntletKit, r = { kinds: [...kinds].sort(), hp0, hp1: s.player.maxHp, kit: k, gearR: gc && s.rarityOf(gc), icons: [gc?.icon, cc?.icon, hc?.icon], bagSame: localStorage.getItem('im_items_v2') === bag0 };
       s.gGear = {}; s.gCharms = []; s.gHorse = undefined; s.refreshGear(); s.equipMount(undefined); r.after = s.gauntletKit; return r; }); /* 用完卸下，不影响后面 */
     ck('兵装 / 信物 / 坐骑卡：三选一里将星 / 兵装 / 信物 / 坐骑四类都会出；拿了就穿上（传说兵装带专属特效）、戴上（机制信物进宝物）、骑上（赤兔 / 绝影 / 的卢）；局内有效、不进行囊',
-      kit.kinds.join() === 'charm,gear,horse,star' && Object.keys(kit.kit.gear).length === 1 && kit.kit.charms.length === 1 && !!kit.kit.horse && kit.kit.mounted && kit.kit.specials.length >= 1 && kit.gearR === 'legend' && kit.icons.every(Boolean) && kit.bagSame && !kit.after.mounted && kit.after.charms.length === 0, kit);
+      kit.kinds.join() === 'charm,gear,horse,star' && Object.values(kit.kit.gear).some(v => /orange$/.test(v)) && kit.kit.charms.length === 1 && !!kit.kit.horse && kit.kit.mounted && kit.kit.specials.length >= 1 && kit.gearR === 'legend' && kit.icons.every(Boolean) && kit.bagSame && !kit.after.mounted && kit.after.charms.length === 0, kit);
     const troopsAt = {}; troopsAt[1] = (await ev(() => window.__S.gauntletFrom0.troops));
     /** 割草画面：场上杂兵用的图（第 1 / 5 / 10 阵对比兵种）。 */
     const onScreen = () => ev(() => { const s = window.__S, cam = s.cameras.main.worldView, n = {}; for (const e of s.enemies) if (e.active && !e.isSupplySlot && e.kind !== 'boss' && cam.contains(e.x, e.y)) { const k = e.def.walkVisual?.texture ?? e.def.texture; n[k] = (n[k] ?? 0) + 1; } return n; }); /* 按兵种定义的图（精灵上是渲染层加了前缀的派生图 iffA_…） */
@@ -168,8 +168,8 @@ if (BASE) {
     ck('名将登场：带亲兵（精锐 / 刀盾围在身边），有出招控制器，首领防拖关掉，顶上写名将名', b1.ok && b1.ctrl && b1.guards >= 2 && b1.stall >= 1e9 && b1.hud.includes(b1.name), b1);
     const ph = await kill(); const opened = await lootOpen(); const tr4 = await trk();
     ck('十阵进度条 · 斩将：第 1 个节点变成已斩（盖朱印），标还停在节点前', tr4.states[0] === 'killed' && tr4.seal && tr4.x < tr4.nodeX[0] && tr4.nodeX[0] - tr4.x < 45, { states: tr4.states.slice(0, 2), seal: tr4.seal, caption: tr4.caption });
-    const loot = await ev(() => { const s = window.__S; return { phase: s.gPhase, kills: s.gKills.length, opts: s.upgradeOptions.map(o => o.id), left: s.enemies.filter(e => e.active && !e.isSupplySlot && e.kind !== 'boss' && e.sprite.alpha > .9).length, cleared: s.gStats.cleared }; });
-    ck('斩将：清场（杂兵退散）→ 战利品三选一（收为副将 / 取其辎重 / 军资）', ph === 'clear' && opened && loot.kills === 1 && loot.opts.length === 3 && loot.opts[0] === 'gauntlet_follow' && loot.opts[1] === 'gauntlet_spoils' && /^supply_/.test(loot.opts[2]) && loot.cleared > 0, loot);
+    const loot = await ev(() => { const s = window.__S; return { phase: s.gPhase, kills: s.gKills.length, opts: s.upgradeOptions.map(o => o.id), r3: s.upgradeOptions[2] ? s.rarityOf(s.upgradeOptions[2]) : null, left: s.enemies.filter(e => e.active && !e.isSupplySlot && e.kind !== 'boss' && e.sprite.alpha > .9).length, cleared: s.gStats.cleared }; });
+    ck('斩将：清场（杂兵退散）→ 战利品三选一（收为副将 / 取其辎重 / 保底一张稀有以上的将星 · 兵装 · 信物 · 坐骑卡）', ph === 'clear' && opened && loot.kills === 1 && loot.opts.length === 3 && loot.opts[0] === 'gauntlet_follow' && loot.opts[1] === 'gauntlet_spoils' && /^gauntlet_(star|gear|charm|horse)_/.test(loot.opts[2]) && (loot.r3 === 'rare' || loot.r3 === 'legend') && loot.cleared > 0, loot);
     await ev(() => window.__S.chooseUpgrade(0)); await wait(400);
     const fol = await ev(() => { const s = window.__S, f = s.gauntletFollowers[0]?.f; return { n: s.gauntletFollowers.length, name: f?.label.text, tex: f?.sprite.texture.key, look: f?.look?.tex, mode: s.mode }; });
     ck('收为副将：他在场（名牌「副将 · 名字」、用他自己的首领图）', fol.n === 1 && fol.name === '副将 · ' + b1.name && fol.tex === fol.look && (fol.mode === 'none' || fol.mode === 'levelup'), fol); /* 选完战利品可能接着弹攒着的升级三选一 */
@@ -181,15 +181,19 @@ if (BASE) {
       ck('下一阵割草：斩将后的收尾保护（主将无敌、全场杂兵溃退）只在清场那几秒——第 2 阵起收尾保护关掉、主将不无敌（个别被主将招式吓退的不算）', !r.hold && !r.guard && !r.killed && r.n > 3, r); }
     { const t5 = await trk(); ck('十阵进度条 · 下一阵：标从第 1 个节点继续往第 2 个节点走，第 1 个节点留着已斩印，第 2 个还是暗的', t5.pos > .1 && t5.pos < .2 && t5.x > t5.nodeX[0] && t5.x < t5.nodeX[1] && t5.states[0] === 'killed' && t5.states[1] === 'dark' && t5.caption.startsWith('第 2/10 阵 · 距名将登场'), { pos: t5.pos, caption: t5.caption, states: t5.states.slice(0, 3) }); }
     // 一路打到第十阵（战利品选辎重，第 2～3 阵再收两位副将凑满三位）
-    let lastHp = b1.hp, okRun = true; const names = [b1.name];
+    let lastHp = b1.hp, okRun = true, qiyu3 = null; const names = [b1.name];
     for (let w = 2; w <= 10; w++) {
       if (w === 5 || w === 10) { for (let i = 0; i < 5; i++) { await wait(1200); await unblock(); } troopsAt[w] = { ...(await ev(() => window.__S.gauntletFrom0.troops)), screen: await onScreen() }; await p.screenshot({ path: OUT + `/gauntlet-${w === 5 ? 13 : 14}-wave${w}-mow.png` }); }
       const bw = await bossUp(); if (!bw.ok) { okRun = false; console.log('  阵 ' + w + ' 名将没出来', bw); break; } names.push(bw.name);
       await kill(); if (!(await lootOpen())) { okRun = false; console.log('  阵 ' + w + ' 战利品没弹'); break; }
       await ev(k => window.__S.chooseUpgrade(k), w <= 3 ? 0 : 1); await wait(300);
-      if (w < 10) { await ev(() => { const s = window.__S; s.gAt = s.elapsed - 10; }); if (!(await until(wv => { const s = window.__S; if (s.mode === 'levelup') s.chooseUpgrade(0); return s.gWave === wv && s.gPhase === 'mow'; }, 6000, w + 1))) { okRun = false; break; } }
+      if (w === 3) { const ok3 = await until(() => { const s = window.__S; if (s.mode === 'levelup') s.chooseUpgrade(0); return s.mode === 'bossloot' && /^奇遇/.test(s.levelPanel.getByName('upgrade-title')?.text ?? ''); }, 6000); await wait(700); await p.screenshot({ path: OUT + '/gauntlet-17-qiyu.png' });
+        qiyu3 = { open: ok3, ...(await ev(() => { const s = window.__S, ids = s.upgradeOptions.map(o => o.id), k = Math.max(0, ids.findIndex(id => id.startsWith('gauntlet_formation_'))); const r = { title: s.levelPanel.getByName('upgrade-title')?.text, ids, rar: s.upgradeOptions.map(o => s.rarityOf(o)), pick: ids[k] }; s.chooseUpgrade(k); return { ...r, fm: s.gauntletFormations }; })) }; }
+      if (w < 10) { await ev(() => { const s = window.__S; s.gAt = s.elapsed - 10; }); if (!(await until(wv => { const s = window.__S; if (s.mode === 'levelup' || (s.mode === 'bossloot' && /^奇遇/.test(s.levelPanel.getByName('upgrade-title')?.text ?? ''))) s.chooseUpgrade(0); return s.gWave === wv && s.gPhase === 'mow'; }, 6000, w + 1))) { okRun = false; break; } }
     }
     ck('一路打到第十阵：每阵一位名将（前后按章递进），副将凑满 3 位', okRun && names.length === 10 && (await ev(() => window.__S.gauntletFollowers.length)) === 3, names);
+    { const qw = await ev(() => [...window.__S.gQiyuWaves]), big = id => /^gauntlet_(star_.*\.K|horse_|formation_|qiyu_weapon|gear_)/.test(id);
+      ck('奇遇：第 3 / 6 / 9 阵斩将后（战利品之后）额外一次三选一，只出大件（主星 / 传说坐骑 / 军阵 / 本命连升两级 / 传说兵装），稀有以上；拿军阵进阵位', qw.join() === '3,6,9' && !!qiyu3?.open && qiyu3.ids.length === 3 && qiyu3.ids.every(big) && qiyu3.rar.every(r => r === 'rare' || r === 'legend') && (!qiyu3.pick.startsWith('gauntlet_formation_') || qiyu3.fm.loadout[0] === qiyu3.pick.replace('gauntlet_formation_', '')), { qw, qiyu3 }); }
     { const T = [1, 5, 10].map(w => troopsAt[w]), inf = T.map(t => t?.tex.infantry), top = t => Object.entries(t?.screen ?? {}).sort((a, b) => b[1] - a[1])[0]?.[0];
       const texOk = await ev(keys => keys.every(k => window.__S.textures.exists(k)), [...new Set(T.flatMap(t => Object.values(t?.tex ?? {})))]);
       ck('每阵兵种（截图第 1 / 5 / 10 阵割草）：黄巾 → 曹军 → 魏军，步卒图各不相同、图都在；第 5 / 10 阵屏幕上最多的兵就是本阵的兵；步卒一阵比一阵厚', T.every(Boolean) && T[0].arc === 'huangjin' && T[1].arc === 'chibi' && T[2].arc === 'beifa' && new Set(inf).size === 3 && texOk
@@ -249,7 +253,7 @@ if (BASE) {
         if (id === 'luxun') { await ev(() => { window.__S.gBandAt = window.__S.combatNow; }); await wait(1100); await p.screenshot({ path: OUT + '/gauntlet-10-luxun-fireband.png' }); await until(() => { const s = window.__S; if (s.mode === 'levelup') s.chooseUpgrade(0); const b = s.gauntletExtras.band; return b.cells > 20 && b.pending === 0; }, 9000);
           const b = (await ev(() => window.__S.gauntletExtras)).band; return { ok: b.bands >= 1 && b.cells > 20, band: b }; }
         if (id === 'simayi') { const c = await ev(() => window.__S.gauntletCtrl?.constructor?.name); return { ok: c === 'SimayiBoss' && x.forts === 4, ctrl: c, forts: x.forts }; }
-        if (id === 'haozhao') { const fired = await until(() => (window.__S.gauntletExtras.strikes?.fired ?? 0) > 0, 9000); await p.screenshot({ path: OUT + '/gauntlet-11-haozhao-towers.png' });
+        if (id === 'haozhao') { const fired = await until(() => { const s = window.__S; if (s.mode === 'levelup') s.chooseUpgrade(0); return (s.gauntletExtras.strikes?.fired ?? 0) > 0; }, 12000); /* 升级弹窗暂停战斗：等的时候顺手选掉 */ await p.screenshot({ path: OUT + '/gauntlet-11-haozhao-towers.png' });
           const x2 = await ev(() => window.__S.gauntletExtras);
           return { ok: x.props.length === 2 && x.props.every(p => p.art === 'tower') && fired, towers: x.props.length, strikes: x2.strikes }; } // 郝昭新图版式不对，先没接（见 gauntlet-v1.md）
         if (id === 'wutugu') { const before = x; await ev(() => { const s = window.__S; for (const p of s.gProps) if (!p.broken && p.e.active) { p.e.hp = 0; s.killEnemy(p.e); } }); await wait(400); const after = await ev(() => window.__S.gauntletExtras);

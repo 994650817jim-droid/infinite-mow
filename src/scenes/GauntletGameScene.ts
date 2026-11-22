@@ -1,9 +1,9 @@
 import Phaser from 'phaser';
 import { GameScene } from './GameScene';
-import { BALANCE, HEADING_FONT, actorDepth } from '../config';
+import { BALANCE, DEPTH, FONT, HEADING_FONT, actorDepth } from '../config';
 import { getBattleChapter, getChapter, type ChapterDef } from '../data/chapters';
 import type { EnemyDef } from '../data/enemies';
-import { GAUNTLET, GAUNTLET_POOL, type GauntletProps, endlessBoss, gauntletReward, pickBosses, readGauntletBest, unlockedPool, waveScale, writeGauntletBest, type GauntletBoss } from '../data/gauntlet';
+import { GAUNTLET, GAUNTLET_MOVES, GAUNTLET_POOL, type GauntletProps, endlessBoss, gauntletReward, pickBosses, readGauntletBest, unlockedPool, waveScale, writeGauntletBest, type GauntletBoss } from '../data/gauntlet';
 import { BOSS_MOVES, type BossMovesetDef } from '../data/bossMoves';
 import { supplyOption } from '../data/upgrades';
 import { thirdBattle } from '../data/thirdChapter';
@@ -19,6 +19,12 @@ import { NANZHENG_CONFIG } from './NanzhengGameScene';
 import { BossMoveset } from '../systems/BossMoveset';
 import { YuanshuBoss } from '../systems/YuanshuBoss';
 import { DongzhuoBoss } from '../systems/DongzhuoBoss';
+import { SimayiBoss } from '../systems/SimayiBoss';
+import { Strikes } from '../systems/BeifaSystems';
+import { playSheet } from '../systems/SkillFxSheets';
+import { warnFx } from '../ui/WarnFx';
+import { HILL_ART } from '../data/hanzhongChapter';
+import { SMY } from '../data/beifaChapter';
 import { ensureTroopArt } from '../systems/TroopArt';
 import { CaorenBoss } from '../systems/CaorenBoss';
 import { GuanduBoss } from '../systems/GuanduBoss';
@@ -43,7 +49,7 @@ interface BossArt { tex: string; sheet?: string; def: EnemyDef; style: ChapterDe
 interface GCtrl { readonly state?: string; update(dt: number, now: number): void; clear(): void; defeat?(): void; updateDeath?(delta: number): void; incoming?(ally: boolean): number; hit?(now: number): void; readonly label?: string }
 
 /** 副将用什么兵器模板（随行系统的四种出手：枪扫 / 刀扇 / 弓射 / 谋火）。 */
-const TEMPLATE: Record<string, FollowerTemplate> = { huaxiong: 'blade', xurong: 'blade', yanliang: 'blade', yanghuai: 'blade', zhangren: 'bow', pangde: 'blade', sunhuan: 'blade', mangyachang: 'blade', zhurong: 'bow', zhanghe: 'spear', zhangliang: 'blade', zhangbao: 'strategist', lijue: 'blade', guosi: 'blade', zhangxiu: 'spear', caochun: 'blade', caimao: 'bow', zhaofan: 'bow', liudu: 'blade', huangzhong: 'bow', zhangjiao: 'strategist', lubu: 'spear', yuanshu: 'blade', chunyuqiong: 'blade', caoren: 'blade', hanxuan: 'blade', liuzhang: 'strategist', caocao: 'blade', lvmeng: 'blade', zhuran: 'spear', menghuo: 'blade', haozhao: 'bow' };
+const TEMPLATE: Record<string, FollowerTemplate> = { xiahouyuan: 'blade', luxun: 'strategist', simayi: 'strategist', wutugu: 'blade', dongzhuo: 'blade', wenchou: 'spear', huaxiong: 'blade', xurong: 'blade', yanliang: 'blade', yanghuai: 'blade', zhangren: 'bow', pangde: 'blade', sunhuan: 'blade', mangyachang: 'blade', zhurong: 'bow', zhanghe: 'spear', zhangliang: 'blade', zhangbao: 'strategist', lijue: 'blade', guosi: 'blade', zhangxiu: 'spear', caochun: 'blade', caimao: 'bow', zhaofan: 'bow', liudu: 'blade', huangzhong: 'bow', zhangjiao: 'strategist', lubu: 'spear', yuanshu: 'blade', chunyuqiong: 'blade', caoren: 'blade', hanxuan: 'blade', liuzhang: 'strategist', caocao: 'blade', lvmeng: 'blade', zhuran: 'spear', menghuo: 'blade', haozhao: 'bow' };
 
 /**
  * 按适配表改招（本模式每位最多 3 招）：drop 去掉的招（招名，两个阶段都拿掉；某阶段删空了保留原样）、add 加的招、p2Boost 二阶段移速 / 招式伤害加成。
@@ -57,9 +63,10 @@ function adaptMoves(d: BossMovesetDef, b: GauntletBoss): BossMovesetDef {
 
 /**
  * 随身布置用的现成图（适配表 gauntlet-roster.md）：粮垛 / 辎重车 = 官渡焚粮目标同一张道具图集（yellow_props）；城门 / 箭楼 = 攻城 v2 城墙图集（带毁坏帧）；
- * 火油罐 = 第四批新图；营帐走环境互动的可破坏营帐（EnvInteractions.placeTent，没有时退回辎重车图）。
+ * 火油罐 = 第四批新图；营帐 / 营垒 = 环境道具图集 env_props（本模式没有环境互动系统，营帐自己摆）。
  */
-const PROP_ART: Record<Exclude<GauntletProps['art'], 'tent'>, { key: string; frame: number; broken?: number; size: number; radius: number }> = {
+const PROP_ART: Record<GauntletProps['art'] | 'fort', { key: string; frame: number; broken?: number; size: number; radius: number }> = {
+  tent: { key: 'env_props', frame: 8, broken: 12, size: 150, radius: 52 }, fort: { key: 'env_props', frame: 11, broken: 15, size: 150, radius: 52 }, // 营帐 / 营垒：环境道具图集（8+势力 立着、12+势力 塌了；营垒用魏军 3）
   granary: { key: 'yellow_props', frame: 1, size: 120, radius: 40 }, cart: { key: 'yellow_props', frame: 24, size: 100, radius: 34 }, // 同官渡焚粮目标（BattlefieldSupplies.spawnDepot 用 yellow_props：1 乌巢粮仓、24 袁军辎重）
   gate: { key: 'siege_mid_walls', frame: 1, broken: 2, size: 170, radius: 60 }, tower: { key: 'siege_mid_walls', frame: 3, broken: 4, size: 170, radius: 46 },
   jar: { key: 'gauntlet_oil_jar', frame: 0, broken: 1, size: 90, radius: 26 },
@@ -108,7 +115,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     gWave = 1; gPhase: 'mow' | 'boss' | 'clear' | 'choice' | 'done' = 'mow'; gAt = 0; gOrder: GauntletBoss[] = []; gCur: GauntletBoss | null = null;
     gKills: GauntletBoss[] = []; gCleared = false; gEndless = false; private gPool: GauntletBoss[] = [];
     private gCtrl: GCtrl | null = null; private gLootShown = false; private gEliteAt = 0; private gFollowers: Array<{ f: Follower; boss: GauntletBoss }> = [];
-    private gPendingReplace: GauntletBoss | null = null; private gTrack: GauntletTrack | null = null; private gPortrait = new Map<string, string>();
+    private gPendingReplace: GauntletBoss | null = null; private gTrack: GauntletTrack | null = null; private gStrikes: Strikes | null = null; private gPortrait = new Map<string, string>();
     /** 测试读：帧率采样（三位副将 + 名将 + 割草同屏）。 */
     gStats = { lootPicks: [] as string[], spawned: 0, cleared: 0 };
 
@@ -116,6 +123,8 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       (Base.prototype as unknown as { preload?: () => void }).preload?.call(this); // 基类（开发构建的 DevGameScene）有 preload 就先跑
       // 名将池的首领图都先载好（第一 / 二章的张梁、张宝、张角、华雄、徐荣、吕布开机就有）
       for (const b of unlockedPool(() => true, true)) { const a = bossArt(b); if (a.sheet && !this.textures.exists(a.tex)) loadBossSheet(this.load, a.tex, a.sheet); }
+      if (!this.textures.exists(HILL_ART[0].key)) this.load.image(HILL_ART[0].key, HILL_ART[0].url); // 高地圈（汉中山头同一张图）
+      if (!this.textures.exists('gauntlet_oil_jar')) this.load.spritesheet('gauntlet_oil_jar', 'assets/props/gauntlet_oil_jar.png', { frameWidth: 256, frameHeight: 256 }); // 兀突骨火油罐（美术 11-21：完好 / 碎裂）
       if (!this.textures.exists('siege_mid_walls')) this.load.spritesheet('siege_mid_walls', 'assets/siege-v2/walls.png', { frameWidth: 384, frameHeight: 384 }); // 随身城门 / 箭楼（攻城 v2 城墙图集）
       if (!this.textures.exists(SEAL_KEY)) this.load.image(SEAL_KEY, 'assets/ending/seal_red_2.png'); // 进度条斩将盖的朱印（结局麒麟阁同一枚，缩小用）
     }
@@ -138,8 +147,9 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       this.hudTexts.chapter.setText(''); // 关名不写（见 updateTrack）
       this.time.delayedCall(500, () => { if (!this.over) this.showWaveBanner('名将连战 · 第 1 阵', false, `割草 ${GAUNTLET.mowSec} 秒后名将登场 · 共 ${GAUNTLET.waves} 阵`); });
       this.gTrack?.destroy(); this.gTrack = new GauntletTrack(this, GAUNTLET.waves, 'hud_medal2_' + this.runConfig.character, SEAL_KEY); this.gTrack.setWave(1, true);
+      this.gStrikes = new Strikes({ scene: this, player: this.player, army: this.legion, now: () => this.combatNow }); // 地面落点打击（手绘预警圈 → 命中序列帧）：郝昭箭楼、司马懿
       if (this.gPool.some(b => b.id === 'dongzhuo')) ensureTroopArt(this, ['dongzhuo_walk', 'dongzhuo_attack']); // 董卓行走 / 攻击图（同 2-3，按需载入）
-      this.events.once('shutdown', () => { this.gCtrl?.clear(); this.gCtrl = null; this.gTrack?.destroy(); this.gTrack = null; this.clearProps(); this.clearEscort(); });
+      this.events.once('shutdown', () => { this.gCtrl?.clear(); this.gCtrl = null; this.gTrack?.destroy(); this.gTrack = null; this.clearProps(); this.clearEscort(); this.clearHill(); this.clearBand(); this.gStrikes?.clear(); this.gStrikes = null; });
     }
     /** 自定关：不进战役关卡逻辑（剧情、进度、段落、招降都按自定关跳过）。 */
     protected customChapter() { return this.chapter?.name === '名将连战' ? this.chapter : { ...this.makeChapter(this.gOrder[0] ?? unlockedPool(() => true, true)[0]), bossStyle: 'lubu' as const }; } // 开局建场景时用中性的首领风格：华雄 / 徐荣的风格会让基类搭汜水关城墙、荥阳伏兵营
@@ -182,6 +192,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       this.hudTexts.wave.setText(''); // 阵数看顶部十阵进度条（总制作人 11-21：去掉左上角那行，兵力行保留）
       this.updateTrack();
       if (this.mode !== 'none') return;
+      this.gStrikes?.update();
       if (this.gPhase === 'mow' && this.waveT >= GAUNTLET.mowSec) this.startBoss();
       else if (this.gPhase === 'boss' && !this.boss?.active && !this.bossKilled) this.spawnBoss(); // 首领没刷出来（落点被挡）：下一帧再试
       else if (this.gPhase === 'clear') {
@@ -228,7 +239,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     /** 名将登场：先收掉上一位留下的控制器，按这一阵换关卡定义，再出首领（带亲兵）。 */
     startBoss(): void {
       const b = this.variant(this.waveBoss());
-      this.clearProps(); this.clearEscort();
+      this.clearProps(); this.clearEscort(); this.clearHill(); this.clearBand(); this.gStrikes?.clear();
       this.gCur = b; this.gPhase = 'boss'; this.gAt = this.elapsed;
       this.gCtrl?.clear(); this.gCtrl = null; this.lubu?.clear(); this.lubu = null; this.zhangjiao?.clear(); this.zhangjiao = null; this.huaxiong?.clear(); this.huaxiong = null; this.xurong?.clear(); this.xurong = null; this.moveset?.clear(); this.moveset = null; this.bossMount?.destroy(); this.bossMount = null;
       this.boss = null; this.bossSpawned = false; this.bossKilled = false; this.bossWarned = true; this.bossPhase2 = false; this.bossEnergy = 0;
@@ -241,12 +252,17 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       if (GAUNTLET.stallOff) this.bossStallCfg = { quotaSec: 1e9, enrageSec: 1e9 }; // 首领防拖关掉（阵数节奏已经限住每阵长度）
       const art = bossArt(b), now = this.combatNow;
       const host: ArcHost = { scene: this, boss, player: this.player, army: this.legion, spawn: (k, x, y, def) => this.spawnEnemy(k, x, y, 1, true, def), def: k => this.chapter.enemies[k], banner: (t, c) => this.showWaveBanner(t, true, c), sfx: k => this.sfx.play(k) };
-      if (b.ctrl === 'moveset') { this.moveset?.clear(); this.moveset = null; const mv = BOSS_MOVES[b.arc + '.' + b.id] ?? BOSS_MOVES[b.id]; if (mv) this.gCtrl = new BossMoveset(host, art.layout === 'walk' ? boss.sprite.texture.key : art.tex, now, adaptMoves(mv, b), art.layout); }
+      if (b.ctrl === 'moveset') { this.moveset?.clear(); this.moveset = null; const mv = BOSS_MOVES[b.arc + '.' + b.id] ?? BOSS_MOVES[b.id] ?? GAUNTLET_MOVES[b.id]; if (mv) this.gCtrl = new BossMoveset(host, art.layout === 'walk' ? boss.sprite.texture.key : art.tex, now, adaptMoves(mv, b), art.layout); }
       else if (b.ctrl === 'yuanshu') this.gCtrl = new YuanshuBoss(host, art.tex, now, { endlessHoney: !!b.endlessHoney });
       else if (b.ctrl === 'caoren') this.gCtrl = new CaorenBoss(host, art.tex, now);
       else if (b.ctrl === 'guandu') this.gCtrl = new GuanduBoss({ scene: this, boss, player: this.player, army: this.legion, spawn: (k, x, y) => this.spawnEnemy(k, x, y, 1, true),
         morale: b.props ? () => ({ multiplier: 1, burned: this.gProps.filter(p => p.broken).length, intact: this.propsAlive() }) : undefined }, b.stage, now) as unknown as GCtrl; // 颜良 / 文丑 / 淳于琼按关取招式；军心只给名牌看（减伤由随身布置算）
       else if (b.ctrl === 'dongzhuo') this.gCtrl = this.dongzhuoCtrl(boss, now);
+      else if (b.ctrl === 'simayi' && this.gStrikes) { // 五丈原的控制器：随身营垒（环境互动的营帐，同 12-3）45 秒自倒
+        this.gCtrl = new SimayiBoss(host, art.tex, now, { strikes: this.gStrikes, placeFort: (x, y, i) => { let f = this.env?.placeTent(x, y, 'gauntlet-fort-' + this.gWave + '-' + i, SMY.fortHp, 3) ?? null; if (!f) { const m = this.propEnemy(x, y, SMY.fortHp, 'fort'); if (m) { f = m.e; this.gFortProps.push({ e: m.e, life: m.e.spawnId, img: m.img, broken: false }); } } if (f) this.markGate(f, 'tent'); return f; } });
+        this.gFortsUntil = now + 45000;
+      }
+      this.gHill = null; this.gHillAt = b.hill ? now + 6000 : Infinity; this.gBandAt = b.fireBand ? now + 5000 : Infinity;
       this.gRises = b.rises?.count ?? 0; this.gPauseUntil = 0;
       this.spawnProps(b, boss, now); this.spawnEscort(b, boss, now);
       // 亲兵：围在名将身边
@@ -259,12 +275,13 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       if (this.gEscort && enemy === this.gEscort.e) { if (!this.gEscort.leaving) this.gEscort.ctrl.update(dt, now); return true; }
       if (enemy === this.boss && this.gCtrl) {
         if (now >= this.gPauseUntil) this.gCtrl.update(dt, now); // 孟获倒地复起的那一下：停住不出招
-        this.updateProps(now);
+        this.updateProps(now); this.updateHill(now); this.updateBand(now); this.updateForts(now);
         return true;
       }
       return super.customBossStep(enemy, dt, now);
     }
     protected hitEnemy(enemy: Enemy, raw: number, now: number, source: 'melee' | 'arrow' | 'fire' = 'melee', ally = false, weaponHit = true) {
+      if (!ally && this.hillHasPlayer()) raw *= this.gCur?.hill?.playerDmg ?? 1; // 高地圈：主将站在里面伤害加成
       const E = this.gEscort;
       if (E && enemy === E.e) { // 随行护卫：打到 leaveAt 血线退场（不算斩将）
         if (E.leaving) return super.hitEnemy(enemy, 0, now, source, ally, weaponHit);
@@ -296,10 +313,25 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     }
 
     // ———— 随身布置（适配表规则 a）：登场在名将身边立几件可打掉的物件，立着时名将受伤减；有持续时间 ————
-    private gProps: Array<{ e: Enemy; life: number; img: Phaser.GameObjects.Image | null; broken: boolean; art: GauntletProps['art'] }> = [];
+    private gProps: Array<{ e: Enemy; life: number; img: Phaser.GameObjects.Image | null; broken: boolean; art: GauntletProps['art']; volleyAt: number }> = [];
+    /** 火油罐碎处的火（名将踩进去藤甲着火）；藤甲着火了没有。 */
+    private gFires: Array<{ x: number; y: number; until: number }> = []; private gArmorBurned = false;
     private gPropsDef: GauntletProps | null = null; private gPropsUntil = 0; private gPin: { x: number; y: number } | null = null;
+    /** 一件物件：不会动、不会打的不可见敌人（同招式框架的旗 / 柱）+ 盖在上面的现成图。 */
+    private propEnemy(x: number, y: number, hp: number, art: keyof typeof PROP_ART): { e: Enemy; img: Phaser.GameObjects.Image | null } | null {
+      const A = PROP_ART[art], e = this.spawnEnemy('infantry', x, y, 1, true, { ...this.chapter.enemies.infantry, attackVisual: undefined, behavior: undefined, hp, speed: 0, damage: 0, xp: 1, radius: A.radius, tint: 0xffffff });
+      if (!e) return null; e.controlImmune = true; e.sprite.setAlpha(0);
+      const img = this.textures.exists(A.key) ? this.add.image(e.x, e.y + 18, A.key, A.frame).setOrigin(.5, .9).setDisplaySize(A.size, A.size).setDepth(actorDepth(e.y)).setName('gauntlet-prop') : null;
+      return { e, img };
+    }
     private propsAlive(): number { return this.gProps.filter(p => !p.broken).length; }
-    private propsMul(): number { return this.gPropsDef && this.propsAlive() > 0 ? this.gPropsDef.takenMul : 1; }
+    private propsMul(): number { return this.gPropsDef && this.propsAlive() > 0 && !this.gArmorBurned ? this.gPropsDef.takenMul : 1; }
+    /** 兀突骨藤甲着火：不再减伤，狂怒（招式间隔 ×0.85）。 */
+    private burnArmor(): void {
+      if (this.gArmorBurned) return; this.gArmorBurned = true;
+      const c = this.gCtrl as unknown as { gapMul?: number } | null; if (c && typeof c.gapMul === 'number') c.gapMul *= .85;
+      this.showWaveBanner(this.gPropsDef?.armor ?? '藤甲着火', true, (this.gCur?.name ?? '') + '不再刀枪不入 · 狂怒');
+    }
     private spawnProps(b: GauntletBoss, boss: Enemy, now: number): void {
       const P = b.props; if (!P) return;
       this.gPropsDef = P; this.gPropsUntil = now + P.lifeSec * 1000;
@@ -311,15 +343,14 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
         let e: Enemy | null = null, img: Phaser.GameObjects.Image | null = null;
         if (P.art === 'tent' && this.env) e = this.env.placeTent(x, y, 'gauntlet-tent-' + this.gWave + '-' + i, hp);
         if (!e) {
-          const A = PROP_ART[P.art === 'tent' ? 'cart' : P.art];
-          e = this.spawnEnemy('infantry', x, y, 1, true, { ...this.chapter.enemies.infantry, attackVisual: undefined, behavior: undefined, hp, speed: 0, damage: 0, xp: 1, radius: A.radius, tint: 0xffffff });
-          if (e) { e.controlImmune = true; e.sprite.setAlpha(0); if (this.textures.exists(A.key)) img = this.add.image(e.x, e.y + 18, A.key, A.frame).setOrigin(.5, .9).setDisplaySize(A.size, A.size).setDepth(actorDepth(e.y)).setName('gauntlet-prop'); }
+          const made = this.propEnemy(x, y, hp, P.art); e = made?.e ?? null; img = made?.img ?? null;
         }
         if (!e) continue;
         this.markGate(e); // 自动索敌先打它（同首领关的营垒 / 城门）
-        this.gProps.push({ e, life: e.spawnId, img, broken: false, art: P.art });
+        this.gProps.push({ e, life: e.spawnId, img, broken: false, art: P.art, volleyAt: now + 2500 + i * 1500 });
       }
       if (P.pin) this.gPin = { x: boss.x, y: boss.y };
+      this.gFires = []; this.gArmorBurned = false;
       this.time.delayedCall(1600, () => { if (this.gPropsDef === P && this.propsAlive()) this.showWaveBanner(P.name, true, `${P.name}立着时${b.name}受伤 −${Math.round((1 - P.takenMul) * 100)}% · 先拆${P.name}${P.pin ? ' · 门在他不出' : ''}`); });
     }
     private updateProps(now: number): void {
@@ -327,11 +358,17 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       for (const p of this.gProps) {
         if (p.broken || (p.e.active && p.e.spawnId === p.life && p.e.hp > 0)) continue;
         p.broken = true;
-        const A = p.art === 'tent' ? null : PROP_ART[p.art], img = p.img;
+        const A = PROP_ART[p.art], img = p.img;
         if (img && A?.broken !== undefined) img.setFrame(A.broken); else if (img) this.tweens.add({ targets: img, alpha: 0, duration: 500, onComplete: () => img.destroy() });
         if (P.shaken) (this.gCtrl as unknown as { shaken?: (n: number) => void } | null)?.shaken?.(now); // 官渡控制器：打断当前招式、僵直（军心动摇）
-        if (!this.propsAlive()) this.showWaveBanner(P.name + '尽毁', false, (this.gCur?.name ?? '') + '不再减伤');
+        if (P.fireSec) { const x = p.e.x, y = p.e.y; this.gFires.push({ x, y, until: now + P.fireSec * 1000 }); for (let k = 0; k < P.fireSec; k++) this.time.delayedCall(k * 1000, () => playSheet(this, 'fx_ground_fire', x, y + 6, { size: 150, ms: 1000, depth: actorDepth(y) + .4, originY: .78, name: 'gauntlet-jar-fire' })); } // 火油罐：碎处起火
+        if (!this.propsAlive()) { if (P.armor) this.burnArmor(); else this.showWaveBanner(P.name + '尽毁', false, (this.gCur?.name ?? '') + '不再减伤'); }
       }
+      // 箭楼：立着时定时朝主将放一轮箭雨（手绘预警圈，同陈仓箭楼）
+      if (P.volley && this.gStrikes) for (const p of this.gProps) if (!p.broken && now >= p.volleyAt) { p.volleyAt = now + P.volley.everySec * 1000; const pl = this.player; for (let k = 0; k < P.volley.count; k++) this.gStrikes.add('arrows', pl.x + (Math.random() - .5) * 200, pl.y + (Math.random() - .5) * 160, P.volley.r, 1300, P.volley.ratio, 0); }
+      // 火油罐：名将踩进火里 → 藤甲着火（剩下的罐一并碎）
+      this.gFires = this.gFires.filter(f => f.until > now);
+      { const bz = this.boss; if (P.armor && !this.gArmorBurned && bz?.active && this.gFires.some(f => Math.hypot(bz.x - f.x, bz.y - f.y) < 80)) { for (const p of this.gProps) if (!p.broken && p.e.active) { p.e.hp = 0; this.killEnemy(p.e); } this.burnArmor(); } }
       if (now >= this.gPropsUntil && this.propsAlive()) for (const p of this.gProps) if (!p.broken && p.e.active) { p.e.hp = 0; this.killEnemy(p.e); } // 到时自己倒
       const b = this.boss; if (this.gPin && b?.active && this.propsAlive()) { b.sprite.x = this.gPin.x; b.sprite.y = this.gPin.y; } // 刘璋闭城：门在他不出
     }
@@ -342,6 +379,82 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
         if (p.e.active && p.e.spawnId === p.life) p.e.deactivate();
       }
       this.gProps = []; this.gPropsDef = null; this.gPin = null;
+      for (const f of this.gFortProps) { f.img?.destroy(); if (f.e.active && f.e.spawnId === f.life) f.e.deactivate(); } this.gFortProps = [];
+    }
+
+    // ———— 高地圈（适配表规则 b，夏侯渊 / 曹操的山头）：定时出现一块高地，谁站在里面谁加成，可以抢 ————
+    private gHill: { x: number; y: number; r: number; upAt: number; until: number; objs: Phaser.GameObjects.GameObject[]; img: Phaser.GameObjects.Image | null } | null = null;
+    private gHillAt = Infinity; private gHillBossIn = false;
+    /** 椭圆判定（同第八章山头：纵向压扁 .55）。 */
+    private inHill(x: number, y: number): boolean { const h = this.gHill; return !!h && Math.hypot(x - h.x, (y - h.y) / .55) <= h.r; }
+    private hillHasPlayer(): boolean { return !!this.gHill && this.combatNow >= this.gHill.upAt && this.inHill(this.player.x, this.player.y); }
+    private updateHill(now: number): void {
+      const H = this.gCur?.hill; if (!H) return;
+      if (!this.gHill && now >= this.gHillAt) {
+        const p = this.player, b = this.boss, mx = b ? (p.x + b.x) / 2 : p.x, my = b ? (p.y + b.y) / 2 : p.y, a = Math.random() * Math.PI * 2, x = mx + Math.cos(a) * 120, y = my + Math.sin(a) * 90;
+        const img = this.textures.exists(HILL_ART[0].key) ? this.add.image(x, y + 4, HILL_ART[0].key).setDisplaySize(H.radius * 2.4, H.radius * 2.4 * 160 / 256).setDepth(DEPTH.ground + 3).setAlpha(.3).setName('gauntlet-hill') : null;
+        const flag = this.textures.exists('zhuge_banner') ? this.add.image(x, y - 6, 'zhuge_banner').setOrigin(.32, 1).setDisplaySize(46, 70).setDepth(actorDepth(y)).setTint(0xc9b48a).setAlpha(.3) : null;
+        const label = this.add.text(x, y - H.radius * .55 - 18, '高地', { fontFamily: FONT, fontSize: '14px', color: '#f5e2b0', stroke: '#1a120b', strokeThickness: 3 }).setOrigin(.5).setDepth(DEPTH.fx + 2).setAlpha(.6);
+        this.gHill = { x, y, r: H.radius, upAt: now + H.warnSec * 1000, until: now + (H.warnSec + H.lastSec) * 1000, objs: [img, flag, label].filter((o): o is NonNullable<typeof o> => !!o), img };
+        this.gHillAt = now + H.everySec * 1000;
+        this.showWaveBanner('高地 · 可以抢', true, `站上高地：主将伤害 +${Math.round((H.playerDmg - 1) * 100)}% · ${this.gCur?.name ?? ''}站上去出招更快`);
+      }
+      const h = this.gHill; if (!h) return;
+      const up = now >= h.upAt, k = up ? 1 : .3 + .7 * Math.max(0, 1 - (h.upAt - now) / (H.warnSec * 1000));
+      for (const o of h.objs) (o as unknown as { setAlpha(v: number): void }).setAlpha(k);
+      // 名将站进去：出招间隔变短（离开恢复）
+      const c = this.gCtrl as unknown as { gapMul?: number } | null, b = this.boss, bossIn = up && !!b?.active && this.inHill(b.x, b.y);
+      if (c && typeof c.gapMul === 'number' && bossIn !== this.gHillBossIn) { c.gapMul *= bossIn ? H.bossGap : 1 / H.bossGap; this.gHillBossIn = bossIn; }
+      if (now >= h.until) this.clearHill();
+    }
+    private clearHill(): void {
+      const H = this.gCur?.hill, c = this.gCtrl as unknown as { gapMul?: number } | null;
+      if (this.gHillBossIn && H && c && typeof c.gapMul === 'number') c.gapMul /= H.bossGap;
+      this.gHillBossIn = false; for (const o of this.gHill?.objs ?? []) o.destroy(); this.gHill = null;
+    }
+
+    // ———— 火带（适配表规则 b，陆逊的火线 / 风向）：报风向 → 一道火带顺风扫过全场，留缺口；二阶段一次两道 ————
+    private gBandCells: Array<{ id: string; x: number; y: number; at: number; band: number }> = [];
+    private gBandAt = Infinity; private gBandSeq = 0; private gBandHit = new Set<number>();
+    /** 测试读：放过几道火带、点燃几格、烧到主将几次。 */
+    gBandStats = { bands: 0, cells: 0, hits: 0 };
+    private updateBand(now: number): void {
+      const F = this.gCur?.fireBand; if (!F) return;
+      if (now >= this.gBandAt) {
+        this.gBandAt = now + F.everySec * 1000;
+        const dir = Math.floor(Math.random() * 8) * Math.PI / 4; this.startBand(F, now, dir);
+        if ((this.gCtrl as unknown as { phase2?: boolean } | null)?.phase2 && F.p2Bands > 1) this.time.delayedCall(1600, () => { if (this.gCur?.fireBand === F && this.gPhase === 'boss') this.startBand(F, this.combatNow, dir + Math.PI / 2); });
+      }
+      const wf = warnFx(this), pl = this.player;
+      for (let i = this.gBandCells.length - 1; i >= 0; i--) {
+        const c = this.gBandCells[i];
+        if (now < c.at) { wf.circle(c.id, 'fire', c.x, c.y, F.r, Math.max(0, 1 - (c.at - now) / F.warnMs), now); continue; }
+        this.gBandCells.splice(i, 1); this.gBandStats.cells++;
+        playSheet(this, 'fx_ground_fire', c.x, c.y + 6, { size: F.r * 2.4, ms: 900, depth: actorDepth(c.y) + .4, originY: .78, name: 'gauntlet-fireband' });
+        if (pl.alive && !this.gBandHit.has(c.band) && Math.hypot(pl.x - c.x, pl.y - c.y) <= F.r + pl.radius * .5) { this.gBandHit.add(c.band); pl.takeDamage(Math.max(4, pl.maxHp * F.ratio), now); this.gBandStats.hits++; }
+      }
+    }
+    /** 一道火带：dir = 顺风方向；横着 cols 格、顺风 rows 行，从主将上风处扫过去；中间留 gap 格缺口（站进缺口就躲开）。 */
+    private startBand(F: NonNullable<GauntletBoss['fireBand']>, now: number, dir: number): void {
+      const band = ++this.gBandSeq, pl = this.player, perp = dir + Math.PI / 2, cx0 = pl.x - Math.cos(dir) * (F.rows - 1) / 2 * F.spacing, cy0 = pl.y - Math.sin(dir) * (F.rows - 1) / 2 * F.spacing;
+      const g0 = 1 + Math.floor(Math.random() * Math.max(1, F.cols - F.gap - 1));
+      for (let j = 0; j < F.rows; j++) for (let k = 0; k < F.cols; k++) {
+        if (k >= g0 && k < g0 + F.gap) continue;
+        const o = (k - (F.cols - 1) / 2) * F.spacing, x = cx0 + Math.cos(dir) * j * F.spacing + Math.cos(perp) * o, y = cy0 + Math.sin(dir) * j * F.spacing + Math.sin(perp) * o;
+        this.gBandCells.push({ id: 'gauntlet-band-' + band + '-' + j + '-' + k, x, y, at: now + F.warnMs + j * F.stepMs, band });
+      }
+      const from = ((Math.round((dir + Math.PI) / (Math.PI / 4)) % 8) + 8) % 8, NAMES = ['东', '东南', '南', '西南', '西', '西北', '北', '东北'];
+      this.gBandStats.bands++;
+      this.showWaveBanner(NAMES[from] + '风起 · 火烧连营', true, '火带顺风扫过来 · 站进缺口');
+    }
+    private clearBand(): void { this.gBandCells = []; this.gBandHit.clear(); this.gBandAt = Infinity; }
+
+    // ———— 司马懿的随身营垒：45 秒自倒 ————
+    private gFortsUntil = Infinity; private gFortProps: Array<{ e: Enemy; life: number; img: Phaser.GameObjects.Image | null; broken: boolean }> = [];
+    private updateForts(now: number): void {
+      for (const f of this.gFortProps) if (!f.broken && !(f.e.active && f.e.spawnId === f.life && f.e.hp > 0)) { f.broken = true; f.img?.setFrame(PROP_ART.fort.broken ?? PROP_ART.fort.frame); }
+      if (now < this.gFortsUntil) return; this.gFortsUntil = Infinity;
+      for (const f of (this.gCtrl as unknown as { forts?: Enemy[] } | null)?.forts ?? []) if (f.active) { f.hp = 0; this.killEnemy(f); }
     }
 
     // ———— 随行护卫（适配表规则 c）：董卓由吕布护卫、韩玄带黄忠；护卫在时名将受伤减，护卫打到 leaveAt 血退场 ————
@@ -509,7 +622,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     get gauntletTrack() { return this.gTrack; }
     /** 测试用：当前名将控制器的状态（招式框架 / 专属 / 华雄徐荣原生）。 */
     /** 测试用：随身布置、护卫、三擒剩几次。 */
-    get gauntletExtras() { return { props: this.gProps.map(p => ({ art: p.art, broken: p.broken, active: p.e.active })), propsMul: this.propsMul(), pinned: !!this.gPin, escort: this.gEscort ? { name: this.gEscort.name, hp: Math.round(this.gEscort.e.hp), max: this.gEscort.e.maxHp, leaving: this.gEscort.leaving, active: this.gEscort.e.active } : null, rises: this.gRises }; }
+    get gauntletExtras() { return { hill: this.gHill ? { up: this.combatNow >= this.gHill.upAt, playerIn: this.hillHasPlayer(), x: Math.round(this.gHill.x), y: Math.round(this.gHill.y) } : null, band: { ...this.gBandStats, pending: this.gBandCells.length }, strikes: this.gStrikes ? { ...this.gStrikes.metrics } : null, forts: ((this.gCtrl as unknown as { forts?: Enemy[] } | null)?.forts ?? []).filter(f => f.active).length, armorBurned: this.gArmorBurned, props: this.gProps.map(p => ({ art: p.art, broken: p.broken, active: p.e.active })), propsMul: this.propsMul(), pinned: !!this.gPin, escort: this.gEscort ? { name: this.gEscort.name, hp: Math.round(this.gEscort.e.hp), max: this.gEscort.e.maxHp, leaving: this.gEscort.leaving, active: this.gEscort.e.active } : null, rises: this.gRises }; }
     get gauntletState(): string | null { const c = (this.gCtrl ?? this.huaxiong ?? this.xurong) as { state?: string } | null; return c?.state ?? null; }
     get gauntletFollowers() { return this.gFollowers; }
   };

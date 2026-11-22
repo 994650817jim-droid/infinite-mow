@@ -232,6 +232,11 @@ assets/raw/*
 !/tools/make-ending-finis.mjs
 !/tools/compose-ending-seal-preview.mjs
 !/tools/compose-ending-finis-preview.mjs
+!/tools/make-coin-art.mjs
+!/tools/compose-coin-preview.mjs
+!/tools/make-jade-token.mjs
+!/tools/make-bundle-full.mjs
+!/tools/compose-jade-preview.mjs
 !/tools/compose-star-fx-preview.mjs
 !/tools/shot-story-portraits.mjs
 !/tools/resize-image.mjs

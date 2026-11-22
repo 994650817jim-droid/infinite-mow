@@ -19,7 +19,10 @@ ck('开关默认关；?gauntlet=1 开、?gauntlet=0 关', M.gauntletOn('') === f
 // 名将池（适配表 gauntlet-roster.md，分批接入）：BATCH = 已接入的批次名单
 const BATCH1 = ['zhangliang', 'zhangbao', 'lijue', 'guosi', 'zhangxiu', 'caochun', 'caimao', 'zhaofan', 'liudu', 'huangzhong'];
 const BATCH2 = ['huaxiong', 'xurong', 'yanliang', 'yanghuai', 'zhangren', 'pangde', 'sunhuan', 'mangyachang', 'zhurong', 'zhanghe'];
-const NEW = [...BATCH1, ...BATCH2];
+const NEW = [...BATCH1, ...BATCH2, 'dongzhuo', 'wenchou'];
+// 第三批：新接入董卓、文丑 + 第一版里几位按适配表升级（随身布置 / 随行护卫 / 三擒 / 前后两套 / 蜜水不限时）；巡检全部走一遍，曹仁再在第 7 阵看后段那套
+const BATCH3 = ['dongzhuo', 'wenchou', 'chunyuqiong', 'liuzhang', 'zhuran', 'hanxuan', 'lvmeng', 'caoren@4', 'caoren@7', 'menghuo', 'yuanshu'];
+const SWEEP = [...BATCH1, ...BATCH2, ...BATCH3];
 { const M2 = await load('src/data/bossMoves.ts'), BM = M2.BOSS_MOVES, ids = P.map(b => b.id);
   ck(`名将池：第一版 12 位 + 已接入 ${NEW.length} 位，不重名；每位有出场段（前 / 中 / 后 / 守关）与解锁关卡`, P.length === 12 + NEW.length && new Set(P.map(b => b.name)).size === P.length && NEW.every(id => ids.includes(id)) && P.every(b => ['front', 'mid', 'late', 'gate'].includes(b.tier) && /^[a-z]+-[123]$/.test(b.clearKey)), P.map(b => b.name + ':' + b.tier));
   const over = P.filter(b => b.ctrl === 'moveset').map(b => { const d = BM[b.arc + '.' + b.id] ?? BM[b.id], drop = b.drop ?? [], names = d ? [...new Set([...d.p1.moves, ...d.p2.moves].map(m => m.name).filter(n => !drop.includes(n)))] : null; return { id: b.id, names, dropOk: drop.every(n => d && [...d.p1.moves, ...d.p2.moves].some(m => m.name === n)) }; });
@@ -33,12 +36,12 @@ const NEW = [...BATCH1, ...BATCH2];
   const small = M.pickBosses(P.filter(b => b.id === 'zhangjiao' || b.id === 'lubu'), rnd);
   ck('池子不到十位（刚打完第二章：张角、吕布）时轮着重复、不连着两阵同一位；第十阵是守关档的吕布', small.length === 10 && small.every((b, i) => i === 0 || b.id !== small[i - 1].id) && small[9].id === 'lubu', small.map(b => b.id));
   const early = M.pickBosses(M.unlockedPool(k => /^(huangjin|hulao|third)-/.test(k)), rnd);
-  ck('缺段往前借：只打到第三章时，第 4 阵是中段唯一的袁术，其余中 / 后段先借前段没出过的、借完再轮，第十阵守关吕布；不连着同一位', early.slice(0, 3).every(b => b.tier === 'front') && early[3].id === 'yuanshu' && early[9].id === 'lubu' && new Set(early.slice(0, 7).map(b => b.id)).size === 7 && early.every((b, i) => i === 0 || b.id !== early[i - 1].id), early.map(b => b.name));
+  ck('缺段往前借：只打到第三章时，第 4 阵是中段唯一的袁术，其余中 / 后段先借前段没出过的、借完再轮，第十阵守关（吕布或董卓）；不连着同一位', early.slice(0, 3).every(b => b.tier === 'front') && early[3].id === 'yuanshu' && early[9].tier === 'gate' && new Set(early.slice(0, 7).map(b => b.id)).size === 7 && early.every((b, i) => i === 0 || b.id !== early[i - 1].id), early.map(b => b.name));
   const seen = []; let last = null, okE = true; for (let i = 0; i < P.length - 1; i++) { const b = M.endlessBoss(P, last, rnd, seen); if (b === last || seen.includes(b)) okE = false; seen.push(b); last = b; }
   ck('无尽：全池循环，不连着同一位、一轮里不重复', okE, seen.length); }
 { const s = [1, 5, 10, 11, 15].map(n => M.waveScale(n));
   ck('每阵强度递增；第十阵以后（无尽）继续乘、刷兵量封顶 ' + G.endless.countCap, s.every((x, i) => i === 0 || (x.hp > s[i - 1].hp && x.bossHp > s[i - 1].bossHp)) && M.waveScale(40).count <= G.endless.countCap, s.map(x => +x.hp.toFixed(2))); }
-ck('能抽的名将 = 战役里打败过的（测试存档全开）；一个没打过也保底张角', M.unlockedPool(k => k === 'huangjin-3' || k === 'hulao-3').length === 2 && M.unlockedPool(() => false)[0]?.id === 'zhangjiao' && M.unlockedPool(() => false, true).length === P.length);
+ck('能抽的名将 = 战役里打败过的（测试存档全开）；一个没打过也保底张角', M.unlockedPool(k => k === 'huangjin-3' || k === 'hulao-3').map(b => b.name).sort().join() === ['张角', '董卓', '吕布'].sort().join() && M.unlockedPool(() => false)[0]?.id === 'zhangjiao' && M.unlockedPool(() => false, true).length === P.length);
 ck('结算奖励按斩将数（军粮 ×' + G.reward.provisionsPerKill + '、每 ' + G.reward.scrollsEvery + ' 位一张残卷），首次通关另给大奖', M.gauntletReward(3, false).provisions === 3 * G.reward.provisionsPerKill && M.gauntletReward(10, true).scrolls === 5 + G.reward.firstClear.scrolls && M.gauntletReward(0, false).provisions === 0);
 { const S = src('src/scenes/GauntletGameScene.ts'), R = src('src/world/RouteMap.ts'), WN = src('src/world/WorldNodes.ts'), V1 = src('src/scenes/WorldMapSceneV1.ts'), W = src('src/scenes/WorldMapScene.ts'), B = src('src/scenes/BootScene.ts'), MN = src('src/main.ts'), F = src('src/systems/FollowerSquad.ts');
   ck('接线：场景注册；天下地图入口只在开关开着时加（关着时地图一模一样）、第二章打完开放；开发构建 ?gauntlet=1 直接进', MN.includes('const GauntletBattleScene=gauntletGameSceneClass(BattleScene);') && MN.includes('LubuBattleScene, GauntletBattleScene,') && R.includes("if (gauntletOn()) nodes.push({ id: 'gauntlet', kind: 'challenge'") && R.includes("after: stageId('hulao', 3) });\n") && W.includes("if (n.kind === 'challenge' && n.id === 'gauntlet') { this.launchGauntlet(); return; }") && B.includes("import.meta.env.DEV&&q.get('gauntlet')==='1'")
@@ -76,7 +79,7 @@ if (BASE) {
     /** 让这一阵的名将登场（割草时间拨到头），返回名将信息。 */
     const bossUp = async () => { await ev(() => { const s = window.__S; if (s.gPhase === 'mow') s.gAt = s.elapsed - 70; }); const ok = await until(() => !!window.__S.boss?.active && window.__S.gPhase === 'boss', 8000); await unblock();
       return { ok, ...(await ev(() => { const s = window.__S, bz = s.boss; return { name: s.gCur?.name, id: s.gCur?.id, hp: bz?.maxHp, tex: bz?.sprite.texture.key, ctrl: !!s.gauntletCtrl || !!s.lubu || !!s.zhangjiao || !!s.huaxiong || !!s.xurong, stall: s.bossStallCfg.quotaSec, guards: s.enemies.filter(e => e.active && (e.kind === 'elite' || e.kind === 'shield') && bz && Math.hypot(e.x - bz.x, e.y - bz.y) < 160).length, hud: s.gauntletTrack?.stats.caption ?? '' }; })) }; };
-    const kill = () => ev(() => { const s = window.__S, bz = s.boss; if (bz?.active) { bz.hp = 0; s.killEnemy(bz); } return s.gPhase; });
+    const kill = () => ev(() => { const s = window.__S; for (let k = 0; k < 4 && s.gPhase === 'boss' && s.boss?.active; k++) { s.boss.hp = 0; s.killEnemy(s.boss); } return s.gPhase; }); /* 孟获三擒：倒下原地再起两次，连斩到阵过为止 */
     const lootOpen = () => until(() => window.__S.mode === 'bossloot', 6000);
     const b1 = await bossUp(); await wait(1200); await p.screenshot({ path: OUT + '/gauntlet-2-boss.png' });
     const tr3 = await trk(), tr3b = await ev(() => { const t = window.__S.gauntletTrack; const n = t.root.getByName('gauntlet-node-1'); return { nodeImg: n?.list?.some(o => o.type === 'Image' && String(o.texture?.key).startsWith('gauntlet_head_')), breathe: window.__S.tweens.getTweensOf(t.root.getByName('gauntlet-marker')).length > 0 }; });
@@ -139,26 +142,50 @@ if (BASE) {
     // 新接入名将巡检（适配表分批）：逐位强制登场 → 图在、有出招控制器、几秒内出招 → 斩 → 战利品（黄忠收为副将，其余取辎重）→ 下一位
     { await until(() => { const s = window.__game.scene.getScene('GauntletGameScene'); return s?.player?.alive && s.elapsed > .5; }, 30000);
       await ev(() => { const s = window.__game.scene.getScene('GauntletGameScene'); window.__S = s; s.gEndless = true; s.player.damageImmune = true; });
-      const rows = [], FOLLOW = 'huangzhong', SHOTS = { caochun: 'gauntlet-5-newboss.png', huaxiong: 'gauntlet-7-huaxiong.png' };
-      for (const id of NEW) {
+      const rows = [], FOLLOW = 'huangzhong', SHOTS = { caochun: 'gauntlet-5-newboss.png', huaxiong: 'gauntlet-7-huaxiong.png', dongzhuo: 'gauntlet-8-dongzhuo-escort.png', chunyuqiong: 'gauntlet-9-props.png' };
+      /** 第三批的额外检查（登场、出招之后，斩之前）：随身布置 / 护卫 / 蜜水 / 曹仁两套。返回 { ok, ... }。 */
+      const PROPS = { wenchou: ['cart', 3], chunyuqiong: ['granary', 3], liuzhang: ['gate', 1], zhuran: ['tent', 3] };
+      const extra = async id0 => {
+        const id = id0.split('@')[0], x = await ev(() => window.__S.gauntletExtras);
+        if (PROPS[id]) { const [art, n] = PROPS[id], before = x;
+          await ev(() => { const s = window.__S, p = s.gProps.find(q => !q.broken); if (p) { p.e.hp = 0; s.killEnemy(p.e); } }); await wait(400);
+          const after = await ev(() => ({ ...window.__S.gauntletExtras, shaken: window.__S.gauntletCtrl?.metrics?.shaken ?? null }));
+          return { ok: before.props.length === n && before.props.every(p => p.art === art) && before.propsMul < 1 && after.props.filter(p => p.broken).length === 1 && (id !== 'liuzhang' || before.pinned) && (after.shaken === null || after.shaken > 0), n: before.props.length, mul: before.propsMul, pinned: before.pinned, broken: after.props.filter(p => p.broken).length, shaken: after.shaken }; }
+        if (id === 'dongzhuo' || id === 'hanxuan') { const before = x.escort;
+          await ev(() => { const s = window.__S, E = s.gEscort; if (E) s.hitEnemy(E.e, E.e.hp, s.combatNow, 'melee', false, false); }); await wait(1400);
+          const after = await ev(() => window.__S.gauntletExtras.escort);
+          return { ok: !!before && before.active && before.name === (id === 'dongzhuo' ? '吕布' : '黄忠') && !after, escort: before?.name, after }; }
+        if (id === 'yuanshu') { const o = await ev(() => window.__S.gauntletCtrl?.opts); return { ok: !!o?.endlessHoney, opts: o }; }
+        if (id === 'caoren') { const c = await ev(() => window.__S.gauntletCtrl?.constructor?.name); return { ok: c === (+id0.split('@')[1] >= 7 ? 'BossMoveset' : 'CaorenBoss'), ctrl: c, wave: id0.split('@')[1] }; }
+        return { ok: true };
+      };
+      for (const id0 of SWEEP) {
+        const [id, atWave] = id0.split('@');
         await unblock();
-        await ev(async id => { const s = window.__S, G = await import('/src/data/gauntlet.ts'); s.gOrder[s.gWave - 1] = G.GAUNTLET_POOL.find(x => x.id === id); s.gPhase = 'mow'; s.gAt = s.elapsed - 999; }, id);
+        await ev(async ([id, atWave]) => { const s = window.__S, G = await import('/src/data/gauntlet.ts'); if (atWave) s.gWave = +atWave; s.gOrder[s.gWave - 1] = G.GAUNTLET_POOL.find(x => x.id === id); s.gPhase = 'mow'; s.gAt = s.elapsed - 999; }, [id, atWave]);
         const up = await until(() => window.__S.gPhase === 'boss' && !!window.__S.boss?.active, 8000);
-        await ev(() => { const s = window.__S, bz = s.boss; if (bz) { s.player.x = bz.x - 150; s.player.y = bz.y; } });
+        await ev(() => { const s = window.__S, bz = s.boss; if (bz) { s.player.sprite.x = bz.x - 150; s.player.sprite.y = bz.y + 60; } }); /* Player.x 是 sprite.x 的 getter：挪 sprite */
         await ev(() => { window.__castSeen = false; });
         const cast = await until(() => { const s = window.__S, st = s.gauntletState; if (s.mode === 'levelup') s.chooseUpgrade(0); if (st && !['approach', 'idle', 'dead'].includes(st)) window.__castSeen = true; return (s.gauntletCtrl?.metrics?.moves ?? 0) > 0 || window.__castSeen; }, 10000); /* 开局 / 升级三选一会暂停战斗：等的时候顺手选掉；原生控制器（华雄 / 徐荣）看状态离开「逼近」 */
-        if (SHOTS[id]) { await wait(400); await p.screenshot({ path: OUT + '/' + SHOTS[id] }); }
+        if (SHOTS[id0]) { await wait(400); await p.screenshot({ path: OUT + '/' + SHOTS[id0] }); }
         const row = await ev(() => { const s = window.__S, bz = s.boss, c = s.gauntletCtrl, tex = bz?.sprite.texture.key; return { id: s.gCur?.id, tex, texOk: !!tex && tex !== '__MISSING' && tex !== '__DEFAULT' && s.textures.get(tex).frameTotal > 4, ctrl: c?.constructor?.name ?? (s.huaxiong ? 'HuaxiongBoss' : s.xurong ? 'XurongBoss' : null), moves: c?.metrics?.moves ?? 0, mounted: !!c?.mounted }; });
+        row.extra = await extra(id0);
+        if (id === 'menghuo') { // 三擒：前两次倒下原地再起（还在场、阵没过），第三次才斩
+          const r = []; for (let k = 0; k < 2; k++) { await ev(() => { const s = window.__S, bz = s.boss; if (bz) { bz.hp = 0; s.killEnemy(bz); } }); await wait(300); r.push(await ev(() => ({ rises: window.__S.gauntletExtras.rises, alive: !!window.__S.boss?.active, phase: window.__S.gPhase, hp: Math.round(window.__S.boss?.hp / window.__S.boss?.maxHp * 100) }))); }
+          row.extra = { ok: r[0].rises === 1 && r[1].rises === 0 && r.every(x => x.alive && x.phase === 'boss' && x.hp >= 35), r }; }
         await ev(() => { const s = window.__S, bz = s.boss; if (bz) { bz.hp = 0; s.killEnemy(bz); } });
         const down = await until(() => window.__S.gPhase === 'clear', 6000), loot = await until(() => { const s = window.__S; if (s.mode === 'levelup') s.chooseUpgrade(0); return s.mode === 'bossloot'; }, 8000);
+        if (id === 'hanxuan') { const n = await ev(() => window.__S.upgradeOptions[0]?.name); row.extra = { ...row.extra, ok: row.extra.ok && n === '收为副将 · 黄忠', follow: n }; }
         await ev(follow => window.__S.chooseUpgrade(follow ? 0 : 1), id === FOLLOW);
         if (id === FOLLOW) { await wait(1200); const f = await ev(() => { const s = window.__S, g = s.gauntletFollowers.at(-1); return g ? { name: g.f.label.text, look: g.f.look?.tex, tex: g.f.sprite.texture.key, boss: g.boss.id } : null; }); row.follower = f;
-          await ev(() => { const s = window.__S, g = s.gauntletFollowers.at(-1); if (g) { s.player.x = g.f.sprite.x - 220; s.player.y = g.f.sprite.y; } }); await wait(150); await p.screenshot({ path: OUT + '/gauntlet-6-newfollower.png' }); }
+          await ev(() => { const s = window.__S, g = s.gauntletFollowers.at(-1); if (g) { s.player.sprite.x = g.f.sprite.x + 200; s.player.sprite.y = g.f.sprite.y; } }); await wait(120); /* 主将挪开，副将还没跟上：两人分开拍 */ await p.screenshot({ path: OUT + '/gauntlet-6-newfollower.png' }); }
         await ev(() => { const s = window.__S; s.gAt = s.elapsed - 60; });
-        rows.push({ ...row, want: id, up, cast, down, loot });
+        rows.push({ ...row, want: id, up, cast, down, loot, sweep: id0 });
       }
       const bad = rows.filter(r => !(r.up && r.id === r.want && r.texOk && r.ctrl && r.cast && r.down && r.loot));
-      ck(`新接入名将巡检（${NEW.length} 位）：逐位登场、首领图在、有出招控制器、几秒内出招、能被斩、斩后有战利品`, bad.length === 0, bad.length ? bad : rows.map(r => r.id + (r.mounted ? '(骑)' : '') + ':' + r.moves));
+      ck(`新接入名将巡检（${rows.length} 场）：逐位登场、首领图在、有出招控制器、几秒内出招、能被斩、斩后有战利品`, bad.length === 0, bad.length ? bad : rows.map(r => r.sweep + (r.mounted ? '(骑)' : '') + ':' + r.moves));
+      const b3 = rows.filter(r => BATCH3.includes(r.sweep));
+      ck('第三批适配：随身布置（文丑辎重车 / 淳于琼粮垛 / 刘璋城门钉住 / 朱然营帐：在时减伤、打掉一件会倒、官渡控制器僵直）、随行护卫（董卓吕布 / 韩玄黄忠：打到三成血退场）、韩玄那阵收黄忠、孟获倒下原地再起两次、袁术蜜水不限时、曹仁第 7 阵起换樊城那套', b3.length === BATCH3.length && b3.every(r => r.extra?.ok), b3.some(r => !r.extra?.ok) ? b3.filter(r => !r.extra?.ok).map(r => ({ id: r.sweep, ...r.extra })) : b3.map(r => r.sweep));
       { await unblock(); await ev(() => { const s = window.__S; if (s.mode === 'bossloot') s.chooseUpgrade(1); s.gWave = 10; s.gEndless = true; s.nextWave(); }); await wait(400);
         const e = await ev(() => { const t = window.__S.gauntletTrack.stats; return { cycle: t.cycle, states: [...t.states], pos: t.pos, caption: t.caption, gate: !!window.__S.gauntletTrack.root.getByName('gauntlet-node-10').list.find(o => o.type === 'Text' && o.style?.fontSize === '13px') }; });
         ck('十阵进度条 · 无尽：第 11 阵起换一轮（节点全回到暗的、标回到起点，守关节点不再放大），小字「无尽 · 第 11 阵」', e.cycle === 1 && e.states.every(x => x === 'dark') && e.pos < .1 && !e.gate && e.caption.startsWith('无尽 · 第 11 阵'), e); }

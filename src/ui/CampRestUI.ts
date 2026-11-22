@@ -67,7 +67,7 @@ export class CampRestUI {
   this.root.add(scene.add.rectangle(0,0,W,H,0x110e0a,.38).setOrigin(0).setInteractive());
   this.header=this.text(D?40:28,D?18:30,'行营休整',D?27:30).setFontFamily(HEADING_FONT).setColor('#f3e3bf');
   this.resources=this.text(D?40:28,D?57:78,'',D?17:19).setColor('#e6c894').setPadding(26,0,0,0);
-  if(scene.textures.exists('yellow_props')){this.purse=scene.add.image(0,0,'yellow_props',17).setScrollFactor(0).setName('camp-coin-purse');this.purse.setScale(26/128);this.root.add(this.purse);}
+  this.purse=scene.add.image(0,0,'__DEFAULT').setScrollFactor(0).setName('camp-coin-purse').setVisible(false);this.root.add(this.purse); /* 铜钱正面帧 coin_flip 第 0 帧（钱币串 coin_string 在 20px 下只剩一道细线，不用；ui/CoinFly 按需载入）；载入前不显示 */
   this.next=this.text(D?W-40:28,D?30:110,'',D?16:17).setColor('#d2c3a6');if(D)this.next.setOrigin(1,0);
   this.root.add([this.header,this.resources,this.next]);
   // 2026-11-18 用户：「这里 ui 水墨特效太多了」→ 整页只留底部「率军出征」一处水墨笔刷，其余换漆底描金（LacquerKit）
@@ -179,7 +179,7 @@ export class CampRestUI {
   const ph=this.pointsHint?.(),tail=ph?(starMapOn()?' · '+pointsLeftText(ph.n)+' ⓘ':' · 属性点 '+ph.n+' 未加 ⓘ'):'';
   const txt='随军钱币 '+food+' · 兵力 '+this.army.count+tail;if(txt!==this.resources.text)this.resources.setText(txt);
   this.resTip.setText(ph?(starMapOn()?'点星：':'加点：')+ph.where:''); /* 2026-11-21：资源行太长、快顶到「下一关」——说明放悬停 */
-  this.purse?.setPosition(this.resources.x+13,this.resources.y+this.resources.height/2);
+  if(this.purse&&this.scene.textures.exists('coin_flip')){if(this.purse.texture.key!=='coin_flip')this.purse.setTexture('coin_flip',0).setDisplaySize(22,22);this.purse.setVisible(true).setPosition(this.resources.x+12,this.resources.y+this.resources.height/2);}
  }
  private render(){
   this.body.removeAll(true);this.layoutTabs();this.tabs.forEach((t,k)=>{if(!t.visible)return;const on=t.getData('tab')===this.tab;const lk=CAMP_TAB_MECH[t.getData('tab') as number],locked=!!lk&&!mechOpen(lk);t.setColor(on?'#ffe7b0':'#bcae93').setAlpha(on?1:locked?.38:.78);this.tabIcons[k]?.setAlpha(locked?.38:1);const w=t.width;this.tabFrames[k].setTexture(warPanelTexture(this.scene,w,46,on)).setDisplaySize(w+16,46+16).setVisible(true).setAlpha(on?1:.62);this.tabIcons[k]?.setAlpha(on?1:.6);

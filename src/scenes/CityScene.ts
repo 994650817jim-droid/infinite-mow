@@ -111,9 +111,9 @@ export class CityScene extends Phaser.Scene {
   // 2026-11-17 用户：「只留下天下地图，其他按钮不需要，玩家想要什么就去点击建筑物」——招贤馆、招募后备、讲武堂、出征备战都改为点建筑 / 从天下地图出征
   this.top=txt(this,D?W-24:24,D?28:72,'',D?15:14,'#efe0b4',HEADING_FONT).setOrigin(D?1:0,.5).setName('city-grain');
   // 钱币：数字前一个钱袋；这次来营寨期间钱币一涨，铜钱从屏幕中间飞进钱袋（ui/CoinFly；2026-11-21 军粮改钱币）
-  if(this.textures.exists('yellow_props')){this.purse=this.add.image(0,0,'yellow_props',17).setScrollFactor(0).setDepth(this.top.depth).setName('city-coin-purse');this.purse.setScale(24/128);}
+  this.purse=this.add.image(0,0,'__DEFAULT').setScrollFactor(0).setDepth(this.top.depth).setName('city-coin-purse').setVisible(false); /* 铜钱正面帧 coin_flip 第 0 帧（钱币串 coin_string 在 20px 下只剩一道细线，不用；ui/CoinFly 按需载入） */
   this.coinProv=loadWorld().provisions;
-  this.coinFly=new CoinFly(this,{value:()=>this.coinProv,purse:()=>this.purse??null,depth:900,sfx:()=>uiSfx(),onFrame:shown=>{const t='钱币 '+shown;if(this.top.text!==t)this.top.setText(t);this.purse?.setPosition(D?this.top.x-this.top.width-14:this.top.x+this.top.width+14,this.top.y);}});
+  this.coinFly=new CoinFly(this,{value:()=>this.coinProv,purse:()=>this.purse??null,depth:900,sfx:()=>uiSfx(),onFrame:shown=>{const t='钱币 '+shown;if(this.top.text!==t)this.top.setText(t);if(this.purse&&this.textures.exists('coin_flip')){if(this.purse.texture.key!=='coin_flip')this.purse.setTexture('coin_flip',0).setDisplaySize(20,20);this.purse.setVisible(true).setPosition(D?this.top.x-this.top.width-14:this.top.x+this.top.width+14,this.top.y);}}});
   // 规模牌（全景左上角）与下一步提示（全景底边）
   this.sizeText=txt(this,this.vr.x+12,this.vr.y+(D?CAMP_BARS.top+8:10),'',D?15:14,'#f6e2ae',HEADING_FONT).setDepth(5).setShadow(0,1,'#000',4,true,true).setBackgroundColor('#1a120bcc').setPadding(8,4,8,4);
   this.hint=txt(this,D?190:24,D?28:94,'',D?13:12,'#b9d2a8').setOrigin(0,.5).setName('city-hint');

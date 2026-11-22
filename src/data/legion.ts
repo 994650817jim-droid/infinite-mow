@@ -18,8 +18,9 @@ export const ORDERS: Record<Order, string> = { guard: '护阵', sortie: '出击'
  * 战斗左上的部曲状态行（11-21 用户试玩「1-1 看不到自己军粮」）：资源和状态数字尽量显示，没开放的操作按钮才藏——
  * 随军粮从 1-1 起就写（打怪、拆营帐会掉）；部曲开放（squad，1-2）后才加「兵力 / 阵亡」。
  */
-export function legionStatusText(food: number, count: number, dead: number, squad: boolean): string {
-  return squad ? `钱币 ${food} · 兵力 ${count}${dead ? ` · 阵亡 ${dead}` : ''}` : `钱币 ${food}`; // 战斗 HUD 直接写「钱币 N」（2026-11-21 军粮改钱币）
+export function legionStatusText(count: number, dead: number, squad: boolean): string {
+  // 2026-11-21 钱币改到右上「行囊」旁边显示（用户「行囊可以看到钱币数量」），这一行只写部曲：兵力 / 阵亡（部曲开放前空着）
+  return squad ? `兵力 ${count}${dead ? ` · 阵亡 ${dead}` : ''}` : '';
 }
 export const LEGION = { startingFood: 0, waveFood: 0, trainCost: [0, 40, 80], squadSize: 12, nearStep: .1, farStep: .5 } as const;
 

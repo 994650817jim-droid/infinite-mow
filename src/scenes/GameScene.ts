@@ -128,7 +128,7 @@ import { PassiveShout } from '../ui/PassiveShout';
 import { EnemyMovement } from '../systems/EnemyMovement';
 import { Legion } from '../systems/Legion';
 import { LegionUI } from '../ui/LegionUI';
-import { CoinFly } from '../ui/CoinFly';
+import { CoinFly, COIN_ART } from '../ui/CoinFly';
 import { Reinforcements } from '../systems/Reinforcements';
 import { MartialFields } from '../systems/MartialFields';
 import { RunGrowth, ATTRIBUTE_INFO, attributeCap, attributeIcon, type AttributeId } from '../systems/RunGrowth';
@@ -3775,7 +3775,7 @@ export class GameScene extends Phaser.Scene {
   protected propLoot(kind: PropLootKind, x: number, y: number): void {
     const L = PROP_LOOT, rng = this.propRng, now = this.combatNow;
     this.battleHeal?.onPropBroken(kind, x, y, rng); // 粮袋 / 木箱：概率掉干粮 / 酒肉（data/battleHeal）
-    if (kind === 'grain') { this.legion.food += L.grain.food; this.showGrowthNotice('缴获粮草 · 随军钱币 +' + L.grain.food); return; }
+    if (kind === 'grain') { this.coinBurst(x, y, L.grain.food); this.legion.food += L.grain.food; this.showGrowthNotice('缴获粮草 · 随军钱币 +' + L.grain.food); return; } // 铜钱从粮袋 / 粮车处飞进行囊
     if (kind !== 'weapons' && kind !== 'armor' && kind !== 'crate' && kind !== 'coins') return;
     const c = L[kind];
     for (let i = 0; i < c.gems; i++) { const a = i / Math.max(1, c.gems) * Math.PI * 2; this.spawnGem(x + Math.cos(a) * 22, y + 8 + Math.sin(a) * 10, 1); }
@@ -5425,15 +5425,42 @@ export class GameScene extends Phaser.Scene {
   private setupCoinFly(): void {
     this.coinFly?.destroy();
     const toUi = (x: number, y: number): { x: number; y: number } => { const m = this.cameras.main, k = m.zoom / (this.uiCam?.zoom ?? m.zoom); return { x: (x - m.worldView.x) * k, y: (y - m.worldView.y) * k }; };
-    this.coinFly = new CoinFly(this, { value: () => this.legion?.food ?? 0, armed: () => this.mode === 'none' && !this.over && this.elapsed > 1, purse: () => (this.legionUI?.purse?.visible && this.legionUI.purse.parentContainer?.visible ? this.legionUI.purse : null), depth: DEPTH.hud + 8, sfx: () => this.sfx,
-      from: () => { const f = this.legion?.foodFrom, p = f && performance.now() - f.t < 300 ? f : this.player; return p ? toUi(p.x, p.y) : null; } });
-    this.legionUI.coinLag = () => this.coinFly?.displayLag() ?? 0;
-    // 行营（休整 / 整军）：卖兵装、事件得钱 → 铜钱从屏幕中间飞到资源行的钱袋
+    this.coinToUi = toUi;
+    // 2026-11-21 用户「钱币就是飞进行囊里，行囊可以看到钱币数量」：铜钱飞向右上「行囊」图标（到达时切鼓起贴图 0.25 秒 + 放大 1.08 回弹），
+    // 行囊左边写钱币数（铜钱图标 coin_flip 正面帧 + 数字，无底板，变化时跳一下）；左上部曲行不再写钱币（同一个数不显示两处）
+    const bag = (): Phaser.GameObjects.Image | null => { const i = this.bagBundle?.icon; return i && i.visible && i.texture.key !== '__DEFAULT' ? i : null; };
+    if (!this.coinCount) {
+      this.coinCount = this.add.text(0, 0, '', { fontFamily: HEADING_FONT, fontSize: '16px', color: '#f6e2b8', resolution: 2, stroke: '#140b05', strokeThickness: 4 }).setOrigin(1, .5).setScrollFactor(0).setDepth(DEPTH.hud + 2).setName('hud-coin-count');
+      this.coinIcon = this.add.image(0, 0, '__DEFAULT').setScrollFactor(0).setDepth(DEPTH.hud + 2).setName('hud-coin-icon').setVisible(false);
+    }
+    let shownLast = -1, jumpAt = -1e9;
+    // 行囊还没开放（1-1 兵装未解锁时行囊图标不显示）：钱币数照样写在右上同一位置，铜钱飞向这个铜钱图标
+    const target = (): Phaser.GameObjects.Image | null => bag() ?? (this.coinIcon?.visible ? this.coinIcon : null);
+    this.coinFly = new CoinFly(this, { value: () => this.legion?.food ?? 0, armed: () => this.mode === 'none' && !this.over && this.elapsed > 1, purse: target, depth: DEPTH.hud + 8, sfx: () => this.sfx,
+      bump: .08, flashKey: COIN_ART.bundleFull,
+      from: () => { const f = this.legion?.foodFrom, p = f && performance.now() - f.t < 300 ? f : this.player; return p ? toUi(p.x, p.y) : null; },
+      onFrame: shown => {
+        const b = bag(), t = this.coinCount!, ic = this.coinIcon!, on = !!this.legionUI?.hud?.visible;
+        t.setVisible(on); ic.setVisible(on && this.textures.exists(COIN_ART.flip)); if (!on) return;
+        if (shown !== shownLast) { if (shownLast >= 0) jumpAt = performance.now(); shownLast = shown; t.setText(String(shown)); }
+        const e = (performance.now() - jumpAt) / 240, s = e >= 0 && e < 1 ? 1 + .3 * Math.sin(e * Math.PI) : 1;
+        const hb = this.hudTexts?.bag, ax = b ? b.x - 28 : (hb ? hb.x - 4 : GAME_WIDTH - 28), ay = b ? b.y + 6 : (hb ? hb.y + 24 : 124);
+        t.setPosition(ax, ay).setScale(s);
+        if (ic.visible) { if (ic.texture.key !== COIN_ART.flip) ic.setTexture(COIN_ART.flip, 0).setDisplaySize(20, 20); ic.setPosition(t.x - t.width * s - 13, t.y); }
+      } });
+    // 行营（休整 / 整军）：卖兵装、事件得钱 → 铜钱从屏幕中间飞到资源行的钱币图标
     this.campCoinFly?.destroy();
     this.campCoinFly = new CoinFly(this, { value: () => this.legion?.food ?? 0, armed: () => this.mode === 'rest' && !!this.campUI?.root.visible, purse: () => (this.campUI?.root.visible ? this.campUI.purse : null), depth: DEPTH.overlay + 40, sfx: () => this.sfx,
       onFrame: shown => { if (this.campUI?.root.visible) this.campUI.paintCoins(shown); } });
     if (this.campUI) this.campUI.coinLag = () => this.campCoinFly?.displayLag() ?? 0;
   }
+  private coinCount?: Phaser.GameObjects.Text; private coinIcon?: Phaser.GameObjects.Image;
+  private coinToUi?: (x: number, y: number) => { x: number; y: number };
+  /**
+   * 钱币飞入行囊的通用入口：从世界坐标 (x, y) 飞 amount 的钱（地上的铜钱掉落物捡到时调这个）。钱照常加进 legion.food（先加后加都行），
+   * 这里只管表现，加上来的那部分不会再被「盯数值」飞第二遍。
+   */
+  coinBurst(x: number, y: number, amount: number): void { const p = this.coinToUi?.(x, y); if (p) this.coinFly?.burst(p, amount); }
   private campCoinFly?: CoinFly;
   protected renderStarPanel(): void {
     this.attributePauseText?.setText(`星图 · ${this.player.growth.unallocated}`);

@@ -10,6 +10,8 @@ import { gearFromItems, gearSummary, horseBonusText } from '../systems/ItemEffec
 import { type GearOwner, type LoadoutKey, LOADOUT_KEYS, equipTarget, keySlot, tokenSlots, equipItem, equippedBy, heroHorse, horseRider, loadItems, loadout, looseCount, markBagSeen, rideHorse, stableUnlocked, takeItemNotice, takeStableAnnouncement, unequipSlot, gearUpgrades, markGearGuideSeen } from '../systems/ItemStore';
 import { bagArt, drawQualityArt, drawQualityFrame, ensureItemTextures, horseIcon, itemIconKey, itemTile, loadBagArt, type IconSlot } from './ItemQuality';
 import { lqHitBox, lqPanel, lqSheet, lqSkin } from './LacquerKit';
+import { loadWorld } from '../world/WorldStore';
+import { COIN_ART, ensureCoinArt } from './CoinFly';
 import { padNavigator } from './PadNavigator';
 import { ItemTooltip, compareLines } from './ItemTooltip';
 
@@ -135,7 +137,12 @@ export class ItemBagUI {
     // 标题 + 计数（只算未穿戴的）+ 关闭
     this.text(x0 + 28, y0 + (D ? 18 : 22), '行囊', D ? 26 : 30, '#f2ddae', true);
     const loose = looseCount(s), over = loose > BAG_CAPACITY;
-    this.text(x0 + (D ? 100 : 108), y0 + (D ? 28 : 34), `未穿戴 ${loose} / ${BAG_CAPACITY}${over ? ' · 已超出，可去军需商人出售' : ''}${this.battle ? (this.o.atRest ? ' · 休整中' : ' · 战斗中可换装') : ''}`, 13, over ? '#f08a6a' : '#b9a57a').setName('item-bag-count');
+    const countText = this.text(x0 + (D ? 100 : 108), y0 + (D ? 28 : 34), `未穿戴 ${loose} / ${BAG_CAPACITY}${over ? ' · 已超出，可去军需商人出售' : ''}${this.battle ? (this.o.atRest ? ' · 休整中' : ' · 战斗中可换装') : ''}`, 13, over ? '#f08a6a' : '#b9a57a').setName('item-bag-count');
+    // 钱币一行（2026-11-21 用户「行囊可以看到钱币数量」）：战斗 / 行营里是本局随军钱币，主页 / 营寨里是营寨钱币
+    { const war = this.battle, n = war ? Math.round((this.scene as unknown as { legion?: { food: number } }).legion?.food ?? 0) : loadWorld().provisions, cx = countText.x + countText.width + 30, cy = countText.y + countText.height / 2;
+      const t = this.text(cx + 14, cy, `${war ? '随军钱币' : '钱币'} ${n}`, D ? 15 : 16, '#f3d48a', true).setOrigin(0, .5).setName('item-bag-coins');
+      const icon = (): void => { if (!t.active || !this.scene.textures.exists(COIN_ART.flip)) return; const im = this.scene.add.image(cx, cy, COIN_ART.flip, 0).setDisplaySize(20, 20).setScrollFactor(0).setName('item-bag-coin-icon'); this.body.add(im); };
+      if (this.scene.textures.exists(COIN_ART.flip)) icon(); else ensureCoinArt(this.scene, icon); }
     this.button(x0 + pw - (D ? 52 : 56), y0 + (D ? 32 : 40), '返回', 'item-bag-close', () => this.close(), { size: D ? 15 : 17 });
     // 一键穿戴（总制作人第一章试玩：20 件兵装一件没穿）：有更好的没穿时按钮后面带个小红点
     { const ups = gearUpgrades(this.hero, this.o.runLoot ?? [], s).length, bx = x0 + pw - (D ? 170 : 176), by = y0 + (D ? 32 : 40);

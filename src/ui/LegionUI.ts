@@ -65,7 +65,7 @@ export class LegionUI {
     const text = (x: number, y: number, s: string, size = 16) => scene.add.text(x, y, s, { fontFamily: FONT, fontSize: `${size}px`, color: '#eee2c1', resolution: 2, stroke: '#0c0805', strokeThickness: 4, /* 浮动字描边加粗（2026-11-21） */ shadow: { offsetX: 0, offsetY: 2, color: '#080d09', blur: 3, fill: true } }).setScrollFactor(0);
     const button = (s: string, fn: () => void) => text(0, 0, s, 15).setPadding(10, 10).setBackgroundColor('rgba(57,83,62,0.96)').setInteractive({ useHandCursor: true }).on('pointerover', function(this: Phaser.GameObjects.Text) { this.setTint(0xffe4a1); }).on('pointerout', function(this: Phaser.GameObjects.Text) { this.clearTint(); }).on('pointerdown', fn);
     this.hud = scene.add.container(0, 0).setScrollFactor(0).setDepth(DEPTH.hud + 3);
-    this.status = text(28, 115, '', 15).setStroke('#171a13', 2).setPadding(24, 0, 0, 0);
+    this.status = text(28, 115, '', 15).setStroke('#171a13', 2);
     this.orderPlate = scene.add.graphics().setScrollFactor(0);
     this.order = (D ? text(this.orderCx - 32, this.orderCy - 32, '', 13).setPadding(0, 68, 0, 0).setFixedSize(64, 88).setAlign('center').setStroke('#17140d', 3) : text(this.orderX, this.orderY, '', 16).setPadding(32, 9, 0, 0).setFixedSize(this.orderW, this.orderH))
       .setInteractive({ useHandCursor: true }).setAlpha(D ? 1 : .9)
@@ -317,15 +317,9 @@ export class LegionUI {
    * squad：部曲开放没有（mechanic-rollout #5，1-2）。原则（11-21 用户试玩「1-1 看不到自己军粮」）：资源和状态数字尽量显示，没开放的操作按钮才隐藏——
    * 随军粮从 1-1 起就显示（打怪、拆营帐会掉）；「兵力 / 阵亡」和护阵 / 出击按钮等部曲开放再出现。
    */
-  /** HUD 钱袋图标（钱币数字前）。美术的钱袋图标到位前用营地道具图集 yellow_props 的钱袋帧（17）。 */
-  purse: Phaser.GameObjects.Image | null = null;
-  /** 还在飞向钱袋、没落袋的钱（ui/CoinFly 给）；数字显示 真值 − 这个数，铜钱落袋时跳到新值。 */
-  coinLag: () => number = () => 0;
   update(army: Legion, visible: boolean, squad = true): void {
     this.hud.setVisible(visible); if (!visible) return;
-    this.status.setText(legionStatusText(Math.max(0, Math.round(army.food - this.coinLag())), army.count, army.dead, squad));
-    if (!this.purse && this.status.scene.textures.exists('yellow_props')) { this.purse = this.status.scene.add.image(0, 0, 'yellow_props', 17).setScrollFactor(0).setName('hud-coin-purse'); this.purse.setScale(24 / 128); this.hud.add(this.purse); }
-    this.purse?.setPosition(this.status.x + 11, this.status.y + this.status.height / 2 - 1);
+    this.status.setText(legionStatusText(army.count, army.dead, squad));
     if (squad !== this.orderShown) { this.orderShown = squad; for (const o of [this.orderPlate, this.orderIcon, this.order, this.keyHint]) o?.setVisible(squad); if (squad) this.order.setInteractive({ useHandCursor: true }); else this.order.disableInteractive(); }
     if (squad) this.paintOrder(army);
   }

@@ -51,7 +51,7 @@ export class BootScene extends Phaser.Scene {
     this.load.spritesheet('refined_spear','assets/combat-refined/spear-sequence.png',{frameWidth:384,frameHeight:64});
     this.load.spritesheet('refined_impact','assets/combat-refined/impact-sequence.png',{frameWidth:64,frameHeight:64});}
     // 军功信物手绘图（2026-11-18，data/gemFx.ts）：青铜古钱 / 金令牌各 4 帧高光，gem_fx 拾取闪光 + 光晕
-    if(!lean){this.load.spritesheet('gem_tok_small','assets/gems/gem_tok_small.png',{frameWidth:64,frameHeight:64});
+    if(!lean){this.load.spritesheet('gem_tok_small','assets/coins/gem_tok_small_jade.png',{frameWidth:64,frameHeight:64}); /* 2026-11-21 用户「经验换个样子继续掉」：小号信物换青玉军功符；青铜古钱留给钱币 */
     this.load.spritesheet('gem_tok_large','assets/gems/gem_tok_large.png',{frameWidth:96,frameHeight:96});
     this.load.spritesheet('gem_fx','assets/gems/gem_fx.png',{frameWidth:128,frameHeight:128});}
     // 三选一 / 增益栏图标：2026-11-14 起使用 ChatGPT 生成的厚涂图标（assets/upgrade-icons，tools/build-upgrade-icons.mjs 切图）；

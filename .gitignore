@@ -228,6 +228,10 @@ assets/raw/*
 !/tools/make-star-sky.mjs
 !/tools/make-star-fx.mjs
 !/tools/make-ending-art.mjs
+!/tools/make-ending-seals.mjs
+!/tools/make-ending-finis.mjs
+!/tools/compose-ending-seal-preview.mjs
+!/tools/compose-ending-finis-preview.mjs
 !/tools/compose-star-fx-preview.mjs
 !/tools/shot-story-portraits.mjs
 !/tools/resize-image.mjs

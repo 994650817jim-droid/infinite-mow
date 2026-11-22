@@ -5,7 +5,7 @@ import { chromium } from 'playwright';
 import fs from 'fs';
 const O = 'public/assets/ending/', R = O + 'originals/raw/', rd = f => 'data:image/jpeg;base64,' + fs.readFileSync(f).toString('base64');
 fs.mkdirSync('assets/review/ending', { recursive: true });
-const JOBS = { unify: { t: '结局 · 天下一统', h: '四海归一', b: '五丈原一战，魏军溃退，汉室光复。关中、中原尽入版图，天下终归一统。' }, three: { t: '结局 · 三分天下', h: '据有一方', b: '五丈原一战，司马懿退守关中。然而我军占城有限，诸强割据，天下终成鼎足之势。' } };
+const JOBS = { pavilion: { t: '', h: '', b: '' }, unify: { t: '结局 · 天下一统', h: '四海归一', b: '五丈原一战，魏军溃退，汉室光复。关中、中原尽入版图，天下终归一统。' }, three: { t: '结局 · 三分天下', h: '据有一方', b: '五丈原一战，司马懿退守关中。然而我军占城有限，诸强割据，天下终成鼎足之势。' } };
 const b = await chromium.launch({ channel: 'chrome', headless: true });
 try {
   const p = await b.newPage();
@@ -17,6 +17,7 @@ try {
       const c = document.createElement('canvas'); c.width = 1920; c.height = 1080; const g = c.getContext('2d'); g.imageSmoothingQuality = 'high'; g.drawImage(st, 0, 0, 1920, 1080);
       // 预览：960×540 逻辑画面（输出 2×），下三分之一叠示意文字（文字区 y 360..540 逻辑像素）
       const m = document.createElement('canvas'); m.width = 1920; m.height = 1080; const mg = m.getContext('2d'); mg.drawImage(c, 0, 0);
+      if (!j.h) { const rx = 242, ry = 224; mg.fillStyle = '#2b1d12'; mg.font = 'bold 34px serif'; mg.textAlign = 'left'; const names = ['黄巾之乱','虎牢关','官渡','赤壁','汉中','五丈原']; names.forEach((n, i) => { const x = rx + 40 + (i % 3) * 470, y = ry + 90 + Math.floor(i / 3) * 190; mg.fillText('第' + (i + 1) + '章  ' + n, x, y); mg.fillStyle = 'rgba(160,30,20,.85)'; mg.fillRect(x + 300, y - 40, 56, 56); mg.fillStyle = '#2b1d12'; }); mg.strokeStyle = 'rgba(0,255,255,.8)'; mg.lineWidth = 2; mg.setLineDash([10, 8]); mg.strokeRect(rx, ry, 1440, 502); return { webp: c.toDataURL('image/webp', .93), mock: m.toDataURL('image/png') }; }
       mg.textAlign = 'center'; mg.shadowColor = 'rgba(0,0,0,.8)'; mg.shadowBlur = 8; mg.fillStyle = '#e7d6a8'; mg.font = '28px serif'; mg.fillText(j.t, 960, 760); mg.fillStyle = '#f6e3b0'; mg.font = 'bold 76px serif'; mg.fillText(j.h, 960, 850); mg.fillStyle = '#d9c9a0'; mg.font = '32px serif'; mg.fillText(j.b.slice(0, 22), 960, 925); mg.fillText(j.b.slice(22), 960, 970);
       mg.strokeStyle = 'rgba(0,255,255,.7)'; mg.lineWidth = 2; mg.setLineDash([10, 8]); mg.strokeRect(0, 720, 1920, 360);
       return { webp: c.toDataURL('image/webp', .93), mock: m.toDataURL('image/png') };

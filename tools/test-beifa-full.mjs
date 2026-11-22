@@ -99,14 +99,17 @@ try {
       ck('12-3：章末剧情（五丈原）', sawEnd, { sawEnd });
       await p.waitForFunction(() => window.__game.scene.isActive('EndingScene'), null, { timeout: 30000 }).catch(() => {});
       await wait(p, 800);
-      const e1 = await p.evaluate(() => { const s = window.__game.scene.getScene('EndingScene'); return { active: window.__game.scene.isActive('EndingScene'), story: !!s?.children.getByName('story-ending'), kind: s?.kind }; });
+      const e1 = await p.evaluate(() => { const s = window.__game.scene.getScene('EndingScene'); return { active: window.__game.scene.isActive('EndingScene'), story: !!s?.children.getByName('ending-story'), kind: s?.kind }; });
       await p.screenshot({ path: `${OUT}/ending-story.png` });
-      ck('结局：打赢五丈原 → 结局卷轴', e1.active && e1.story, e1);
-      await p.evaluate(() => { const s = window.__game.scene.getScene('EndingScene'); for (let i = 0; i < 8; i++) { const root = s.children.getByName('story-ending'); if (!root) break; (root.list.find(o => o.name === 'story-ending-next' || o.name === 'story-ending-confirm'))?.emit('pointerup'); } });
+      ck('结局：打赢五丈原 → 结局画卷（2026-11-21 重做：ending-story）', e1.active && e1.story, e1);
+      await p.evaluate(() => { const s = window.__game.scene.getScene('EndingScene'); for (let i = 0; i < 3 && s.screen === 'story'; i++) s.children.getByName('ending-story')?.list.find(o => o.name === 'ending-continue')?.emit('pointerup'); }); // 第一次点先显出全部字，第二次进麒麟阁
       await p.waitForTimeout(600);
-      const e2 = await p.evaluate(() => { const s = window.__game.scene.getScene('EndingScene'), pav = s.children.getByName('ending-pavilion'); return { pav: !!pav, rows: pav ? pav.list.filter(o => o.name?.startsWith('ending-row-')).length : 0 }; });
+      const e2 = await p.evaluate(() => { const s = window.__game.scene.getScene('EndingScene'), pav = s.children.getByName('ending-pavilion'); return { pav: !!pav, rows: pav ? pav.list.filter(o => o.name?.startsWith('ending-chapter-')).length : 0 }; });
       await p.screenshot({ path: `${OUT}/ending-pavilion.png` });
-      ck('结局：麒麟阁 · 本局编年史（逐章列出）', e2.pav && e2.rows >= 10, e2);
+      ck('结局：麒麟阁长卷（十二章逐章竖排）', e2.pav && e2.rows >= 10, e2);
+      await p.keyboard.press('Escape'); await p.waitForTimeout(600);
+      const e3 = await p.evaluate(() => { const s = window.__game.scene.getScene('EndingScene'); return { screen: s.screen, ret: !!s.children.getByName('ending-finale')?.list.find(o => o.name === 'ending-return') }; });
+      ck('结局：Esc 跳到收尾一屏（感谢游玩 · 回到天下）', e3.screen === 'finale' && e3.ret, e3);
     }
   }
   ck('无页面报错', !errs.length, errs.slice(0, 3));

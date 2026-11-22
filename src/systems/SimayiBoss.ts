@@ -27,22 +27,25 @@ export interface SimayiExtra {
 export class SimayiBoss extends ArcBossV2<Move> {
   phase: SimayiPhase = 'hold';
   forts: Enemy[] = [];
+  /** 每座营垒摆下时的 spawnId：物件槽打破后会被新物件复用（同一个 Enemy 又 active），只认摆下时那一条命，否则拆光了还算「营垒在」、司马懿不出营（2026-11-22，同夷陵 10-2）。 */
+  private fortLife = new Map<Enemy, number>();
+  fortUp(f: Enemy): boolean { return f.active && this.fortLife.get(f) === f.spawnId; }
   private volleyAt = 0; private ambushAt = 0; private meteorAt = 0; private order = 0;
   private feintFrom = { x: 0, y: 0 }; private night?: Phaser.GameObjects.Rectangle;
   readonly metrics = { volleys: 0, ambush: 0, surround: 0, feint: 0, thunder: 0, meteors: 0, fortsDown: 0 };
   readonly debug: BossDebug = {
     moves: ['调兵合围', '假退诱敌', '落雷阵'],
     force: (i, now) => { this.beat.set(null, 'idle', now, 0); this.start((['surround', 'feint', 'thunder'] as const)[i] ?? 'surround', now); },
-    phase2: now => { for (const f of this.forts) if (f.active) f.deactivate(); this.toBattle(now); },
+    phase2: now => { for (const f of this.forts) if (this.fortUp(f)) f.deactivate(); this.toBattle(now); },
   };
   constructor(h: ArcHost, tex: string, now: number, private x: SimayiExtra) { warmCast(h.scene, 'simayi');
     super(h, tex, '司马懿', now);
     const b = h.boss;
-    for (let i = 0; i < SMY.forts; i++) { const a = i / SMY.forts * Math.PI * 2 + Math.PI / 4, f = x.placeFort(b.x + Math.cos(a) * SMY.fortRadius, b.y + Math.sin(a) * SMY.fortRadius * .8, i); if (f) this.forts.push(f); }
+    for (let i = 0; i < SMY.forts; i++) { const a = i / SMY.forts * Math.PI * 2 + Math.PI / 4, f = x.placeFort(b.x + Math.cos(a) * SMY.fortRadius, b.y + Math.sin(a) * SMY.fortRadius * .8, i); if (f) { this.forts.push(f); this.fortLife.set(f, f.spawnId); } }
     this.volleyAt = now + 2500; this.ambushAt = now + 6000; this.remindAt = now + 6000; // 先拆营垒提醒：首领登场题字过了再说
     h.banner('司马懿坚守不出', `营垒在时司马懿不出营 · 拆掉 ${this.forts.length} 座营垒`);
   }
-  get fortsAlive(): number { return this.forts.filter(f => f.active).length; }
+  get fortsAlive(): number { return this.forts.filter(f => this.fortUp(f)).length; }
   private remindAt = 0;
   /** 坚守时受伤 ×fortTakenMul；被打时每 10 秒提醒一次先拆营垒（原来只有开场横幅和血条小字，打他半天不掉血不知道为什么）。 */
   protected takenMul(): number {

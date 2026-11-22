@@ -32,10 +32,13 @@ try {
     await p.screenshot({ path: `${OUT}/stage${stage}-hill.png` });
     ck(`8-${stage}：站上山头读条占领 → 伤害、射程 +20%`, cap && cap.dmg > info.dmg * 1.19 && cap.range > 1.19, { cap, before: info.dmg });
     let chest = false, end = null, sawEnd = false, bossSeen = false, hz = null;
-    for (let t = 0; t < 900 && !end; t++) {
+    const deadline = Date.now() + 420000; // 按墙钟给 7 分钟（原 900 拍，机器忙时不够）
+    for (let t = 0; Date.now() < deadline && !end; t++) {
       const st = await p.evaluate(S0 => {
         const s = eval(S0); if (!s) return { gone: true };
         if (s.mode === 'levelup' || s.mode === 'recruit') s.__DEV_ACTIONS?.closePopup?.();
+        // 残血劝降面板（宁死不降的也弹，只有「斩杀」可按）：游戏停在 mode 'parley' 等玩家点，这里按斩杀（2026-11-22：原脚本不点，8-2 夏侯渊 / 10-1 孙桓卡在面板上）
+        if (s.children.getByName('parley-panel')) s.choose('execute');
         const end = s.children.getByName('story-hanzhong-end'); if (end && s.__endShot) (end.list.find(o => o.name === 'story-hanzhong-end-next' || o.name === 'story-hanzhong-end-confirm'))?.emit('pointerup');
         const c = s.bossChests?.find(c => !c.done && c.ready);
         if (c) { const dx = c.x - s.player.x, dy = c.y - s.player.y, d = Math.hypot(dx, dy) || 1; s.player.sprite.x += dx / d * Math.min(d, 18); s.player.sprite.y += dy / d * Math.min(d, 18); }

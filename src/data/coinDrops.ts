@@ -14,9 +14,12 @@ export type CoinKind = 'fodder' | 'infantry' | 'shield' | 'archer' | 'cavalry' |
  * 每类敌人：掉落概率 chance、每杀期望 expect（与 main 的 1 / 5 / 20 对齐）、分几堆撒 piles（只影响表现）。
  * 每次掉落的总面值 = expect ÷ chance × PITY_COMP（见 coinValue）。普通兵按「越强越多」分档，典型兵种比例下平均约每杀 1。
  */
-export const COIN_DROP: Readonly<Record<CoinKind, { chance: number; expect: number; piles: number }>> = {
-  /** 流民等成群的炮灰（enemyRoster role fodder） */
-  fodder: { chance: .10, expect: .45, piles: 1 },
+export const COIN_DROP: Readonly<Record<CoinKind, { chance: number; expect: number; piles: number; noPity?: boolean }>> = {
+  /**
+   * 流民等成群的炮灰（enemyRoster role fodder）。noPity：不参与保底——既不累计计数、也不触发，面值不乘 PITY_COMP（= 4.5）。
+   * 2026-11-22 平衡（coin-drops.md 8.1）：掉率只有 10%，计入保底时纯流民每杀期望 ×1.195，不计入后 ×1.003、1-1 混合 ×1.008。
+   */
+  fodder: { chance: .10, expect: .45, piles: 1, noPity: true },
   infantry: { chance: .18, expect: 1, piles: 1 },
   shield: { chance: .22, expect: 1.1, piles: 1 },
   archer: { chance: .22, expect: 1.1, piles: 1 },
@@ -35,7 +38,7 @@ export const COIN_PITY = { misses: 15 } as const;
 export const PITY_COMP = .975;
 
 /** 某类敌人一次掉落的总面值（带小数；实现时每场余数累积）。 */
-export function coinValue(kind: CoinKind): number { const d = COIN_DROP[kind]; return d.expect / d.chance * (d.chance < 1 ? PITY_COMP : 1); }
+export function coinValue(kind: CoinKind): number { const d = COIN_DROP[kind]; return d.expect / d.chance * (d.chance < 1 && !d.noPity ? PITY_COMP : 1); }
 
 /**
  * 拾取：和经验军功符共用同一个吸取范围（主将拾取范围 × 磁石类加成）与吸取手感（data/gemFx）；钱币落地后 lifeMs 不捡就自动飞进行囊。
@@ -45,6 +48,7 @@ export const COIN_PICKUP = { lifeMs: 12000, cap: 60, liteAbove: 140 } as const;
 
 // ───────────── 接入游戏（2026-11-21，系统实现；上面的数值表归平衡会话） ─────────────
 /**
+ * （2026-11-22 按平衡会话 coin-drops.md 第 8 节：上面的表给流民加了 noPity；第一章试验数值的钱币表在 data/ch1Trial CH1V6.coins。）
  * 总开关：默认开。关着时回到「击杀直接入账」（Legion.onKill：杂兵 +1、精锐 +5、首领 +20），和接入前完全一样，方便平衡对照。
  * 开发构建网址带 ?coinDrops=0 关掉（正式构建里网址不生效）；测试 / 模拟器用 setCoinDrops(false / true)，setCoinDrops(null) 还给默认。
  */
@@ -73,23 +77,27 @@ export function coinKindOf(kind: string, role?: string): CoinKind {
  * 一场战斗的掉落判定（纯逻辑，不碰画面）：保底计数 + 面值小数的余数累积。
  * roll(kind) 返回这次掉几堆、每堆多少（整数）；不掉返回 null。面值的小数部分留在 carry 里攒到下一次，所以长期总额 = 面值之和，没有取整偏差。
  * 首领阶段额度用完时调用方根本不调 roll（普通兵不掉、保底也不计数），首领 / 副将照常调。
+ * tune（可选）：试验数值用的改写（data/ch1Trial CH1V6.coins）——普通兵面值 × minionMul，精锐必掉 elite，首领必掉 boss、分 bossPiles 堆；掉率、分档、保底不变。
  */
+export interface CoinTune { minionMul: number; elite: number; boss: number; bossPiles: number }
 export class CoinRoller {
   /** 普通兵连续没掉的个数（保底用）；carry = 还没发出去的小数。 */
   misses = 0; carry = 0;
   /** 统计（平衡 / 测试用）：判定次数、掉落次数、其中保底触发的次数、掉出的总额。 */
   readonly stats = { rolls: 0, drops: 0, pity: 0, total: 0 };
-  roll(kind: CoinKind, rnd: () => number = Math.random): number[] | null {
+  roll(kind: CoinKind, rnd: () => number = Math.random, tune?: CoinTune): number[] | null {
     const d = COIN_DROP[kind]; this.stats.rolls++;
-    if (d.chance < 1) {
+    if (d.noPity) { if (rnd() >= d.chance) return null; } // 流民：单纯按掉率，不碰保底计数
+    else if (d.chance < 1) {
       const pity = this.misses >= COIN_PITY.misses;
       if (!pity && rnd() >= d.chance) { this.misses++; return null; }
       this.misses = 0; if (pity) this.stats.pity++;
     }
-    const v = coinValue(kind) + this.carry, n = Math.floor(v + 1e-9); this.carry = v - n;
+    const face = !tune ? coinValue(kind) : kind === 'boss' ? tune.boss : kind === 'elite' ? tune.elite : coinValue(kind) * tune.minionMul;
+    const v = face + this.carry, n = Math.floor(v + 1e-9); this.carry = v - n;
     this.stats.drops++; this.stats.total += n;
     if (n <= 0) return null;
-    const piles = Math.max(1, Math.min(d.piles, n)), each = Math.floor(n / piles), out = Array.from({ length: piles }, () => each);
+    const piles = Math.max(1, Math.min(tune && kind === 'boss' ? tune.bossPiles : d.piles, n)), each = Math.floor(n / piles), out = Array.from({ length: piles }, () => each);
     for (let i = 0; i < n - each * piles; i++) out[i]++;
     return out;
   }

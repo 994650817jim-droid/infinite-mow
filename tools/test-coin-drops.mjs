@@ -9,8 +9,8 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
 const BASE = process.env.COIN_BASE ?? 'fdc833e2';
-const r = await build({ stdin: { contents: "export * as CD from './src/data/coinDrops'; export * as CF from './src/systems/CoinDropField'; export * as BS from './src/data/bossStall'; export { GEM_FX } from './src/data/gemFx';", resolveDir: process.cwd(), loader: 'ts' }, bundle: true, format: 'esm', platform: 'node', write: false, logLevel: 'error' });
-const { CD, CF, BS, GEM_FX } = await import('data:text/javascript;base64,' + Buffer.from(r.outputFiles[0].text).toString('base64'));
+const r = await build({ stdin: { contents: "export * as CD from './src/data/coinDrops'; export * as CF from './src/systems/CoinDropField'; export * as BS from './src/data/bossStall'; export * as TR from './src/data/ch1Trial'; export { GEM_FX } from './src/data/gemFx';", resolveDir: process.cwd(), loader: 'ts' }, bundle: true, format: 'esm', platform: 'node', write: false, logLevel: 'error' });
+const { CD, CF, BS, TR, GEM_FX } = await import('data:text/javascript;base64,' + Buffer.from(r.outputFiles[0].text).toString('base64'));
 let pass = 0, fail = 0;
 const ck = (n, ok, d) => { ok ? pass++ : fail++; console.log((ok ? 'PASS ' : 'FAIL ') + n + (d !== undefined ? ' · ' + JSON.stringify(d).slice(0, 420) : '')); };
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -36,14 +36,13 @@ ck('总开关默认开', CD.COIN_DROPS_DEFAULT === true && CD.coinDropsOn() === 
     const natural = (drops - R.stats.pity) / (N - R.stats.pity), perDrop = sum / drops, perKill = sum / N;
     rows[kind] = { chance: d.chance, naturalRate: +natural.toFixed(4), faceValue: +CD.coinValue(kind).toFixed(3), perDrop: +perDrop.toFixed(3), pityShare: +(R.stats.pity / drops * 100).toFixed(1) + '%', maxMissRun: maxRun, expect: d.expect, perKillWithPity: +perKill.toFixed(4), vsTable: (perKill / d.expect >= 1 ? '+' : '') + ((perKill / d.expect - 1) * 100).toFixed(1) + '%' };
     if (Math.abs(natural / d.chance - 1) > .015 || Math.abs(perDrop / CD.coinValue(kind) - 1) > .001) allOk = false;
-    if (maxRun > CD.COIN_PITY.misses) pityOk = false;
     if (Math.abs(sum - (valueSum - R.carry)) > 1e-6 * N || sum !== R.stats.total || drops !== R.stats.drops) carryOk = false;
     // 单一兵种连续刷时，含保底的每杀期望相对表的偏差（面值已乘 PITY_COMP = .975）
     drift[kind] = perKill / d.expect - 1;
   }
   ck('每个普通兵种 40 万次：不靠保底时的掉率与表一致（±1.5%），每次掉落的平均入账额 = 表里的面值（±0.1%）', allOk, Object.fromEntries(NORMAL.map(k => [k, [rows[k].naturalRate, rows[k].perDrop]])));
-  ck('【实测，供平衡参考】单一兵种连续刷时含保底的每杀期望相对表：流民 +17～22%（掉率 10%，保底触发多，.975 补不回来）；刀兵 0～+4%；刀盾 / 弓手 / 骑兵 / 特性兵 −3～+1%', drift.fodder > .17 && drift.fodder < .22 && drift.infantry > 0 && drift.infantry < .04 && ['shield', 'archer', 'cavalry', 'special'].every(k => drift[k] > -.03 && drift[k] < .01), Object.fromEntries(NORMAL.map(k => [k, rows[k].vsTable])));
-  ck('保底：任何兵种都不会连续超过 15 个不掉', pityOk && parseFloat(rows.fodder.pityShare) > 5, Object.fromEntries(NORMAL.map(k => [k, rows[k].maxMissRun])));
+  ck('【实测，供平衡参考】单一兵种连续刷时含保底的每杀期望相对表：流民不参与保底，±2% 以内；刀兵 0～+4%；刀盾 / 弓手 / 骑兵 / 特性兵 −3～+1%', Math.abs(drift.fodder) < .02 && drift.infantry > 0 && drift.infantry < .04 && ['shield', 'archer', 'cavalry', 'special'].every(k => drift[k] > -.03 && drift[k] < .01), Object.fromEntries(NORMAL.map(k => [k, rows[k].vsTable])));
+  ck('保底：参与保底的兵种都不会连续超过 15 个不掉；流民不参与（会出现更长的连续不掉，保底触发次数为 0）', NORMAL.filter(k => k !== 'fodder').every(k => rows[k].maxMissRun === 15 && parseFloat(rows[k].pityShare) > 0) && rows.fodder.maxMissRun > 15 && rows.fodder.pityShare === '0%' && CD.COIN_DROP.fodder.noPity === true && NORMAL.every(k => k === 'fodder' || !CD.COIN_DROP[k].noPity), Object.fromEntries(NORMAL.map(k => [k, rows[k].maxMissRun])));
   ck('余数累积：每次发出去的都是正整数，小数攒在 carry（0 ≤ carry < 1），发出的总额 = 面值之和 − carry，没有取整偏差', carryOk && intOk);
 }
 // 保底的精确行为：前 15 个都不中，第 16 个必掉而且不掷骰
@@ -53,6 +52,8 @@ ck('总开关默认开', CD.COIN_DROPS_DEFAULT === true && CD.coinDropsOn() === 
   ck('连续 15 个没掉，第 16 个必掉（这一下不掷骰），之后重新计数', first.every(x => x === null) && Array.isArray(sixteenth) && calls === 15 && R.misses === 0 && R.stats.pity === 1 && R.roll('infantry', never) === null && R.misses === 1, { sixteenth, calls });
   const R2 = new CD.CoinRoller(); for (let i = 0; i < 7; i++) R2.roll('infantry', never); R2.roll('elite', never); R2.roll('boss', never);
   ck('精锐 / 首领不参与保底计数（不清零也不累加）', R2.misses === 7);
+  { const R3 = new CD.CoinRoller(); for (let i = 0; i < 9; i++) R3.roll('infantry', never); for (let i = 0; i < 40; i++) R3.roll('fodder', never); const kept = R3.misses; R3.roll('fodder', () => 0); const afterHit = R3.misses; for (let i = 0; i < 6; i++) R3.roll('infantry', never); const due = R3.misses, forced = R3.roll('fodder', never), stillDue = R3.misses, inf = R3.roll('infantry', never);
+    ck('流民不参与保底：不累计计数、掉了也不清零、轮到保底时不会被流民触发（留给下一个参与保底的兵）；流民面值 4.5（不乘 0.975）', kept === 9 && afterHit === 9 && due === 15 && forced === null && stillDue === 15 && Array.isArray(inf) && R3.stats.pity === 1 && CD.coinValue('fodder') === 4.5 && Math.abs(CD.coinValue('infantry') - 1 / .18 * .975) < 1e-12, { kept, due, forced, inf }); }
 }
 // ④ 精锐、首领
 {
@@ -66,6 +67,13 @@ ck('总开关默认开', CD.COIN_DROPS_DEFAULT === true && CD.coinDropsOn() === 
   const t1 = .7 * 1 + .12 * .45 + .12 * 1.1 + .06 * 1.1, t2 = .35 * 1 + .2 * 1.1 + .18 * 1.1 + .15 * 1.25 + .1 * 1.6 + .02 * .45;
   ck('【实测，供平衡参考】混合兵种（保底计数各兵种共用）的每杀平均：两组我假设的比例下与按表加权的期望相差不超过 3%（第一章那组约 0.97，比原来每杀固定 1 少约 3%；后期那组约 1.12）', Math.abs(ch1 / t1 - 1) < .03 && Math.abs(late / t2 - 1) < .03, { ch1, tableCh1: +t1.toFixed(3), late, tableLate: +t2.toFixed(3) });
 }
+// 第一章试验数值（?balance=ch1v6）的钱币表：CH1V6.coins
+{
+  const T = TR.CH1V6.coins, N = 300000, out = {}; let ok = true;
+  for (const kind of NORMAL) { const A = new CD.CoinRoller(), B = new CD.CoinRoller(); let a = 0, b = 0; const s0 = seed; for (let i = 0; i < N; i++) { const p = A.roll(kind, rnd); if (p) a += p[0]; } seed = s0; for (let i = 0; i < N; i++) { const p = B.roll(kind, rnd, T); if (p) b += p[0]; } out[kind] = +(b / a).toFixed(4); if (Math.abs(b / a - .5) > .002 || A.stats.drops !== B.stats.drops) ok = false; }
+  const R = new CD.CoinRoller(), e = R.roll('elite', rnd, T), bo = R.roll('boss', rnd, T);
+  ck('试验表：同一串随机数下掉落次数与正式表相同（掉率、保底不变），普通兵总额正好一半；精锐必掉 3；首领必掉 40，分 8 堆各 5', ok && same(e, [3]) && same(bo, [5, 5, 5, 5, 5, 5, 5, 5]) && same(T, { minionMul: .5, elite: 3, boss: 40, bossPiles: 8 }) && TR.CH1V6.food.elite === 3 && TR.CH1V6.food.boss === 40 && TR.CH1V6.food.perKills === 2, out);
+}
 // ⑤ 兵种归档
 ck('归档：首领 / 精锐按兵种；role fodder = 炮灰档；pack / swim 按基础兵种；其余 role = 特性兵；没配特性的按兵种',
   same([CD.coinKindOf('boss'), CD.coinKindOf('elite', 'heavy'), CD.coinKindOf('infantry', 'fodder'), CD.coinKindOf('infantry', 'pack'), CD.coinKindOf('archer', 'swim'), CD.coinKindOf('infantry', 'support'), CD.coinKindOf('shield', 'heavy'), CD.coinKindOf('infantry'), CD.coinKindOf('shield'), CD.coinKindOf('archer'), CD.coinKindOf('cavalry'), CD.coinKindOf('whatever')],
@@ -77,7 +85,7 @@ ck('归档：首领 / 精锐按兵种；role fodder = 炮灰档；pack / swim �
   const src = G();
   const within = BS.killGrant('infantry', 1, 60, false), over = BS.killGrant('infantry', 9999, 60, false), overElite = BS.killGrant('elite', 9999, 60, false), boss = BS.killGrant('boss', 9999, 60, false), lt = BS.killGrant('elite', 9999, 60, true);
   ck('killGrant：额度内普通兵给钱；额度用完普通兵 / 精锐不给；首领、副将任何时候都给', within.food === true && over.food === false && overElite.food === false && boss.food === true && lt.food === true);
-  ck('GameScene.killEnemy：掉钱币与旧的入账走同一个 grant.food 闸门——额度用完时既不掉、也不调判定（保底不计数）', /if \(coinDropsOn\(\) && !ch1TrialOn\(this\.hardKey\(\)\)\) \{ if \(grant\.food\) this\.dropCoins\(enemy\); \}\r?\n    else if \(grant\.food\) this\.legion\.onKill\(enemy\);/.test(src) && (src.match(/this\.dropCoins\(/g) ?? []).length === 1 && (src.match(/coinRoller\.roll\(/g) ?? []).length === 1);
+  ck('GameScene.killEnemy：掉钱币与旧的入账走同一个 grant.food 闸门——额度用完时既不掉、也不调判定（保底不计数）', /if \(coinDropsOn\(\)\) \{ if \(grant\.food\) this\.dropCoins\(enemy\); \}\r?\n    else if \(grant\.food\) this\.legion\.onKill\(enemy\);/.test(src) && /ch1TrialOn\(this\.hardKey\(\)\) \? CH1V6\.coins : undefined/.test(src) && (src.match(/this\.dropCoins\(/g) ?? []).length === 1 && (src.match(/coinRoller\.roll\(/g) ?? []).length === 1);
   ck('攻城：不给战利品的敌人（noLoot）也不掉钱币', /protected dropCoins\(enemy: Enemy\) \{ if \(!this\.noLoot\) super\.dropCoins\(enemy\); \}/.test(readFileSync('src/scenes/SiegeGameScene.ts', 'utf8')));
   ck('击杀给钱只有 GameScene.killEnemy 这一处（各章 / 攻城 / 守城 / 军情 / 支线 / 名将连战都是它的子类，没有别处调 legion.onKill）', execFileSync('git', ['grep', '-n', 'legion\\.onKill(', '--', 'src'], { encoding: 'utf8' }).trim().split('\n').length === 1);
 }
@@ -133,7 +141,9 @@ ck('归档：首领 / 精锐按兵种；role fodder = 炮灰档；pack / swim �
     const o = old('src/scenes/GameScene.ts'), c = cur('src/scenes/GameScene.ts');
     ck('GameScene.killEnemy 里原来那一行「if (grant.food) this.legion.onKill(enemy);」只是前面加了开关分支：关着时执行的就是它', o.includes('    if (grant.food) this.legion.onKill(enemy); // 首领阶段超额：随军粮 0') && c.includes('    else if (grant.food) this.legion.onKill(enemy);') && !c.includes('\n    if (grant.food) this.legion.onKill(enemy);'));
     ck('经验信物的吸取半径算法没变（只是提成了 pickupRadiusNow，钱币共用）', o.includes('this.combatNow < this.gemMagnetUntil ? 1e9 : this.player.stats.pickupRadius * this.player.growth.pickupMultiplier()') && c.includes('protected pickupRadiusNow(): number { return this.combatNow < this.gemMagnetUntil ? 1e9 : this.player.stats.pickupRadius * this.player.growth.pickupMultiplier(); }'));
-    ck(`数值表（COIN_DROP / COIN_PITY / PITY_COMP / COIN_PICKUP / coinValue）与平衡会话提交的原文一致，只在文件末尾追加了接入代码`, cur('src/data/coinDrops.ts').startsWith(norm(execFileSync('git', ['show', '19f8cf3d:src/data/coinDrops.ts'], { encoding: 'utf8' })).trimEnd()));
+    { const orig = norm(execFileSync('git', ['show', '19f8cf3d:src/data/coinDrops.ts'], { encoding: 'utf8' })), now = cur('src/data/coinDrops.ts'), pick = (t, re) => (t.match(re) ?? [''])[0];
+      const rowsOf = t => ['infantry', 'shield', 'archer', 'cavalry', 'special', 'elite', 'boss'].map(k => pick(t, new RegExp('  ' + k + ': \\{[^}]*\\},')));
+      ck('数值表：除了平衡会话 11-22 要求的「流民不参与保底」（noPity + 面值不乘 0.975），其余各行、保底 15、补偿 0.975、拾取常量都与平衡提交的原文一致', same(rowsOf(orig), rowsOf(now)) && rowsOf(now).every(Boolean) && ['export const COIN_PITY = { misses: 15 } as const;', 'export const PITY_COMP = .975;', 'export const COIN_PICKUP = { lifeMs: 12000, cap: 60, liteAbove: 140 } as const;'].every(l => orig.includes(l) && now.includes(l)) && now.includes("fodder: { chance: .10, expect: .45, piles: 1, noPity: true },") && orig.includes("fodder: { chance: .10, expect: .45, piles: 1 },")); }
   }
 }
 console.log(`\n${fail ? 'FAILED' : 'OK'} · ${pass} 通过 / ${fail} 失败`);

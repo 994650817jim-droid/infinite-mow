@@ -2938,8 +2938,8 @@ export class GameScene extends Phaser.Scene {
     if (this.starSpellKill) { this.starSpellKill = false; this.starPyre(enemy); } // 星图主星·火烧连营（开关关着 / 没点亮时 starPyre 立刻返回）
     this.buildCombat.onKill(enemy,this.combatNow);
     this.controlBuild?.onKill(enemy,this.combatNow);
-    // 首领阶段超额（grant.food = false）：钱币 0——不掉、保底也不计数。开关 coinDropsOn() 关着、或第一章试验数值（另有一套给钱规则）时仍是击杀直接入账
-    if (coinDropsOn() && !ch1TrialOn(this.hardKey())) { if (grant.food) this.dropCoins(enemy); }
+    // 首领阶段超额（grant.food = false）：钱币 0——不掉、保底也不计数。开关 coinDropsOn() 关着时仍是击杀直接入账；第一章试验数值开着时掉落用 CH1V6.coins 那张表
+    if (coinDropsOn()) { if (grant.food) this.dropCoins(enemy); }
     else if (grant.food) this.legion.onKill(enemy); // 旧的击杀直接入账（tools/test-boss-stall 按这一句原文断言）
     if (grant.drops) this.itemDrops?.onKill(enemy); // 超额：不掉兵装、不掉残卷
     if(kind==='elite')this.battleHeal?.onEliteDown(enemy.x,enemy.y); // 精锐：概率掉军中伤药（保底）
@@ -3227,7 +3227,7 @@ export class GameScene extends Phaser.Scene {
   protected coinRoller = new CoinRoller();
   protected coinField: CoinDropField | null = null;
   protected dropCoins(enemy: Enemy): void {
-    const piles = this.coinRoller.roll(coinKindOf(enemy.kind, ROSTER[enemy.def.roster ?? '']?.role)); if (!piles) return;
+    const piles = this.coinRoller.roll(coinKindOf(enemy.kind, ROSTER[enemy.def.roster ?? '']?.role), Math.random, ch1TrialOn(this.hardKey()) ? CH1V6.coins : undefined); if (!piles) return;
     const x = enemy.sprite.x, y = enemy.sprite.y, n = piles.length, a0 = Math.random() * Math.PI * 2;
     for (let i = 0; i < n; i++) {
       const ox = n > 1 ? Math.cos(a0 + i / n * Math.PI * 2) * 30 : 0, oy = n > 1 ? Math.sin(a0 + i / n * Math.PI * 2) * 20 : 0;

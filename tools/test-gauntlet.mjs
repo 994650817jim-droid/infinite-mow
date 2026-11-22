@@ -133,16 +133,16 @@ if (BASE) {
     ck('排除：每局 1 次（按钮在「换一批」正下方，不压面板标题）——点「排除一张」再点一张卡，那张换掉、本局不再出现（抽 40 次都不出）；用完按钮不再进排除', rx.exVisible && /排除一张/.test(rx.exText) && !rx.exHitsTitle && rx.excluding && rx.excluded.includes(rx.target) && rx.excludes === 0 && rx.modeAfter === 'levelup' && !rx.stillShown && rx.n === 3 && rx.seen === 0 && !rx.exAgain, rx);
     // 局内 build：三选一三类各一（同类重了换成将星 / 兵装）、卡面标稀有度；将星卡开关关着也生效、主星最多 2 颗
     const cb = await ev(async () => { const s = window.__S, C = await import('/src/data/gauntletCards.ts'), SM = await import('/src/data/starMap.ts'); let dup = 0, stars = 0;
-      for (let i = 0; i < 40; i++) { const o = s.upgradeChoices(), cs = o.map(x => C.cardCategory(x.id)); if (new Set(cs).size < cs.length) dup++; if (cs.includes('star')) stars++; }
+      let extra = 0; for (let i = 0; i < 40; i++) { const o = s.upgradeChoices(), cs = o.map(x => C.cardCategory(x.id)); if (new Set(cs).size < cs.length) dup++; if (cs.includes('star')) stars++; if (cs.includes('star') || cs.includes('gear')) extra++; }
       s.pendingLevels = Math.max(1, s.pendingLevels); s.forcePickNow = true; if (s.mode !== 'levelup') s.openUpgrade(); await new Promise(r => setTimeout(r, 400));
       for (let i = 0; i < 30 && !s.upgradeOptions.some(o => o.id.startsWith('gauntlet_star_')); i++) { s.upgradeOptions = s.upgradeChoices(); s.renderCards(); }
       const marks = s.upgradeOptions.map((o, i) => { const t = s.levelPanel.list.flatMap(c => c.list ?? []).find(x => x.name === 'gauntlet-rarity-' + i); return { id: o.id, r: s.rarityOf(o), label: t?.visible ? t.text : null }; });
-      await new Promise(r => setTimeout(r, 500)); return { dup, stars, marks, starMap: SM.starMapOn() }; });
+      await new Promise(r => setTimeout(r, 500)); return { dup, stars, extra, marks, starMap: SM.starMapOn() }; });
     await p.screenshot({ path: OUT + '/gauntlet-15-cards-rarity.png' }); /* 卡面：稀有度 + 将星卡 */
     const sc = await ev(() => { const s = window.__S, g = s.player.growth, hp0 = s.player.maxHp, k = g.stars.length; s.lightCardStar('strength.NR1'); const hp1 = s.player.maxHp; s.lightCardStar('strength.K'); s.lightCardStar('agility.K');
       const keysLeft = s.extraCards().filter(x => x.option.id.startsWith('gauntlet_star_') && x.rarity === 'legend').length, r = { hp0, hp1, on: g.starOn('strength.NR1'), key: g.keyOn('strength.K'), keysLeft, attrs: Object.values(g.attributes).reduce((n, v) => n + v, 0) };
       g.stars = g.stars.slice(0, k); s.player.heal(s.player.maxHp); if (s.mode === 'levelup') s.chooseUpgrade(0); return r; }); /* 用完放回，不影响后面 */
-    ck('三选一三类各一（抽 40 次没有同类两张；常出将星卡）；卡面右上角标稀有度（普通 / 精良 / 稀有 / 传说）', cb.dup === 0 && cb.stars >= 8 && cb.marks.length === 3 && cb.marks.every(m => m.label === { common: '普通', fine: '精良', rare: '稀有', legend: '传说' }[m.r]) && cb.marks.some(m => m.id.startsWith('gauntlet_star_')), cb);
+    ck('三选一三类各一（抽 40 次没有同类两张；本模式专有卡常出，其中有将星卡）；卡面右上角标稀有度（普通 / 精良 / 稀有 / 传说）', cb.dup === 0 && cb.extra >= 10 && cb.stars >= 2 && /* 专有卡（将星 / 兵装 / 信物 / 坐骑）常出；将星是其中一类，按权重约四成 */ cb.marks.length === 3 && cb.marks.every(m => m.label === { common: '普通', fine: '精良', rare: '稀有', legend: '传说' }[m.r]) && cb.marks.some(m => m.id.startsWith('gauntlet_star_')), cb);
     ck('将星卡：星图开关关着也生效（铁骨生命上限涨）、主星生效且拿满 2 颗后不再出；四维点数不变', !cb.starMap && sc.hp1 > sc.hp0 && sc.on && sc.key && sc.keysLeft === 0 && sc.attrs === 0, sc);
     // 兵装 / 信物 / 坐骑卡（局内有效、不进行囊）：传说兵装 + 稀有信物 + 传说坐骑，拿了穿上 / 戴上 / 骑上；三选一里四类专有卡都会出
     const kit = await ev(async () => { const s = window.__S, C = await import('/src/data/gauntletCards.ts'), bag0 = localStorage.getItem('im_items_v2'), kinds = new Set(); s.gWave = 8;
@@ -253,8 +253,9 @@ if (BASE) {
     const dead = await ev(async () => { const s = window.__game.scene.getScene('GauntletGameScene'); window.__S = s; s.player.damageImmune = false; s.player.hp = 1; s.player.takeDamage(99999, s.combatNow); await new Promise(r => setTimeout(r, 1500)); return { over: s.over, title: s.resultTexts.subtitle.text, body: s.resultTexts.body.text, best: JSON.parse(localStorage.getItem('im_gauntlet_best_test') ?? 'null') }; });
     ck('「再来一局」：同一员将直接重开第 1 阵（不回选将页）；阵亡结算：止步第 1 阵、斩将 0；最高连斩还是 10（低的不覆盖）', again && (await ev(() => window.__S.runConfig.character)) === heroBefore && dead.over && /止步第 1 阵/.test(dead.title) && dead.best?.kills === 10 && /最高连斩　10/.test(dead.body), { again, heroBefore, ...dead });
     // 结算主按钮：主菜单是主要入口（开发直进也算），写「返回主菜单」、点了回主菜单（统筹 11-22 验收：原来写「返回天下地图」）
-    { await wait(600); await p.screenshot({ path: OUT + '/gauntlet-22-result-home.png' }); const ht = await ev(() => { const h = window.__S.resultPanel.getByName('result-home'); const t = h?.text ?? null; h?.emit('pointerdown'); return t; }); const toMenu = await until(() => window.__game.scene.isActive('MenuScene'), 30000);
-      ck('结算主按钮（主菜单 / 开发直进）：写「返回主菜单」、点了回主菜单', ht === '返回主菜单' && toMenu, { ht, toMenu }); }
+    { await wait(600); await p.screenshot({ path: OUT + '/gauntlet-22-result-home.png' }); const rs = await ev(() => { const R = window.__S.resultPanel, b = R.getByName('result-restart'), t = R.getByName('result-restart-text'), h = R.getByName('result-home'); const A = b?.getBounds(), H = h?.getBounds(); return { vis: !!b?.visible, text: t?.text, apart: !!A && !!H && (A.right <= H.x || H.right <= A.x) }; });
+      const ht = await ev(() => { const h = window.__S.resultPanel.getByName('result-home'); const t = h?.text ?? null; h?.emit('pointerdown'); return t; }); const toMenu = await until(() => window.__game.scene.isActive('MenuScene'), 30000);
+      ck('结算按钮（主菜单 / 开发直进）：败走也有「再来一局」（和主按钮并排不重叠）；主按钮写「返回主菜单」、点了回主菜单', rs.vis && rs.text === '再来一局' && rs.apart && ht === '返回主菜单' && toMenu, { rs, ht, toMenu }); }
     // 天下地图入口：地图上一直有名将连战的点
     await ev(() => { const s = window.__game.scene.getScene('MenuScene'); s.registry.set('mapFocusNode', 'gauntlet'); s.scene.start('WorldMapScene'); }); const onMap = await until(() => window.__game.scene.isActive('WorldMapScene'), 30000); await wait(2500);
     // 天下地图有两版：默认 V1（WorldNodes 节点 + 牙旗），?map=v2 是路线图；两版都认

@@ -1047,6 +1047,8 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       else home?.setText('返回天下地图').removeAllListeners('pointerdown').on('pointerdown', () => { this.registry.set('mapFocusNode', 'gauntlet'); this.scene.start('WorldMapScene'); });
       const restart = this.resultPanel.getByName('result-restart') as Phaser.GameObjects.Image | null;
       restart?.removeAllListeners('pointerdown').on('pointerdown', () => this.scene.restart());
+      // 「再来一局」本模式任何结局都给（基类只在胜利、且允许重打旧关时给；败走才是这个模式最常见的结局）：同一员将直接重开，和主按钮并排
+      restart?.setActive(true).setVisible(true); (this.resultPanel.getByName('result-restart-text') as Phaser.GameObjects.Text | null)?.setVisible(true).setText('再来一局'); this.layoutResultButtons?.();
     }
     /** 结算画面（电脑版）：基类画完奖励格以后，底下一行战况换成本模式的、副标题下面排斩将头像（基类可能晚些再画一遍，所以挂在这里）。 */
     private gResult: { kills: number; best: number; record: boolean } | null = null;

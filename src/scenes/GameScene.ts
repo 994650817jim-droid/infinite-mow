@@ -846,7 +846,7 @@ export class GameScene extends Phaser.Scene {
   protected bossWarned = false;
   protected chargeGfx!: Phaser.GameObjects.Graphics;
   protected resultPanel!: Phaser.GameObjects.Container;
-  private layoutResultButtons?: () => void;
+  protected layoutResultButtons?: () => void;
   protected resultTexts!: Record<string, Phaser.GameObjects.Text>;
   /** 结算动画是否放完（测试读）；resultAnimSkip 跳到结尾。resultTop / resultH 为电脑版结算卷位置。 */
   resultAnimDone = true;

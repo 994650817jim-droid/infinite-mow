@@ -9,6 +9,7 @@
  * 纯数据 / 纯函数：不读写存档（WorldStore 会 import 这里，避免循环依赖）。
  */
 import { CITIES, HOME, cityAttackable, type CityDef } from './WorldCities';
+import { GAUNTLET, gauntletOn } from '../data/gauntlet';
 import { CHAPTER_TIMELINE, CITY_CHAPTER, STAGE_POINTS, chapterStagesDone, stageOpen, type TimelineChapterId, type TimelineProgress } from './ChapterTimeline';
 
 /**
@@ -50,6 +51,8 @@ function build(): { nodes: RouteNode[]; main: string[] } {
     nodes.push({ id: 'siege-' + c.id, kind: 'siege', x, y, city: c.id, after: nearest(c, pool).id });
   }
   nodes.push({ id: 'lubu', kind: 'challenge', x: HULAO_PASS.x, y: HULAO_PASS.y, after: stageId('hulao', 3) });
+  // 名将连战入口（data/gauntlet.ts）：开关开着才有这个点（关着时天下地图和原来一模一样）；第二章打完开放
+  if (gauntletOn()) nodes.push({ id: 'gauntlet', kind: 'challenge', x: HULAO_PASS.x + GAUNTLET.entry.dx, y: HULAO_PASS.y + GAUNTLET.entry.dy, after: stageId('hulao', 3) });
   return { nodes, main };
 }
 const BUILT = build();
@@ -119,6 +122,9 @@ export function routeView(st: RouteState): RouteView {
       const mine = st.owned.includes(n.city), alert = st.alerts.includes(n.city);
       const v: NodeVis = mine || alert ? 'cleared' : siegeUnlocked(n.city, s) || st.testRun ? 'open' : 'hidden';
       vis.set(n.id, v); if (v !== 'hidden') holes.push({ x: n.x, y: n.y, r: REVEAL.siege, id: n.id });
+    } else if (n.kind === 'challenge' && n.id === 'gauntlet') {
+      const a = n.after ? routeNode(n.after) : undefined, v: NodeVis = !a || stageCleared(a, s) || st.testRun ? 'open' : 'hidden';
+      vis.set(n.id, v); if (v !== 'hidden') holes.push({ x: n.x, y: n.y, r: REVEAL.challenge, id: n.id });
     } else if (n.kind === 'challenge') {
       const a = n.after ? routeNode(n.after) : undefined, v: NodeVis = st.challengeCleared ? 'cleared' : (st.challengeOpen || st.testRun) && (!a || stageCleared(a, s) || st.testRun) ? 'open' : 'hidden';
       vis.set(n.id, v); if (v !== 'hidden') holes.push({ x: n.x, y: n.y, r: REVEAL.challenge, id: n.id });

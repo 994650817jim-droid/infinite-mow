@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { GAUNTLET, readGauntletBest } from '../data/gauntlet';
 import { playMenuMusic } from '../systems/Music';
 import { startCityAmbient } from '../systems/ContentSfx';
 import { uiSfx } from '../systems/Sfx';
@@ -284,7 +285,7 @@ export class WorldMapScene extends Phaser.Scene {
       if (alert) lab.list.forEach(o => { if (o instanceof Phaser.GameObjects.Text) o.setColor('#ff9a7a'); });
     } else if (n.kind === 'challenge') {
       const img = this.add.image(0, 0, 'rt_pennant_challenge').setOrigin(.32, .92); img.setScale(46 / img.height); parts.push(img);
-      lab = this.label(v === 'cleared' ? '虎牢关 · 三英战吕布 ✓' : '挑战 · 虎牢关', 6, false, 12); w = 40; h = 46;
+      lab = this.label(n.id === 'gauntlet' ? '名将连战' : v === 'cleared' ? '虎牢关 · 三英战吕布 ✓' : '挑战 · 虎牢关', 6, false, 12); w = 40; h = 46;
     } else if (n.kind === 'camp') {
       const img = this.add.image(0, 0, 'rt_camp').setOrigin(.5, .7); img.setScale(76 / img.width); parts.push(img);
       const size = citySize(loadWorld().town);
@@ -464,7 +465,7 @@ export class WorldMapScene extends Phaser.Scene {
     if (n.kind === 'camp') return this.campDetail();
     if (n.kind === 'stage') return this.stageDetail(n, v);
     if (n.kind === 'siege') return this.siegeDetail(n, v);
-    if (n.kind === 'challenge') return this.challengeDetail(v);
+    if (n.kind === 'challenge') return n.id === 'gauntlet' ? this.gauntletDetail(v) : this.challengeDetail(v);
   }
   private setDetail(icon: string, glyph: string, title: string, sub: string, body: string) {
     if (this.textures.exists(icon)) this.sealG.setTexture(icon, '__BASE');
@@ -504,6 +505,12 @@ export class WorldMapScene extends Phaser.Scene {
     this.setDetail('rt_pennant_challenge', '', '三英战吕布', '挑战 · 虎牢关', `${locked ? `未解锁：${LUBU_CHALLENGE.unlockHint}` : wins ? `已胜 ${wins} 场 · 可反复挑战` : '可选挑战 · 不影响讨董进度'}\n吕布横扫与蓄力冲锋 · 三波后吕布出阵\n奖励：${wins ? `钱币 +${rewardGrain(rr.merits, rr.provisions)}` : `首胜得名马「赤兔」（入马厩）· 钱币 +${rewardGrain(r.merits, r.provisions)}`}${this.lossWarning() ? '\n' + this.lossWarning() : ''}`);
     this.setAction(locked ? '尚未解锁' : '挑战吕布', !locked);
   }
+  /** 名将连战（data/gauntlet.ts）：模式说明 + 最高连斩。 */
+  private gauntletDetail(v: NodeVis) {
+    const locked = v === 'hidden', best = readGauntletBest(isChapterTestRun()).kills;
+    this.setDetail('rt_pennant_challenge', '', '名将连战', '模式 · 割草斩将', `${locked ? '未解锁：第二章通关后开放' : best ? '最高连斩 ' + best + ' 位' : `${GAUNTLET.waves} 阵连斩 · 通关后可继续无尽`}\n每阵割草 ${GAUNTLET.mowSec} 秒，名将带亲兵杀到；斩将后战利品三选一（收为副将 / 取其辎重 / 军资）\n奖励：按斩将数给军粮、武学残卷 · 不掉战役兵装 · 不影响战役进度`);
+    this.setAction(locked ? '尚未解锁' : '出战 · 名将连战', !locked);
+  }
   private intelDetail(e: IntelEvent) {
     const info = INTEL_INFO[e.kind], c = cityById(e.city), f = FACTIONS[e.faction]?.name ?? '';
     this.setDetail('rt_pennant_intel', info.glyph, `${info.name} · ${intelTitle(e).split(' · ')[1] ?? ''}`, `${this.intelLeft(e)}${c ? ` · ${c.name}（${c.region}）` : ''}`, `${intelBrief(e, f)}\n奖励：${this.intelRewardText(e)}${this.lossWarning() ? '\n' + this.lossWarning() : ''}`);
@@ -514,6 +521,7 @@ export class WorldMapScene extends Phaser.Scene {
     if (sel.kind === 'intel') { this.openIntel(sel.event); return; }
     const n = sel.node;
     if (n.kind === 'camp') { this.scene.start('CityScene'); return; }
+    if (n.kind === 'challenge' && n.id === 'gauntlet') { this.launchGauntlet(); return; }
     if (n.kind === 'challenge') { if (lubuChallengeOpen() || isChapterTestRun()) this.launchChallenge(); return; }
     if (n.kind === 'siege') { const c = cityById(n.city!)!, alert = !!this.alertFor(c.id); if (!alert && this.owned.includes(c.id)) { this.scene.start('TownScene', { city: c.id }); return; } this.openSiege(c, alert); return; }
     if (n.kind === 'stage' && n.chapter && n.stage) { if (!stageOpen(n.chapter, n.stage, loadWorld()) && !isChapterTestRun()) return; this.enterStage(n.chapter, n.stage, hard); }
@@ -543,6 +551,8 @@ export class WorldMapScene extends Phaser.Scene {
     this.goBattle('GameScene');
   }
   private goBattle(key: string) { if (this.registry.get('battleReady')) this.scene.start(key); else { this.registry.set('pendingWarlord', key); this.registry.set('loadBattle', true); this.scene.start('BootScene'); } }
+  /** 名将连战：以主公出战（不经点将页、不整军）。 */
+  private launchGauntlet() { const hero = this.lordId(); if (!isChapterTestRun()) try { localStorage.setItem('im_last_hero', hero); } catch { /* storage unavailable */ } this.registry.remove('campaignTransfer'); this.registry.set('runConfig', { character: hero }); this.goBattle('GauntletGameScene'); }
   private launchChallenge() { const hero = this.lordId(); this.registry.remove('campaignTransfer'); this.registry.set('runConfig', { character: hero }); this.goBattle('LubuGameScene'); }
   private launchSiege(city: CityDef, hero: CharacterId, defense = false) {
     if (!isChapterTestRun()) try { localStorage.setItem('im_last_hero', hero); } catch { /* storage unavailable */ }

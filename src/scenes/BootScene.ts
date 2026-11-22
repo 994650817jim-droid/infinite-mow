@@ -38,6 +38,8 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
+    // 名将连战（开发构建 ?gauntlet=1）：开机直接进一局（主将用上次的武将；加 dev=1 是测试存档、名将池全开）
+    {const q=new URLSearchParams(location.search);if(import.meta.env.DEV&&q.get('gauntlet')==='1'&&!this.registry.get('gauntletArmed')){this.registry.set('gauntletArmed',true);this.registry.set('loadBattle',true);this.registry.set('pendingWarlord','GauntletGameScene');let hero='zhaoyun';try{hero=localStorage.getItem('im_last_hero')||hero;}catch{/* 存储不可用 */}this.registry.set('runConfig',{character:hero});}}
     // 守城 v2 一键预览（?dev=1&defenseV2=1&defensePreview=1）：测试存档，开机直接进一场中城守城（data/defenseV2.ts DEFENSE_V2.preview）
     {const q=new URLSearchParams(location.search);if(import.meta.env.DEV&&q.get('dev')==='1'&&q.get('defensePreview')==='1'&&!this.registry.get('defensePreviewArmed')){this.registry.set('defensePreviewArmed',true);this.registry.set('defensePreview',true);this.registry.set('loadBattle',true);this.registry.set('pendingWarlord','SiegeGameScene');this.registry.set('siegeCity',DEFENSE_V2.preview.city);this.registry.set('siegeMode','defense');this.registry.set('runConfig',{character:'zhaoyun'});}}
     const lean=this.lean=LEAN_BOOT&&!this.registry.get('loadBattle')&&!this.registry.get('battleReady');

@@ -804,7 +804,7 @@ export class GameScene extends Phaser.Scene {
   protected bossChests:BossChest[]=[];
   /** 刚倒下的首领朝向（用了倒地 4 帧时 ±1）：宝箱往前偏开尸体。 */
   private bossFallDir=0;
-  private lootContinue:(()=>void)|null=null;private relicHits=0;private relicFireAt=0;private relicHealAt=0;
+  protected lootContinue:(()=>void)|null=null;private relicHits=0;private relicFireAt=0;private relicHealAt=0;
   /** 穿着的信物库新信物（开局 / 换装后由 applyCharms 算出）。 */
   protected charmInfo:CharmState|null=null;
   private attributeReturn:'pause'|'none'='pause';private rerolls=0;private rerollButton?:Phaser.GameObjects.Text;private pointsButton?:Phaser.GameObjects.Container;private pointsBadge?:Phaser.GameObjects.Text;

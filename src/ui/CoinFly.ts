@@ -49,6 +49,7 @@ export function ensureCoinArt(scene: Phaser.Scene, done?: () => void): void {
   if (done) L.once('complete', done);
   if (!L.isLoading()) L.start();
 }
+const TOKEN_DUR = 350, TOKEN_WINDOW = 100, TOKEN_PER_WINDOW = 2, TOKEN_MAX = 10;
 const DUR = 450, STAGGER = 55, MAX_LIVE = 12, SETTLE_MS = 900, POP = .22, FLASH_MS = 250, CLAIM_MS = 1500;
 interface Coin { img: Phaser.GameObjects.Sprite | null; t0: number; x0: number; y0: number; cx: number; cy: number; batch: Batch }
 interface Batch { amount: number; t0: number; left: number }
@@ -69,7 +70,7 @@ export class CoinFly {
     scene.events.on(Phaser.Scenes.Events.UPDATE, this.onUpdate);
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.destroy());
   }
-  destroy(): void { this.scene.events.off(Phaser.Scenes.Events.UPDATE, this.onUpdate); for (const c of this.coins) c.img?.destroy(); this.coins = []; this.batches = []; }
+  destroy(): void { this.scene.events.off(Phaser.Scenes.Events.UPDATE, this.onUpdate); for (const c of this.coins) c.img?.destroy(); for (const t of this.tokens) t.img.destroy(); this.coins = []; this.tokens = []; this.batches = []; }
   /** 还在飞、没到达的钱（界面显示 真值 − 这个数）。 */
   displayLag(): number { const now = performance.now(); let n = 0; for (const b of this.batches) if (now - b.t0 < SETTLE_MS) n += b.amount; return n; }
   /** 数值被别处直接改了（读档、重置）时同步基准，不飞。 */
@@ -78,6 +79,34 @@ export class CoinFly {
   get flying(): number { return this.coins.length; }
   /** 测试用：目标切到「鼓起」贴图的次数。 */
   flashes = 0;
+
+  // ───────── 经验信物飞进行囊（2026-11-21 用户「军功符也要飞进行囊」）─────────
+  // 纯表现：经验在信物碰到主将时就已入账；这里从主将处再飞一段到目标（约 0.35 秒），到达时目标一样轻轻一鼓，不动钱币数字、不出声。
+  // 经验掉得多：每 0.1 秒最多起飞 2 枚、同屏最多 10 枚，超出的不画。
+  private tokens: Array<{ img: Phaser.GameObjects.Image; t0: number; x0: number; y0: number; cx: number; cy: number }> = [];
+  private tokenLaunches: number[] = [];
+  /** 测试用：在飞的信物数 / 累计起飞数。 */
+  get tokensFlying(): number { return this.tokens.length; }
+  tokensLaunched = 0;
+  /** 从 from（HUD 坐标）飞一枚信物（贴图 key 的 frame 帧，显示 size）到目标；超过限流就不画，返回是否起飞。 */
+  token(from: { x: number; y: number }, key: string, frame: number, size: number): boolean {
+    const now = performance.now(), purse = this.o.purse();
+    this.tokenLaunches = this.tokenLaunches.filter(t => now - t < TOKEN_WINDOW);
+    if (!purse || !this.scene.textures.exists(key) || this.tokens.length >= TOKEN_MAX || this.tokenLaunches.length >= TOKEN_PER_WINDOW) return false;
+    this.tokenLaunches.push(now); this.tokensLaunched++;
+    const img = this.scene.add.image(from.x, from.y, key, frame).setScrollFactor(0).setDepth(this.o.depth).setName('token-fly'); img.setScale(size / Math.max(1, img.width));
+    img.setData('s', img.scaleX);
+    this.tokens.push({ img, t0: now, x0: from.x, y0: from.y, cx: (from.x + purse.x) / 2 + (Math.random() - .5) * 30, cy: Math.min(from.y, purse.y) - 40 - Math.random() * 20 });
+    return true;
+  }
+  private updateTokens(now: number, purse: Phaser.GameObjects.Image | null): void {
+    for (let i = this.tokens.length - 1; i >= 0; i--) {
+      const c = this.tokens[i], k = (now - c.t0) / TOKEN_DUR;
+      if (k >= 1 || !purse) { c.img.destroy(); this.tokens.splice(i, 1); if (purse) this.bump(now); continue; }
+      const t = k * k, a = (1 - t) * (1 - t), b = 2 * (1 - t) * t, d = t * t;
+      c.img.setPosition(a * c.x0 + b * c.cx + d * purse.x, a * c.y0 + b * c.cy + d * purse.y).setScale((c.img.getData('s') as number) * (1 - .3 * Math.max(0, k - .6) / .4));
+    }
+  }
 
   /** 通用入口：从 from（HUD 坐标）飞 amount 的钱到目标。钱应当已经（或马上）加进数值里；这里只管表现。 */
   burst(from: { x: number; y: number }, amount: number): void {
@@ -106,6 +135,7 @@ export class CoinFly {
       c.img?.setVisible(true).setPosition(x, y).setScale((c.img.getData('s') as number) * (1 - .25 * Math.max(0, k - .7) / .3));
       if (c.img && this.scene.textures.exists(COIN_ART.flip)) c.img.setFrame(Math.floor((now - c.t0) / 70) % 6); // 约 14 帧 / 秒翻转
     }
+    this.updateTokens(now, purse);
     this.batches = this.batches.filter(b => b.left > 0 && now - b.t0 < SETTLE_MS);
     this.o.onFrame?.(Math.max(0, Math.round(v - this.displayLag())));
     if (purse) {

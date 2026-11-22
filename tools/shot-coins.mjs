@@ -50,6 +50,19 @@ ck('同屏飞行铜钱不超过 12 枚', cap <= 12 && cap > 0, cap);
 await ev(s => { s.legion.food += 40; }); await p.waitForTimeout(80); await ev(s => s.togglePause()); await p.waitForTimeout(1200); await ev(s => s.togglePause()); await p.waitForTimeout(400);
 const pz = await ev(s => ({ food: s.legion.food, lag: s.coinFly.displayLag(), count: s.children.getByName('hud-coin-count')?.text })); // 主将还在自动打怪，可能刚好又有 1 枚在飞
 ck('飞到一半暂停：不丢计数，恢复后显示 = 真值（减去刚刚又在飞的）', pz.count === String(pz.food - pz.lag) && pz.food - pz.lag >= pz.food - 5, pz);
+// ⑤ 经验信物（2026-11-21 用户「军功符也要飞进行囊」）：在主将身边撒 40 颗，吸取到主将时经验立即入账；再从主将处飞进行囊（限流：同屏 ≤ 10）
+{
+  const x0 = await ev(s => { const g = s.player.growth; s.player.xpNext = 1e9; /* 截图时别弹升级三选一 */ window.__xpTot = 0; const orig = s.player.gainXp.bind(s.player); s.player.gainXp = a => { window.__xpTot += a; return orig(a); }; for (let i = 0; i < 40; i++) { const a = i / 40 * Math.PI * 2, r = 30 + (i % 4) * 12; s.spawnGem(s.player.x + Math.cos(a) * r, s.player.y + Math.sin(a) * r, 1); } return { launched: s.coinFly.tokensLaunched, coins: s.children.getByName('hud-coin-count')?.text }; });
+  let maxFly = 0, sawXpBeforeLanding = false, shot = false;
+  for (let i = 0; i < 16; i++) {
+    const r = await ev(s => ({ fly: s.coinFly.tokensFlying, launched: s.coinFly.tokensLaunched, xp: window.__xpTot, left: s.gems.filter(g => g.active).length }));
+    maxFly = Math.max(maxFly, r.fly); if (r.fly > 0 && r.xp > 0) sawXpBeforeLanding = true;
+    if (!shot && r.fly >= 3) { shot = true; await p.screenshot({ path: `${OUT}/battle-xp-to-bag.png` }); }
+    await p.waitForTimeout(90);
+  }
+  const x1 = await ev(s => ({ launched: s.coinFly.tokensLaunched, xp: window.__xpTot, left: s.gems.filter(g => g.active).length, coins: s.children.getByName('hud-coin-count')?.text }));
+  ck('吸取经验：信物从主将处飞向行囊、经验在碰到主将时就入账（信物还在飞时已加经验）、同屏 ≤ 10、不动钱币数', x1.launched > x0.launched && sawXpBeforeLanding && maxFly <= 10 && x1.xp > 0, { x0, x1, maxFly, sawXpBeforeLanding });
+}
 // ⑤ 行囊面板里有钱币一行
 await ev(s => s.openBattleBag()); await p.waitForTimeout(1500);
 const bagLine = await ev(s => { const r = s.children.getByName('item-bag'); let t = null; const walk = l => { for (const o of l) { if (o.name === 'item-bag-coins') t = o.text; if (o.list) walk(o.list); } }; walk(r?.list ?? []); return { t, food: s.legion.food }; });

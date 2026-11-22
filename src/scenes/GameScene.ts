@@ -3238,6 +3238,8 @@ export class GameScene extends Phaser.Scene {
         if (!gem.lite) this.gemSpark(px, py);
         // 拾取军功宝石不再播放音效（用户要求；战场补给拾取仍有音效）
         const gained = this.player.gainXp(this.player.growth.scaleXp(gem.value, this.heroXpRate()));
+        // 2026-11-21 用户「军功符也要飞进行囊」：经验照旧此刻入账；再从主将处飞一枚信物进右上行囊（纯表现，限流；手机布局 / 降级不画、不出声）
+        if (IS_DESKTOP && !gem.lite && this.coinToUi) this.coinFly?.token(this.coinToUi(px, py), img.texture.key, 0, gem.large ? 22 : 16);
         this.relics?.onGem(this.combatNow);
         if (gained > 0) this.onHeroLevelUp(gained); // 软上限（2026-11-20）：不封顶，越级后每级 ×1.45
         continue;

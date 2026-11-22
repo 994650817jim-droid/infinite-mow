@@ -59,6 +59,8 @@ export const BOUNTIES: Record<BountyId, { name: string; desc: string; icon: stri
 
 export interface CardHost {
   chapter: number;
+  /** 「名将来投」按哪一章的时代出人（缺省 = chapter；名将连战按本阵兵种那一章）。 */
+  era?: number;
   /** 本关已拿的机缘增益次数。 */
   taken: Readonly<Record<string, number>>;
   applyBuff: (b: FortuneBuff) => void;
@@ -97,7 +99,7 @@ export function make(kind: NewCardKind, h: CardHost, rnd: () => number): Upgrade
   }
   if (kind === 'troops') { const T = NEW_CARDS.troops; return card('new_troops', '援军', `义军 ${T.n} 人随你冲阵 ${T.ms / 1000} 秒`, '兵源', 'growth_icon_tiger_tally', 'once', () => h.escort(T.n, T.ms)); }
   if (kind === 'general') {
-    const names = ERA_GENERALS[Math.max(0, Math.min(11, h.chapter - 1))], name = pickOf(names, rnd), G = NEW_CARDS.general, n = G.n(h.chapter);
+    const names = ERA_GENERALS[Math.max(0, Math.min(11, (h.era ?? h.chapter) - 1))], name = pickOf(names, rnd), G = NEW_CARDS.general, n = G.n(h.chapter);
     return card('new_general', '名将来投 · ' + name, `${name}率 ${n} 名部众来投\n随你冲阵 ${G.ms / 1000} 秒`, '名将来投', 'growth_icon_wanrendi', 'once', () => h.general(name, n, G.ms));
   }
   if (kind === 'supply') { const g = NEW_CARDS.supply.grain(h.chapter); return card('new_supply', '军资', `随军钱币 +${g}\n立即回复 ${Math.round(NEW_CARDS.supply.heal * 100)}% 生命`, '军资', 'growth_icon_pickup', 'once', () => { h.addGrain(g); h.healFrac(NEW_CARDS.supply.heal); }); }

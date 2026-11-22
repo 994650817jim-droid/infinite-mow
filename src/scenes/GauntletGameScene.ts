@@ -4,6 +4,9 @@ import { BALANCE, DEPTH, FONT, HEADING_FONT, actorDepth } from '../config';
 import { getBattleChapter, getChapter, type ChapterDef } from '../data/chapters';
 import type { EnemyDef } from '../data/enemies';
 import { GAUNTLET, GAUNTLET_MOVES, GAUNTLET_POOL, GAUNTLET_TROOPS, type GauntletArc, type GauntletProps, endlessBoss, gauntletReward, pickBosses, readGauntletBest, unlockedPool, waveScale, writeGauntletBest, type GauntletBoss } from '../data/gauntlet';
+import { GAUNTLET_BUILD, RARITY, STAR_CARD_IDS, cardCategory, cardRarity, pickByRarity, rollRarity, starCardPool, type GCategory, type GRarity, type StarCard } from '../data/gauntletCards';
+import { STAR_BY_ID, STAR_REGIONS } from '../data/starMap';
+import { starIconKey, starIconUrl } from '../data/starFx';
 import { ARC_CHAPTER, guardDef, troopChapter, troopTextures, waveTroopSet, type TroopKind } from '../data/gauntletTroops';
 import { BOSS_MOVES, type BossMovesetDef } from '../data/bossMoves';
 import { supplyOption } from '../data/upgrades';
@@ -24,7 +27,11 @@ import { MECH_FLAGS } from '../data/mechanicUnlocks';
 import { BuildState } from '../data/builds';
 import { WEAPON_OVER } from '../data/weaponBranches';
 import { RunGrowth, attributeCap, type AttributeId } from '../systems/RunGrowth';
-import { emptyGear } from '../systems/ItemEffects';
+import { gearFromItems, horseBonusText } from '../systems/ItemEffects';
+import { AFFIXES, QUALITIES, QUALITY_ORDER, SLOTS, SPECIALS, itemName, rollCharm, rollItem, type ItemInstance, type ItemQuality } from '../data/items';
+import { charmDef } from '../data/charms';
+import { HORSES, horseQuality, type HorseDef } from '../data/mounts';
+import { ensureItemTextures, horseIcon, itemIcon } from '../ui/ItemQuality';
 import { SHU_CONFIG } from './ShuGameScene';
 import { XIANGFAN_CONFIG } from './XiangfanGameScene';
 import { NANZHENG_CONFIG } from './NanzhengGameScene';
@@ -165,6 +172,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       if (!this.textures.exists(HILL_ART[0].key)) this.load.image(HILL_ART[0].key, HILL_ART[0].url); // 高地圈（汉中山头同一张图）
       if (!this.textures.exists('gauntlet_oil_jar')) this.load.spritesheet('gauntlet_oil_jar', 'assets/props/gauntlet_oil_jar.png', { frameWidth: 256, frameHeight: 256 }); // 兀突骨火油罐（美术 11-21：完好 / 碎裂）
       if (!this.textures.exists('siege_mid_walls')) this.load.spritesheet('siege_mid_walls', 'assets/siege-v2/walls.png', { frameWidth: 384, frameHeight: 384 }); // 随身城门 / 箭楼（攻城 v2 城墙图集）
+      for (const id of STAR_CARD_IDS) if (!this.textures.exists(starIconKey(id))) this.load.image(starIconKey(id), starIconUrl(id)); // 将星卡图标（星图页同一套）
       if (!this.textures.exists(SEAL_KEY)) this.load.image(SEAL_KEY, 'assets/ending/seal_red_2.png'); // 进度条斩将盖的朱印（结局麒麟阁同一枚，缩小用）
       // 每阵杂兵 / 名将亲兵用到的各章兵种图（data/gauntletTroops.ts）：蜀 / 襄樊 / 南中按 176 格载，其余 v2 兵种表走 loadV2TroopSheets（同各章场景）
       const keys = troopArtKeys(), grid = gridTroops(), gridKeys = new Set(grid.map(t => t.walk));
@@ -205,12 +213,14 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       this.gPool = pool.filter(b => b.name !== heroName).length ? pool.filter(b => b.name !== heroName) : pool; // 本局主将同名的名将不出（主将黄忠 / 孟获 / 祝融……）
       this.gOrder = pickBosses(this.gPool);
       // 从 0 开局 + 卡池全开（基类 create 里按 mechOpen 建系统、读卡池上限，所以先开）；各章兵种换色图先备好
+      this.gGear = {}; this.gCharms = []; this.gHorse = undefined; // 本局兵装 / 信物 / 坐骑：从 0 开局，空
       const F = GAUNTLET.from0; this.gRerollFree = F.freeRerolls; this.gRerollPaid = 0; this.gExcludes = F.excludes; this.gExcluded.clear(); this.gExcluding = false; this.gExcludeBtn = null;
       this.openPool(); this.events.once('shutdown', () => this.closePool());
       this.ensureTroopArt();
       super.create();
       // 不带随从（副将位只给本局收的名将）、不掉战役兵装
       this.followers?.clear(); this.followers = null;
+      this.player.growth.cardStars = true; this.gRarity.clear(); this.gBuildLog = []; this.gRarityMarks = []; ensureItemTextures(this); // 将星卡：星图开关关着也生效
       this.itemDrops = null;
       this.chapter = this.makeChapter(this.gOrder[0]);
       this.bossWarned = true; this.gEliteAt = GAUNTLET.eliteFirst;
@@ -231,9 +241,6 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     // ———— 从 0 开局（用户 11-21「名将挑战是从 0 开始 build 起来」「全新从 0 开始的不继承主剧情的 build」）————
     // 主将 1 级、加点 0；不带星图 / 兵装 / 信物 / 坐骑 / 武将谱（本命淬炼、战法心得）/ 城建 / 部曲；专属兵器与招牌被动照有（武将自带）。
     // 局内升级照给加点和三选一，等级 / 经验不写回武将存档；结算只写钱币、武学残卷和最高连斩（finish）。
-    protected campaignGear() { return emptyGear(); }
-    protected campaignCharms(): ReturnType<GameScene['campaignCharms']> { return []; }
-    protected campaignHorse() { return undefined; }
     protected persistHeroProgress(): boolean { return false; }
     protected lordHeroXp(): number { return 0; }
     protected heroXpRate(): number { return GAUNTLET.from0.xpRate; }
@@ -255,29 +262,143 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     /** 三选一节奏：前期升级快，两次面板最短隔 pickGapSec 秒（中间升的级攒着连选）。 */
     protected pickGapOk(): boolean { return this.forcePickNow || this.elapsed - this.lastPickAt >= GAUNTLET.from0.pickGapSec; }
 
+    // ———— 局内 build（gauntlet-build.md）：稀有度四档、三选一类别分散、将星卡 ————
+    /** 本模式专有卡的稀有度（id → 档），基类出的卡按 cardRarity 推。 */
+    private gRarity = new Map<string, GRarity>();
+    /** 本局拿到的卡（结算「本局 build」用）：名字、图标、稀有度、类别。 */
+    gBuildLog: Array<{ id: string; name: string; icon?: string; rarity: GRarity; cat: GCategory }> = [];
+    rarityOf(o: UpgradeOption): GRarity { return cardRarity(o, this.gRarity.get(o.id)); }
+    /** 现在能出的本模式专有卡（将星；兵装 / 信物 / 坐骑在第二部分接）。 */
+    protected extraCards(): Array<{ rarity: GRarity; option: UpgradeOption }> {
+      const g = this.player.growth, out: Array<{ rarity: GRarity; option: UpgradeOption }> = [];
+      for (const c of starCardPool(g.stars, (a, t) => g.perk(a, t))) out.push({ rarity: c.rarity, option: this.starOption(c) });
+      return out.filter(x => !this.gExcluded.has(x.option.id));
+    }
+    private starOption(c: StarCard): UpgradeOption {
+      const keys = this.player.growth.stars.filter(id => STAR_BY_ID.get(id)?.kind === 'keystone').length;
+      const extra = c.kind === 'keystone' ? '\n主星 · 每局最多 ' + GAUNTLET_BUILD.keystoneMax + ' 颗（已有 ' + keys + ' 颗）' : c.kind === 'perk' && c.attr ? '\n' + STAR_REGIONS[c.attr].name + '专精 · 第 ' + c.tier + ' 档' : '';
+      const id = 'gauntlet_star_' + c.star, icon = this.textures.exists(starIconKey(c.star)) ? starIconKey(c.star) : 'growth_icon_wanrendi';
+      this.gRarity.set(id, c.rarity);
+      return { id, name: (c.kind === 'keystone' ? '主星 · ' : '将星 · ') + c.name, desc: c.desc + extra, kind: c.kind === 'keystone' ? 'rare' : 'passive', categoryLabel: c.kind === 'keystone' ? '主星' : '将星', scope: 'run', icon, apply: () => this.lightCardStar(c.star) };
+    }
+    /** 将星卡：点亮这颗星（不走连线 / 点数；开关关着也生效），生命上限涨了补上这一截。 */
+    lightCardStar(id: string): void {
+      const pl = this.player, g = pl.growth; if (g.stars.includes(id)) return;
+      g.cardStars = true; const oldMax = pl.maxHp; g.stars = [...g.stars, id]; pl.passive.areaMul = g.areaMultiplier();
+      if (pl.maxHp > oldMax) pl.heal(pl.maxHp - oldMax);
+    }
+    /** 按本阵稀有度表抽一张本模式专有卡（不和已在面板上的重复）。 */
+    private drawExtra(current: readonly UpgradeOption[], avoid: ReadonlySet<GCategory> = new Set()): UpgradeOption | null {
+      const r = rollRarity(this.gWave), W = GAUNTLET_BUILD.extraWeights, kinds = (Object.keys(W) as Array<keyof typeof W>).filter(k => !avoid.has(k === 'star' ? 'star' : 'gear'));
+      const order: Array<keyof typeof W> = []; const left = [...kinds]; while (left.length) { const t = left.reduce((n, k) => n + W[k], 0); let x = Math.random() * t, i = 0; for (; i < left.length - 1; i++) { x -= W[left[i]]; if (x < 0) break; } order.push(left.splice(i, 1)[0]); }
+      for (const k of order) {
+        const o = k === 'star' ? pickByRarity(this.extraCards().filter(x => !current.some(c => c.id === x.option.id)), r)?.option ?? null : k === 'gear' ? this.gearCard(r) : k === 'charm' ? this.charmCard(r) : this.horseCard(r);
+        if (o && !this.gExcluded.has(o.id) && !current.some(c => c.id === o.id)) return o;
+      }
+      return null;
+    }
+    /** 三选一尽量三类各一：同类重了，后一张换成本模式专有卡；本来就不重样时也有 extraChance 把「机缘」那张换掉。 */
+    private spreadCategories(opts: UpgradeOption[]): UpgradeOption[] {
+      const out = [...opts], seen = new Set<GCategory>(); let swapped = false;
+      for (let i = 0; i < out.length; i++) { const c = cardCategory(out[i].id); if (!seen.has(c)) { seen.add(c); continue; } const x = this.drawExtra(out, seen); if (x) { out[i] = x; seen.add(cardCategory(x.id)); swapped = true; } }
+      if (!swapped && out.length && Math.random() < GAUNTLET_BUILD.extraChance) { const k = out.findIndex(o => cardCategory(o.id) === 'other'), i = k >= 0 ? k : out.length - 1, others = new Set(out.filter((_, j) => j !== i).map(o => cardCategory(o.id))), x = this.drawExtra(out, others); if (x) out[i] = x; }
+      return out;
+    }
+    /** 卡面上的稀有度：右上角一行字（普通 / 精良 / 稀有 / 传说，品质色），精良以上加一圈同色描边。 */
+    private gRarityMarks: Array<{ g: Phaser.GameObjects.Graphics; t: Phaser.GameObjects.Text }> = [];
+    private paintRarity(): void {
+      this.cardViews.forEach((v, i) => {
+        let m = this.gRarityMarks[i];
+        if (!m || !m.g.scene) {
+          const g = this.add.graphics().setScrollFactor(0).setName('gauntlet-rarity-frame-' + i), t = this.add.text(v.w / 2 - 16, 16 - v.h / 2, '', { fontFamily: HEADING_FONT, fontSize: '13px', color: '#ffffff', resolution: 2 }).setOrigin(1, 0).setPadding(6, 2).setStroke('#120904', 3).setScrollFactor(0).setName('gauntlet-rarity-' + i);
+          v.root.add([g, t]); m = this.gRarityMarks[i] = { g, t };
+        }
+        const o = this.upgradeOptions[i], show = !!o && (this.mode === 'levelup' || this.gRarity.has(o.id)); // 升级三选一都标；战利品 / 抉择面板只标本模式专有卡
+        m.g.clear(); m.t.setVisible(!!o && show); if (!o || !show) return;
+        const r = this.rarityOf(o), R = RARITY[r];
+        m.t.setText(R.name).setColor(R.css);
+        if (r !== 'common') m.g.lineStyle(r === 'legend' ? 3 : 2.5, R.color, .95).strokeRoundedRect(-v.w / 2 + 5, -v.h / 2 + 5, v.w - 10, v.h - 10, 12);
+      });
+    }
+
+    // ———— 兵装 / 信物 / 坐骑卡（第二批第二部分；统筹确认：局内有效、不进行囊、结算不给）————
+    /** 本局穿的兵装（甲 / 盔 / 靴，每栏一件）、戴的信物（最多 GAUNTLET_BUILD.charmSlots 件，同名只一件）、骑的马。 */
+    private gGear: Partial<Record<'armor' | 'helm' | 'boots', ItemInstance>> = {}; private gCharms: ItemInstance[] = []; private gHorse: HorseDef | undefined;
+    /** 测试读：本局兵装 / 信物 / 坐骑。 */
+    get gauntletKit() { return { gear: Object.fromEntries(Object.entries(this.gGear).map(([k, v]) => [k, v ? itemName(v) + '·' + v.quality : null])), charms: this.gCharms.map(c => itemName(c) + '·' + c.quality), horse: this.gHorse?.name ?? null, mounted: !!this.mount, specials: [...this.player.growth.gear.specials], treasures: [...this.player.growth.build.treasures] }; }
+    /** 卡面图标：兵装 / 马的图在道具图集里（按帧），三选一卡只认整张贴图——第一次用时裁成一张单图。 */
+    private kitIcon(ic: { key: string; frame?: string }): string {
+      if (!ic.frame) return ic.key;
+      const key = 'gauntlet_item_' + ic.frame; if (this.textures.exists(key)) return key;
+      const f = this.textures.getFrame(ic.key, ic.frame); if (!f) return ic.key;
+      const c = this.textures.createCanvas(key, Math.max(1, f.cutWidth), Math.max(1, f.cutHeight)); if (!c) return ic.key;
+      c.context.drawImage(f.source.image as CanvasImageSource, f.cutX, f.cutY, f.cutWidth, f.cutHeight, 0, 0, f.cutWidth, f.cutHeight); c.refresh(); return key;
+    }
+    private affixText(item: ItemInstance): string {
+      const parts = item.affixes.map(a => { const d = AFFIXES[a.id]; return d.name + ' +' + (d.percent ? Math.round(a.value * 1000) / 10 + '%' : a.value.toFixed(1)); }), lines: string[] = [];
+      for (let i = 0; i < parts.length; i += 2) lines.push(parts.slice(i, i + 2).join(' · ')); // 两条一行：传说兵装 4 条词条 + 专属特效也放得下
+      if (item.special) lines.push(SPECIALS[item.special].name + '：' + SPECIALS[item.special].desc);
+      return lines.join('\n');
+    }
+    /** 稀有度 → 兵装品质（普通出白 / 绿，精良蓝、稀有紫、传说橙）。 */
+    private qualityOf(r: GRarity): ItemQuality { return r === 'legend' ? 'orange' : r === 'rare' ? 'purple' : r === 'fine' ? 'blue' : Math.random() < .5 ? 'white' : 'green'; }
+    private kitChapter(): number { return ARC_CHAPTER[waveTroopSet(this.gWave).troops.arc]; }
+    /** 一张兵装卡：随机一栏、这一档品质，比这一栏现在穿的好才出（每栏一件，新的换旧的）。 */
+    private gearCard(r: GRarity): UpgradeOption | null {
+      const q = this.qualityOf(r), slots = (['armor', 'helm', 'boots'] as const).filter(s => { const cur = this.gGear[s]; return !cur || QUALITY_ORDER.indexOf(cur.quality) < QUALITY_ORDER.indexOf(q); });
+      if (!slots.length) return null;
+      const slot = slots[Math.floor(Math.random() * slots.length)], item = rollItem(q, Math.random, slot, this.kitChapter()), cur = this.gGear[slot];
+      const id = 'gauntlet_gear_' + item.uid; this.gRarity.set(id, r);
+      return { id, name: '兵装 · ' + itemName(item), desc: this.affixText(item) + (cur ? '\n换下：' + itemName(cur) : ''), kind: 'relic', categoryLabel: SLOTS[slot].name + ' · ' + QUALITIES[q].name + ' · 不进行囊', scope: 'run', icon: this.kitIcon(itemIcon(this, item)),
+        apply: () => { this.gGear[slot] = item; this.refreshGear(); } };
+    }
+    /** 一张信物卡：这一档品质能出的信物（同名只一件）；戴满了换下品质最低的那件。 */
+    private charmCard(r: GRarity): UpgradeOption | null {
+      const q = this.qualityOf(r), held = new Set(this.gCharms.map(c => c.base));
+      let item: ItemInstance | null = null; for (let i = 0; i < 8 && !item; i++) { const c = rollCharm(q, Math.random, undefined, this.kitChapter()); if (c && !held.has(c.base)) item = c; }
+      if (!item) return null;
+      const full = this.gCharms.length >= GAUNTLET_BUILD.charmSlots, worst = full ? [...this.gCharms].sort((a, b) => QUALITY_ORDER.indexOf(a.quality) - QUALITY_ORDER.indexOf(b.quality))[0] : null;
+      if (worst && QUALITY_ORDER.indexOf(worst.quality) >= QUALITY_ORDER.indexOf(q)) return null; // 戴满了、这件不比最差的那件好：不出
+      const def = charmDef(item.base), it = item, id = 'gauntlet_charm_' + it.uid; this.gRarity.set(id, r);
+      return { id, name: '信物 · ' + itemName(it), desc: (def?.desc(q) ?? '') + '\n' + this.affixText(it) + (worst ? '\n换下：' + itemName(worst) : ''), kind: 'relic', categoryLabel: '信物 · ' + QUALITIES[q].name + ' · 不进行囊', scope: 'run', icon: this.kitIcon(itemIcon(this, it)),
+        apply: () => { this.gCharms = [...this.gCharms.filter(c => c !== worst), it]; this.refreshGear(); } };
+    }
+    /** 一张坐骑卡：这一档的马（驽马普通、名驹精良、赤兔 / 绝影 / 的卢传说；没有稀有档的马）；只能骑一匹，新的换旧的。 */
+    private horseCard(r: GRarity): UpgradeOption | null {
+      const want = (h: HorseDef) => { const q = horseQuality(h); return r === 'legend' ? q === 'orange' : r === 'common' ? q === 'white' : r === 'fine' && q === 'blue'; };
+      const pool = HORSES.filter(h => want(h) && h.id !== this.gHorse?.id); if (!pool.length) return null;
+      const h = pool[Math.floor(Math.random() * pool.length)], id = 'gauntlet_horse_' + h.id; this.gRarity.set(id, r);
+      return { id, name: '坐骑 · ' + h.name + (h.legend ? ' ★' : ''), desc: horseBonusText(h) + '\n骑马冲阵（同战役坐骑）' + (this.gHorse ? '\n换下：' + this.gHorse.name : ''), kind: h.legend ? 'rare' : 'relic', categoryLabel: '坐骑', scope: 'run', icon: this.kitIcon(horseIcon(this, h.id)),
+        apply: () => { this.gHorse = h; this.refreshGear(); this.equipMount(h); } };
+    }
+    protected campaignGear() { return gearFromItems([...Object.values(this.gGear ?? {}).filter((x): x is ItemInstance => !!x), ...(this.gCharms ?? [])], this.gHorse); }
+    protected campaignCharms(): ReturnType<GameScene['campaignCharms']> { return [...(this.gCharms ?? [])]; }
+    protected campaignHorse() { return this.gHorse; }
+
     // ———— 换一批 / 排除（掌控感）：每局 2 次免费换一批，之后花钱币、逐次涨价；每局 1 次排除（点一张卡，本局不再出现）————
     private gRerollFree = 0; private gRerollPaid = 0; private gExcludes = 0; private gExcluded = new Set<string>(); private gExcluding = false;
     private gExcludeBtn: Phaser.GameObjects.Text | null = null;
     protected rerollCost(): number { return this.gRerollFree > 0 ? 0 : GAUNTLET.from0.rerollBase + GAUNTLET.from0.rerollStep * this.gRerollPaid; }
-    protected rerollLabel(cost: number): string { return this.gRerollFree > 0 ? `换一批 · 免费（本局还剩 ${this.gRerollFree} 次）` : `换一批 · ${cost} 钱币`; }
+    protected rerollLabel(cost: number): string { return this.gRerollFree > 0 ? `换一批 · 免费 ×${this.gRerollFree}` : `换一批 · ${cost} 钱币`; }
     protected rerollSpent(cost: number): void { if (this.gRerollFree > 0) this.gRerollFree--; else { this.legion.food -= cost; this.gRerollPaid++; } }
     /** 三选一：排除过的卡不出（缺的位置重抽补上）。 */
     protected upgradeChoices(): UpgradeOption[] {
-      let out = super.upgradeChoices().filter(o => !this.gExcluded.has(o.id));
+      const first = super.upgradeChoices(); let out: UpgradeOption[] = [];
+      for (const o of first) { if (!this.gExcluded.has(o.id)) { out.push(o); continue; } let rep: UpgradeOption | null = null; for (let i = 0; i < 12 && !rep; i++) rep = super.upgradeChoices().find(x => cardCategory(x.id) === cardCategory(o.id) && !this.gExcluded.has(x.id) && !out.some(y => y.id === x.id) && !first.some(y => y.id === x.id)) ?? null; if (rep) out.push(rep); } // 排除掉的那张：同类补一张
       for (let i = 0; i < 12 && out.length < 3; i++) for (const o of super.upgradeChoices()) if (out.length < 3 && !this.gExcluded.has(o.id) && !out.some(x => x.id === o.id)) out.push(o);
       if (!out.length) out = super.upgradeChoices();
-      return out;
+      return this.spreadCategories(out);
     }
     protected chooseUpgrade(index: number): void {
-      if (!this.gExcluding || this.mode !== 'levelup') { super.chooseUpgrade(index); return; }
+      if (!this.gExcluding || this.mode !== 'levelup') { const o = this.upgradeOptions[index]; if (o && ((this.mode === 'levelup' && this.pendingLevels > 0) || (this.mode === 'bossloot' && this.lootContinue))) this.gBuildLog.push({ id: o.id, name: o.name, icon: o.icon, rarity: this.rarityOf(o), cat: cardCategory(o.id) }); super.chooseUpgrade(index); return; }
       const o = this.upgradeOptions[index]; if (!o) return;
       this.gExcluding = false; this.gExcludes--; this.gExcluded.add(o.id);
       const rep = this.upgradeChoices().find(x => !this.upgradeOptions.some(y => y.id === x.id));
       if (rep) this.upgradeOptions[index] = rep; else this.upgradeOptions.splice(index, 1);
       this.showGrowthNotice(`已排除「${o.name}」· 本局不再出现`); this.renderCards();
     }
-    protected renderCards(): void { super.renderCards(); this.paintExclude(); }
-    protected setMode(mode: Parameters<GameScene['setMode']>[0]): void { if (mode !== 'levelup') this.gExcluding = false; super.setMode(mode); this.paintExclude(); }
+    protected renderCards(): void { super.renderCards(); this.paintExclude(); this.paintRarity(); }
+    protected setMode(mode: Parameters<GameScene['setMode']>[0]): void { if (mode !== 'levelup') this.gExcluding = false; super.setMode(mode); this.paintExclude(); this.paintRarity(); }
     /** 排除按钮：在「换一批」左边，同一套字样；只在升级三选一时显示。 */
     private paintExclude(): void {
       const panel = this.levelPanel, rr = panel?.getByName('upgrade-reroll') as Phaser.GameObjects.Text | null; if (!panel || !rr) return;
@@ -288,8 +409,9 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
           .setInteractive({ useHandCursor: true }).on('pointerdown', () => { if (this.mode === 'levelup' && this.gExcludes > 0) { this.gExcluding = !this.gExcluding; this.paintExclude(); } });
         panel.add(b); this.gExcludeBtn = b;
       }
-      b.setText(this.gExcluding ? '点一张卡排除 · 再点这里取消' : this.gExcludes > 0 ? `排除一张 · 本局 ${this.gExcludes} 次` : '排除 · 本局已用完').setColor(this.gExcluding ? '#ff9b7a' : rr.style.color as string).setAlpha(this.gExcludes > 0 ? 1 : .5);
-      b.setPosition(rr.x - rr.displayWidth - 6, rr.y).setVisible(this.mode === 'levelup' && rr.visible);
+      b.setText(this.gExcluding ? '点一张卡排除 · 再点取消' : this.gExcludes > 0 ? `排除一张 · ×${this.gExcludes}` : '排除 · 已用完').setColor(this.gExcluding ? '#ff9b7a' : rr.style.color as string).setAlpha(this.gExcludes > 0 ? 1 : .5);
+      b.setPosition(rr.x, rr.y + rr.displayHeight - 4).setVisible(this.mode === 'levelup' && rr.visible); // 「换一批」正下方、右对齐（放左边会压住面板标题）
+      (this.levelPanel.getByName('upgrade-lock-note') as Phaser.GameObjects.Text | null)?.setText('选定后本局不可更改 · 名将连战从 0 开局，局内成长不带出'); // 战役那句「行营休整重整」本模式没有
     }
 
     /**

@@ -27,6 +27,7 @@ import { stageCleared } from '../systems/HeroProgress';
 import { addScrolls } from '../systems/MasteryStore';
 import { addProvisions } from '../world/WorldStore';
 import { FollowerSquad, type Follower } from '../systems/FollowerSquad';
+import { GauntletTrack } from '../ui/GauntletTrack';
 import { FOLLOWER_ATTACK_SFX } from '../systems/HeroSfx';
 import type { Recruit } from '../systems/RosterStore';
 import type { Enemy } from '../entities/Enemy';
@@ -51,6 +52,9 @@ function adaptMoves(d: BossMovesetDef, b: GauntletBoss): BossMovesetDef {
   const boost = b.p2Boost; if (boost) { p2.speedMul *= boost.speed; p2.moves = p2.moves.map(m => ({ ...m, dmg: m.dmg * boost.dmg })); }
   return { ...d, p1, p2 };
 }
+
+/** 进度条斩将盖的朱印贴图键（结局麒麟阁同一张 seal_red_2）。 */
+const SEAL_KEY = 'ending_seal_red';
 
 /** 每位名将的首领图与战役数值（从各章的数据 / 场景配置取，和战役里同一张图、同一份数值）。 */
 function bossArt(b: GauntletBoss): BossArt {
@@ -87,14 +91,15 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     gWave = 1; gPhase: 'mow' | 'boss' | 'clear' | 'choice' | 'done' = 'mow'; gAt = 0; gOrder: GauntletBoss[] = []; gCur: GauntletBoss | null = null;
     gKills: GauntletBoss[] = []; gCleared = false; gEndless = false; private gPool: GauntletBoss[] = [];
     private gCtrl: GCtrl | null = null; private gLootShown = false; private gEliteAt = 0; private gFollowers: Array<{ f: Follower; boss: GauntletBoss }> = [];
-    private gPendingReplace: GauntletBoss | null = null; private gPortrait = new Map<string, string>();
+    private gPendingReplace: GauntletBoss | null = null; private gTrack: GauntletTrack | null = null; private gPortrait = new Map<string, string>();
     /** 测试读：帧率采样（三位副将 + 名将 + 割草同屏）。 */
     gStats = { lootPicks: [] as string[], spawned: 0, cleared: 0 };
 
     preload() {
       (Base.prototype as unknown as { preload?: () => void }).preload?.call(this); // 基类（开发构建的 DevGameScene）有 preload 就先跑
-      // 十二位名将的首领图都先载好（第一 / 二章的张角、吕布开机就有）
+      // 名将池的首领图都先载好（第一 / 二章的张梁、张宝、张角、华雄、徐荣、吕布开机就有）
       for (const b of unlockedPool(() => true, true)) { const a = bossArt(b); if (a.sheet && !this.textures.exists(a.tex)) loadBossSheet(this.load, a.tex, a.sheet); }
+      if (!this.textures.exists(SEAL_KEY)) this.load.image(SEAL_KEY, 'assets/ending/seal_red_2.png'); // 进度条斩将盖的朱印（结局麒麟阁同一枚，缩小用）
     }
     create() {
       const saved = this.registry.get('runConfig') as RunConfig | undefined;
@@ -112,9 +117,10 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       this.itemDrops = null;
       this.chapter = this.makeChapter(this.gOrder[0]);
       this.bossWarned = true; this.gEliteAt = GAUNTLET.eliteFirst;
-      this.hudTexts.chapter.setText('名将连战');
+      this.hudTexts.chapter.setText(''); // 关名不写（见 updateTrack）
       this.time.delayedCall(500, () => { if (!this.over) this.showWaveBanner('名将连战 · 第 1 阵', false, `割草 ${GAUNTLET.mowSec} 秒后名将登场 · 共 ${GAUNTLET.waves} 阵`); });
-      this.events.once('shutdown', () => { this.gCtrl?.clear(); this.gCtrl = null; });
+      this.gTrack?.destroy(); this.gTrack = new GauntletTrack(this, GAUNTLET.waves, 'hud_medal2_' + this.runConfig.character, SEAL_KEY); this.gTrack.setWave(1, true);
+      this.events.once('shutdown', () => { this.gCtrl?.clear(); this.gCtrl = null; this.gTrack?.destroy(); this.gTrack = null; });
     }
     /** 自定关：不进战役关卡逻辑（剧情、进度、段落、招降都按自定关跳过）。 */
     protected customChapter() { return this.chapter?.name === '名将连战' ? this.chapter : { ...this.makeChapter(this.gOrder[0] ?? unlockedPool(() => true, true)[0]), bossStyle: 'lubu' as const }; } // 开局建场景时用中性的首领风格：华雄 / 徐荣的风格会让基类搭汜水关城墙、荥阳伏兵营
@@ -154,7 +160,8 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       super.update(time, delta);
       this.gCtrl?.updateDeath?.(delta);
       if (this.over || !this.player?.alive) return;
-      this.hudTexts.wave.setText(this.waveLine());
+      this.hudTexts.wave.setText(''); // 阵数看顶部十阵进度条（总制作人 11-21：去掉左上角那行，兵力行保留）
+      this.updateTrack();
       if (this.mode !== 'none') return;
       if (this.gPhase === 'mow' && this.waveT >= GAUNTLET.mowSec) this.startBoss();
       else if (this.gPhase === 'boss' && !this.boss?.active && !this.bossKilled) this.spawnBoss(); // 首领没刷出来（落点被挡）：下一帧再试
@@ -163,11 +170,33 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
         else if (this.gLootShown && this.waveT >= GAUNTLET.clearSec) { if (this.gWave === GAUNTLET.waves && !this.gEndless) this.openClearChoice(); else this.nextWave(); }
       }
     }
+    /** 进度条线下的小字：第 N/10 阵 · 距名将登场 mm:ss / 名将名字 / 已斩；无尽写「无尽 · 第 N 阵」。 */
     private waveLine(): string {
-      const n = this.gEndless ? `无尽 · 第 ${this.gWave} 阵` : `第 ${this.gWave}/${GAUNTLET.waves} 阵`;
-      if (this.gPhase === 'mow') return `${n} · 割草 ${Math.max(0, Math.ceil(GAUNTLET.mowSec - this.waveT))} 秒`;
+      const n = this.gEndless || this.gWave > GAUNTLET.waves ? `无尽 · 第 ${this.gWave} 阵` : `第 ${this.gWave}/${GAUNTLET.waves} 阵`;
+      if (this.gPhase === 'mow') { const left = Math.max(0, Math.ceil(GAUNTLET.mowSec - this.waveT)); return `${n} · 距名将登场 ${String(Math.floor(left / 60)).padStart(2, '0')}:${String(left % 60).padStart(2, '0')}`; }
       if (this.gPhase === 'boss') return `${n} · ${this.gCur?.name ?? ''}`;
-      return `${n} · 斩将 ${this.gKills.length}`;
+      return `${n} · 已斩 ${this.gKills[this.gKills.length - 1]?.name ?? ''}`;
+    }
+    /** 十阵进度条：割草时标按时间从上一节点匀速走向这一阵的节点（走到头 = 名将登场），名将在场 / 斩将后停在节点。 */
+    private updateTrack(): void {
+      const t = this.gTrack; if (!t) return;
+      const W = GAUNTLET.waves, local = ((this.gWave - 1) % W) + 1;
+      const pos = this.gPhase === 'mow' ? (local - 1 + Math.min(1, this.waveT / GAUNTLET.mowSec)) / W : local / W;
+      t.update(pos, this.gPhase === 'boss' && !!this.boss?.active, this.waveLine());
+      t.setVisible(this.hudTexts.timer.visible && !this.over);
+      // 计时器、关名放在进度条下面：基类每换一次关卡定义（本模式每阵都换）会把它们放回原位，这里每帧摆回来
+      const ty = GauntletTrack.HEIGHT + 3; if (this.hudTexts.timer.y !== ty) { this.hudTexts.timer.setY(ty); this.hudTexts.chapter.setY(ty + 30); }
+      if (this.hudTexts.chapter.text) this.hudTexts.chapter.setText(''); // 计时器下那行关名（基类按关卡定义写「名将连战」）不写：进度条已标明，空出来不压名将登场横幅
+    }
+    /** 名将小头像（进度条节点）：结算头像那张裁好的全身图取上半截，裁成圆形。 */
+    private head(b: GauntletBoss): string {
+      const key = 'gauntlet_head_' + b.id; if (this.textures.exists(key)) return key;
+      const pk = this.portrait(b); if (!pk.startsWith('gauntlet_face_')) return pk;
+      const src = this.textures.get(pk).getSourceImage() as HTMLCanvasElement, w = src.width, h = src.height, side = Math.max(1, Math.min(w, Math.round(h * .5))), S = 64;
+      const c = this.textures.createCanvas(key, S, S); if (!c) return pk;
+      const g = c.context; g.save(); g.beginPath(); g.arc(S / 2, S / 2, S / 2, 0, Math.PI * 2); g.closePath(); g.clip();
+      g.fillStyle = '#2a1f14'; g.fillRect(0, 0, S, S); g.drawImage(src, Math.round((w - side) / 2), 0, side, side, 0, 0, S, S); g.restore(); c.refresh();
+      return key;
     }
     /** 这一阵的名将：十阵名单里的；无尽时现抽一位（全池循环）并记进名单。 */
     private waveBoss(): GauntletBoss {
@@ -197,6 +226,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       // 亲兵：围在名将身边
       let k = 0; for (const [kind, n] of GAUNTLET.guards) for (let i = 0; i < n; i++, k++) { const a = k / 4 * Math.PI * 2; this.spawnEnemy(kind, boss.x + Math.cos(a) * 70, boss.y + Math.sin(a) * 50, undefined, true); }
       const last = this.gWave === GAUNTLET.waves && !this.gEndless;
+      this.gTrack?.bossUp(this.gWave, this.head(b));
       this.showWaveBanner(last ? `守关名将 · ${b.name}` : `第 ${this.gWave} 阵 · ${b.name}`, true, last ? '斩之即通关' : '名将带亲兵杀到 · 杂兵减半');
     }
     protected customBossStep(enemy: Enemy, dt: number, now: number) { if (enemy === this.boss && this.gCtrl) { this.gCtrl.update(dt, now); return true; } return super.customBossStep(enemy, dt, now); }
@@ -210,6 +240,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     protected spawnBossChest(_x: number, _y: number, _done: () => void): void { this.onBossDown(); }
     private onBossDown(): void {
       const b = this.gCur; if (!b || this.gPhase !== 'boss') return;
+      this.gTrack?.bossDown(this.gWave);
       this.gKills.push(b); this.gPhase = 'clear'; this.gAt = this.elapsed; this.gLootShown = false;
       if (this.gWave === GAUNTLET.waves && !this.gEndless) this.gCleared = true;
       // 清场：场上的杂兵退散（淡出，不给经验 / 掉落）；地上的经验珠留着捡
@@ -283,7 +314,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       this.showLoot('名将连战 · 十阵通关', '继续无尽，或者收兵结算', opts, () => { if (this.gEndless) this.nextWave(); else this.time.delayedCall(200, () => this.finish(true, 'boss')); });
     }
     nextWave(): void {
-      this.gWave++; this.gPhase = 'mow'; this.gAt = this.elapsed; this.gLootShown = false; this.gEliteAt = GAUNTLET.eliteFirst; this.spawnTimer = .5;
+      this.gWave++; this.gTrack?.setWave(this.gWave, this.gWave <= GAUNTLET.waves); this.gPhase = 'mow'; this.gAt = this.elapsed; this.gLootShown = false; this.gEliteAt = GAUNTLET.eliteFirst; this.spawnTimer = .5;
       this.chapter = this.makeChapter(this.waveBoss());
       this.showWaveBanner(this.gEndless ? `无尽 · 第 ${this.gWave} 阵` : this.gWave === GAUNTLET.waves ? `第 ${this.gWave} 阵 · 守关之战` : `第 ${this.gWave} 阵`, false, `割草 ${GAUNTLET.mowSec} 秒后名将登场`);
     }
@@ -332,6 +363,8 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     }
     /** 测试用：当前名将控制器（招式框架 / 专属）。 */
     get gauntletCtrl() { return this.gCtrl; }
+    /** 测试用：十阵进度条。 */
+    get gauntletTrack() { return this.gTrack; }
     /** 测试用：当前名将控制器的状态（招式框架 / 专属 / 华雄徐荣原生）。 */
     get gauntletState(): string | null { const c = (this.gCtrl ?? this.huaxiong ?? this.xurong) as { state?: string } | null; return c?.state ?? null; }
     get gauntletFollowers() { return this.gFollowers; }

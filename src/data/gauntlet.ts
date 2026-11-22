@@ -127,25 +127,57 @@ export const GAUNTLET_POOL: readonly GauntletBoss[] = [
   { id: 'simayi', name: '司马懿', chapter: 12, arc: 'beifa', stage: 3, ctrl: 'simayi', tier: 'gate', clearKey: 'beifa-3', off: '五丈原营垒（改随身营垒：登场在身边立 4 座，45 秒自倒）；假退诱敌保留（本模式开阔场地，不会引出场地）' },
 ];
 
-export interface WaveScale { hp: number; dmg: number; count: number; bossHp: number; bossDmg: number }
+export interface WaveScale { count: number }
+/**
+ * 每阵的杂兵（用户 11-21「兵种质量从第一章的兵到最后的兵，从弱到强」）：用哪一章哪一关的敌人定义——兵种、外形（含各章换色）、配比、精锐 / 特性兵照搬；
+ * 强度按目标折算：本阵步卒生命 / 伤害折到 infHp / infDmg，其余兵种按同一倍率；再保证每类兵都不比上一阵弱（场景里逐阵取大）。
+ * 名将生命 / 伤害按阵定目标（bossHp / bossDmg，不再用各章原值——后几章首领原值是按 50 级主将调的，从 0 开局打不动）。初值，交平衡。
+ */
+export interface GauntletTroops {
+  arc: GauntletArc; stage: 1 | 2 | 3; name: string; infHp: number; infDmg: number; bossHp: number; bossDmg: number;
+  /** 这几类兵换用另一章的图（只换外形：图 / 攻击图 / 染色，数值与配比照本章）。 */
+  look?: { arc: GauntletArc; stage: 1 | 2 | 3; kinds: ReadonlyArray<'infantry' | 'shield' | 'archer' | 'cavalry' | 'elite'> };
+}
+export const GAUNTLET_TROOPS: readonly GauntletTroops[] = [
+  { arc: 'huangjin', stage: 1, name: '黄巾流民 · 刀兵', infHp: 18, infDmg: 5, bossHp: 750, bossDmg: 11 }, // 11-21 实打（白板赵云）：第一阵名将原 900 要打两分钟
+  { arc: 'hulao', stage: 1, name: '西凉军', infHp: 26, infDmg: 6, bossHp: 1300, bossDmg: 12 },
+  { arc: 'qunxiong', stage: 2, name: '群雄杂军（凉州残部）', infHp: 34, infDmg: 6.5, bossHp: 1600, bossDmg: 12.5 }, // 实打：第三阵是白板的第一道坎（原 7 / 1800 / 13 时割草掉一半血、名将战被拖死）
+  { arc: 'guandu', stage: 1, name: '袁军', infHp: 44, infDmg: 7.5, bossHp: 2300, bossDmg: 14 },
+  { arc: 'chibi', stage: 1, name: '曹军水陆', infHp: 56, infDmg: 8.5, bossHp: 3000, bossDmg: 16 },
+  { arc: 'jingnan', stage: 2, name: '荆南守军（山越弓手 · 藤牌兵）', infHp: 70, infDmg: 9.5, bossHp: 3800, bossDmg: 18 },
+  { arc: 'shu', stage: 2, name: '益州守军（蜀弩手）', infHp: 86, infDmg: 10.5, bossHp: 4700, bossDmg: 20 },
+  { arc: 'yiling', stage: 1, name: '吴军（解烦兵）', infHp: 104, infDmg: 11.5, bossHp: 5700, bossDmg: 22 },
+  { arc: 'nanzheng', stage: 2, name: '南蛮（藤甲兵 · 象兵）', infHp: 124, infDmg: 13, bossHp: 6900, bossDmg: 25 },
+  // 第十二章北伐的兵在战役里也是第五章那套曹军换色（武卒 / 连弩的图还没画，BEIFA_TROOP_SHEETS 指的文件不存在）：步卒 / 弓手借第八章魏军青州兵、魏弩手的图，和第五阵分得开
+  { arc: 'beifa', stage: 1, name: '魏军精锐（青州兵 · 魏弩手）', infHp: 150, infDmg: 15, bossHp: 8500, bossDmg: 28, look: { arc: 'hanzhong', stage: 1, kinds: ['infantry', 'archer'] } },
+];
+/** 第 n 阵的杂兵与名将目标（无尽：固定用最后三阵的兵种轮换——吴 / 南蛮 / 魏，强度在第十阵上按 endless 每阵再乘）。 */
+export function waveTroops(n: number): GauntletTroops {
+  const T = GAUNTLET_TROOPS, i = Math.max(1, Math.floor(n));
+  if (i <= T.length) return T[i - 1];
+  const k = i - T.length, src = T[T.length - 3 + ((k - 1) % 3)], last = T[T.length - 1], E = GAUNTLET.endless;
+  return { ...src, name: src.name + ' · 无尽', infHp: Math.round(last.infHp * E.hp ** k), infDmg: +(last.infDmg * E.dmg ** k).toFixed(1), bossHp: Math.round(last.bossHp * E.bossHp ** k), bossDmg: +(last.bossDmg * E.bossDmg ** k).toFixed(1) };
+}
 export const GAUNTLET = {
   /** 一局几阵；每阵割草多少秒后名将登场；斩将后清场几秒再弹战利品。 */
-  waves: 10, mowSec: 70, clearSec: 10,
+  waves: 10, mowSec: 55, clearSec: 10, // 从 0 开局（11-21）：割草 70 → 55 秒，十阵约 15～20 分钟
   /** 守关档有两位以上时，第 8～9 阵借一位守关名将的机会（每局最多一次）。 */
   gateBorrow: .35,
   /**
-   * 每阵强度（第 1～10 阵）：杂兵生命 / 伤害 / 刷兵量（间隔除以 count、每次数量乘 count）倍率；名将生命 / 伤害按他在战役里的数值再乘。
-   * 杂兵底子是第二章西凉兵（生命 22 / 伤害 6 一档），玩家带着战役成长进来，所以后几阵翻得比较多。初值，交平衡。
+   * 每阵刷兵量（第 1～10 阵）：间隔除以 count、每次数量乘 count。杂兵 / 名将的生命与伤害改按每阵兵种表 GAUNTLET_TROOPS（11-21 从 0 开局）。初值，交平衡。
    */
-  scale: [
-    { hp: 1.0, dmg: 1.0, count: 1.0, bossHp: .6, bossDmg: .8 }, { hp: 1.6, dmg: 1.15, count: 1.1, bossHp: .7, bossDmg: .85 },
-    { hp: 2.3, dmg: 1.3, count: 1.2, bossHp: .8, bossDmg: .9 }, { hp: 3.1, dmg: 1.5, count: 1.3, bossHp: .9, bossDmg: .95 },
-    { hp: 4.0, dmg: 1.7, count: 1.4, bossHp: 1.0, bossDmg: 1.0 }, { hp: 5.0, dmg: 1.9, count: 1.5, bossHp: 1.1, bossDmg: 1.05 },
-    { hp: 6.2, dmg: 2.15, count: 1.6, bossHp: 1.2, bossDmg: 1.1 }, { hp: 7.5, dmg: 2.4, count: 1.7, bossHp: 1.35, bossDmg: 1.15 },
-    { hp: 9.0, dmg: 2.7, count: 1.8, bossHp: 1.5, bossDmg: 1.2 }, { hp: 11, dmg: 3.0, count: 2.0, bossHp: 1.8, bossDmg: 1.3 },
-  ] as readonly WaveScale[],
-  /** 无尽（第十阵以后）：每多一阵在第十阵上再乘。刷兵量封顶 countCap（同屏敌人仍守 150 红线）。 */
+  scale: [{ count: 1.0 }, { count: 1.1 }, { count: 1.2 }, { count: 1.3 }, { count: 1.4 }, { count: 1.5 }, { count: 1.6 }, { count: 1.7 }, { count: 1.8 }, { count: 2.0 }] as readonly WaveScale[],
+  /** 无尽（第十阵以后）：每多一阵在第十阵上再乘（杂兵生命 / 伤害、名将生命 / 伤害、刷兵量）。刷兵量封顶 countCap（同屏敌人仍守 150 红线）。 */
   endless: { hp: 1.12, dmg: 1.06, count: 1.05, bossHp: 1.12, bossDmg: 1.05, countCap: 2.4 },
+  /**
+   * 从 0 开局（用户 11-21「名将挑战是从 0 开始 build 起来」，不继承主剧情）：主将 1 级、不带星图 / 兵装 / 信物 / 坐骑 / 武将谱 / 城建 / 部曲；局内经验只在本局。
+   * xpRate：打怪经验倍率；softLevel：越级加价从这级起（每级所需经验 ×1.45，同战役软上限）。11-21 白板赵云实打前三阵每阵约 400～520 原始经验（Lv10 / 11 / 13），
+   *   只靠倍率压到十阵 20 级会让前三阵少两级、更难过；改成前期照快、过 17 级明显变慢：十阵打完约 20～21 级（估算见 gauntlet-v1.md 第八轮）。无尽每阵软上限 +2。
+   * 刷新：每局 freeRerolls 次免费，之后 rerollBase 起每次 +rerollStep 钱币；排除：每局 excludes 次（点一张卡，本局不再出现）。
+   * clearHeal：斩将后清场休整回复的生命比例（白板主将没有战役里的回血来源，实打第 2 阵带着四成血进场容易被拖死；战利品「取其辎重」仍是回满）。
+   * pickGapSec：两次升级三选一面板的最短间隔（关内秒；期间升的级攒着，开面板时连选），战役里是 50 秒，从 0 开局前期升级快，改短。
+   */
+  from0: { xpRate: 2.2, softLevel: 17, freeRerolls: 2, excludes: 1, rerollBase: 40, rerollStep: 30, pickGapSec: 12, clearHeal: .35 },
   /** 名将登场：带亲兵（各几个，围在他身边）；名将在场时杂兵刷新间隔 ×bossInterval、每次数量 ×bossBurst（刷新量减半）。 */
   guards: [['elite', 1], ['shield', 3]] as ReadonlyArray<readonly ['elite' | 'shield' | 'infantry', number]>,
   bossInterval: 2, bossBurst: .5,
@@ -176,7 +208,7 @@ export function waveScale(n: number): WaveScale {
   const T = GAUNTLET.scale, E = GAUNTLET.endless, i = Math.max(1, Math.floor(n));
   if (i <= T.length) return T[i - 1];
   const k = i - T.length, last = T[T.length - 1];
-  return { hp: last.hp * E.hp ** k, dmg: last.dmg * E.dmg ** k, count: Math.min(E.countCap, last.count * E.count ** k), bossHp: last.bossHp * E.bossHp ** k, bossDmg: last.bossDmg * E.bossDmg ** k };
+  return { count: Math.min(E.countCap, last.count * E.count ** k) };
 }
 
 /** 能抽的名将：战役里打败过的（cleared 判断）；all = 开发测试存档全开。一个都没有时保底第一章张角。 */

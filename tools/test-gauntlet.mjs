@@ -9,6 +9,9 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 let esbuild; try { esbuild = require('esbuild'); } catch { esbuild = require(join(process.env.NODE_PATH ?? '', 'esbuild')); }
 const root = process.cwd();
+/** 带 phaser 桩的打包（章节数据一路会引到场景工具里的 phaser）。 */
+const stub = { name: 'stub', setup(b) { b.onResolve({ filter: /^phaser$/ }, () => ({ path: 'phaser', namespace: 'stub' })); b.onLoad({ filter: /.*/, namespace: 'stub' }, () => ({ contents: 'const P = new Proxy(function(){}, { get: (t, k) => k === "__esModule" ? false : P, apply: () => P, construct: () => P }); export default P;', loader: 'js' })); } };
+const loadStub = async entry => { const r = await esbuild.build({ entryPoints: [join(root, entry)], bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent', plugins: [stub], loader: { '.png': 'empty', '.webp': 'empty' } }); return import('data:text/javascript;base64,' + Buffer.from(r.outputFiles[0].text).toString('base64')); };
 const load = async entry => { const r = await esbuild.build({ entryPoints: [join(root, entry)], bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent' }); return import('data:text/javascript;base64,' + Buffer.from(r.outputFiles[0].text).toString('base64')); };
 let fail = 0; const ck = (n, ok, d) => { if (!ok) fail++; console.log((ok ? 'PASS ' : 'FAIL ') + n + (d !== undefined ? ' · ' + JSON.stringify(d).slice(0, 420) : '')); };
 const src = p => readFileSync(join(root, p), 'utf8').replace(/\r\n/g, '\n');
@@ -42,7 +45,20 @@ const SWEEP = [...BATCH1, ...BATCH2, ...BATCH3, ...BATCH4];
   const seen = []; let last = null, okE = true; for (let i = 0; i < P.length - 1; i++) { const b = M.endlessBoss(P, last, rnd, seen); if (b === last || seen.includes(b)) okE = false; seen.push(b); last = b; }
   ck('无尽：全池循环，不连着同一位、一轮里不重复', okE, seen.length); }
 { const s = [1, 5, 10, 11, 15].map(n => M.waveScale(n));
-  ck('每阵强度递增；第十阵以后（无尽）继续乘、刷兵量封顶 ' + G.endless.countCap, s.every((x, i) => i === 0 || (x.hp > s[i - 1].hp && x.bossHp > s[i - 1].bossHp)) && M.waveScale(40).count <= G.endless.countCap, s.map(x => +x.hp.toFixed(2))); }
+  ck('每阵刷兵量递增；第十阵以后（无尽）继续乘、封顶 ' + G.endless.countCap, s.every((x, i) => i === 0 || x.count > s[i - 1].count) && M.waveScale(40).count <= G.endless.countCap, s.map(x => +x.count.toFixed(2))); }
+// 每阵兵种（11-21 统筹 A：从第一章的兵到最后的兵、从弱到强）：表 GAUNTLET_TROOPS + data/gauntletTroops.ts 折算
+{ const T = await loadStub('src/data/gauntletTroops.ts'), WANT = ['huangjin', 'hulao', 'qunxiong', 'guandu', 'chibi', 'jingnan', 'shu', 'yiling', 'nanzheng', 'beifa'];
+  const sets = Array.from({ length: 16 }, (_, i) => T.waveTroopSet(i + 1));
+  ck('每阵兵种：第 1～10 阵依次是黄巾 → 西凉 → 群雄 → 袁军 → 曹军 → 荆南 → 益州 → 吴军 → 南蛮 → 魏军（借那一章那一关的兵种 / 外形 / 配比）；无尽固定轮换最后三阵（吴 / 南蛮 / 魏）',
+    sets.slice(0, 10).every((s, i) => s.troops.arc === WANT[i]) && sets.slice(10).every((s, i) => s.troops.arc === WANT[7 + i % 3]) && sets.every(s => typeof s.chapter.pickEnemy === 'function'), sets.map(s => s.troops.arc));
+  const bad = []; for (let i = 1; i < sets.length; i++) for (const k of T.TROOP_KINDS) { const a = sets[i - 1], b = sets[i]; if (a.heavy[k]) continue; if (!(b.defs[k].hp > a.defs[k].hp && b.defs[k].damage >= a.defs[k].damage)) bad.push(`${i + 1}:${k} ${a.defs[k].hp}→${b.defs[k].hp}`); }
+  const tg = sets.every((s, i) => i === 0 || (s.troops.infHp > sets[i - 1].troops.infHp && s.troops.infDmg > sets[i - 1].troops.infDmg && s.troops.bossHp > sets[i - 1].troops.bossHp && s.troops.bossDmg > sets[i - 1].troops.bossDmg));
+  ck('强度单调：表里步卒 / 名将生命伤害逐阵涨；折算后每类兵（步 / 盾 / 弓 / 骑 / 精锐）都比上一阵强（重兵象兵不进链），无尽接着涨', tg && bad.length === 0, bad.length ? bad : sets.slice(0, 10).map(s => s.defs.infantry.hp + '/' + s.defs.elite.hp));
+  const g = T.guardDef('nanzheng', 2, 'shield', 3);
+  ck('名将亲兵：用他自己那一章的兵（南中藤甲兵），强度按本阵折算（第 3 阵不比本阵步卒厚太多）', /tengjia|f_liangzhou/.test(g.walkVisual?.texture ?? g.texture) && g.hp < sets[2].defs.shield.hp * 2.5 && g.hp > sets[2].defs.infantry.hp, { tex: g.walkVisual?.texture ?? g.texture, hp: g.hp }); }
+{ const S = src('src/scenes/GauntletGameScene.ts'), GS = src('src/scenes/GameScene.ts');
+  ck('从 0 开局（接线）：兵装 / 信物 / 坐骑空、等级 / 经验不写回、战后不记武将经验、卡池全开并在离开时放回', S.includes('protected campaignGear() { return emptyGear(); }') && S.includes("protected campaignCharms(): ReturnType<GameScene['campaignCharms']> { return []; }") && S.includes('protected campaignHorse() { return undefined; }') && S.includes('protected persistHeroProgress(): boolean { return false; }') && S.includes('protected lordHeroXp(): number { return 0; }')
+    && S.includes("this.openPool(); this.events.once('shutdown', () => this.closePool());") && GS.includes('if (this.persistHeroProgress()) { setHeroProgress(id, this.player.level, this.player.xp); g.heroFree += pts; }') && GS.includes('this.player.growth.gear=this.campaignGear();') && GS.includes('const horse=this.campaignHorse();this.mount=horse?')); }
 ck('能抽的名将 = 战役里打败过的（测试存档全开）；一个没打过也保底张角', M.unlockedPool(k => k === 'huangjin-3' || k === 'hulao-3').map(b => b.name).sort().join() === ['张角', '董卓', '吕布'].sort().join() && M.unlockedPool(() => false)[0]?.id === 'zhangjiao' && M.unlockedPool(() => false, true).length === P.length);
 ck('结算奖励按斩将数（军粮 ×' + G.reward.provisionsPerKill + '、每 ' + G.reward.scrollsEvery + ' 位一张残卷），首次通关另给大奖', M.gauntletReward(3, false).provisions === 3 * G.reward.provisionsPerKill && M.gauntletReward(10, true).scrolls === 5 + G.reward.firstClear.scrolls && M.gauntletReward(0, false).provisions === 0);
 { const S = src('src/scenes/GauntletGameScene.ts'), R = src('src/world/RouteMap.ts'), WN = src('src/world/WorldNodes.ts'), V1 = src('src/scenes/WorldMapSceneV1.ts'), W = src('src/scenes/WorldMapScene.ts'), B = src('src/scenes/BootScene.ts'), MN = src('src/main.ts'), F = src('src/systems/FollowerSquad.ts');
@@ -66,23 +82,43 @@ if (BASE) {
   /** 升级三选一 / 战斗支援之类的弹窗先关掉（战利品面板 bossloot 不动，测试自己选）。 */
   const unblock = () => ev(() => { const s = window.__S; for (let i = 0; i < 6 && s.mode !== 'none' && s.mode !== 'bossloot' && !s.over; i++) { if (s.mode === 'levelup') s.chooseUpgrade(0); else s.setMode('none'); } });
   try {
-    await p.addInitScript(() => { if (!sessionStorage.getItem('seeded')) { localStorage.setItem('im_story', 'off'); localStorage.setItem('im_home_seen', '1'); localStorage.removeItem('im_gauntlet_best_test'); sessionStorage.setItem('seeded', '1'); } });
+    // 战役存档里赵云 30 级（从 0 开局：进名将连战应是 1 级，打完也不改这条记录）
+    await p.addInitScript(() => { if (!sessionStorage.getItem('seeded')) { localStorage.setItem('im_story', 'off'); localStorage.setItem('im_home_seen', '1'); localStorage.removeItem('im_gauntlet_best_test'); const h = JSON.parse(localStorage.getItem('im_heroes_v1') ?? 'null') ?? { version: 1, heroes: {}, migrated: true, firstClears: [], attrSet: 4 }; h.heroes.zhaoyun = { level: 30, xp: 100, attributes: {} }; localStorage.setItem('im_heroes_v1', JSON.stringify(h)); sessionStorage.setItem('seeded', '1'); } });
     await p.goto(BASE + '?dev=1&gauntlet=1&layout=desktop&story=off', { timeout: 180000 });
     const entered = await p.waitForFunction(() => { const s = window.__game?.scene.getScene('GauntletGameScene'); return s?.player && window.__game.scene.isActive('GauntletGameScene') && s.elapsed > .5; }, null, { timeout: 180000 }).then(() => true, () => false);
     const st0 = await ev(() => { const s = window.__game.scene.getScene('GauntletGameScene'); window.__S = s; s.player.damageImmune = true; return { name: s.chapter.name, phase: s.gPhase, wave: s.gWave, order: s.gOrder.map(b => b.name), followers: s.followers?.members.length ?? 0, troops: s.legion.count, drops: !!s.itemDrops, story: !!s.storyDir?.chapterId }; });
     ck('开发构建 ?gauntlet=1 直接进名将连战：第 1 阵割草；没有部曲、随从、兵装掉落；十阵名单已抽好', entered && st0.name === '名将连战' && st0.phase === 'mow' && st0.wave === 1 && st0.followers === 0 && st0.troops === 0 && !st0.drops && st0.order.length === 10, st0);
+    // 从 0 开局（11-21 统筹 B / 局内 build 第 5 条）：存档里 30 级的赵云进来是 1 级白板，卡池全开
+    const z0 = await ev(() => { const s = window.__S; return { hero: s.runConfig.character, ...s.gauntletFrom0 }; });
+    ck('从 0 开局：主将 1 级、经验 0、加点 0、没有星图 / 兵装 / 信物 / 坐骑 / 本命淬炼 / 战法心得；卡池全开（玩法不按进度藏，战法精研 5 级、战法格 7、武艺精熟 +2、专职精进 2）',
+      z0.hero === 'zhaoyun' && z0.level === 1 && z0.xp === 0 && z0.attrs === 0 && z0.unallocated === 0 && z0.heroFree === 0 && z0.stars === 0 && z0.gear === 0 && z0.charms === 0 && z0.charmHp === 0 && !z0.mount && z0.temper === 0 && z0.xinde === 0
+      && z0.caps.mech && z0.caps.rank === 5 && z0.caps.slot === 7 && z0.caps.extra === 2 && z0.caps.over === 2 && z0.soft === 17, z0);
+    // 换一批 ×2 免费 → 之后 40 钱币起、每次 +30；排除 ×1（点一张，本局不再出现）
+    const rx = await ev(async () => { const s = window.__S, F = () => ({ ...s.gauntletFrom0.reroll }); s.legion.food = 0; s.pendingLevels = Math.max(1, s.pendingLevels); s.forcePickNow = true; if (s.mode !== 'levelup') s.openUpgrade(); await new Promise(r => setTimeout(r, 300));
+      const btn = s.levelPanel.getByName('upgrade-reroll'), ex = s.levelPanel.getByName('gauntlet-exclude'), o = { mode: s.mode, exVisible: !!ex?.visible, exText: ex?.text, rr0: btn?.text, f0: F(), ids0: s.upgradeOptions.map(x => x.id) };
+      btn.emit('pointerdown'); o.f1 = F(); o.ids1 = s.upgradeOptions.map(x => x.id); btn.emit('pointerdown'); o.f2 = F(); o.rr2 = btn.text; o.rr2On = !!btn.input?.enabled;
+      btn.emit('pointerdown'); o.f2b = F(); s.legion.food = 500; s.renderCards(); btn.emit('pointerdown'); o.food = s.legion.food; o.f3 = F();
+      ex.emit('pointerdown'); o.excluding = s.gauntletFrom0.excluding; o.exText2 = ex.text; const target = s.upgradeOptions[1]?.id; s.chooseUpgrade(1); const a = s.gauntletFrom0;
+      o.target = target; o.excluded = a.excluded; o.excludes = a.excludes; o.modeAfter = s.mode; o.stillShown = s.upgradeOptions.some(x => x.id === target); o.n = s.upgradeOptions.length;
+      let seen = 0; for (let i = 0; i < 40; i++) if (s.upgradeChoices().some(x => x.id === target)) seen++; o.seen = seen; ex.emit('pointerdown'); o.exAgain = s.gauntletFrom0.excluding;
+      s.chooseUpgrade(0); s.legion.food = 0; return o; });
+    ck('换一批：每局 2 次免费（按钮写「免费 · 本局还剩 N 次」），用完后 40 钱币起、每次 +30（钱不够按不动）', rx.mode === 'levelup' && /免费.*2 次/.test(rx.rr0) && rx.f0.free === 2 && rx.f1.free === 1 && rx.ids1.join() !== rx.ids0.join() && rx.f2.free === 0 && rx.f2.cost === 40 && /40 钱币/.test(rx.rr2) && !rx.rr2On && rx.f2b.paid === 0 && rx.food === 460 && rx.f3.paid === 1 && rx.f3.cost === 70, rx);
+    ck('排除：每局 1 次——点「排除一张」再点一张卡，那张换掉、本局不再出现（抽 40 次都不出）；用完按钮不再进排除', rx.exVisible && /排除一张/.test(rx.exText) && rx.excluding && rx.excluded.includes(rx.target) && rx.excludes === 0 && rx.modeAfter === 'levelup' && !rx.stillShown && rx.n === 3 && rx.seen === 0 && !rx.exAgain, rx);
+    const troopsAt = {}; troopsAt[1] = (await ev(() => window.__S.gauntletFrom0.troops));
+    /** 割草画面：场上杂兵用的图（第 1 / 5 / 10 阵对比兵种）。 */
+    const onScreen = () => ev(() => { const s = window.__S, cam = s.cameras.main.worldView, n = {}; for (const e of s.enemies) if (e.active && !e.isSupplySlot && e.kind !== 'boss' && cam.contains(e.x, e.y)) { const k = e.def.walkVisual?.texture ?? e.def.texture; n[k] = (n[k] ?? 0) + 1; } return n; }); /* 按兵种定义的图（精灵上是渲染层加了前缀的派生图 iffA_…） */
     for (let i = 0; i < 9; i++) { await wait(2000); await unblock(); } /* 割草十几秒：杂兵围上来再拍 */
     const trk = () => ev(() => { const t = window.__S.gauntletTrack?.stats; return t ? { pos: +t.pos.toFixed(4), x: +t.markerX.toFixed(1), nodeX: t.nodeX.map(v => +v.toFixed(1)), states: [...t.states], caption: t.caption, seal: window.__S.gauntletTrack.root.list.some(n => n.list?.some?.(o => o.name === 'gauntlet-node-seal')) } : null; });
     const mow = await ev(() => { const s = window.__S; return { enemies: s.enemies.filter(e => e.active && !e.isSupplySlot).length, spawned: s.gStats.spawned, waveLine: s.hudTexts.wave.text, chapterLine: s.hudTexts.chapter.text }; });
     const tr1 = await trk(); await wait(1500); const tr2 = await trk();
-    await p.screenshot({ path: OUT + '/gauntlet-1-mow.png' });
+    await p.screenshot({ path: OUT + '/gauntlet-1-mow.png' }); troopsAt[1].screen = await onScreen();
     ck('割草：杂兵一波波刷出来；左上角不再写「第 N/10 阵」、计时器下不再写关名（看顶部进度条）', mow.enemies > 5 && mow.waveLine === '' && mow.chapterLine === '', mow);
     ck('十阵进度条 · 割草：10 个节点都是暗的「？」，标从起点往第一个节点匀速走（随时间前进、还没到节点），小字「第 1/10 阵 · 距名将登场 mm:ss」', !!tr1 && tr1.nodeX.length === 10 && tr1.states.every(s => s === 'dark') && tr2.x > tr1.x && tr2.pos > tr1.pos && tr2.pos < .1 && tr2.x < tr2.nodeX[0] && /^第 1\/10 阵 · 距名将登场 \d\d:\d\d$/.test(tr2.caption), { tr1: tr1 && { pos: tr1.pos, x: tr1.x }, tr2 });
     /** 让这一阵的名将登场（割草时间拨到头），返回名将信息。 */
     const bossUp = async () => { await ev(() => { const s = window.__S; if (s.gPhase === 'mow') s.gAt = s.elapsed - 70; }); const ok = await until(() => { const s = window.__S; if (s.mode === 'levelup') s.chooseUpgrade(0); return !!s.boss?.active && s.gPhase === 'boss'; }, 8000); await unblock(); /* 升级三选一会暂停战斗：等的时候顺手选掉 */
       return { ok, ...(await ev(() => { const s = window.__S, bz = s.boss; return { name: s.gCur?.name, id: s.gCur?.id, hp: bz?.maxHp, tex: bz?.sprite.texture.key, ctrl: !!s.gauntletCtrl || !!s.lubu || !!s.zhangjiao || !!s.huaxiong || !!s.xurong, stall: s.bossStallCfg.quotaSec, guards: s.enemies.filter(e => e.active && (e.kind === 'elite' || e.kind === 'shield') && bz && Math.hypot(e.x - bz.x, e.y - bz.y) < 160).length, hud: s.gauntletTrack?.stats.caption ?? '' }; })) }; };
     const kill = () => ev(() => { const s = window.__S; for (let k = 0; k < 4 && s.gPhase === 'boss' && s.boss?.active; k++) { s.boss.hp = 0; s.killEnemy(s.boss); } return s.gPhase; }); /* 孟获三擒：倒下原地再起两次，连斩到阵过为止 */
-    const lootOpen = () => until(() => window.__S.mode === 'bossloot', 6000);
+    const lootOpen = () => until(() => { const s = window.__S; if (s.mode === 'levelup') s.chooseUpgrade(0); return s.mode === 'bossloot'; }, 8000); /* 从 0 开局升级多：斩将那几秒常弹升级三选一，等的时候顺手选掉 */
     const b1 = await bossUp();
     { const top = await ev(() => { const s = window.__S, vis = n => s.children.list.filter(o => o.name === n && o.visible && o.alpha > .05).length; return { notices: vis('combat-notice'), announce: vis('boss-announce'), timer: s.hudTexts.timer.visible, caption: s.gauntletTrack.root.getByName('gauntlet-track-caption').visible }; });
       ck('名将登场：顶部只留水墨横幅（称号 + 名字）——没有别的战场横幅，计时与进度条小字先藏', top.announce === 1 && top.notices === 0 && !top.timer && !top.caption, top); }
@@ -101,29 +137,40 @@ if (BASE) {
     ck('斩将：清场（杂兵退散）→ 战利品三选一（收为副将 / 取其辎重 / 军资）', ph === 'clear' && opened && loot.kills === 1 && loot.opts.length === 3 && loot.opts[0] === 'gauntlet_follow' && loot.opts[1] === 'gauntlet_spoils' && /^supply_/.test(loot.opts[2]) && loot.cleared > 0, loot);
     await ev(() => window.__S.chooseUpgrade(0)); await wait(400);
     const fol = await ev(() => { const s = window.__S, f = s.gauntletFollowers[0]?.f; return { n: s.gauntletFollowers.length, name: f?.label.text, tex: f?.sprite.texture.key, look: f?.look?.tex, mode: s.mode }; });
-    ck('收为副将：他在场（名牌「副将 · 名字」、用他自己的首领图）', fol.n === 1 && fol.name === '副将 · ' + b1.name && fol.tex === fol.look && fol.mode === 'none', fol);
-    await ev(() => { const s = window.__S; s.gAt = s.elapsed - 10; }); await until(() => window.__S.gPhase === 'mow' && window.__S.gWave === 2, 4000); await ev(() => { const s = window.__S, f = s.gauntletFollowers[0]?.f; if (f) for (let i = 0; i < 3; i++) s.spawnEnemy('elite', f.x + 26 + i * 12, f.y + 8, undefined, true); }); /* 精锐贴着副将刷（杂兵从屏边走过来、又先被主将砍光，副将摸不到） */
+    ck('收为副将：他在场（名牌「副将 · 名字」、用他自己的首领图）', fol.n === 1 && fol.name === '副将 · ' + b1.name && fol.tex === fol.look && (fol.mode === 'none' || fol.mode === 'levelup'), fol); /* 选完战利品可能接着弹攒着的升级三选一 */
+    await ev(() => { const s = window.__S; s.gAt = s.elapsed - 10; }); await until(() => { const s = window.__S; if (s.mode === 'levelup') s.chooseUpgrade(0); return s.gPhase === 'mow' && s.gWave === 2; }, 6000); await ev(() => { const s = window.__S, f = s.gauntletFollowers[0]?.f; if (f) for (let i = 0; i < 3; i++) s.spawnEnemy('elite', f.x + 26 + i * 12, f.y + 8, undefined, true); }); /* 精锐贴着副将刷（杂兵从屏边走过来、又先被主将砍光，副将摸不到） */
     for (let i = 0; i < 10 && !(await ev(() => (window.__S.gauntletFollowers[0]?.f.dealt ?? 0) > 0)); i++) { await wait(600); await unblock(); }
-    const atk = await ev(() => { const s = window.__S, f = s.gauntletFollowers[0]?.f; return { wave: s.gWave, dealt: Math.round(f?.dealt ?? 0), hits: f?.hits ?? 0, hp1: +s.chapter.hpScale(0).toFixed(2) }; });
-    ck('下一阵：第 2 阵割草、杂兵生命按阵加强；副将会攻击（造成伤害）', atk.wave === 2 && atk.hp1 > 1 && atk.dealt > 0, atk);
+    const atk = await ev(() => { const s = window.__S, f = s.gauntletFollowers[0]?.f; return { wave: s.gWave, dealt: Math.round(f?.dealt ?? 0), hits: f?.hits ?? 0, inf: s.chapter.enemies.infantry.hp, arc: s.gauntletFrom0.troops.arc }; });
+    ck('下一阵：第 2 阵割草、换第二章西凉兵且步卒更厚；副将会攻击（造成伤害）', atk.wave === 2 && atk.arc === 'hulao' && atk.inf > troopsAt[1].inf && atk.dealt > 0, atk);
+    { const r = await ev(() => { const s = window.__S, pl = s.player, es = s.enemies.filter(e => e.active && !e.isSupplySlot && e.kind !== 'boss'); return { hold: s.victoryHold, guard: !!pl.victoryGuard, killed: s.bossKilled, rout: es.filter(e => e.routUntil > s.combatNow).length, toward: es.filter(e => (pl.x - e.x) * e.moveVx + (pl.y - e.y) * e.moveVy > 0).length, n: es.length }; });
+      ck('下一阵割草：斩将后的收尾保护（主将无敌、全场杂兵溃退）只在清场那几秒——第 2 阵起收尾保护关掉、主将不无敌（个别被主将招式吓退的不算）', !r.hold && !r.guard && !r.killed && r.n > 3, r); }
     { const t5 = await trk(); ck('十阵进度条 · 下一阵：标从第 1 个节点继续往第 2 个节点走，第 1 个节点留着已斩印，第 2 个还是暗的', t5.pos > .1 && t5.pos < .2 && t5.x > t5.nodeX[0] && t5.x < t5.nodeX[1] && t5.states[0] === 'killed' && t5.states[1] === 'dark' && t5.caption.startsWith('第 2/10 阵 · 距名将登场'), { pos: t5.pos, caption: t5.caption, states: t5.states.slice(0, 3) }); }
     // 一路打到第十阵（战利品选辎重，第 2～3 阵再收两位副将凑满三位）
     let lastHp = b1.hp, okRun = true; const names = [b1.name];
     for (let w = 2; w <= 10; w++) {
+      if (w === 5 || w === 10) { for (let i = 0; i < 5; i++) { await wait(1200); await unblock(); } troopsAt[w] = { ...(await ev(() => window.__S.gauntletFrom0.troops)), screen: await onScreen() }; await p.screenshot({ path: OUT + `/gauntlet-${w === 5 ? 13 : 14}-wave${w}-mow.png` }); }
       const bw = await bossUp(); if (!bw.ok) { okRun = false; console.log('  阵 ' + w + ' 名将没出来', bw); break; } names.push(bw.name);
       await kill(); if (!(await lootOpen())) { okRun = false; console.log('  阵 ' + w + ' 战利品没弹'); break; }
       await ev(k => window.__S.chooseUpgrade(k), w <= 3 ? 0 : 1); await wait(300);
-      if (w < 10) { await ev(() => { const s = window.__S; s.gAt = s.elapsed - 10; }); if (!(await until(wv => window.__S.gWave === wv && window.__S.gPhase === 'mow', 4000, w + 1))) { okRun = false; break; } }
+      if (w < 10) { await ev(() => { const s = window.__S; s.gAt = s.elapsed - 10; }); if (!(await until(wv => { const s = window.__S; if (s.mode === 'levelup') s.chooseUpgrade(0); return s.gWave === wv && s.gPhase === 'mow'; }, 6000, w + 1))) { okRun = false; break; } }
     }
     ck('一路打到第十阵：每阵一位名将（前后按章递进），副将凑满 3 位', okRun && names.length === 10 && (await ev(() => window.__S.gauntletFollowers.length)) === 3, names);
+    { const T = [1, 5, 10].map(w => troopsAt[w]), inf = T.map(t => t?.tex.infantry), top = t => Object.entries(t?.screen ?? {}).sort((a, b) => b[1] - a[1])[0]?.[0];
+      const texOk = await ev(keys => keys.every(k => window.__S.textures.exists(k)), [...new Set(T.flatMap(t => Object.values(t?.tex ?? {})))]);
+      ck('每阵兵种（截图第 1 / 5 / 10 阵割草）：黄巾 → 曹军 → 魏军，步卒图各不相同、图都在；第 5 / 10 阵屏幕上最多的兵就是本阵的兵；步卒一阵比一阵厚', T.every(Boolean) && T[0].arc === 'huangjin' && T[1].arc === 'chibi' && T[2].arc === 'beifa' && new Set(inf).size === 3 && texOk
+        && [0, 1, 2].every(i => Object.values(T[i].tex).includes(top(T[i]))) && T[0].inf < T[1].inf && T[1].inf < T[2].inf, T.map(t => t && { arc: t.arc, inf: t.inf, tex: t.tex.infantry, top: top(t), screen: t.screen }).concat([{ texOk }])); }
     // 三位副将 + 名将 + 割草同屏量帧率（拨回一阵割草：先刷满杂兵，再叫名将）
     const fps = await ev(async () => { const s = window.__S; for (let i = 0; i < 120; i++) s.spawnAroundPlayer(i % 3 ? 'infantry' : 'shield', true); s.gAt = s.elapsed - 10; const t0 = performance.now(); let n = 0, min = 999; await new Promise(r => { const f = () => { n++; min = Math.min(min, window.__game.loop.actualFps); if (performance.now() - t0 < 3000) requestAnimationFrame(f); else r(); }; requestAnimationFrame(f); }); return { avg: Math.round(n / 3), min: Math.round(min), enemies: s.enemies.filter(e => e.active && !e.isSupplySlot).length, followers: s.gauntletFollowers.length }; });
     console.log('  帧率（无头浏览器，三位副将 + 杂兵）：', JSON.stringify(fps));
     // 第十阵斩完 → 通关抉择 → 收兵结算
-    await until(() => window.__S.gPhase === 'choice' && window.__S.mode === 'bossloot', 14000);
+    await until(() => { const s = window.__S; if (s.mode === 'levelup') s.chooseUpgrade(0); return s.gPhase === 'choice' && s.mode === 'bossloot'; }, 16000);
     const choice = await ev(() => ({ phase: window.__S.gPhase, opts: window.__S.upgradeOptions.map(o => o.id), cleared: window.__S.gCleared }));
     ck('第十阵斩完：十阵通关，抉择「继续 · 无尽 / 收兵 · 结算」', choice.cleared && choice.opts.join() === 'gauntlet_endless,gauntlet_settle', choice);
+    // 结算写回什么（统筹 B：局内经验 / 等级不写回战役存档，奖励写回）：开发存档下结算本来不入库，这里把「测试战斗」判定关掉，看真结算写了什么
+    const save = () => ev(() => { const j = k => { try { return JSON.parse(localStorage.getItem(k) ?? 'null'); } catch { return null; } }; const h = j('im_heroes_v1')?.heroes?.zhaoyun; return { hero: h ? { level: h.level, xp: h.xp } : null, provisions: j('im_world_v1')?.provisions ?? 0, scrolls: j('im_mastery_v1')?.scrolls ?? 0 }; });
+    const sv0 = await save(), lv10 = await ev(() => { const s = window.__S; s.debugRun = () => false; return s.player.level; });
     await ev(() => window.__S.chooseUpgrade(1)); const over = await until(() => window.__S.over && window.__S.mode === 'result', 6000); await wait(900);
+    { const sv1 = await save(); ck('结算写回：钱币、武学残卷照给（入存档）；局内升到的等级 / 经验不写回武将存档（赵云仍是 30 级）', sv1.provisions > sv0.provisions && sv1.scrolls > sv0.scrolls && sv1.hero?.level === 30 && sv1.hero?.xp === 100 && sv0.hero?.level === 30 && lv10 >= 1, { before: sv0, after: sv1, runLevel: lv10 }); await ev(() => { delete window.__S.debugRun; }); }
     const res = await ev(() => { const s = window.__S; return { title: s.resultTexts.subtitle.text, body: s.resultTexts.body.text, faces: s.resultPanel.list.filter(o => o.name === 'gauntlet-face').length, best: JSON.parse(localStorage.getItem('im_gauntlet_best_test') ?? 'null') }; });
     await p.screenshot({ path: OUT + '/gauntlet-3-result.png' });
     ck('收兵结算：通关副标题、打到第 10 阵、斩将 10 位（头像一排）、用时、最高连斩写进存档单独的键（测试存档 _test）', over && /通关/.test(res.title) && /第 10 阵/.test(res.body) && /斩将　　10 位/.test(res.body) && /用时/.test(res.body) && res.faces === 10 && res.best?.kills === 10, res);
@@ -218,6 +265,8 @@ if (BASE) {
         const st = o => o ? { font: o.style.fontFamily, size: o.style.fontSize, color: o.style.color, ls: o.letterSpacing } : null;
         return { has: !!g, text: g?.text, locked: g?.getData('locked') ?? null, first: row[0]?.n === 'home-gauntlet', overlap: row.some((a, i) => row.some((b, j) => i < j && a.x < b.r && b.x < a.r)), oneLine: new Set(row.map(o => o.cy)).size === 1, style: st(g), review: st(s.children.getByName('home-review')), n: row.length, row: row.map(o => o.n + ':' + o.x + '-' + o.r) }; });
       await p.screenshot({ path: OUT + '/gauntlet-12-menu.png' });
+      const capsBack = await ev(() => window.__game.scene.getScene('GauntletGameScene').gauntletCaps);
+      ck('离开名将连战：卡池全开改的全局开关放回（玩法按进度、战法精研 / 战法格 / 精熟 / 专职上限回到进来前）', capsBack.mech === false && capsBack.rank === 3 && capsBack.slot === 6 && capsBack.extra === 0 && capsBack.over === 0, capsBack);
       ck('主菜单入口：底部文字按钮一行最前面是「名将连战」（样式同「战役回顾」、一行不挤不换行），开发存档下可点', menu && m.has && m.text === '名将连战' && m.locked === false && m.first && !m.overlap && m.oneLine && JSON.stringify(m.style) === JSON.stringify(m.review), m);
       await ev(() => window.__game.scene.getScene('MenuScene').children.getByName('home-gauntlet').emit('pointerdown'));
       const inG = await until(() => { const s = window.__game.scene.getScene('GauntletGameScene'); return window.__game.scene.isActive('GauntletGameScene') && !!s?.player?.alive && s.elapsed > .3; }, 30000);

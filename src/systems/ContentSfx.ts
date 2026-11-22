@@ -262,6 +262,10 @@ Object.assign(CONTENT_SFX, <Record<string, Recipe>>{
   awaken_formation: (v, t, p) => { for (let i = 0; i < 3; i++) { v.metal(t + i * .09, 320 * p, .012, .15); v.noise(t + i * .09, .04, 'bandpass', 1200, .02, 700, 1.3); } awakenCore(v, t, p, 117); drum(v, t + .5, .07, 100); drum(v, t + .66, .07, 100); return 2.4; },
 });
 
+// 结局麒麟阁盖朱印（2026-11-22）：木印落纸一声闷响 + 纸面轻擦；连盖时 110 毫秒节流、同时 2 个
+Object.assign(CONTENT_SFX_CONFIG, { seal_stamp: F(.3, 110, 2, 1, .06) });
+Object.assign(CONTENT_SFX, <Record<string, Recipe>>{ seal_stamp: (v, t, p) => { v.tone(t, .12, 'sine', 160 * p, .04, 90 * p); v.noise(t, .05, 'lowpass', 900, .03, 300); v.noise(t + .02, .08, 'bandpass', 2200, .012, 1500, 1.2); return .3; } });
+
 /** 响度校准倍数（tools/render-sfx.mjs 实测后填；未列出的 = 1）。 */
 const LEVEL: Record<string, number> = {
   // 觉醒（2026-11-21，峰值约 -14 dBFS：低于首领倒下、高于命中与升级）

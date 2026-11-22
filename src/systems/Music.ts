@@ -46,11 +46,20 @@ export type MusicTheme = 'battle' | 'menu';
  * hall 招贤馆 / 名将堂（雅：古琴、箫、编钟，无鼓）· rest 战斗结算 / 战败退守（静：古琴 + 二胡，无鼓）。
  * 换情绪时淡出 0.45 秒、换编制、淡入 0.9 秒；同一情绪再进不重来（共用一个实例，切界面不断音）。
  */
-export type MenuMood = 'home' | 'map' | 'camp' | 'hall' | 'rest';
-export const MENU_MOODS: readonly MenuMood[] = ['home', 'map', 'camp', 'hall', 'rest'];
-const MOOD_BPM: Record<MenuMood, number> = { home: 72, map: 64, camp: 80, hall: 60, rest: 66 };
+export type MenuMood = 'home' | 'map' | 'camp' | 'hall' | 'rest' | 'ending_unify' | 'ending_tri';
+export const MENU_MOODS: readonly MenuMood[] = ['home', 'map', 'camp', 'hall', 'rest', 'ending_unify', 'ending_tri'];
+const MOOD_BPM: Record<MenuMood, number> = { home: 72, map: 64, camp: 80, hall: 60, rest: 66, ending_unify: 60, ending_tri: 54 };
+/**
+ * 结局专属曲（2026-11-22 用户「结局的专属音乐也安排一下」）：取战斗曲《乱世长歌》的主题乐句（PHRASES / FORM）放慢做终章变奏。
+ * 天下一统《山河定》：60 BPM，旋律从 D 羽调式改到 D 宫调式（D E F# A B，明亮庄严），古琴 / 竹笛 / 编钟 / 合唱 / 远鼓。
+ * 三分天下《三分歌》：54 BPM，保留 D 羽调式（苍凉），箫（竹笛低八度）、二胡，留白多。
+ * 跟着结局四屏走（setEndingSection）：0 画卷 主题首次完整呈现 · 1 麒麟阁 加轻鼓点与钟 · 2 功臣 最饱满 · 3 收尾 旋律停、一个长和弦收住、之后渐弱到低音与偶尔一声钟（可一直停留）。
+ * 32 小节一轮（天下一统约 128 秒、三分天下约 142 秒），可循环。
+ */
+export const ENDING_TITLES = { ending_unify: '山河定', ending_tri: '三分歌' } as const;
+const SCALE_GONG = [62, 64, 66, 69, 71, 74, 76, 78, 81];
 /** 各情绪响度对齐（tools/test-audio.mjs 实测 12 秒 RMS 后定）：编制轻的抬一点，和主页相差 ≤ 2 dB。 */
-const MOOD_GAIN: Record<MenuMood, number> = { home: 1, map: .9, camp: 1.4, hall: 1.55, rest: 1.35 };
+const MOOD_GAIN: Record<MenuMood, number> = { home: 1, map: .9, camp: 1.4, hall: 1.55, rest: 1.35, ending_unify: 1.15, ending_tri: 1.4 };
 
 export class Music {
   private ctx: BaseAudioContext | null = null;
@@ -72,6 +81,10 @@ export class Music {
   private pauseMul = 1;
   /** 界面曲情绪（只对 menu 生效）。 */
   mood: MenuMood = 'home';
+  /** 结局四屏段落（0 画卷 · 1 麒麟阁 · 2 功臣 · 3 收尾）与该段从第几步开始。 */
+  endingSection: 0 | 1 | 2 | 3 = 0; private sectionStep = 0;
+  /** 结局曲的两套旋律（战斗曲乐句换调式）。 */
+  private readonly endingMel: Record<'ending_unify' | 'ending_tri', Array<[number, number] | null>> = { ending_unify: new Array(32 * 16).fill(null), ending_tri: new Array(32 * 16).fill(null) };
   private moodTimer: number | null = null;
   muted = false;
   private bpm: number;
@@ -92,6 +105,12 @@ export class Music {
       let pos = slot * 32;
       for (const [deg, len] of phrases[name]) { if (deg >= 0) this.melodyAt[pos] = [SCALE[deg], len * 2]; pos += len * 2; }
     });
+    // 结局曲：《乱世长歌》原乐句（FORM / PHRASES），天下一统换宫调式、三分天下保留羽调式
+    FORM.forEach((name, slot) => {
+      if (!name) return;
+      let pos = slot * 32;
+      for (const [deg, len] of PHRASES[name]) { if (deg >= 0) { this.endingMel.ending_unify[pos] = [SCALE_GONG[deg], len * 2]; this.endingMel.ending_tri[pos] = [SCALE[deg], len * 2]; } pos += len * 2; }
+    });
     this.reloadPrefs();
   }
 
@@ -107,14 +126,20 @@ export class Music {
     }
   }
 
-  private level(): number { return this.muted ? 0 : this.volume * 0.55 * this.duck * this.pauseMul * (this.theme === 'menu' ? MOOD_GAIN[this.mood] : 1); }
+  private level(): number { return this.muted ? 0 : this.volume * 0.55 * this.duck * this.pauseMul * (this.theme === 'menu' ? MOOD_GAIN[this.mood] * (this.endingSection === 3 && this.mood.startsWith('ending') ? .55 : 1) : 1); }
+  /** 结局换屏：换段落（同一速度、同一乐句往下走，只加减编制；收尾段旋律停、长和弦收住并慢慢压到 55%）。 */
+  setEndingSection(s: 0 | 1 | 2 | 3): void {
+    if (s === this.endingSection) return;
+    this.endingSection = s; this.sectionStep = this.step;
+    if (this.moodTimer === null) this.applyGain(this.level(), s === 3 ? 2.2 : .3); // 换情绪淡入淡出进行中时不打断；收尾段约 6 秒渐弱到 55%；回到前几段（重进结局）恢复
+  }
   /** 暂停 / 打开面板：音乐压到一半（0.25 秒渐变）；关掉恢复。 */
   setPaused(on: boolean): void { const m = on ? .5 : 1; if (m === this.pauseMul) return; this.pauseMul = m; this.applyGain(this.level(), .25); }
   get pausedDuck(): boolean { return this.pauseMul < 1; }
   /** 换界面曲情绪：没在播时直接换；在播时淡出 → 换编制、从乐段开头起 → 淡入。同一情绪不动。 */
   setMood(mood: MenuMood, immediate = false): void {
     if (this.theme !== 'menu' || mood === this.mood && this.moodTimer === null) return;
-    const apply = (): void => { this.mood = mood; this.bpm = MOOD_BPM[mood]; this.stepDur = 60 / this.bpm / 4; this.step = 0; };
+    const apply = (): void => { this.mood = mood; this.bpm = MOOD_BPM[mood]; this.stepDur = 60 / this.bpm / 4; this.step = 0; this.sectionStep = 0; }; // 结局段落由 EndingScene 按屏设置，这里不重置（换情绪的淡入有 0.5 秒延迟，期间可能已经翻到下一屏）
     if (this.moodTimer !== null) { window.clearTimeout(this.moodTimer); this.moodTimer = null; }
     if (immediate || !this.playing || !this.ctx) { apply(); return; }
     this.applyGain(0, .45 / 3);
@@ -254,7 +279,8 @@ export class Music {
         this.nextTime += b.stepDur;
         continue;
       }
-      if (this.epic && this.theme === 'menu') { this.epic.menuStep(this.step, this.nextTime, this.stepDur, this.melodyAt, MENU_ROOTS, ARP, this.mood); this.step++; }
+      if (this.epic && this.theme === 'menu' && (this.mood === 'ending_unify' || this.mood === 'ending_tri')) { this.epic.endingStep(this.step, this.nextTime, this.stepDur, this.endingMel[this.mood], this.mood === 'ending_unify', this.endingSection, Math.floor((this.step - this.sectionStep) / 16)); this.step++; }
+      else if (this.epic && this.theme === 'menu') { this.epic.menuStep(this.step, this.nextTime, this.stepDur, this.melodyAt, MENU_ROOTS, ARP, this.mood as 'home' | 'map' | 'camp' | 'hall' | 'rest'); this.step++; }
       else if (this.epic) { this.epic.battleStep(this.step, this.nextTime, this.stepDur, this.intensity === 1); this.step++; }
       else { this.scheduleStep(this.step, this.nextTime); this.step = (this.step + 1) % 512; }
       this.nextTime += this.stepDur;

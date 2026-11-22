@@ -13,9 +13,9 @@ const bundle = await build({ stdin: { contents: `
     const cs = [...Array(ch)].map((_, c) => buf.getChannelData(c)); let o = 44; for (let i = 0; i < n; i++) for (let c = 0; c < ch; c++) { const v = Math.max(-1, Math.min(1, cs[c][i])); data.setInt16(o, v < 0 ? v * 32768 : v * 32767, true); o += 2; }
     const b = new Uint8Array(data.buffer); let s = ''; for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode(...b.subarray(i, i + 0x8000)); return btoa(s); }
   window.__moods = [...MENU_MOODS];
-  window.__render = async (m, secs) => { const mu = new Music('menu'); mu.setMood(m, true); return wav(await mu.renderOffline(secs, null)); };
+  window.__render = async (m, secs, sec = 0) => { const mu = new Music('menu'); mu.setMood(m, true); mu.setEndingSection(sec); return wav(await mu.renderOffline(secs, null)); };
 `, resolveDir: process.cwd(), loader: 'ts' }, bundle: true, write: false, format: 'iife', platform: 'browser', define: { 'import.meta.env.DEV': 'false' } });
 const b = await chromium.launch({ channel: 'chrome', headless: true, args: ['--mute-audio'] });
 const p = await b.newPage(); await p.setContent('<html><body></body></html>'); await p.addScriptTag({ content: bundle.outputFiles[0].text });
-for (const m of await p.evaluate(() => window.__moods)) { writeFileSync(join(outDir, `ui-bgm-${m}.wav`), Buffer.from(await p.evaluate(([m, s]) => window.__render(m, s), [m, SECS]), 'base64')); console.log('WAV', m); }
+for (const m of await p.evaluate(() => window.__moods)) { if (m.startsWith('ending')) { for (const sec of [0, 1, 2, 3]) { writeFileSync(join(outDir, `ending-${m.slice(7)}-${sec + 1}.wav`), Buffer.from(await p.evaluate(([m, s, sec]) => window.__render(m, s, sec), [m, SECS, sec]), 'base64')); console.log('WAV', m, sec); } continue; } writeFileSync(join(outDir, `ui-bgm-${m}.wav`), Buffer.from(await p.evaluate(([m, s]) => window.__render(m, s), [m, SECS]), 'base64')); console.log('WAV', m); }
 await b.close();

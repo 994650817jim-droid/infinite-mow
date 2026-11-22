@@ -303,6 +303,55 @@ export class EpicBgm {
     const n = mel[(bar * 16 + pos) % mel.length];
     if (n) { if (bar < 16) this.dizi(mtof(n[0]), t, n[1] * sd * .97, .05); else this.erhu(mtof(n[0]), t, n[1] * sd, .055); }
   }
+  /**
+   * 结局曲（Music.ts 顶部说明）：unify = 《山河定》（D 宫调式，明亮庄严），否则《三分歌》（D 羽调式，苍凉、留白多）。
+   * section：0 画卷（主题首次完整呈现）· 1 麒麟阁（加轻鼓点 + 钟）· 2 功臣（最饱满）· 3 收尾（旋律停，长和弦收住，之后只剩低音与偶尔一声钟）。
+   * since：进入本段后第几小节（收尾段第 0 小节奏收束和弦）。
+   */
+  endingStep(step: number, t: number, sd: number, mel: Array<[number, number] | null>, unify: boolean, section: 0 | 1 | 2 | 3, since: number): void {
+    const bar = Math.floor(step / 16) % 32, pos = step % 16, bar16 = sd * 16;
+    const roots = unify ? [50, 57, 59, 52, 55, 57, 50, 50] : [50, 50, 53, 48, 55, 55, 57, 50];
+    const root = roots[bar % 8], third = unify ? ([50, 55, 57].includes(root) ? 4 : 3) : ([53, 48, 55].includes(root) ? 4 : 3);
+    const notes = [root, root + 7, root + 12, root + 12 + third];
+    if (section === 3) {
+      if (since === 0 && pos === 0) {
+        // 收束：主音长和弦（编钟依次敲响 + 合唱 + 低音），旋律乐器最后一个长音
+        const chord = unify ? [50, 57, 62, 66, 69] : [50, 57, 62, 65, 69];
+        chord.forEach((m, i) => this.bell(mtof(m + 12), t + i * .14, unify ? .02 : .015));
+        this.choir(chord.slice(0, 4).map(m => m - 12), t, bar16 * 2.6, unify ? .035 : .028, unify ? 'a' : 'o');
+        this.bassDrone(mtof(38), t, bar16 * 2.8, .07);
+        if (unify) this.dizi(mtof(74), t + sd * 2, bar16 * 1.6, .045); else this.erhu(mtof(62), t + sd * 2, bar16 * 1.6, .045);
+        if (unify) this.gong(t, .07);
+      } else if (since >= 3 && pos === 0 && bar % 4 === 0) {
+        // 余韵：可以一直停在收尾屏——低音 + 一声远钟，四小节一次
+        this.bassDrone(mtof(38), t, bar16 * 4.1, .035); this.bell(mtof(unify ? 74 : 69), t + sd * 4, .01);
+      }
+      return;
+    }
+    if (pos === 0) {
+      this.bassDrone(mtof(root - 12), t, bar16 * 1.1, unify ? .055 : .045);
+      if (unify && bar % 4 === 0) for (let k = 0; k < 2; k++) this.bell(mtof(notes[k + 2] + 12), t + k * sd * 2, .016); // 编钟
+      if (!unify && bar % 8 === 0) this.bell(mtof(notes[1] + 12), t, .011);
+    }
+    // 古琴：天下一统四分琶音；三分天下只在一、三拍（留白）
+    if (unify ? pos % 4 === 0 : (pos === 0 || pos === 8)) { const i = unify ? pos / 4 : pos / 4; this.qin(mtof(notes[i] - (i === 0 ? 12 : 0)), t, unify ? .05 : .055, !unify && pos === 8 && bar % 4 === 3); }
+    // 麒麟阁起：轻的节律
+    if (section >= 1) {
+      if (unify) { if (pos === 0) this.warDrum(t, section >= 2 ? .12 : .09); if (pos === 8) this.warDrum(t, .05); if (pos === 0 && bar % 2 === 1) this.bell(mtof(notes[2] + 24), t, .008); }
+      else if (pos === 0) this.smallDrum(t, .06);
+    }
+    // 功臣：最饱满
+    if (section >= 2 && pos === 0) {
+      if (unify && bar % 2 === 0) this.choir([notes[0], notes[1], notes[3]].map(m => m - 12), t, bar16 * 2.02, .028, 'a');
+      if (!unify && bar % 4 === 0) this.choir([notes[0], notes[2]].map(m => m - 12), t, bar16 * 4.02, .02, 'o');
+      if (unify && pos === 0) this.warDrum(t + sd * 4, .04);
+    }
+    const n = mel[(bar * 16 + pos) % mel.length];
+    if (n) {
+      if (unify) { this.dizi(mtof(n[0]), t, n[1] * sd * .97, .045); if (section >= 2) this.horn(mtof(n[0] - 12), t, n[1] * sd * .95, .026); }
+      else { this.dizi(mtof(n[0] - 12), t, n[1] * sd * .97, .045); if (section >= 2) this.erhu(mtof(n[0]), t, n[1] * sd, .035); }
+    }
+  }
   /** 界面曲各情绪的编制（旋律同《营火望乡》）。 */
   private menuMood(mood: 'map' | 'camp' | 'hall' | 'rest', bar: number, pos: number, t: number, sd: number, mel: Array<[number, number] | null>, root: number, notes: number[], bar16: number): void {
     const n = mel[(bar * 16 + pos) % mel.length];

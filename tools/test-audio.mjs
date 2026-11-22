@@ -67,7 +67,7 @@ ck(`合成：代码里用到的 ${used.size} 个键都能离线合成（无 NaN 
 // ———— 界面 BGM（2026-11-20 用户「检查界面bgm」）————
 // 4. 静态：每个非战斗界面都开界面曲，情绪是有效的；战斗场景暂停压低、结算后接「静」
 const MOODS = await page.evaluate(() => [...window.__T.MENU_MOODS]);
-const UI_SCENES = { MenuScene: 'home', WorldMapScene: 'map', WorldMapSceneV1: 'map', TownScene: 'camp', CityScene: 'camp', CityRecruitScene: 'camp', TalentHallScene: 'hall', EndingScene: 'home',
+const UI_SCENES = { MenuScene: 'home', WorldMapScene: 'map', WorldMapSceneV1: 'map', TownScene: 'camp', CityScene: 'camp', CityRecruitScene: 'camp', TalentHallScene: 'hall',
   BeifaChapterScene: 'map', ChibiChapterScene: 'map', GuanduChapterScene: 'map', HanzhongChapterScene: 'map', JingnanChapterScene: 'map', NanzhengChapterScene: 'map', ShuChapterScene: 'map', ThirdChapterScene: 'map', XiangfanChapterScene: 'map', YilingChapterScene: 'map' };
 const badScene = [];
 for (const [sc, want] of Object.entries(UI_SCENES)) {
@@ -118,6 +118,29 @@ const dk = await page.evaluate(async () => {
   return { hitGain, awakenGains, state: s.ctx.state };
 });
 ck('觉醒：压低期间新起的命中音效 × 0.4，觉醒本身（高优先级）不压', dk.hitGain.includes(.4) && !dk.awakenGains.includes(.4), dk);
+// ———— 结局专属曲（2026-11-22 用户「结局的专属音乐也安排一下」）————
+const es = readFileSync('src/scenes/EndingScene.ts', 'utf8');
+ck('结局：EndingScene 按结局种类放专属曲（天下一统 ending_unify / 三分天下 ending_tri），每屏换段落', es.includes('playMenuMusic(this, ENDING_MUSIC[this.kind])') && /unify: 'ending_unify', tripartite: 'ending_tri'/.test(es) && es.includes('menuMusic().setEndingSection(ENDING_SECTION[screen])') && /seal_stamp/.test(es), null);
+const endSec = await page.evaluate(async () => {
+  const { Music } = window.__T, out = {};
+  for (const mood of ['ending_unify', 'ending_tri']) { out[mood] = {};
+    for (const sec of [0, 2, 3]) { const mu = new Music('menu'); mu.setMood(mood, true); mu.setEndingSection(sec); const buf = await mu.renderOffline(16, null); let sum = 0, n = 0, peak = 0, nan = 0;
+      for (let c = 0; c < buf.numberOfChannels; c++) { const d = buf.getChannelData(c); for (let i = 0; i < d.length; i++) { const v = d[i]; if (!Number.isFinite(v)) { nan++; continue; } sum += v * v; n++; peak = Math.max(peak, Math.abs(v)); } }
+      out[mood][sec] = { rmsDb: +(20 * Math.log10(Math.sqrt(sum / n) + 1e-9)).toFixed(1), peakDb: +(20 * Math.log10(peak + 1e-9)).toFixed(1), nan }; } }
+  return out;
+});
+console.log('INFO 结局曲各段 16 秒响度', JSON.stringify(endSec));
+const okSec = m => endSec[m][0].nan + endSec[m][2].nan + endSec[m][3].nan === 0 && endSec[m][2].peakDb <= 0 && endSec[m][2].rmsDb > endSec[m][0].rmsDb && endSec[m][3].rmsDb < endSec[m][2].rmsDb;
+ck('结局：两种编配都能合成、不削波；功臣段比画卷段饱满、收尾段比功臣段轻', okSec('ending_unify') && okSec('ending_tri'), endSec);
+const endRt = await page.evaluate(async () => {
+  const { Music } = window.__T, m = new Music('menu'), wait = ms => new Promise(r => setTimeout(r, ms)), g = () => m.master?.gain.value ?? -1;
+  m.setMood('ending_unify', true); m.start(); m.unlock(); for (let i = 0; i < 40 && m.ctx?.state !== 'running'; i++) await wait(25);
+  await wait(1200); m.setEndingSection(1); await wait(300); m.setEndingSection(2); await wait(1200); const full = g();
+  m.setEndingSection(3); await wait(400); const early = g(); await wait(4500); const late = g();
+  m.setMood('map'); await wait(700); const mood = m.mood; await wait(1500); const mapGain = g(); m.dispose();
+  return { full: +full.toFixed(3), early: +early.toFixed(3), late: +late.toFixed(3), mood, mapGain: +mapGain.toFixed(3) };
+});
+ck('结局：跳到收尾时平滑渐弱（0.4 秒时仍 > 80%、5 秒后降到约 55–75%，不突然断）；离开后换回地图曲', endRt.early > endRt.full * .8 && endRt.late < endRt.full * .8 && endRt.late > endRt.full * .45 && endRt.mood === 'map' && endRt.mapGain > 0, endRt);
 ck('无页面报错', errs.length === 0, errs);
 await b.close();
 console.log(fail ? `TEST-AUDIO FAIL ${fail}` : 'TEST-AUDIO OK');

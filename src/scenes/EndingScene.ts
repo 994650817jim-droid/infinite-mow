@@ -8,7 +8,8 @@ import { homeCommand } from '../ui/HomeCommand';
 import { loadRoster } from '../systems/RosterStore';
 import { loadWorld } from '../world/WorldStore';
 import { CITIES } from '../world/WorldCities';
-import { playMenuMusic, type MenuMood } from '../systems/Music';
+import { menuMusic, playMenuMusic, type MenuMood } from '../systems/Music';
+import { uiSfx } from '../systems/Sfx';
 
 export type EndingKind = 'unify' | 'tripartite';
 /** 结局判定：占城数 ≥ 全部城池 × ENDING.unifyRatio → 天下一统，否则三分天下。 */
@@ -63,7 +64,10 @@ export const ENDING_TEXT = { top: 360, unify: { cx: 470, w: 560 }, tripartite: {
 /** 麒麟阁长卷上的文字 / 印章安全区（逻辑坐标，见 ending-art.md）。 */
 export const PAVILION_SAFE = { x0: 121, x1: 841, y0: 112, y1: 363 } as const;
 /** 结局音乐：不用主菜单曲（home）；先用界面曲的「静」编制（古琴 + 二胡，无鼓）。换正式结局曲时改这里。 */
-export const ENDING_MUSIC: MenuMood = 'rest';
+/** 结局专属曲（Music.ts：天下一统《山河定》、三分天下《三分歌》，《乱世长歌》主题的终章变奏），按结局种类选编配。 */
+export const ENDING_MUSIC: Record<EndingKind, MenuMood> = { unify: 'ending_unify', tripartite: 'ending_tri' };
+/** 四屏 → 结局曲段落（0 画卷 · 1 麒麟阁 · 2 功臣 · 3 收尾）。 */
+const ENDING_SECTION = { story: 0, pavilion: 1, heroes: 2, finale: 3 } as const;
 
 type Screen = 'story' | 'pavilion' | 'heroes' | 'finale';
 const INK = '#2a1c10', PAPER_INK = '#4a3420';
@@ -91,10 +95,10 @@ export class EndingScene extends Phaser.Scene {
     for (const id of this.heroIds()) img('ink_hero_' + id, `assets/ink-scroll/${id}.webp`);
   }
   create(): void {
-    playMenuMusic(this, ENDING_MUSIC);
     this.cameras.main.setBackgroundColor('#0b0806');
     const s = loadWorld(); this.owned = s.ownedCities.length; this.total = CITIES.length;
     this.kind = endingKind(this.owned, this.total);
+    playMenuMusic(this, ENDING_MUSIC[this.kind]); // 结局专属曲（按结局种类）；离开回天下地图时地图场景换回地图曲（同一实例淡出淡入）
     const esc = (): void => { if (this.screen !== 'finale') this.show('finale'); };
     this.input.keyboard?.on('keydown-ESC', esc);
     this.events.once('shutdown', () => this.input.keyboard?.off('keydown-ESC', esc));
@@ -128,6 +132,7 @@ export class EndingScene extends Phaser.Scene {
   }
   show(screen: Screen): void {
     this.tweens.killAll(); this.root?.destroy(); this.screen = screen;
+    menuMusic().setEndingSection(ENDING_SECTION[screen]); // 跟屏换段落；Esc 跳到收尾 = 直接进收尾段（旋律停、长和弦收住、慢慢渐弱）
     this.root = this.add.container(0, 0).setName('ending-' + screen);
     this.cameras.main.fadeIn(500, 8, 5, 3);
     if (screen === 'story') this.story(); else if (screen === 'pavilion') this.pavilion(); else if (screen === 'heroes') this.heroes(); else this.finale();
@@ -176,7 +181,7 @@ export class EndingScene extends Phaser.Scene {
           if (this.textures.exists(ENDING_ART.seal.red)) sealC.add(this.add.image(0, 0, ENDING_ART.seal.red).setDisplaySize(seal, seal));
           sealC.add(this.add.text(0, 0, st.seal, { fontFamily: TITLE_FONT, fontSize: Math.round(seal * .52) + 'px', color: '#fbf1e0', resolution: 2 }).setOrigin(.5));
           // 很轻的盖印：略大、透明 → 落定
-          sealC.setScale(1.3).setAlpha(0); this.tweens.add({ targets: sealC, scale: 1, alpha: 1, delay: 300 + i * 110 + k * 60, duration: 240, ease: 'Back.easeOut' });
+          sealC.setScale(1.3).setAlpha(0); this.tweens.add({ targets: sealC, scale: 1, alpha: 1, delay: 300 + i * 110 + k * 60, duration: 240, ease: 'Back.easeOut', onStart: () => uiSfx().play('seal_stamp') }); // 盖印轻响（自带节流，连盖不刷屏）
         } else if (this.textures.exists(ENDING_ART.seal.ghost)) col.add(this.add.image(cx, yy, ENDING_ART.seal.ghost).setDisplaySize(seal, seal).setName(`ending-seal-empty-${c.arc}-${k}`));
       });
     });

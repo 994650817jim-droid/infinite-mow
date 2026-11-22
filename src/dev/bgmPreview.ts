@@ -9,6 +9,8 @@ const MOOD_NAME: Record<MenuMood, [string, string]> = {
   camp: ['营寨 / 城池 / 城中募兵', '暖：古琴八分拨弦、小鼓、远处人声嘈嘈与营火噼啪'],
   hall: ['招贤馆', '雅：古琴、箫、编钟，无鼓'],
   rest: ['战斗结算 / 战败退守', '静：古琴 + 二胡（胜负短曲之后接上）'],
+  ending_unify: ['结局 · 天下一统《山河定》', '《乱世长歌》主题放慢、D 宫调式：古琴、竹笛、编钟、合唱、远鼓（60 BPM）'],
+  ending_tri: ['结局 · 三分天下《三分歌》', '《乱世长歌》主题放慢、D 羽调式：箫、二胡、古琴，留白多（54 BPM）'],
 };
 const BOSSES = ['张角', '华雄', '吕布', '董卓', '袁术', '曹操', '司马懿'];
 
@@ -52,7 +54,7 @@ function section(title: string, cards: Array<{ t: string; s: string; btns: Array
   }
   document.getElementById('app')!.append(sec);
 }
-section('界面曲（非战斗界面）', MENU_MOODS.map(m => ({ t: MOOD_NAME[m][0], s: MOOD_NAME[m][1], btns: [['播放', () => playMood(m)]] as Array<[string, () => void]> })));
+section('界面曲（非战斗界面）', MENU_MOODS.filter(m => !m.startsWith('ending')).map(m => ({ t: MOOD_NAME[m][0], s: MOOD_NAME[m][1], btns: [['播放', () => playMood(m)]] as Array<[string, () => void]> })));
 section('战斗曲', (Object.keys(BATTLE_THEMES) as BattleThemeKey[]).map(k => ({ t: BATTLE_THEMES[k].title, s: `${BATTLE_THEMES[k].bpm} BPM`, btns: [['播放', () => playBattle(k)]] as Array<[string, () => void]> })));
 section('首领曲', [{ t: '首领出场 + 主题', s: '按首领气质（调式、主奏乐器、特效）', btns: BOSSES.map(n => [n, () => playBattle('huangjin', n)] as [string, () => void]) }]);
 section('胜负短曲 · 开场', [{ t: '胜负短曲', s: '接在战斗曲后约 4 秒', btns: [['胜利', () => playJingle(true)], ['败退', () => playJingle(false)]] }, { t: '开场水墨动画曲', s: 'assets/audio/opening_theme.ogg', btns: [['播放', playOpening]] }]);
@@ -60,4 +62,6 @@ document.getElementById('stop')!.onclick = () => { stopAll(); say('已停止'); 
 const vol = document.getElementById('vol') as HTMLInputElement;
 try { vol.value = localStorage.getItem('im_bgm_vol') ?? '40'; } catch { /* ignore */ }
 vol.oninput = () => { const v = Number(vol.value); menu?.setVolume(v); battle?.setVolume(v); if (opening) opening.volume = Math.min(1, v / 100 * .55); say(`音乐音量 ${v}%（写入游戏设置 im_bgm_vol）`); };
+const SEC = ['① 画卷', '② 麒麟阁', '③ 功臣', '④ 收尾'];
+section('结局专属曲（按结局四屏切段落）', (['ending_unify', 'ending_tri'] as const).map(m => ({ t: MOOD_NAME[m][0], s: MOOD_NAME[m][1] + '。先点「播放」，再点四段听编制变化；④ 收尾是长和弦收住、渐弱到低音与远钟', btns: [['播放', () => playMood(m)], ...SEC.map((n, i) => [n, () => { if (!menu || menu.mood !== m) playMood(m); window.setTimeout(() => { menu?.setEndingSection(i as 0 | 1 | 2 | 3); say(`${MOOD_NAME[m][0]} · ${n}`); }, menu?.mood === m ? 0 : 700); }] as [string, () => void])] as Array<[string, () => void]> })));
 (window as unknown as { __bgmPreview?: unknown }).__bgmPreview = { playMood, playBattle, playJingle, stopAll, get menu() { return menu; }, get battle() { return battle; } };

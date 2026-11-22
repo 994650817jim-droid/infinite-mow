@@ -216,7 +216,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       this.gPool = pool.filter(b => b.name !== heroName).length ? pool.filter(b => b.name !== heroName) : pool; // 本局主将同名的名将不出（主将黄忠 / 孟获 / 祝融……）
       this.gOrder = pickBosses(this.gPool);
       // 从 0 开局 + 卡池全开（基类 create 里按 mechOpen 建系统、读卡池上限，所以先开）；各章兵种换色图先备好
-      this.gGear = {}; this.gCharms = []; this.gHorse = undefined; this.gRecruitBtn = null; this.gRecruits = { times: 0, men: 0 }; // 本局兵装 / 信物 / 坐骑：从 0 开局，空
+      this.gGear = {}; this.gCharms = []; this.gHorse = undefined; this.gRecruitBtn = null; this.gRecruits = { times: 0, men: 0 }; this.gResultTab = 'kills'; // 本局兵装 / 信物 / 坐骑：从 0 开局，空
       const F = GAUNTLET.from0; this.gRerollFree = F.freeRerolls; this.gRerollPaid = 0; this.gExcludes = F.excludes; this.gExcluded.clear(); this.gExcluding = false; this.gExcludeBtn = null;
       this.openPool(); this.events.once('shutdown', () => this.closePool());
       this.ensureTroopArt();
@@ -455,6 +455,50 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       const cost = recruitCost(this.gWave), T = recruitTier(this.gWave), ok = this.legion.food >= cost;
       b.setText(`招兵 · ${GAUNTLET_RECRUIT.per} 名 · ${cost} 钱币\n${T.kinds.map(k => TROOPS[k].name).join(' / ')} · ${T.level} 阶 · 兵力 ${this.legion.count}`).setVisible(true).setAlpha(ok ? 1 : .55);
     }
+    // ———— 结算「本局 build」（局内 build 第 6 条）：斩将头像那一块加两个页签，「本局 build」按类列出这一局拿到的东西 ————
+    /** 本局 build 按类汇总：本命·武艺、战法、将星、兵装（兵装 / 信物 / 坐骑）、军阵·部曲、副将；每项 图标 + 短名 + 稀有度。 */
+    gauntletBuild(): Array<{ cat: string; items: Array<{ name: string; icon: string; rarity: GRarity }> }> {
+      const fam = (id: string) => id.replace(/^(martial_.+)_\d+$/, '$1').replace(/^weapon_over_\d+$/, 'weapon_over');
+      const last = new Map<string, { id: string; name: string; icon?: string; rarity: GRarity; cat: GCategory }>();
+      for (const e of this.gBuildLog) if (!/^gauntlet_(follow|spoils|replace_|keep|endless|settle)/.test(e.id)) last.set(fam(e.id), e); // 收副将 / 取辎重 / 收兵这些是面板动作，不算 build（副将另列）
+      const pick = (cat: GCategory) => [...last.values()].filter(e => e.cat === cat && !/^gauntlet_(gear|charm|horse)_/.test(e.id)).map(e => ({ name: e.name.replace(/^(将星|主星) · /, ''), icon: e.icon ?? 'icon_passive', rarity: e.rarity }));
+      const kit: Array<{ name: string; icon: string; rarity: GRarity }> = [];
+      const qr = (q: ItemQuality): GRarity => q === 'orange' ? 'legend' : q === 'purple' ? 'rare' : q === 'blue' ? 'fine' : 'common';
+      for (const it of [...Object.values(this.gGear).filter((x): x is ItemInstance => !!x), ...this.gCharms]) kit.push({ name: itemName(it), icon: this.kitIcon(itemIcon(this, it)), rarity: qr(it.quality) });
+      if (this.gHorse) kit.push({ name: this.gHorse.name, icon: this.kitIcon(horseIcon(this, this.gHorse.id)), rarity: this.gHorse.legend ? 'legend' : horseQuality(this.gHorse) === 'white' ? 'common' : 'fine' });
+      const army: Array<{ name: string; icon: string; rarity: GRarity }> = this.gFormations.map(id => ({ name: FORMATIONS[id].name, icon: this.textures.exists('formation_icon_' + id) ? 'formation_icon_' + id : 'growth_icon_eight_trigrams', rarity: id === 'bazhen' ? 'legend' : 'rare' as GRarity }));
+      if (this.gRecruits.men) army.push({ name: '招兵 ' + this.gRecruits.men + ' 名', icon: 'growth_icon_tiger_tally', rarity: 'common' });
+      const out = [
+        { cat: '本命 · 武艺', items: pick('own') }, { cat: '战法', items: pick('tactic') }, { cat: '将星', items: pick('star') },
+        { cat: '兵装 · 信物 · 坐骑', items: kit }, { cat: '军阵 · 部曲', items: army },
+        { cat: '副将', items: this.gFollowers.map(({ boss }) => ({ name: boss.name, icon: this.portrait(boss), rarity: 'rare' as GRarity })) },
+        { cat: '机缘', items: pick('other') },
+      ];
+      return out.filter(g => g.items.length);
+    }
+    /** 结算画面上的「本局 build」块：按类分栏，每栏标题 + 图标格（两行放不下写 +N）。 */
+    private drawBuild(top: number, h: number): Phaser.GameObjects.GameObject[] {
+      const groups = this.gauntletBuild(), objs: Phaser.GameObjects.GameObject[] = [], gap = 12, W = Math.min(1200, (GAME_WIDTH - 48) / (this.resultPanel.scaleX || 1)), x0 = this.resultTexts.subtitle.x - W / 2; // 结算面板整体是缩放过的：按面板里的坐标算可用宽度
+      if (!groups.length) { objs.push(this.add.text(this.resultTexts.subtitle.x, top + h / 2, '这一局还没拿到什么', { fontFamily: HEADING_FONT, fontSize: '16px', color: '#c9b48a', resolution: 2 }).setOrigin(.5).setScrollFactor(0).setName('gauntlet-build-empty')); return objs; }
+      const weight = groups.map(g => Math.max(1.2, Math.min(4, g.items.length))), tw = weight.reduce((a, b) => a + b, 0), avail = W - gap * (groups.length - 1);
+      let x = x0;
+      groups.forEach((g, gi) => {
+        const w = avail * weight[gi] / tw, S = 30, cell = 46, cols = Math.max(1, Math.floor(w / cell)), rows = 2, max = cols * rows;
+        objs.push(this.add.rectangle(x + w / 2, top + h / 2, w, h, 0x1a120b, .55).setStrokeStyle(1, 0xd9b46a, .5).setScrollFactor(0).setName('gauntlet-build-col'));
+        { const hd = this.add.text(x + w / 2, top + 6, `${g.cat} · ${g.items.length}`, { fontFamily: HEADING_FONT, fontSize: '14px', color: '#f0dcae', resolution: 2 }).setOrigin(.5, 0).setStroke('#1a120b', 3).setScrollFactor(0).setName('gauntlet-build-head'); if (hd.width > w - 8) hd.setScale((w - 8) / hd.width); objs.push(hd); } // 窄栏标题缩到放得下
+        const shown = g.items.length > max ? g.items.slice(0, max - 1) : g.items, ox = x + (w - Math.min(cols, shown.length) * cell) / 2 + cell / 2;
+        shown.forEach((it, i) => {
+          const cx = ox + (i % cols) * cell, cy = top + 40 + Math.floor(i / cols) * 48, R = RARITY[it.rarity];
+          objs.push(this.add.circle(cx, cy, S / 2 + 3, 0x0d0905, .9).setStrokeStyle(2, R.color, it.rarity === 'common' ? .5 : 1).setScrollFactor(0).setName('gauntlet-build-ring'));
+          const img = this.add.image(cx, cy, this.textures.exists(it.icon) ? it.icon : 'icon_passive').setScrollFactor(0).setName('gauntlet-build-icon'); img.setScale(Math.min(S / img.width, S / img.height)); objs.push(img);
+          objs.push(this.add.text(cx, cy + S / 2 + 1, it.name.length > 4 ? it.name.slice(0, 4) : it.name, { fontFamily: FONT, fontSize: '10px', color: R.css, resolution: 2 }).setOrigin(.5, 0).setStroke('#120904', 3).setScrollFactor(0).setName('gauntlet-build-name'));
+        });
+        if (g.items.length > max) objs.push(this.add.text(ox + ((max - 1) % cols) * cell, top + 40 + Math.floor((max - 1) / cols) * 48, '+' + (g.items.length - max + 1), { fontFamily: HEADING_FONT, fontSize: '18px', color: '#f0dcae', resolution: 2 }).setOrigin(.5).setScrollFactor(0).setName('gauntlet-build-more'));
+        x += w + gap;
+      });
+      return objs;
+    }
+
     // ———— 换一批 / 排除（掌控感）：每局 2 次免费换一批，之后花钱币、逐次涨价；每局 1 次排除（点一张卡，本局不再出现）————
     private gRerollFree = 0; private gRerollPaid = 0; private gExcludes = 0; private gExcluded = new Set<string>(); private gExcluding = false;
     private gExcludeBtn: Phaser.GameObjects.Text | null = null;
@@ -990,20 +1034,32 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     }
     /** 结算画面（电脑版）：基类画完奖励格以后，底下一行战况换成本模式的、副标题下面排斩将头像（基类可能晚些再画一遍，所以挂在这里）。 */
     private gResult: { kills: number; best: number; record: boolean } | null = null;
+    /** 结算那一块现在显示哪个页签：斩将头像 / 本局 build。 */
+    gResultTab: 'kills' | 'build' = 'kills';
     protected presentResult(victory: boolean): void {
       super.presentResult(victory); const r = this.gResult; if (!r || !this.resultPanel) return; const { kills, best, record } = r;
-      for (const o of [...this.resultPanel.list]) if (o.name.startsWith('gauntlet-face')) o.destroy();
+      for (const o of [...this.resultPanel.list]) if (/^gauntlet-(face|build|tab)/.test(o.name)) o.destroy();
       // 电脑版：底下一行战况换成本模式的（第几阵 · 斩将 · 用时 · 最高连斩）；斩将头像排在分隔线下面
       (this.resultPanel.getByName('result-stats') as Phaser.GameObjects.Text | null)?.setText([`第 ${this.gWave} 阵`, `斩将 ${kills} 位`, '用时 ' + this.formatTime(this.elapsed), `最高连斩 ${best}${record ? '（新纪录）' : ''}`].join('　·　'));
       // 斩将一排（11-21 总制作人「头像太小」）：每位一块同尺寸的底牌，人像裁掉留白后等比放进底牌、脚踩同一条底线，名字在牌下；最多 12 位（无尽多了取最后 12 位）
-      const row = this.gKills.slice(-12), n = row.length; if (!n) return;
+      const row = this.gKills.slice(-12), n = row.length, faces: Phaser.GameObjects.GameObject[] = [];
       const PW = 76, PH = 92, gap = n > 10 ? 10 : 16, w = n * PW + (n - 1) * gap, x0 = this.resultTexts.subtitle.x - w / 2 + PW / 2, top = this.resultTop + 146, cy = top + PH / 2;
       row.forEach((b, i) => {
         const x = x0 + i * (PW + gap), plate = this.add.rectangle(x, cy, PW, PH, 0x1a120b, .72).setStrokeStyle(1.5, 0xd9b46a, .8).setScrollFactor(0).setName('gauntlet-face-plate');
         const img = this.add.image(x, top + PH - 6, this.portrait(b)).setOrigin(.5, 1).setScrollFactor(0).setName('gauntlet-face'); img.setScale(Math.min((PW - 10) / img.width, (PH - 12) / img.height));
         const t = this.add.text(x, top + PH + 7, b.name, { fontFamily: HEADING_FONT, fontSize: '15px', color: '#f0dcae', resolution: 2 }).setOrigin(.5, 0).setStroke('#1a120b', 3).setScrollFactor(0).setName('gauntlet-face-name');
-        this.resultPanel.add([plate, img, t]);
+        faces.push(plate, img, t);
       });
+      if (!n) faces.push(this.add.text(this.resultTexts.subtitle.x, cy, '这一局还没斩将', { fontFamily: HEADING_FONT, fontSize: '16px', color: '#c9b48a', resolution: 2 }).setOrigin(.5).setScrollFactor(0).setName('gauntlet-face-empty'));
+      this.resultPanel.add(faces);
+      // 「本局 build」（局内 build 第 6 条）：和斩将头像共用这一块，分隔线上两个页签切换
+      const build = this.drawBuild(top + 2, PH + 14); this.resultPanel.add(build); // 两行图标 + 小字，底边不超过斩将名字那一行（下面是奖励格）
+      const tab = (label: string, key: 'kills' | 'build', x: number) => this.add.text(x, top - 13, label, { fontFamily: HEADING_FONT, fontSize: '14px', color: '#f0dcae', resolution: 2 }).setOrigin(.5).setPadding(12, 2) /* 骑在分隔线上，不压副标题 */.setBackgroundColor('#1a120b').setStroke('#0a0603', 3).setScrollFactor(0).setName('gauntlet-tab-' + key)
+        .setInteractive({ useHandCursor: true }).on('pointerdown', () => setTab(key));
+      const tabs = { kills: tab('斩将 · ' + n, 'kills', this.resultTexts.subtitle.x - 78), build: tab('本局 build', 'build', this.resultTexts.subtitle.x + 78) }; this.resultPanel.add([tabs.kills, tabs.build]);
+      const setTab = (key: 'kills' | 'build') => { this.gResultTab = key; for (const o of faces) (o as Phaser.GameObjects.Text).setVisible(key === 'kills'); for (const o of build) (o as Phaser.GameObjects.Text).setVisible(key === 'build');
+        for (const k of ['kills', 'build'] as const) tabs[k].setColor(k === key ? '#ffd76a' : '#9d8f78').setBackgroundColor(k === key ? '#3a2614' : '#1a120b'); };
+      setTab(this.gResultTab);
       // 奖励格挪到头像排下面（基类按分隔线到要事之间居中摆，会和头像排重叠）
       const rw = this.resultPanel.getByName('result-rewards') as Phaser.GameObjects.Container | null, below = top + PH + 36;
       if (rw) { const empty = rw.list.length === 1 && rw.list[0] instanceof Phaser.GameObjects.Text; /* 「本场没有新的奖励」一行字：容器原点在字中间 */ rw.setY(Math.max(rw.y, empty ? below + 14 : below)); }

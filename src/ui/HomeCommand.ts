@@ -57,10 +57,14 @@ export function fitArt(g:Phaser.GameObjects.NineSlice,a:{w:number;h:number;cap:n
  g.setSlices(nsW,a.h,a.cap,a.cap,0,0);g.setScale(dispW/nsW,1/k).setY(y-INK.bodyOffset*dispH+(pressed?1:0));
 }
 
-/** 首页/军营通用命令按钮。返回 g（底板图像）、hit、caption、paint(state) 与旧接口一致。 */
-export function homeCommand(scene:Phaser.Scene,x:number,y:number,width:number,height:number,label:string,primary=false,enabled=true,fontSize?:number){
- // 2026-11-21 总制作人「每屏只留一个水墨主按钮」：电脑版次要按钮（原黑色水墨）一律改漆金（homeLqCommand，接口相同）
- if((!primary||!enabled)&&IS_DESKTOP)return homeLqCommand(scene,x,y,width,height,label,Math.min(18,fontSize??Math.round(height*.38)),enabled);
+/**
+ * 首页/军营通用命令按钮。返回 g（底板图像）、hit、caption、paint(state) 与旧接口一致。
+ * opts.ink：电脑版次要按钮也用水墨（墨黑笔触）——只给主菜单「名将连战幸存者」用（2026-11-22 用户「两个按钮……可以都用水墨风」，一屏一个水墨按钮规矩的例外）；
+ * opts.color / hoverColor：字色（缺省按主次取）。
+ */
+export function homeCommand(scene:Phaser.Scene,x:number,y:number,width:number,height:number,label:string,primary=false,enabled=true,fontSize?:number,opts:{ink?:boolean;color?:string;hoverColor?:string}={}){
+ // 2026-11-21 总制作人「每屏只留一个水墨主按钮」：电脑版次要按钮（原黑色水墨）一律改漆金（homeLqCommand，接口相同）；opts.ink 例外
+ if((!primary||!enabled)&&IS_DESKTOP&&!opts.ink)return homeLqCommand(scene,x,y,width,height,label,Math.min(18,fontSize??Math.round(height*.38)),enabled);
  // 有青铜按钮美术时用三段拉伸（两端花纹不变形）；缺图时退回程序画底板
  const art=buttonArt(scene,primary,enabled?'normal':'disabled');
  let g:Phaser.GameObjects.Image|Phaser.GameObjects.NineSlice;
@@ -78,7 +82,7 @@ export function homeCommand(scene:Phaser.Scene,x:number,y:number,width:number,he
   const a=buttonArt(scene,primary,s);
   if(a&&g instanceof Phaser.GameObjects.NineSlice){g.setTexture(a.key);fitArt(g,a,width,height,y,s==='pressed');}
   else if(g instanceof Phaser.GameObjects.Image)g.setTexture(commandTexture(scene,width,height,primary,s)).setDisplaySize(width+PAD*2,height+PAD*2).setY(y+(s==='pressed'?1:0));
-  caption.setY(y+(s==='pressed'?1:0)).setColor(s==='hover'||s==='selected'?'#fff3d4':primary?'#f8e6bf':'#e8d3a6');
+  caption.setY(y+(s==='pressed'?1:0)).setColor(s==='hover'||s==='selected'?(opts.hoverColor??'#fff3d4'):opts.color??(primary?'#f8e6bf':'#e8d3a6'));
  };
  paint();
  if(enabled)hit.on('pointerdown',()=>{const battle=(scene as unknown as {sfx?:{play(k:string):void}}).sfx;if(battle)battle.play('uiClick');else{const s=uiSfx();s.unlock();s.play('uiClick');}});

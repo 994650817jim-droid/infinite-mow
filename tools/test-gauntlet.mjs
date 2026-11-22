@@ -102,10 +102,12 @@ if (BASE) {
   /** 主菜单：名将连战漆金按钮在「匡扶汉室」正下方、不压它、不压底部一行；底部一行四项（+ 退出）一行不挤；按钮字 = 模式名常量。 */
   const menuLayout = () => { const s = window.__game.scene.getScene('MenuScene'), R = n => { const o = s.children.getByName(n); if (!o || !o.visible) return null; const b = o.getBounds(); return { x: Math.round(b.x), r: Math.round(b.right), y: Math.round(b.y), b: Math.round(b.bottom), cx: Math.round(b.centerX) }; };
     const pri = R('start-campaign'), g = R('home-gauntlet'), tag = R('home-gauntlet-tagline'), lab = s.children.getByName('home-gauntlet-label'), hit = s.children.getByName('home-gauntlet');
-    const row = ['home-saves', 'home-codex', 'home-review', 'home-settings', 'home-quit'].map(n => ({ n, ...R(n) })).filter(o => o.x !== undefined).sort((a, b) => a.x - b.x), rowTop = Math.min(...row.map(o => o.y));
+    const RT = n => { const o = s.children.getByName(n); if (!o || !o.visible) return null; const b = o.getBounds(), pt = o.padding?.top ?? 0, pb = o.padding?.bottom ?? 0; return { x: Math.round(b.x), r: Math.round(b.right), y: Math.round(b.y + pt), b: Math.round(b.bottom - pb) }; }; /* 底部一行按字算（点击区有 16 的留白） */
+    const row = ['home-saves', 'home-codex', 'home-review', 'home-settings', 'home-quit'].map(n => ({ n, ...RT(n) })).filter(o => o.x !== undefined).sort((a, b) => a.x - b.x), rowTop = Math.min(...row.map(o => o.y));
     const hitBox = (a, b) => !!a && !!b && a.x < b.r && b.x < a.r && a.y < b.b && b.y < a.b, W = s.scale.width, H = s.scale.height;
-    const r = { pri, g, tag, label: lab?.text, enabled: !!hit?.input?.enabled, row: row.map(o => o.n), rowTop, W, H };
-    r.ok = !!pri && !!g && !!tag && lab?.text === '名将连战幸存者' && !!lab && lab.width <= g.r - g.x - 12 && r.enabled /* 七个字放得下按钮 */ && g.y >= pri.b && Math.abs(g.cx - pri.cx) <= 2 && !hitBox(g, pri) && tag.y >= g.b - 2 && tag.b <= rowTop && g.b <= rowTop && !row.some(o => o.n === 'home-gauntlet') && row.slice(0, 4).map(o => o.n).join() === 'home-saves,home-codex,home-review,home-settings' && !row.some((a, i) => row.some((b, j) => i < j && a.x < b.r && b.x < a.r)) && g.b < H && tag.b < H;
+    const ink = (() => { const L = s.children.list, art = o => o && (o.type === 'NineSlice') && /^btn_ink_/.test(o.texture?.key ?? ''); const near = (b, o) => { const bb = o.getBounds(); return Math.abs(bb.centerY - b.cy) < 12 && Math.abs(bb.centerX - b.cx) < 12; }; return !!pri && !!g && L.some(o => art(o) && /primary/.test(o.texture.key) && near({ cx: pri.cx, cy: (pri.y + pri.b) / 2 }, o)) && L.some(o => art(o) && /secondary/.test(o.texture.key) && near({ cx: g.cx, cy: (g.y + g.b) / 2 }, o)); })();
+    const r = { pri, g, tag, label: lab?.text, enabled: !!hit?.input?.enabled, row: row.map(o => o.n), rowTop, W, H, ink };
+    r.ok = !!pri && !!g && !!tag && lab?.text === '名将连战幸存者' && !!lab && lab.width <= g.r - g.x - 12 && r.enabled /* 七个字放得下按钮 */ && g.y - pri.b >= (g.b - g.y) / 2 && Math.abs(g.cx - pri.cx) <= 2 && (g.r - g.x) < (pri.r - pri.x) && r.ink /* 两颗都是水墨、模式按钮小一号，中间至少空半个按钮高（11-22 用户「两个按钮太挤了」） */ && !hitBox(g, pri) && tag.y >= g.b - 2 && tag.b <= rowTop && g.b <= rowTop && !row.some(o => o.n === 'home-gauntlet') && row.slice(0, 4).map(o => o.n).join() === 'home-saves,home-codex,home-review,home-settings' && !row.some((a, i) => row.some((b, j) => i < j && a.x < b.r && b.x < a.r)) && g.b < H && tag.b < H;
     return r; };
   const unblock = () => ev(() => { const s = window.__S, qiyu = () => s.mode === 'bossloot' && /^奇遇/.test(s.levelPanel.getByName('upgrade-title')?.text ?? ''); for (let i = 0; i < 6 && s.mode !== 'none' && (s.mode !== 'bossloot' || qiyu()) && !s.over; i++) { if (s.mode === 'levelup' || qiyu()) s.chooseUpgrade(0); else s.setMode('none'); } }); /* 奇遇面板也选掉 */
   try {
@@ -343,7 +345,7 @@ if (BASE) {
       const m = await ev(menuLayout); await p.screenshot({ path: OUT + '/gauntlet-12-menu.png' });
       const capsBack = await ev(() => window.__game.scene.getScene('GauntletGameScene').gauntletCaps);
       ck('离开名将连战：卡池全开改的全局开关放回（玩法按进度、战法精研 / 战法格 / 精熟 / 专职上限回到进来前）', capsBack.mech === false && capsBack.rank === 3 && capsBack.slot === 6 && capsBack.extra === 0 && capsBack.over === 0, capsBack);
-      ck('主菜单入口：「匡扶汉室」正下方一个漆金按钮写模式名、下面一行小字「从零开局 · 十阵斩将」，不压水墨按钮、不压底部那一行；底部一行恢复「存档 · 图鉴 · 战役回顾 · 设置」', menu && m.ok, m);
+      ck('主菜单入口：「匡扶汉室」正下方一个水墨按钮（墨黑、小一号、中间空出半个按钮高）写模式名、下面一行小字「从零开局 · 十阵斩将」，不压水墨按钮、不压底部那一行；底部一行恢复「存档 · 图鉴 · 战役回顾 · 设置」', menu && m.ok, m);
       await ev(() => window.__game.scene.getScene('MenuScene').children.getByName('home-gauntlet').emit('pointerdown'));
       const pk = await until(() => window.__game.scene.isActive('GauntletPickScene') && !!window.__game.scene.getScene('GauntletPickScene').gauntletPicker?.root.visible, 30000);
       await ev(() => window.__game.scene.getScene('GauntletPickScene').gauntletPicker.root.getByName('hero-confirm').emit('pointerdown'));
@@ -377,7 +379,7 @@ if (BASE) {
       await qe(() => { window.__game.scene.getScene('GauntletGameScene').scene.start('MenuScene'); }); /* 不把 ScenePlugin 整个序列化回来 */ await qu(menuReady, 30000); await q.waitForTimeout(800);
       await qe(() => { window.__game.scene.getScene('MenuScene').children.getByName('home-gauntlet').emit('pointerdown'); }); await qu(pickReady, 30000);
       const rem = await qe(async () => { const pk = window.__game.scene.getScene('GauntletPickScene').gauntletPicker, C = await import('/src/data/characters.ts'); return C.CHARACTERS[pk.order[pk.candidate]].id; });
-      ck('新存档（不开测试模式）第一次进主菜单就能进：「匡扶汉室」正下方的漆金「名将连战」按钮（1366×768 不压水墨按钮、不压底部一行）', inMenu && !test && !!ml?.ok, ml);
+      ck('新存档（不开测试模式）第一次进主菜单就能进：「匡扶汉室」正下方的水墨「名将连战幸存者」按钮（1366×768 不挤、不压底部一行）', inMenu && !test && !!ml?.ok, ml);
       ck('选将页：标题写模式名；新存档能选开局武将、没归附的是剪影；选第二位开局武将出战 → 以他开打、1 级、名将池全开；回主菜单再进，选将页记住上次选的；页面无报错',
         pk && pi.title.replace(/\s/g, '').includes('名将连战幸存者') && pi.open.length >= 2 && pi.ok && !!chosen && go && gi?.hero === chosen && gi.saved === chosen && gi.level === 1 && gi.pool >= 37 && gi.from === 'menu' && rem === chosen && qerr.length === 0, { pi, chosen, gi, rem, qerr: qerr.slice(0, 4) });
       await ctx.close(); }

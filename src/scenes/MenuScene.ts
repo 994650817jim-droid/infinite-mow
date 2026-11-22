@@ -245,7 +245,7 @@ export class MenuScene extends Phaser.Scene {
     this.heroModal=this.heroPicker.root;const modal=this.heroModal;
     const openHeroes=(startAfter=false)=>{startAfterPick=startAfter;this.ensureHomeArt(true);this.heroPicker?.open(this.selectedChar,startAfter);this.heroEntryPaint?.('selected');};pick.on('pointerdown',()=>openHeroes());
     {const l=lordRules()?lordHero():null;if(l&&!lordFinal()&&!this.registry.get('lordNoticeShown')){this.registry.set('lordNoticeShown',true);showLordNotice(this,l,()=>{confirmLord();paintLord();},()=>openHeroes());}}
-    const startY=D?396:820+this.padY,startW=D?292:W-156,startH=D?56:64; // 11-22：往上让出名将连战漆金按钮的位置
+    const startY=D?372:812+this.padY,startW=D?292:W-156,startH=D?56:64; // 11-22：往上让出名将连战水墨按钮的位置（两颗按钮之间至少半个按钮高）
     const primary=homeCommand(this,D?W*.73:W/2,startY,startW,startH,'匡扶汉室',true);this.startButton=primary.hit.setName('start-campaign').setData('padDefault',true);this.startLabel=primary.caption;
     this.homeGauntletButton(D?W*.73:W/2,startY,startH);
     // W4：有城池告急时提示“出征将失守”
@@ -320,15 +320,15 @@ export class MenuScene extends Phaser.Scene {
   }
   /** 主页「存档」：3 个存档位。 */
   /**
-   * 名将连战入口（用户 11-22「这里ui需要优化」「这个模式可以一开始就玩」）：和战役并列的完整模式，放在「匡扶汉室」水墨按钮正下方——
-   * 一屏只留一个水墨按钮，所以它是次一级的漆金按钮（同左侧「更换武将」），写模式名，下面一行小字说明；没有开关、不看通关。
-   * 点了进本模式自己的选将页（GauntletPickScene：不继承战役，不用这里的当前主将），「返回」回主菜单。
+   * 名将连战入口（和战役并列的完整模式）：「匡扶汉室」正下方。11-22 用户「两个按钮太挤了，可以都用水墨风」：也用水墨笔触（主菜单这两个是
+   * 一屏一个水墨按钮的例外），但分主次——「匡扶汉室」朱红大号不变，这个用墨黑笔触、金字、小一号；两颗按钮之间至少空出半个按钮高，
+   * 悬停一样（换水墨悬停图 + 字提亮）。下面一行小字说明。点了进本模式自己的选将页（GauntletPickScene）。
    */
   private homeGauntletButton(x:number,primaryY:number,primaryH:number):void{
-    const w=D?236:Math.min(W-196,400),h=D?38:44,y=primaryY+primaryH/2+(D?6:8)+h/2;
-    const b=D?homeLqCommand(this,x,y,w,h,GAUNTLET_NAME,17):homeCommand(this,x,y,w,h,GAUNTLET_NAME);
+    const w=D?250:Math.min(W-196,380),h=D?46:50,gap=D?28:12,y=primaryY+primaryH/2+gap+h/2;
+    const b=homeCommand(this,x,y,w,h,GAUNTLET_NAME,false,true,D?19:18,{ink:true,color:'#f0cf86',hoverColor:'#fff1c8'});
     b.hit.setName('home-gauntlet').on('pointerdown',()=>{this.registry.set('gauntletFrom','menu');this.scene.start('GauntletPickScene');});b.caption.setName('home-gauntlet-label');
-    if(D)this.add.text(x,y+h/2+9,GAUNTLET_TAGLINE,{fontFamily:FONT,fontSize:'11px',color:'#d8c49a',resolution:2}).setOrigin(.5).setLetterSpacing(1).setStroke('#120904',3).setName('home-gauntlet-tagline');
+    if(D)this.add.text(x,y+h/2+11,GAUNTLET_TAGLINE,{fontFamily:FONT,fontSize:'11px',color:'#d8c49a',resolution:2}).setOrigin(.5).setLetterSpacing(1).setStroke('#120904',3).setName('home-gauntlet-tagline');
   }
   private homeSaveButton(x:number,y:number):void{
     this.add.text(x,y,'存档',{fontFamily:FONT,fontSize:(D?18:20)+'px',color:'#e5ccb0',resolution:2}).setOrigin(.5).setLetterSpacing(4).setPadding(18,16).setInteractive({useHandCursor:true}).setName('home-saves')

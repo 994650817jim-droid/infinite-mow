@@ -42,3 +42,55 @@ export function coinValue(kind: CoinKind): number { const d = COIN_DROP[kind]; r
  * 对象池：钱币用自己的池（cap），不和经验的 GEM_FX.cap 200 抢——经验堆满时钱币照样能生成；降级阈值按两种掉落物合计算（liteAbove）。
  */
 export const COIN_PICKUP = { lifeMs: 12000, cap: 60, liteAbove: 140 } as const;
+
+// ───────────── 接入游戏（2026-11-21，系统实现；上面的数值表归平衡会话） ─────────────
+/**
+ * 总开关：默认开。关着时回到「击杀直接入账」（Legion.onKill：杂兵 +1、精锐 +5、首领 +20），和接入前完全一样，方便平衡对照。
+ * 开发构建网址带 ?coinDrops=0 关掉（正式构建里网址不生效）；测试 / 模拟器用 setCoinDrops(false / true)，setCoinDrops(null) 还给默认。
+ */
+export const COIN_DROPS_DEFAULT = true;
+let forced: boolean | null = null;
+const urlOff: boolean = (() => {
+  if (!import.meta.env?.DEV) return false; // 纯 node 测试里没有 import.meta.env
+  try { return new URLSearchParams(window.location.search).get('coinDrops') === '0'; } catch { return false; }
+})();
+export function coinDropsOn(): boolean { return forced ?? (urlOff ? false : COIN_DROPS_DEFAULT); }
+export function setCoinDrops(on: boolean | null): void { forced = on; }
+
+/**
+ * 敌人归哪一档：首领 / 精锐（副将也是精锐）按兵种；配了特性的兵（data/enemyRoster，def.roster）看 role——
+ * 'fodder'（流民一类成群的炮灰）算炮灰档；'pack' / 'swim'（兽群、水卒：只是普通兵的变体）按它的基础兵种；其余 role 都算特性兵。
+ * 没配特性的普通兵按基础兵种（刀兵 / 刀盾 / 弓手 / 骑兵）。
+ */
+export function coinKindOf(kind: string, role?: string): CoinKind {
+  if (kind === 'boss' || kind === 'elite') return kind;
+  if (role === 'fodder') return 'fodder';
+  if (role && role !== 'pack' && role !== 'swim') return 'special';
+  return kind === 'shield' || kind === 'archer' || kind === 'cavalry' ? kind : 'infantry';
+}
+
+/**
+ * 一场战斗的掉落判定（纯逻辑，不碰画面）：保底计数 + 面值小数的余数累积。
+ * roll(kind) 返回这次掉几堆、每堆多少（整数）；不掉返回 null。面值的小数部分留在 carry 里攒到下一次，所以长期总额 = 面值之和，没有取整偏差。
+ * 首领阶段额度用完时调用方根本不调 roll（普通兵不掉、保底也不计数），首领 / 副将照常调。
+ */
+export class CoinRoller {
+  /** 普通兵连续没掉的个数（保底用）；carry = 还没发出去的小数。 */
+  misses = 0; carry = 0;
+  /** 统计（平衡 / 测试用）：判定次数、掉落次数、其中保底触发的次数、掉出的总额。 */
+  readonly stats = { rolls: 0, drops: 0, pity: 0, total: 0 };
+  roll(kind: CoinKind, rnd: () => number = Math.random): number[] | null {
+    const d = COIN_DROP[kind]; this.stats.rolls++;
+    if (d.chance < 1) {
+      const pity = this.misses >= COIN_PITY.misses;
+      if (!pity && rnd() >= d.chance) { this.misses++; return null; }
+      this.misses = 0; if (pity) this.stats.pity++;
+    }
+    const v = coinValue(kind) + this.carry, n = Math.floor(v + 1e-9); this.carry = v - n;
+    this.stats.drops++; this.stats.total += n;
+    if (n <= 0) return null;
+    const piles = Math.max(1, Math.min(d.piles, n)), each = Math.floor(n / piles), out = Array.from({ length: piles }, () => each);
+    for (let i = 0; i < n - each * piles; i++) out[i]++;
+    return out;
+  }
+}

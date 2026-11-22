@@ -76,6 +76,8 @@ const LUBU_ESCORT: BossMovesetDef = { id: 'lubu', name: '吕布', phaseAt: .2,
   p1: { name: '飞将护驾', caption: '方天横扫', gapMs: 2600, speedMul: 1, moves: [{ kind: 'sweep', name: '方天横扫', windupMs: 650, cd: 3400, dmg: 1, r: 135, arc: Math.PI * .9 }] },
   p2: { name: '飞将护驾', caption: '方天横扫', gapMs: 2600, speedMul: 1, moves: [{ kind: 'sweep', name: '方天横扫', windupMs: 650, cd: 3400, dmg: 1, r: 135, arc: Math.PI * .9 }] } };
 
+/** 名将登场的水墨横幅（GameScene.announceBoss：0.25 秒淡入、2.3 秒起淡出 0.4 秒）多长：这段时间顶部只留它。 */
+const GAUNTLET_INK_MS = 2700;
 /** 进度条斩将盖的朱印贴图键（结局麒麟阁同一张 seal_red_2）。 */
 const SEAL_KEY = 'ending_seal_red';
 
@@ -146,6 +148,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       this.bossWarned = true; this.gEliteAt = GAUNTLET.eliteFirst;
       this.hudTexts.chapter.setText(''); // 关名不写（见 updateTrack）
       this.time.delayedCall(500, () => { if (!this.over) this.showWaveBanner('名将连战 · 第 1 阵', false, `割草 ${GAUNTLET.mowSec} 秒后名将登场 · 共 ${GAUNTLET.waves} 阵`); });
+      this.moveDevBadge();
       this.gTrack?.destroy(); this.gTrack = new GauntletTrack(this, GAUNTLET.waves, 'hud_medal2_' + this.runConfig.character, SEAL_KEY); this.gTrack.setWave(1, true);
       this.gStrikes = new Strikes({ scene: this, player: this.player, army: this.legion, now: () => this.combatNow }); // 地面落点打击（手绘预警圈 → 命中序列帧）：郝昭箭楼、司马懿
       if (this.gPool.some(b => b.id === 'dongzhuo')) ensureTroopArt(this, ['dongzhuo_walk', 'dongzhuo_attack']); // 董卓行走 / 攻击图（同 2-3，按需载入）
@@ -200,11 +203,19 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
         else if (this.gLootShown && this.waveT >= GAUNTLET.clearSec) { if (this.gWave === GAUNTLET.waves && !this.gEndless) this.openClearChoice(); else this.nextWave(); }
       }
     }
+    /** 开发构建：左上的 DEV 徽标会盖住进度条左端——本模式下挪到左下（兵力 / 增益栏下面、FPS 行上面），离开场景放回原处。正式版没有这个徽标。 */
+    private moveDevBadge(): void {
+      if (!import.meta.env.DEV || typeof document === 'undefined') return;
+      const el = document.getElementById('dev-panel'); if (!el) return;
+      const left = el.style.left, top = el.style.top;
+      el.style.left = '6px'; el.style.top = Math.max(2, window.innerHeight - 112) + 'px'; // 左下、FPS 行上面
+      this.events.once('shutdown', () => { el.style.left = left; el.style.top = top; });
+    }
     /** 进度条线下的小字：第 N/10 阵 · 距名将登场 mm:ss / 名将名字 / 已斩；无尽写「无尽 · 第 N 阵」。 */
     private waveLine(): string {
       const n = this.gEndless || this.gWave > GAUNTLET.waves ? `无尽 · 第 ${this.gWave} 阵` : `第 ${this.gWave}/${GAUNTLET.waves} 阵`;
       if (this.gPhase === 'mow') { const left = Math.max(0, Math.ceil(GAUNTLET.mowSec - this.waveT)); return `${n} · 距名将登场 ${String(Math.floor(left / 60)).padStart(2, '0')}:${String(left % 60).padStart(2, '0')}`; }
-      if (this.gPhase === 'boss') return `${n} · ${this.gCur?.name ?? ''}`;
+      if (this.gPhase === 'boss') return `${n} · ${this.gWave === GAUNTLET.waves && !this.gEndless ? '守关 · ' : ''}${this.gCur?.name ?? ''}`;
       return `${n} · 已斩 ${this.gKills[this.gKills.length - 1]?.name ?? ''}`;
     }
     /** 十阵进度条：割草时标按时间从上一节点匀速走向这一阵的节点（走到头 = 名将登场），名将在场 / 斩将后停在节点。 */
@@ -213,7 +224,9 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       const W = GAUNTLET.waves, local = ((this.gWave - 1) % W) + 1;
       const pos = this.gPhase === 'mow' ? (local - 1 + Math.min(1, this.waveT / GAUNTLET.mowSec)) / W : local / W;
       t.update(pos, this.gPhase === 'boss' && !!this.boss?.active, this.waveLine());
-      t.setVisible(this.hudTexts.timer.visible && !this.over);
+      // 显隐自己每帧定（不跟着计时器：计时器在名将登场时被藏，跟着它会一起藏住）；名将登场的水墨横幅期间藏计时与小字，顶部只留横幅
+      const hud = this.mode === 'none' && !this.over, ink = this.combatNow < this.gInkUntil;
+      t.setVisible(hud); t.setCaptionVisible(!ink); this.hudTexts.timer.setVisible(hud && !ink);
       // 计时器、关名放在进度条下面：基类每换一次关卡定义（本模式每阵都换）会把它们放回原位，这里每帧摆回来
       const ty = GauntletTrack.HEIGHT + 3; if (this.hudTexts.timer.y !== ty) { this.hudTexts.timer.setY(ty); this.hudTexts.chapter.setY(ty + 30); }
       if (this.hudTexts.chapter.text) this.hudTexts.chapter.setText(''); // 计时器下那行关名（基类按关卡定义写「名将连战」）不写：进度条已标明，空出来不压名将登场横幅
@@ -227,6 +240,22 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       const g = c.context; g.save(); g.beginPath(); g.arc(S / 2, S / 2, S / 2, 0, Math.PI * 2); g.closePath(); g.clip();
       g.fillStyle = '#2a1f14'; g.fillRect(0, 0, S, S); g.drawImage(src, Math.round((w - side) / 2), 0, side, side, 0, 0, S, S); g.restore(); c.refresh();
       return key;
+    }
+    /** 战场横幅整体往下挪一行：顶部多了十阵进度条和它的小字，计时器下移后横幅贴着计时器（11-21 验收：顶部压字）。淡出的上飘按新位置重设。 */
+    protected showWaveBanner(text: string, danger = false, captionText?: string): void {
+      super.showWaveBanner(text, danger, captionText);
+      const list = this.children.list.filter(o => o.name === 'combat-notice'), n = list[list.length - 1] as Phaser.GameObjects.Container | undefined;
+      if (!n || n.getData('gShift')) return;
+      n.setData('gShift', 1); this.tweens.killTweensOf(n); n.y += 26;
+      this.tweens.add({ targets: n, alpha: 0, y: n.y - 8, delay: 1150, duration: 350, onComplete: () => n.destroy() });
+    }
+    /** 名将登场的水墨横幅到几时（战斗时钟）：之前的横幅延后到这之后再放。 */
+    private gInkUntil = 0;
+    /** 战场横幅（危险色）：名将登场的水墨横幅还在时延后到它淡出以后，不叠在一起。 */
+    private gBanner(title: string, caption = ''): void {
+      const wait = this.gInkUntil - this.combatNow;
+      if (wait > 0) { this.time.delayedCall(wait, () => { if (!this.over) this.showWaveBanner(title, true, caption); }); return; }
+      this.showWaveBanner(title, true, caption);
     }
     /** 这一阵的名将：十阵名单里的；无尽时现抽一位（全池循环）并记进名单。 */
     private waveBoss(): GauntletBoss {
@@ -249,9 +278,10 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     protected spawnBoss(): void {
       const had = !!this.boss?.active; super.spawnBoss(); const boss = this.boss as Enemy | null, b = this.gCur;
       if (!boss || had || !b) return;
+      this.gInkUntil = this.combatNow + GAUNTLET_INK_MS;
       if (GAUNTLET.stallOff) this.bossStallCfg = { quotaSec: 1e9, enrageSec: 1e9 }; // 首领防拖关掉（阵数节奏已经限住每阵长度）
       const art = bossArt(b), now = this.combatNow;
-      const host: ArcHost = { scene: this, boss, player: this.player, army: this.legion, spawn: (k, x, y, def) => this.spawnEnemy(k, x, y, 1, true, def), def: k => this.chapter.enemies[k], banner: (t, c) => this.showWaveBanner(t, true, c), sfx: k => this.sfx.play(k) };
+      const host: ArcHost = { scene: this, boss, player: this.player, army: this.legion, spawn: (k, x, y, def) => this.spawnEnemy(k, x, y, 1, true, def), def: k => this.chapter.enemies[k], banner: (t, c) => this.gBanner(t, c), sfx: k => this.sfx.play(k) };
       if (b.ctrl === 'moveset') { this.moveset?.clear(); this.moveset = null; const mv = BOSS_MOVES[b.arc + '.' + b.id] ?? BOSS_MOVES[b.id] ?? GAUNTLET_MOVES[b.id]; if (mv) this.gCtrl = new BossMoveset(host, art.layout === 'walk' ? boss.sprite.texture.key : art.tex, now, adaptMoves(mv, b), art.layout); }
       else if (b.ctrl === 'yuanshu') this.gCtrl = new YuanshuBoss(host, art.tex, now, { endlessHoney: !!b.endlessHoney });
       else if (b.ctrl === 'caoren') this.gCtrl = new CaorenBoss(host, art.tex, now);
@@ -268,8 +298,8 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       // 亲兵：围在名将身边
       let k = 0; for (const [kind, n] of GAUNTLET.guards) for (let i = 0; i < n; i++, k++) { const a = k / 4 * Math.PI * 2; this.spawnEnemy(kind, boss.x + Math.cos(a) * 70, boss.y + Math.sin(a) * 50, undefined, true); }
       const last = this.gWave === GAUNTLET.waves && !this.gEndless;
-      this.gTrack?.bossUp(this.gWave, this.head(b));
-      this.showWaveBanner(last ? `守关名将 · ${b.name}` : `第 ${this.gWave} 阵 · ${b.name}`, true, last ? '斩之即通关' : '名将带亲兵杀到 · 杂兵减半');
+      this.gTrack?.bossUp(this.gWave, this.head(b)); void last;
+      // 名将登场只留基类的水墨横幅（称号 + 名字），约 2.7 秒内顶部不放别的横幅、计时与进度条小字先藏（11-21 验收：顶部挤成一团）；「杂兵减半」不再提示
     }
     protected customBossStep(enemy: Enemy, dt: number, now: number) {
       if (this.gEscort && enemy === this.gEscort.e) { if (!this.gEscort.leaving) this.gEscort.ctrl.update(dt, now); return true; }
@@ -351,7 +381,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       }
       if (P.pin) this.gPin = { x: boss.x, y: boss.y };
       this.gFires = []; this.gArmorBurned = false;
-      this.time.delayedCall(1600, () => { if (this.gPropsDef === P && this.propsAlive()) this.showWaveBanner(P.name, true, `${P.name}立着时${b.name}受伤 −${Math.round((1 - P.takenMul) * 100)}% · 先拆${P.name}${P.pin ? ' · 门在他不出' : ''}`); });
+      this.time.delayedCall(200, () => { if (this.gPropsDef === P && this.propsAlive()) this.gBanner(P.name, `${P.name}立着时${b.name}受伤 −${Math.round((1 - P.takenMul) * 100)}% · 先拆${P.name}${P.pin ? ' · 门在他不出' : ''}`); });
     }
     private updateProps(now: number): void {
       const P = this.gPropsDef; if (!P) return;
@@ -397,7 +427,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
         const label = this.add.text(x, y - H.radius * .55 - 18, '高地', { fontFamily: FONT, fontSize: '14px', color: '#f5e2b0', stroke: '#1a120b', strokeThickness: 3 }).setOrigin(.5).setDepth(DEPTH.fx + 2).setAlpha(.6);
         this.gHill = { x, y, r: H.radius, upAt: now + H.warnSec * 1000, until: now + (H.warnSec + H.lastSec) * 1000, objs: [img, flag, label].filter((o): o is NonNullable<typeof o> => !!o), img };
         this.gHillAt = now + H.everySec * 1000;
-        this.showWaveBanner('高地 · 可以抢', true, `站上高地：主将伤害 +${Math.round((H.playerDmg - 1) * 100)}% · ${this.gCur?.name ?? ''}站上去出招更快`);
+        this.gBanner('高地 · 可以抢', `站上高地：主将伤害 +${Math.round((H.playerDmg - 1) * 100)}% · ${this.gCur?.name ?? ''}站上去出招更快`);
       }
       const h = this.gHill; if (!h) return;
       const up = now >= h.upAt, k = up ? 1 : .3 + .7 * Math.max(0, 1 - (h.upAt - now) / (H.warnSec * 1000));
@@ -445,7 +475,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       }
       const from = ((Math.round((dir + Math.PI) / (Math.PI / 4)) % 8) + 8) % 8, NAMES = ['东', '东南', '南', '西南', '西', '西北', '北', '东北'];
       this.gBandStats.bands++;
-      this.showWaveBanner(NAMES[from] + '风起 · 火烧连营', true, '火带顺风扫过来 · 站进缺口');
+      this.gBanner(NAMES[from] + '风起 · 火烧连营', '火带顺风扫过来 · 站进缺口');
     }
     private clearBand(): void { this.gBandCells = []; this.gBandHit.clear(); this.gBandAt = Infinity; }
 
@@ -467,9 +497,9 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       else { const m = BOSS_MOVES[eb.arc + '.' + eb.id] ?? BOSS_MOVES[eb.id]; if (m) mv = adaptMoves(m, eb); }
       if (!mv) return;
       const e = this.spawnEnemy('boss', boss.x + 150, boss.y + 30, 1, true, def); if (!e) return;
-      const host: ArcHost = { scene: this, boss: e, player: this.player, army: this.legion, spawn: (k, x, y, d) => this.spawnEnemy(k, x, y, 1, true, d), def: k => this.chapter.enemies[k], banner: (t, c) => this.showWaveBanner(t, true, c), sfx: k => this.sfx.play(k) };
+      const host: ArcHost = { scene: this, boss: e, player: this.player, army: this.legion, spawn: (k, x, y, d) => this.spawnEnemy(k, x, y, 1, true, d), def: k => this.chapter.enemies[k], banner: (t, c) => this.gBanner(t, c), sfx: k => this.sfx.play(k) };
       this.gEscort = { e, life: e.spawnId, ctrl: new BossMoveset(host, layout === 'walk' ? e.sprite.texture.key : tex, now, mv, layout), def: E, name: eb.name, leaving: false };
-      this.time.delayedCall(1800, () => { if (this.gEscort?.e === e && !this.gEscort.leaving) this.showWaveBanner(eb.name + '护卫', true, `${eb.name}在时${b.name}受伤 −${Math.round((1 - E.takenMul) * 100)}% · 先打${eb.name}（打到三成血退场）`); });
+      this.time.delayedCall(200, () => { if (this.gEscort?.e === e && !this.gEscort.leaving) this.gBanner(eb.name + '护卫', `${eb.name}在时${b.name}受伤 −${Math.round((1 - E.takenMul) * 100)}% · 先打${eb.name}（打到三成血退场）`); });
     }
     /** 护卫退场：喊一声、淡出（不算斩将、不掉东西）。 */
     private escortLeave(): void {
@@ -496,9 +526,9 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     private dongzhuoCtrl(boss: Enemy, now: number): GCtrl {
       const dz = new DongzhuoBoss({ scene: this, player: this.player, army: this.legion,
         move: (e, nx, ny, dt) => { e.moveVx = nx * e.def.speed; e.moveVy = ny * e.def.speed; this.advanceEnemy(e, nx, ny, dt); },
-        raid: () => { const p = this.player, a = Math.random() * Math.PI * 2; this.showWaveBanner('号令西凉铁骑', true, '铁骑从侧翼冲来'); for (let i = 0; i < 3; i++) this.spawnEnemy('cavalry', p.x + Math.cos(a) * 400 + (i - 1) * 60, p.y + Math.sin(a) * 400, 1, true); },
+        raid: () => { const p = this.player, a = Math.random() * Math.PI * 2; this.gBanner('号令西凉铁骑', '铁骑从侧翼冲来'); for (let i = 0; i < 3; i++) this.spawnEnemy('cavalry', p.x + Math.cos(a) * 400 + (i - 1) * 60, p.y + Math.sin(a) * 400, 1, true); },
         guards: (n, x, y) => { for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2; this.spawnEnemy('shield', x + Math.cos(a) * 90, y + Math.sin(a) * 90, 1, true); } },
-        spawn: (k, x, y) => { this.spawnEnemy(k, x, y, 1, true); }, banner: (t, c) => this.showWaveBanner(t, true, c ?? '') }, boss, now);
+        spawn: (k, x, y) => { this.spawnEnemy(k, x, y, 1, true); }, banner: (t, c) => this.gBanner(t, c ?? '') }, boss, now);
       return { update: (dt, n) => { dz.step(dt, n); dz.update(n); }, clear: () => dz.clear(), get label() { return dz.label; }, get state() { return (dz as unknown as { fires: unknown[] }).fires.length ? 'attack' : 'approach'; } };
     }
 

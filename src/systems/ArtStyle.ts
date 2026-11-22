@@ -269,7 +269,7 @@ export const ART_V2_FILES: Readonly<Record<string, string>> = sideBossFiles({
   yiling_luxun: 'assets/bosses-v2/yiling_luxun.png', // 正式图（Gemini 出图，art-style ebfcb2b）
   // 第十二章 北伐首领：张郃 / 郝昭正式 v2 图到之前借用现有首领 v2 图过渡（beifaChapter.BEIFA_SHEETS 是 v1 回退）；司马懿已有正式 v2 图（Gemini 3.1 Pro 出图）
   beifa_zhanghe: 'assets/bosses-v2/hanzhong_zhanghe.png',
-  beifa_haozhao: 'assets/bosses-v2/jingnan_liudu.png',
+  beifa_haozhao: 'assets/bosses-v2/jingnan_liudu.png', // 11-21 新图 assets/bosses-v2/beifa_haozhao.png 已到（美术 1be09d57），但行 5～8 是四方向攻击、没有起手 / 号令 / 倒地帧，和章节首领 4×8 版式对不上（倒地会显示背影站立），退回美术重排后再改指
   beifa_simayi: 'assets/bosses-v2/beifa_simayi.png',
   // 3-2 典韦（友军守营）双铁戟行走 / 攻击图（ChatGPT 出图，首领 v2 标准：格 288、脚底 256，显示 ×0.5；朝左行由朝右逐格镜像）
   dianwei_walk: 'assets/allies-v2/dianwei_walk.png',

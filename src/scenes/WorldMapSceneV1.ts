@@ -637,7 +637,7 @@ export class WorldMapSceneV1 extends Phaser.Scene {
 奖励：按斩将数给钱币、武学残卷 · 不掉战役兵装 · 不影响战役进度${this.lossWarning()?'\n'+this.lossWarning():''}`);
   this.action.text.setText(locked?'尚未解锁':'出战 · 名将连战');this.action.image.setAlpha(locked?.45:1);if(locked)this.action.image.disableInteractive();else this.action.image.setInteractive({useHandCursor:true});this.layoutActions(false);}
  private launchGauntlet(){let hero:CharacterId=defaultHero(null);try{hero=defaultHero(localStorage.getItem('im_last_hero'));}catch{/* storage unavailable */}
-  this.registry.remove('campaignTransfer');this.registry.set('runConfig',{character:hero});
+  this.registry.remove('campaignTransfer');this.registry.set('runConfig',{character:hero});this.registry.set('gauntletFrom','map');
   if(this.registry.get('battleReady'))this.scene.start('GauntletGameScene');else{this.registry.set('pendingWarlord','GauntletGameScene');this.registry.set('loadBattle',true);this.scene.start('BootScene');}}
 /** 挑战关「虎牢关 · 三英战吕布」详情：开放条件、首通奖励赤兔、胜场。 */
  private challengeDetail(n:WorldNode,st:'home'|ChapterState){const locked=st==='locked',wins=lubuClears(),r=LUBU_CHALLENGE.reward,rr=LUBU_CHALLENGE.repeatReward;

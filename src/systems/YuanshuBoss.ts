@@ -29,7 +29,8 @@ export class YuanshuBoss extends ArcBossV2<Move> {
     force: (i, now) => { this.beat.set(null, 'idle', now, 0); this.start((['flags', 'coins', 'guards'] as const)[i] ?? 'flags', now); },
     phase2: (now) => { const b = this.h.boss; if (b.hp > b.maxHp * YS.honey.at) b.hp = Math.floor(b.maxHp * YS.honey.at); this.enterHoney(now); },
   };
-  constructor(h: ArcHost, tex: string, now: number) { warmCast(h.scene, 'yuanshu');
+  /** endlessHoney：名将连战（适配表）——「蜜水」逃跑不限时、逃不掉，追上就打；不回血、不重召亲军。3-3 关卡不传，照旧。 */
+  constructor(h: ArcHost, tex: string, now: number, private readonly opts: { endlessHoney?: boolean } = {}) { warmCast(h.scene, 'yuanshu');
     super(h, tex, '袁术', now);
     this.propGfx = h.scene.add.graphics().setDepth(DEPTH.enemy + 1).setName('yuanshu-props');
     ensureMoves(h.scene, 'yuanshu_moves');
@@ -41,7 +42,7 @@ export class YuanshuBoss extends ArcBossV2<Move> {
     const now = this.kit.now;
     if (this.state === 'dead') return '袁术负伤退走';
     if (this.kit.inShift) return '拿蜜水来！';
-    if (this.fleeUntil > now) return '蜜水 · 追杀 ' + Math.ceil((this.fleeUntil - now) / 1000) + ' 秒';
+    if (this.fleeUntil > now) return this.opts.endlessHoney ? '蜜水 · 追上他' : '蜜水 · 追杀 ' + Math.ceil((this.fleeUntil - now) / 1000) + ' 秒';
     const flags = this.flags.length ? ' · 伪诏 ' + this.flags.length : '', guard = this.guarded ? ' · 亲军护驾（先清亲军）' : '';
     const m = this.beat.move, names: Record<Move, string> = { flags: '玉玺号令', coins: '金钱开路', guards: '亲军护驾' };
     return (this.beat.phase === 'recover' ? '收势 · 反击机会' : m ? names[m] + (this.beat.phase === 'windup' ? ' · 起手' : '') : '仲家天子') + flags + guard;
@@ -53,7 +54,7 @@ export class YuanshuBoss extends ArcBossV2<Move> {
     if (!this.fleeDone && !this.phase2 && b.hp <= b.maxHp * YS.honey.at) this.enterHoney(now);
     if (this.kit.inShift) { this.pose(25, now); return; }
     if (this.fleeUntil > now) { this.flee(dt, now); return; }
-    if (this.fleeUntil && !this.fleeDone) this.escape(now);
+    if (this.fleeUntil && !this.fleeDone) { if (this.opts.endlessHoney) { this.fleeUntil = now + YS.honey.fleeMs; this.flee(dt, now); return; } this.escape(now); }
     const B = this.beat, prog = B.progress(now), p = this.h.player;
     this.angle = Math.atan2(p.y - b.y, p.x - b.x);
     if (B.phase === 'idle') { this.state = 'approach'; this.walk(dt, now, 170); if (now >= this.next) this.start(this.pick(), now); return; }

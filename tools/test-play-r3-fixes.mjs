@@ -31,7 +31,7 @@ ck('续打仍读存档点（主线没打过的关 loadCampaignBuild），所以�
 // ———— 2) 两个招兵入口
 const LG = await load('src/data/legion.ts');
 ck('战斗支援人数表不变（用户 11-16 批准的 2 / 3 / 3 / 4 / 4）', JSON.stringify(LG.FREE_RECRUIT_BY_TIER) === '[2,3,3,4,4]', LG.FREE_RECRUIT_BY_TIER);
-ck('定位写进数据注释与两处说明：战斗支援 = 免费补一小队；行营招兵 = 主要兵源（随军钱币按人招、越招越贵）', /战斗支援 = 补员：免费补一小队/.test(L) && /行营招兵 = 主要兵源/.test(L) && /行营招兵是主要兵源：随军钱币按人招，在编越多越贵/.test(C) && /战斗中的「战斗支援」只免费补一小队/.test(C) && /战斗支援：每次免费补一小队兵；大批招兵去行营（随军粮按人招）/.test(M));
+ck('定位写进数据注释与两处说明：战斗支援 = 免费补一小队；行营招兵 = 主要兵源（随军钱币按人招、越招越贵）', /战斗支援 = 补员：免费补一小队/.test(L) && /行营招兵 = 主要兵源/.test(L) && /行营招兵是主要兵源：随军钱币按人招，在编越多越贵/.test(C) && /战斗中的「战斗支援」只免费补一小队/.test(C) && /战斗支援：每次免费补一小队兵；大批招兵去行营（随军钱币按人招）/.test(M)); // 2026-11-21 军粮改钱币
 
 // ———— 3) 第一章章末
 ck('1-3 打赢、天下地图已开（正常主线）：ch1Map，不进行营、不直赴汜水关（nextWest = 0）', /const ch1Map=victory&&this\.worldCampaign&&!this\.runConfig\.encounter&&this\.chapter\.id==='huangjin'&&this\.chapter\.stage===3&&worldUnlocked\(\);this\.ch1MapEnd=ch1Map;/.test(G) && /\(this\.chapter\.id==='huangjin'&&this\.chapter\.stage===3\)\?\(ch1Map\?0:1\):/.test(G) && /if \(victory && !this\.runConfig\.encounter && !this\.ch1MapEnd && /.test(G));

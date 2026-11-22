@@ -22,5 +22,6 @@ const call = G.match(/this\.legionUI\?\.update\(this\.legion,([^;]*)\);/)?.[1] ?
 ck('战斗 HUD：状态行不再跟部曲开放一起藏（只把 mechOpen(squad) 作为第三个参数传给按钮 / 兵力）', /,\s*mechOpen\('squad'\)\s*\)?$/.test(call.trim()) && !/&&\s*mechOpen\('squad'\)/.test(call), call.trim());
 ck('LegionUI：部曲没开放时只藏护阵 / 出击按钮（含快捷键角标），并关掉点击', /for \(const o of \[this\.orderPlate, this\.orderIcon, this\.order, this\.keyHint\]\) o\?\.setVisible\(squad\)/.test(U) && /disableInteractive\(\)/.test(U) && /legionStatusText\(army\.count, army\.dead, squad\)/.test(U));
 ck('结算页：有「随军钱币」一行（不看玩法开放）；「部曲战损」等部曲开放再写', /row\('随军钱币', String\(this\.legion\.food\)\)/.test(G) && /mechOpen\('squad'\) \? \[row\('部曲战损'/.test(G));
-ck('E / F（护阵 / 出击快捷键）部曲开放前无反应', /cycleOrder: \(\) => \{ if \(mechOpen\('squad'\)\) this\.legion\.cycleOrder\(\); \}/.test(G));
+// 守城 v2（a90411c9）在前面加了一道 legionOrderOverride() 判断，部曲开放的门槛没变；实按确认见 tools/test-squad-keys.mjs
+ck('E / F（护阵 / 出击快捷键）部曲开放前无反应', /cycleOrder: \(\) => \{ (?:if \(this\.legionOrderOverride\(\)\) return; )?if \(mechOpen\('squad'\)\) this\.legion\.cycleOrder\(\); \}/.test(G));
 console.log(fail ? `\n${fail} 项失败` : '\n全部通过'); process.exit(fail ? 1 : 0);

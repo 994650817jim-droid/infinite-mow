@@ -247,21 +247,30 @@ if (BASE) {
       const back = await ev(() => { const s = window.__S, P = s.resultPanel; P.getByName('gauntlet-tab-kills')?.emit('pointerdown'); return { faces: P.list.filter(o => o.name.startsWith('gauntlet-face') && o.visible).length, build: P.list.filter(o => o.name.startsWith('gauntlet-build') && o.visible).length }; });
       ck('结算「本局打法」（界面不写英文）：分隔线上「斩将 / 本局打法」两个页签；按类列出（本命·武艺、副将 3 位，加上这局拿到的战法 / 将星 / 兵装……每项图标 + 稀有度圈），斩将头像先藏；点回斩将复原',
         bd.hasTabs && bd.before.faces > 0 && bd.before.build === 0 && bd.on.tab === 'build' && bd.on.faces === 0 && bd.on.build > 6 && bd.groups.length >= 3 && bd.groups.some(g => g.startsWith('本命 · 武艺:')) && bd.groups.includes('副将:3') /* 战法有没有看这一局抽到什么 */ && bd.on.heads.length === bd.groups.length && back.faces > 0 && back.build === 0
-        && bd.on.tabText === '本局打法' && ![bd.on.tabText, ...bd.on.heads].some(t => /[A-Za-z]/.test(t)) && bd.on.names.length > 0 && bd.on.names.every(n => !/[·・]s*$/.test(n.t) && n.t.length > 0 && n.k >= .6), { ...bd, back }); } /* 名字写全（不截成「锦囊 ·」）、放不下缩字号 */
-    // 重开一局：阵亡结算（不覆盖更高的记录）
-    await ev(() => { window.__S.scene.restart(); }); await until(() => { const s = window.__game.scene.getScene('GauntletGameScene'); return s?.player?.alive && s.elapsed > .5 && !s.over; }, 30000);
+        && bd.on.tabText === '本局打法' && ![bd.on.tabText, ...bd.on.heads].some(t => /[A-Za-z]/.test(t)) && bd.on.names.length > 0 && bd.on.names.every(n => !/[·・]\s*$/.test(n.t) && n.t.length > 0 && n.k >= .6), { ...bd, back }); } /* 名字写全（不截成「锦囊 ·」）、放不下缩字号 */
+    // 「再来一局」：同一员将直接重开（不回选将页）；阵亡结算（不覆盖更高的记录）
+    const heroBefore = await ev(() => window.__S.runConfig.character); await ev(() => { window.__S.resultPanel.getByName('result-restart')?.emit('pointerdown'); }); const again = await until(() => { const s = window.__game.scene.getScene('GauntletGameScene'); return s?.player?.alive && s.elapsed > .5 && !s.over && s.gWave === 1; }, 30000);
     const dead = await ev(async () => { const s = window.__game.scene.getScene('GauntletGameScene'); window.__S = s; s.player.damageImmune = false; s.player.hp = 1; s.player.takeDamage(99999, s.combatNow); await new Promise(r => setTimeout(r, 1500)); return { over: s.over, title: s.resultTexts.subtitle.text, body: s.resultTexts.body.text, best: JSON.parse(localStorage.getItem('im_gauntlet_best_test') ?? 'null') }; });
-    ck('阵亡结算：止步第 1 阵、斩将 0；最高连斩还是 10（低的不覆盖）', dead.over && /止步第 1 阵/.test(dead.title) && dead.best?.kills === 10 && /最高连斩　10/.test(dead.body), dead);
-    // 天下地图入口：结算「返回天下地图」→ 地图聚焦名将连战入口（开关开着、第二章已通关 / 测试存档）
-    await ev(() => { const h = window.__S.resultPanel.getByName('result-home'); h?.emit('pointerdown'); }); const onMap = await until(() => window.__game.scene.isActive('WorldMapScene'), 30000); await wait(2500);
+    ck('「再来一局」：同一员将直接重开第 1 阵（不回选将页）；阵亡结算：止步第 1 阵、斩将 0；最高连斩还是 10（低的不覆盖）', again && (await ev(() => window.__S.runConfig.character)) === heroBefore && dead.over && /止步第 1 阵/.test(dead.title) && dead.best?.kills === 10 && /最高连斩　10/.test(dead.body), { again, heroBefore, ...dead });
+    // 结算主按钮：主菜单是主要入口（开发直进也算），写「返回主菜单」、点了回主菜单（统筹 11-22 验收：原来写「返回天下地图」）
+    { await wait(600); await p.screenshot({ path: OUT + '/gauntlet-22-result-home.png' }); const ht = await ev(() => { const h = window.__S.resultPanel.getByName('result-home'); const t = h?.text ?? null; h?.emit('pointerdown'); return t; }); const toMenu = await until(() => window.__game.scene.isActive('MenuScene'), 30000);
+      ck('结算主按钮（主菜单 / 开发直进）：写「返回主菜单」、点了回主菜单', ht === '返回主菜单' && toMenu, { ht, toMenu }); }
+    // 天下地图入口：地图上一直有名将连战的点
+    await ev(() => { const s = window.__game.scene.getScene('MenuScene'); s.registry.set('mapFocusNode', 'gauntlet'); s.scene.start('WorldMapScene'); }); const onMap = await until(() => window.__game.scene.isActive('WorldMapScene'), 30000); await wait(2500);
     // 天下地图有两版：默认 V1（WorldNodes 节点 + 牙旗），?map=v2 是路线图；两版都认
     const node = await ev(() => { const m = window.__game.scene.getScene('WorldMapScene'), v2 = m?.view?.vis?.get?.('gauntlet'), mk = m?.markers?.find?.(x => x.node.id === 'gauntlet'), v1 = mk ? mk.root.list.find(o => o.name === 'node-gauntlet')?.getData('state') : undefined;
       return { vis: v2 ?? v1 ?? null, focus: m?.selected?.node?.id ?? null, map: m?.view ? 'v2' : 'v1' }; });
     await p.screenshot({ path: OUT + '/gauntlet-4-map.png' });
-    ck('天下地图入口：一直有「名将连战」点（不看开关、不看通关），从结算回地图时选中它', onMap && node.vis === 'open' && node.focus === 'gauntlet', node);
+    ck('天下地图入口：一直有「名将连战」点（不看开关、不看通关）', onMap && node.vis === 'open' && node.focus === 'gauntlet', node);
     { await ev(() => { const m = window.__game.scene.getScene('WorldMapScene'); m.launch(false); }); const pick = await until(() => window.__game.scene.isActive('GauntletPickScene') && !!window.__game.scene.getScene('GauntletPickScene').gauntletPicker?.root.visible, 30000);
       await ev(() => window.__game.scene.getScene('GauntletPickScene').gauntletPicker.root.getByName('hero-confirm').emit('pointerdown')); const back = await until(() => window.__game.scene.isActive('GauntletGameScene'), 30000);
-      ck('从地图入口 → 先到本模式的选将页（不用地图上的主公）→ 出战 → 进名将连战第 1 阵', pick && back && await ev(() => window.__game.scene.getScene('GauntletGameScene').gWave === 1), back); }
+      ck('从地图入口 → 先到本模式的选将页（不用地图上的主公）→ 出战 → 进名将连战第 1 阵', pick && back && await ev(() => window.__game.scene.getScene('GauntletGameScene').gWave === 1), back);
+      await until(() => { const s = window.__game.scene.getScene('GauntletGameScene'); return !!s?.player?.alive && s.elapsed > .5; }, 30000);
+      const mr = await ev(async () => { const s = window.__game.scene.getScene('GauntletGameScene'); window.__S = s; s.player.damageImmune = false; s.player.hp = 1; s.player.takeDamage(99999, s.combatNow); await new Promise(r => setTimeout(r, 1500)); const h = s.resultPanel.getByName('result-home'); const t = h?.text ?? null; h?.emit('pointerdown'); return { from: s.gFrom, t }; });
+      const backMap = await until(() => window.__game.scene.isActive('WorldMapScene'), 30000); await wait(2000); const focus = await ev(() => window.__game.scene.getScene('WorldMapScene')?.selected?.node?.id ?? null);
+      ck('从天下地图进来的：结算主按钮写「返回天下地图」、点了回地图并选中名将连战入口', mr.from === 'map' && mr.t === '返回天下地图' && backMap && focus === 'gauntlet', { ...mr, backMap, focus });
+      await ev(() => { window.__game.scene.getScene('WorldMapScene').launch(false); }); await until(() => window.__game.scene.isActive('GauntletPickScene') && !!window.__game.scene.getScene('GauntletPickScene').gauntletPicker?.root.visible, 30000);
+      await ev(() => { window.__game.scene.getScene('GauntletPickScene').gauntletPicker.root.getByName('hero-confirm').emit('pointerdown'); }); await until(() => window.__game.scene.isActive('GauntletGameScene'), 30000); }
     // 新接入名将巡检（适配表分批）：逐位强制登场 → 图在、有出招控制器、几秒内出招 → 斩 → 战利品（黄忠收为副将，其余取辎重）→ 下一位
     { await until(() => { const s = window.__game.scene.getScene('GauntletGameScene'); return s?.player?.alive && s.elapsed > .5; }, 30000);
       await ev(() => { const s = window.__game.scene.getScene('GauntletGameScene'); window.__S = s; s.gEndless = true; s.player.damageImmune = true; });

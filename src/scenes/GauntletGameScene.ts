@@ -161,8 +161,11 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     gWave = 1; gPhase: 'mow' | 'boss' | 'clear' | 'choice' | 'done' = 'mow'; gAt = 0; gOrder: GauntletBoss[] = []; gCur: GauntletBoss | null = null;
     gKills: GauntletBoss[] = []; gCleared = false; gEndless = false; private gPool: GauntletBoss[] = [];
     private gCtrl: GCtrl | null = null; private gLootShown = false; private gEliteAt = 0; private gFollowers: Array<{ f: Follower; boss: GauntletBoss }> = [];
-    /** 从哪进来的（结算「返回」回哪）：主菜单 / 天下地图（开发直进算天下地图）。 */
-    gFrom: 'menu' | 'map' = 'map';
+    /**
+     * 从哪进来的（结算「返回」回哪）：主菜单是主要入口（11-22 起一开始就能玩），只有从天下地图牙旗进来的回地图；开发直进也算主菜单。
+     * 「再来一局」：同一员将直接重开（同一局的来处不变）——想换将走「返回主菜单」再点模式按钮，选将页记着上次选的。
+     */
+    gFrom: 'menu' | 'map' = 'menu';
     private gPendingReplace: GauntletBoss | null = null; private gTrack: GauntletTrack | null = null; private gStrikes: Strikes | null = null; private gPortrait = new Map<string, string>();
     /** 测试读：帧率采样（三位副将 + 名将 + 割草同屏）。 */
     gStats = { lootPicks: [] as string[], spawned: 0, cleared: 0 };
@@ -205,7 +208,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     }
     create() {
       const saved = this.registry.get('runConfig') as RunConfig | undefined;
-      this.gFrom = this.registry.get('gauntletFrom') === 'menu' ? 'menu' : 'map';
+      this.gFrom = this.registry.get('gauntletFrom') === 'map' ? 'map' : 'menu';
       this.registry.remove('campaignTransfer'); this.registry.remove('worldCampaign'); // 无行营 / 无整军：不带部曲、不读征程构筑
       this.registry.set('runConfig', { ...saved, character: saved?.character ?? 'zhaoyun', chapter: 'hulao', westStage: 3, encounter: 'qunxiong' }); // encounter：不建剧情、不记战役进度、不建西凉专属机制（同篇章场景）
       this.gWave = 1; this.gPhase = 'mow'; this.gAt = 0; this.gKills = []; this.gCleared = false; this.gEndless = false; this.gCtrl = null; this.gLootShown = false; this.gFollowers = []; this.gPendingReplace = null; this.gResult = null; this.gPortrait.clear();

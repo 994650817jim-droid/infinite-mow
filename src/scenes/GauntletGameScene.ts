@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { GameScene } from './GameScene';
-import { BALANCE } from '../config';
+import { BALANCE, HEADING_FONT } from '../config';
 import { getBattleChapter, getChapter, type ChapterDef } from '../data/chapters';
 import type { EnemyDef } from '../data/enemies';
 import { GAUNTLET, endlessBoss, gauntletReward, pickBosses, readGauntletBest, unlockedPool, waveScale, writeGauntletBest, type GauntletBoss } from '../data/gauntlet';
@@ -201,14 +201,24 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     portrait(b: GauntletBoss): string {
       const hit = this.gPortrait.get(b.id); if (hit && this.textures.exists(hit)) return hit;
       const a = bossArt(b), key = 'gauntlet_face_' + b.id; if (!this.textures.exists(a.tex)) return 'growth_icon_pickup';
-      if (!this.textures.exists(key)) { const src = this.textures.get(a.tex), fr = src.has('down_0') ? 'down_0' : 0, f = src.get(fr), c = this.textures.createCanvas(key, f.width, f.height); if (!c) return 'growth_icon_pickup'; c.drawFrame(a.tex, fr, 0, 0); c.refresh(); }
+      // 首领图第一帧（朝下站立）裁到不透明像素的外框：各家首领图格子里人站的位置 / 留白不一样，裁掉留白以后同样大小摆一排才整齐
+      if (!this.textures.exists(key)) {
+        const src = this.textures.get(a.tex), f = src.get(src.has('down_0') ? 'down_0' : 0), w = Math.max(1, Math.round(f.cutWidth)), h = Math.max(1, Math.round(f.cutHeight));
+        const tmp = document.createElement('canvas'); tmp.width = w; tmp.height = h; const g = tmp.getContext('2d', { willReadFrequently: true }); if (!g) return 'growth_icon_pickup';
+        g.drawImage(f.source.image as CanvasImageSource, f.cutX, f.cutY, w, h, 0, 0, w, h);
+        let x0 = w, y0 = h, x1 = -1, y1 = -1;
+        try { const d = g.getImageData(0, 0, w, h).data; for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (d[(y * w + x) * 4 + 3] > 40) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; } } catch { /* 读不了像素：用整格 */ }
+        if (x1 < x0) { x0 = 0; y0 = 0; x1 = w - 1; y1 = h - 1; }
+        const cw = x1 - x0 + 1, ch = y1 - y0 + 1, c = this.textures.createCanvas(key, cw, ch); if (!c) return 'growth_icon_pickup';
+        c.context.drawImage(tmp, x0, y0, cw, ch, 0, 0, cw, ch); c.refresh();
+      }
       this.gPortrait.set(b.id, key); return key;
     }
     private openLoot(): void {
       const b = this.gCur; if (!b) return; const food = GAUNTLET.loot.food + GAUNTLET.loot.foodPerWave * this.gWave, full = this.gFollowers.length >= GAUNTLET.followerMax;
       const opts: UpgradeOption[] = [
         { id: 'gauntlet_follow', name: '收为副将 · ' + b.name, desc: `${b.name}本局跟着你打（用他自己的形象，名将招式能用的照用）\n副将最多 ${GAUNTLET.followerMax} 位${full ? ' · 已满，选了再挑替换谁' : ''}`, kind: 'foundation', categoryLabel: '战利品', scope: 'run', icon: this.portrait(b), apply: () => this.takeFollower(b) },
-        { id: 'gauntlet_spoils', name: '取其辎重', desc: `钱币 +${food}\n立刻回满生命`, kind: 'foundation', categoryLabel: '战利品', scope: 'once', icon: 'growth_icon_pickup', apply: () => { this.legion.food += food; this.player.heal(this.player.maxHp); } },
+        { id: 'gauntlet_spoils', name: '取其辎重', desc: `钱币 +${food}\n立刻回满生命`, kind: 'foundation', categoryLabel: '战利品', scope: 'once', icon: 'growth_icon_pickup', apply: () => { this.coinBurst(this.player.x, this.player.y, food); this.legion.food += food; this.player.heal(this.player.maxHp); } }, // 钱不飘字：铜钱从主将处飞进行囊（coins.md）
         supplyOption(b.chapter),
       ];
       this.showLoot(`斩将 · ${b.name} · 战利品三选一`, '本局有效 · 选一样', opts, () => { if (this.gPendingReplace) { const nb = this.gPendingReplace; this.gPendingReplace = null; this.openReplace(nb); } });
@@ -257,7 +267,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       this.showWaveBanner(this.gEndless ? `无尽 · 第 ${this.gWave} 阵` : this.gWave === GAUNTLET.waves ? `第 ${this.gWave} 阵 · 守关之战` : `第 ${this.gWave} 阵`, false, `割草 ${GAUNTLET.mowSec} 秒后名将登场`);
     }
 
-    // ———— 结算：打到第几阵、斩了哪些名将（头像一排）、用时、最高连斩；按斩将数给军粮 / 武学残卷 ————
+    // ———— 结算：打到第几阵、斩了哪些名将（头像一排）、用时、最高连斩；按斩将数给钱币 / 武学残卷 ————
     protected finish(victory: boolean, reason: RunEndReason = 'death') {
       if (this.over) return;
       super.finish(victory, reason);
@@ -268,10 +278,10 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       const keep = this.resultTexts.body.text.split('\n').filter(l => /^武将等级|^经验已满|^属性点/.test(l));
       const reached = this.gEndless ? `第 ${this.gWave} 阵（无尽）` : `第 ${this.gWave} 阵 / ${GAUNTLET.waves}`;
       this.resultTexts.subtitle.setText(this.gCleared ? (this.gEndless ? `十阵通关 · 无尽斩将 ${kills}` : '十阵连斩 · 通关') : `止步第 ${this.gWave} 阵 · 斩将 ${kills}`);
-      // 正文（逻辑 / 测试读；电脑版结算画面按它画奖励格：「永久奖励 军粮 +N」「武学残卷 +N」「武将等级 …」）
+      // 正文（逻辑 / 测试读；电脑版结算画面按它画奖励格：「永久奖励 钱币 +N」「武学残卷 +N」「武将等级 …」）
       this.resultTexts.body.setText([
         '打到　　' + reached, '斩将　　' + (kills ? kills + ' 位：' + this.gKills.map(b => b.name).join('、') : '无'), '用时　　' + this.formatTime(this.elapsed),
-        '最高连斩　' + best + (record ? '　新纪录！' : ''), ...(debug ? ['名将连战  测试战斗不入库'] : [`永久奖励  军粮 +${rw.provisions}`, `武学残卷  +${rw.scrolls}`, ...(first ? ['首次通关  名将连战大奖'] : [])]), ...keep,
+        '最高连斩　' + best + (record ? '　新纪录！' : ''), ...(debug ? ['名将连战  测试战斗不入库'] : [`永久奖励  钱币 +${rw.provisions}`, `武学残卷  +${rw.scrolls}`, ...(first ? ['首次通关  名将连战大奖'] : [])]), ...keep,
       ].join('\n'));
       this.gResult = { kills, best, record }; this.presentResult(victory);
       const home = this.resultPanel.getByName('result-home') as Phaser.GameObjects.Text | null;
@@ -283,13 +293,21 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     private gResult: { kills: number; best: number; record: boolean } | null = null;
     protected presentResult(victory: boolean): void {
       super.presentResult(victory); const r = this.gResult; if (!r || !this.resultPanel) return; const { kills, best, record } = r;
-      for (const o of [...this.resultPanel.list]) if (o.name === 'gauntlet-face' || o.name === 'gauntlet-face-name') o.destroy();
-      // 电脑版：底下一行战况换成本模式的（第几阵 · 斩将 · 用时 · 最高连斩）；斩将头像排一行放在副标题下面（首领图第一帧 + 名字）
+      for (const o of [...this.resultPanel.list]) if (o.name.startsWith('gauntlet-face')) o.destroy();
+      // 电脑版：底下一行战况换成本模式的（第几阵 · 斩将 · 用时 · 最高连斩）；斩将头像排在分隔线下面
       (this.resultPanel.getByName('result-stats') as Phaser.GameObjects.Text | null)?.setText([`第 ${this.gWave} 阵`, `斩将 ${kills} 位`, '用时 ' + this.formatTime(this.elapsed), `最高连斩 ${best}${record ? '（新纪录）' : ''}`].join('　·　'));
-      { const sub = this.resultTexts.subtitle, row = this.gKills.slice(-12), size = 38, gap = 14, w = row.length * (size + gap) - gap, x0 = sub.x - w / 2 + size / 2, y = sub.y + sub.displayHeight * (1 - sub.originY) + 46;
-        row.forEach((b, i) => { const x = x0 + i * (size + gap), img = this.add.image(x, y, this.portrait(b)).setScrollFactor(0).setName('gauntlet-face'); img.setScale(size / Math.max(img.width, img.height));
-          const t = this.add.text(x, y + size / 2 + 8, b.name, { fontFamily: 'serif', fontSize: '12px', color: '#e8d6a4', resolution: 2 }).setOrigin(.5, 0).setStroke('#1a120b', 3).setScrollFactor(0).setName('gauntlet-face-name');
-          this.resultPanel.add([img, t]); }); }
+      // 斩将一排（11-21 总制作人「头像太小」）：每位一块同尺寸的底牌，人像裁掉留白后等比放进底牌、脚踩同一条底线，名字在牌下；最多 12 位（无尽多了取最后 12 位）
+      const row = this.gKills.slice(-12), n = row.length; if (!n) return;
+      const PW = 76, PH = 92, gap = n > 10 ? 10 : 16, w = n * PW + (n - 1) * gap, x0 = this.resultTexts.subtitle.x - w / 2 + PW / 2, top = this.resultTop + 146, cy = top + PH / 2;
+      row.forEach((b, i) => {
+        const x = x0 + i * (PW + gap), plate = this.add.rectangle(x, cy, PW, PH, 0x1a120b, .72).setStrokeStyle(1.5, 0xd9b46a, .8).setScrollFactor(0).setName('gauntlet-face-plate');
+        const img = this.add.image(x, top + PH - 6, this.portrait(b)).setOrigin(.5, 1).setScrollFactor(0).setName('gauntlet-face'); img.setScale(Math.min((PW - 10) / img.width, (PH - 12) / img.height));
+        const t = this.add.text(x, top + PH + 7, b.name, { fontFamily: HEADING_FONT, fontSize: '15px', color: '#f0dcae', resolution: 2 }).setOrigin(.5, 0).setStroke('#1a120b', 3).setScrollFactor(0).setName('gauntlet-face-name');
+        this.resultPanel.add([plate, img, t]);
+      });
+      // 奖励格挪到头像排下面（基类按分隔线到要事之间居中摆，会和头像排重叠）
+      const rw = this.resultPanel.getByName('result-rewards') as Phaser.GameObjects.Container | null, below = top + PH + 36;
+      if (rw) { const empty = rw.list.length === 1 && rw.list[0] instanceof Phaser.GameObjects.Text; /* 「本场没有新的奖励」一行字：容器原点在字中间 */ rw.setY(Math.max(rw.y, empty ? below + 14 : below)); }
     }
     /** 测试用：当前名将控制器（招式框架 / 专属）。 */
     get gauntletCtrl() { return this.gCtrl; }

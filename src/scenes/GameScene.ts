@@ -848,7 +848,7 @@ export class GameScene extends Phaser.Scene {
   /** 结算动画是否放完（测试读）；resultAnimSkip 跳到结尾。resultTop / resultH 为电脑版结算卷位置。 */
   resultAnimDone = true;
   private resultAnimSkip: (() => void) | null = null;
-  private resultTop = 0; private resultH = 0;
+  protected resultTop = 0; private resultH = 0;
   protected pausePanel!: Phaser.GameObjects.Container;
   protected attributePanel!: Phaser.GameObjects.Container;
   /** 加点面板的说明卡（主属性一行悬停 / 点按）。 */
@@ -5436,7 +5436,8 @@ export class GameScene extends Phaser.Scene {
     // 2026-11-21 用户「钱币就是飞进行囊里，行囊可以看到钱币数量」：铜钱飞向右上「行囊」图标（到达时切鼓起贴图 0.25 秒 + 放大 1.08 回弹），
     // 行囊左边写钱币数（铜钱图标 coin_flip 正面帧 + 数字，无底板，变化时跳一下）；左上部曲行不再写钱币（同一个数不显示两处）
     const bag = (): Phaser.GameObjects.Image | null => { const i = this.bagBundle?.icon; return i && i.visible && i.texture.key !== '__DEFAULT' ? i : null; };
-    if (!this.coinCount) {
+    // 场景 restart（再来一局 / 重打本关）后字段还指着上一局已销毁的文字：没有 scene 就重建，否则每帧 setText 报错、update 停摆（主将阵亡也不进结算）
+    if (!this.coinCount?.scene || !this.coinIcon?.scene) {
       this.coinCount = this.add.text(0, 0, '', { fontFamily: HEADING_FONT, fontSize: '16px', color: '#f6e2b8', resolution: 2, stroke: '#140b05', strokeThickness: 4 }).setOrigin(1, .5).setScrollFactor(0).setDepth(DEPTH.hud + 2).setName('hud-coin-count');
       this.coinIcon = this.add.image(0, 0, '__DEFAULT').setScrollFactor(0).setDepth(DEPTH.hud + 2).setName('hud-coin-icon').setVisible(false);
     }

@@ -39,7 +39,7 @@ if (BASE) {
   const errors = [];
   const b = await chromium.launch({ channel: 'chrome', headless: true, args: ['--mute-audio'] });
   const p = await b.newPage({ viewport: { width: 1280, height: 720 } });
-  p.on('pageerror', e => errors.push(e.message.slice(0, 200)));
+  p.on('pageerror', e => errors.push(e.message.slice(0, 200) + ' @ ' + String(e.stack ?? '').split('\n').slice(1, 4).map(l => l.trim().replace(/https?:\/\/[^/]+\//, '').replace(/\?t=\d+/, '')).join(' < ')));
   p.on('console', m => { if (m.type() === 'error' && !/favicon|Failed to load resource|Texture key already in use/.test(m.text())) errors.push(m.text().slice(0, 200)); });
   const wait = ms => p.waitForTimeout(ms), ev = (f, a) => p.evaluate(f, a);
   const until = async (f, ms, a) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (await ev(f, a)) return true; await wait(200); } return false; };
@@ -92,6 +92,10 @@ if (BASE) {
     const res = await ev(() => { const s = window.__S; return { title: s.resultTexts.subtitle.text, body: s.resultTexts.body.text, faces: s.resultPanel.list.filter(o => o.name === 'gauntlet-face').length, best: JSON.parse(localStorage.getItem('im_gauntlet_best_test') ?? 'null') }; });
     await p.screenshot({ path: OUT + '/gauntlet-3-result.png' });
     ck('收兵结算：通关副标题、打到第 10 阵、斩将 10 位（头像一排）、用时、最高连斩写进存档单独的键（测试存档 _test）', over && /通关/.test(res.title) && /第 10 阵/.test(res.body) && /斩将　　10 位/.test(res.body) && /用时/.test(res.body) && res.faces === 10 && res.best?.kills === 10, res);
+    // 11-21 总制作人：头像放大并排整齐（同尺寸底牌、脚踩同一条底线、不压奖励格）；结算期间不弹「成就解锁」（压标题），延后到下一个场景
+    const look = await ev(() => { const s = window.__S, L = s.resultPanel.list, f = L.filter(o => o.name === 'gauntlet-face'), pl = L.filter(o => o.name === 'gauntlet-face-plate'), rw = s.resultPanel.getByName('result-rewards');
+      return { minH: Math.round(Math.min(...f.map(o => o.displayHeight))), plateH: pl[0]?.height ?? 0, bases: [...new Set(f.map(o => Math.round(o.y)))], plateBottom: Math.round(pl[0] ? pl[0].y + pl[0].height / 2 : 0), rewardsY: Math.round(rw?.y ?? 0), toast: s.children.list.filter(o => o.name === 'achievement-toast').length }; });
+    ck('结算头像：每位一块同尺寸底牌（≥ 80 高）、人像 ≥ 50 高、脚踩同一条底线，奖励格在头像排下面；结算画面上没有「成就解锁」提示', look.plateH >= 80 && look.minH >= 50 && look.bases.length === 1 && look.rewardsY > look.plateBottom && look.toast === 0, look);
     // 重开一局：阵亡结算（不覆盖更高的记录）
     await ev(() => { window.__S.scene.restart(); }); await until(() => { const s = window.__game.scene.getScene('GauntletGameScene'); return s?.player?.alive && s.elapsed > .5 && !s.over; }, 30000);
     const dead = await ev(async () => { const s = window.__game.scene.getScene('GauntletGameScene'); window.__S = s; s.player.damageImmune = false; s.player.hp = 1; s.player.takeDamage(99999, s.combatNow); await new Promise(r => setTimeout(r, 1500)); return { over: s.over, title: s.resultTexts.subtitle.text, body: s.resultTexts.body.text, best: JSON.parse(localStorage.getItem('im_gauntlet_best_test') ?? 'null') }; });

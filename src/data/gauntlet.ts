@@ -69,12 +69,12 @@ export const GAUNTLET = {
    * 再叠一层震怒会和阵数递增打架。名将不会因为拖得久变强。
    */
   stallOff: true,
-  /** 战利品：收为副将（最多 followerMax 位，满了选替换谁）、取其辎重（钱币 = 随军粮 food + foodPerWave × 阵数，回满生命）、军资补位卡。 */
+  /** 战利品：收为副将（最多 followerMax 位，满了选替换谁）、取其辎重（随军钱币 legion.food + food + foodPerWave × 阵数，回满生命）、军资补位卡。 */
   followerMax: 3, loot: { food: 60, foodPerWave: 20 },
   /** 副将强度：按名将生涯（品质橙、模板按兵器）走随行系统；能用降将专属招式的（data/surrenderMoves）照样会用。 */
   followerQuality: 'orange' as const,
   /**
-   * 结算奖励（存档货币，测试 / 调试战斗不给）：按斩了几位名将给军粮（world provisions，界面「钱币」改名合并后跟着改）与武学残卷（MasteryStore scrolls，「兵法残卷」同理）。
+   * 结算奖励（存档货币，测试 / 调试战斗不给）：按斩了几位名将给钱币（world provisions，界面已改名「钱币」）与武学残卷（MasteryStore scrolls；「兵法残卷」改名后跟着改）。
    * 首次通关（斩满十位）再给一次大奖。初值，统筹合并前给用户看。
    */
   reward: { provisionsPerKill: 40, scrollsEvery: 2, firstClear: { provisions: 400, scrolls: 6 } },

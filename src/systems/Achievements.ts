@@ -107,9 +107,15 @@ export function checkWorld(w: WorldSave): void {
   if (Object.values(w.reserve).reduce((n, v) => n + (v || 0), 0) >= 20) unlock('reserve_20');
 }
 
-/** 解锁提示（顶部居中、计时下方；当前最上层场景，约 2.6 秒）。 */
+/** 结算期间解锁、还没弹的提示（离开结算场景后依次弹）。 */
+const deferred: AchievementDef[] = [];
+function flushDeferred(): void { const list = deferred.splice(0); for (const d of list) toast(d); }
+/** 解锁提示（顶部居中、计时下方；当前最上层场景，约 2.6 秒）。结算画面开着时延后到下一个场景。 */
 function toast(def: AchievementDef): void {
   const scene = game?.scene.getScenes(true).at(-1); if (!scene) return;
+  // 结算画面开着（战斗已结束 / 结算卷）：提示框会压住结算标题——先记下，等离开这个场景（回地图 / 营寨 / 再来一局）后在下一个场景弹（总制作人 11-21「成就解锁压住名将连战标题」）
+  const sc = scene as unknown as { over?: boolean; mode?: string };
+  if (sc.over === true || sc.mode === 'result') { const first = !deferred.length; deferred.push(def); if (first) scene.events.once('shutdown', () => setTimeout(flushDeferred, 700)); return; }
   // 同时解锁多个时往下排，不重叠
   const stack = scene.children.list.filter(o => o.name === 'achievement-toast').length;
   const W = GAME_WIDTH, /* HUD 在 UI 镜头上，按设计宽度排（主镜头可拉远） */ w = 260, x = W / 2, y = 132 + stack * 66; // 2026-11-21 总制作人：原在右上，盖住行营「下一关 / 行囊」、战斗里的设置 / 舆图——挪到顶部居中、计时与关名下面

@@ -508,7 +508,7 @@ export class WorldMapScene extends Phaser.Scene {
   /** 名将连战（data/gauntlet.ts）：模式说明 + 最高连斩。 */
   private gauntletDetail(v: NodeVis) {
     const locked = v === 'hidden', best = readGauntletBest(isChapterTestRun()).kills;
-    this.setDetail('rt_pennant_challenge', '', '名将连战', '模式 · 割草斩将', `${locked ? '未解锁：第二章通关后开放' : best ? '最高连斩 ' + best + ' 位' : `${GAUNTLET.waves} 阵连斩 · 通关后可继续无尽`}\n每阵割草 ${GAUNTLET.mowSec} 秒，名将带亲兵杀到；斩将后战利品三选一（收为副将 / 取其辎重 / 军资）\n奖励：按斩将数给军粮、武学残卷 · 不掉战役兵装 · 不影响战役进度`);
+    this.setDetail('rt_pennant_challenge', '', '名将连战', '模式 · 割草斩将', `${locked ? '未解锁：第二章通关后开放' : best ? '最高连斩 ' + best + ' 位' : `${GAUNTLET.waves} 阵连斩 · 通关后可继续无尽`}\n每阵割草 ${GAUNTLET.mowSec} 秒，名将带亲兵杀到；斩将后战利品三选一（收为副将 / 取其辎重 / 军资）\n奖励：按斩将数给钱币、武学残卷 · 不掉战役兵装 · 不影响战役进度`);
     this.setAction(locked ? '尚未解锁' : '出战 · 名将连战', !locked);
   }
   private intelDetail(e: IntelEvent) {

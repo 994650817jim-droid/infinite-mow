@@ -634,7 +634,7 @@ export class WorldMapSceneV1 extends Phaser.Scene {
  private gauntletDetail(st:'home'|ChapterState){const locked=st==='locked',best=readGauntletBest(isChapterTestRun()).kills;
   this.setDetail('名将连战 · 割草斩将',locked?0x4a4f46:0x8c2a2a,locked?'锁':'将',`${locked?'未解锁：第二章「讨伐董卓」通关后开放':best?`最高连斩 ${best} 位`:`${GAUNTLET.waves} 阵连斩 · 通关后可继续无尽`}
 每阵割草 ${GAUNTLET.mowSec} 秒，名将带亲兵杀到；斩将后战利品三选一（收为副将 / 取其辎重 / 军资）
-奖励：按斩将数给军粮、武学残卷 · 不掉战役兵装 · 不影响战役进度${this.lossWarning()?'\n'+this.lossWarning():''}`);
+奖励：按斩将数给钱币、武学残卷 · 不掉战役兵装 · 不影响战役进度${this.lossWarning()?'\n'+this.lossWarning():''}`);
   this.action.text.setText(locked?'尚未解锁':'出战 · 名将连战');this.action.image.setAlpha(locked?.45:1);if(locked)this.action.image.disableInteractive();else this.action.image.setInteractive({useHandCursor:true});this.layoutActions(false);}
  private launchGauntlet(){let hero:CharacterId=defaultHero(null);try{hero=defaultHero(localStorage.getItem('im_last_hero'));}catch{/* storage unavailable */}
   this.registry.remove('campaignTransfer');this.registry.set('runConfig',{character:hero});

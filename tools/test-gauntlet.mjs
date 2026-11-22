@@ -18,7 +18,7 @@ const src = p => readFileSync(join(root, p), 'utf8').replace(/\r\n/g, '\n');
 
 // ———— 一、纯 node
 const M = await load('src/data/gauntlet.ts'), G = M.GAUNTLET, P = M.GAUNTLET_POOL;
-ck('开关默认关；?gauntlet=1 开、?gauntlet=0 关', M.gauntletOn('') === false && M.gauntletOn('?gauntlet=1') === true && M.gauntletOn('?gauntlet=0') === false && M.gauntletOn('?dev=1') === false);
+ck('一开始就能玩：没有开关（gauntletOn 去掉了）；模式名是一个常量 GAUNTLET_NAME（用户 11-22 定名「名将连战幸存者」），主菜单按钮下的小字是 GAUNTLET_TAGLINE', M.gauntletOn === undefined && M.GAUNTLET_NAME === '名将连战幸存者' && M.GAUNTLET_TAGLINE === '从零开局 · 十阵斩将' && M.GAUNTLET_HERO_KEY === 'im_gauntlet_hero');
 // 名将池（适配表 gauntlet-roster.md，分批接入）：BATCH = 已接入的批次名单
 const BATCH1 = ['zhangliang', 'zhangbao', 'lijue', 'guosi', 'zhangxiu', 'caochun', 'caimao', 'zhaofan', 'liudu', 'huangzhong'];
 const BATCH2 = ['huaxiong', 'xurong', 'yanliang', 'yanghuai', 'zhangren', 'pangde', 'sunhuan', 'mangyachang', 'zhurong', 'zhanghe'];
@@ -40,8 +40,8 @@ const SWEEP = [...BATCH1, ...BATCH2, ...BATCH3, ...BATCH4];
   ck('四段制抽将（全池）：1～3 阵前段、4～6 中段、7～9 后段（守关最多借一位）、第 10 阵守关；不重复（40 局）', okAll, sample);
   const small = M.pickBosses(P.filter(b => b.id === 'zhangjiao' || b.id === 'lubu'), rnd);
   ck('池子不到十位（刚打完第二章：张角、吕布）时轮着重复、不连着两阵同一位；第十阵是守关档的吕布', small.length === 10 && small.every((b, i) => i === 0 || b.id !== small[i - 1].id) && small[9].id === 'lubu', small.map(b => b.id));
-  const early = M.pickBosses(M.unlockedPool(k => /^(huangjin|hulao|third)-/.test(k)), rnd);
-  ck('缺段往前借：只打到第三章时，第 4 阵是中段唯一的袁术，其余中 / 后段先借前段没出过的、借完再轮，第十阵守关（吕布或董卓）；不连着同一位', early.slice(0, 3).every(b => b.tier === 'front') && early[3].id === 'yuanshu' && early[9].tier === 'gate' && new Set(early.slice(0, 7).map(b => b.id)).size === 7 && early.every((b, i) => i === 0 || b.id !== early[i - 1].id), early.map(b => b.name));
+  const early = M.pickBosses(P.filter(b => /^(huangjin|hulao|third)-/.test(b.clearKey)), rnd);
+  ck('缺段往前借（池子只有前三章的名将时）：第 4 阵是中段唯一的袁术，其余中 / 后段先借前段没出过的、借完再轮，第十阵守关（吕布或董卓）；不连着同一位', early.slice(0, 3).every(b => b.tier === 'front') && early[3].id === 'yuanshu' && early[9].tier === 'gate' && new Set(early.slice(0, 7).map(b => b.id)).size === 7 && early.every((b, i) => i === 0 || b.id !== early[i - 1].id), early.map(b => b.name));
   const seen = []; let last = null, okE = true; for (let i = 0; i < P.length - 1; i++) { const b = M.endlessBoss(P, last, rnd, seen); if (b === last || seen.includes(b)) okE = false; seen.push(b); last = b; }
   ck('无尽：全池循环，不连着同一位、一轮里不重复', okE, seen.length); }
 { const s = [1, 5, 10, 11, 15].map(n => M.waveScale(n));
@@ -73,11 +73,16 @@ const SWEEP = [...BATCH1, ...BATCH2, ...BATCH3, ...BATCH4];
 { const S = src('src/scenes/GauntletGameScene.ts'), GS = src('src/scenes/GameScene.ts');
   ck('从 0 开局（接线）：兵装 / 信物 / 坐骑只读本局拿的（开局清空）、等级 / 经验不写回、战后不记武将经验、卡池全开并在离开时放回', S.includes('protected campaignGear() { return gearFromItems([...Object.values(this.gGear') && S.includes("protected campaignCharms(): ReturnType<GameScene['campaignCharms']> { return [...(this.gCharms ?? [])]; }") && S.includes('protected campaignHorse() { return this.gHorse; }') && S.includes('this.gGear = {}; this.gCharms = []; this.gHorse = undefined;') && S.includes('protected persistHeroProgress(): boolean { return false; }') && S.includes('protected lordHeroXp(): number { return 0; }')
     && S.includes("this.openPool(); this.events.once('shutdown', () => this.closePool());") && GS.includes('if (this.persistHeroProgress()) { setHeroProgress(id, this.player.level, this.player.xp); g.heroFree += pts; }') && GS.includes('this.player.growth.gear=this.campaignGear();') && GS.includes('this.mount=null;this.equipMount(this.campaignHorse());')); }
-ck('能抽的名将 = 战役里打败过的（测试存档全开）；一个没打过也保底张角', M.unlockedPool(k => k === 'huangjin-3' || k === 'hulao-3').map(b => b.name).sort().join() === ['张角', '董卓', '吕布'].sort().join() && M.unlockedPool(() => false)[0]?.id === 'zhangjiao' && M.unlockedPool(() => false, true).length === P.length);
+ck('名将池 38 位全开（11-22 一开始就能玩：新玩家一个都没打败过，不再按战役进度限）', M.unlockedPool === undefined && M.gauntletPool().length === 38 && P.length === 38);
 ck('结算奖励按斩将数（军粮 ×' + G.reward.provisionsPerKill + '、每 ' + G.reward.scrollsEvery + ' 位一张残卷），首次通关另给大奖', M.gauntletReward(3, false).provisions === 3 * G.reward.provisionsPerKill && M.gauntletReward(10, true).scrolls === 5 + G.reward.firstClear.scrolls && M.gauntletReward(0, false).provisions === 0);
 { const S = src('src/scenes/GauntletGameScene.ts'), R = src('src/world/RouteMap.ts'), WN = src('src/world/WorldNodes.ts'), V1 = src('src/scenes/WorldMapSceneV1.ts'), W = src('src/scenes/WorldMapScene.ts'), B = src('src/scenes/BootScene.ts'), MN = src('src/main.ts'), F = src('src/systems/FollowerSquad.ts');
-  ck('接线：场景注册；天下地图入口只在开关开着时加（关着时地图一模一样）、第二章打完开放；开发构建 ?gauntlet=1 直接进', MN.includes('const GauntletBattleScene=gauntletGameSceneClass(BattleScene);') && MN.includes('LubuBattleScene, GauntletBattleScene,') && R.includes("if (gauntletOn()) nodes.push({ id: 'gauntlet', kind: 'challenge'") && R.includes("after: stageId('hulao', 3) });\n") && W.includes("if (n.kind === 'challenge' && n.id === 'gauntlet') { this.launchGauntlet(); return; }") && B.includes("import.meta.env.DEV&&q.get('gauntlet')==='1'")
-    && WN.includes("...(gauntletOn()?[{id:'gauntlet',name:'名将连战'") && V1.includes("if(node.gauntlet)return chapterStagesDone('hulao',loadWorld())>=3||isChapterTestRun()?'open':'locked';") && V1.includes("if(node.gauntlet&&st==='locked')continue;") && V1.includes("this.scene.start('GauntletGameScene')"));
+  const PK = src('src/scenes/GauntletPickScene.ts'), MS = src('src/scenes/MenuScene.ts');
+  ck('接线：场景注册（含选将页）；天下地图入口一直在（不看开关、不看通关）、从地图 / 主菜单进都先到选将页；开发构建 ?gauntlet=1 直接进', MN.includes('const GauntletBattleScene=gauntletGameSceneClass(BattleScene);') && MN.includes('LubuBattleScene, GauntletBattleScene, GauntletPickScene,') && R.includes("  nodes.push({ id: 'gauntlet', kind: 'challenge'") && !R.includes('gauntletOn') && W.includes("if (n.kind === 'challenge' && n.id === 'gauntlet') { this.launchGauntlet(); return; }") && W.includes("private launchGauntlet() { this.registry.set('gauntletFrom', 'map'); this.scene.start('GauntletPickScene'); }") && B.includes("import.meta.env.DEV&&q.get('gauntlet')==='1'")
+    && WN.includes("{id:'gauntlet',name:GAUNTLET_NAME,") && !WN.includes('gauntletOn') && V1.includes("if(node.gauntlet)return 'open';") && !V1.includes("if(node.gauntlet&&st==='locked')continue;") && V1.includes("this.scene.start('GauntletPickScene')") && MS.includes("this.scene.start('GauntletPickScene')") && PK.includes('free: true') && !MS.includes('gauntletOn'));
+  // 模式名只来自常量：显示用的代码里不再写死「名将连战」（注释不算）
+  { const files = ['src/scenes/GauntletGameScene.ts', 'src/scenes/GauntletPickScene.ts', 'src/scenes/MenuScene.ts', 'src/scenes/WorldMapScene.ts', 'src/scenes/WorldMapSceneV1.ts', 'src/world/WorldNodes.ts', 'src/data/gauntletCards.ts'], hard = [];
+    for (const f of files) src(f).split('\n').forEach((l, i) => { const code = l.replace(/\/\*.*?\*\//g, '').replace(/\/\/.*$/, ''); if (/^\s*\*/.test(l)) return; if (/['`"][^'`"]*名将连战/.test(code)) hard.push(f.split('/').pop() + ':' + (i + 1)); });
+    ck('模式名集中成一个常量：主菜单按钮、进场横幅、结算、天下地图、选将页都读 GAUNTLET_NAME，代码里不再写死', hard.length === 0, hard); }
   ck('不带行营 / 整军 / 随从 / 剧情、不掉战役兵装、不记战役进度、首领防拖关掉', S.includes("this.registry.remove('worldCampaign')") && S.includes("encounter: 'qunxiong'") && S.includes('this.followers?.clear(); this.followers = null;') && S.includes('this.itemDrops = null;') && S.includes('protected lootBlocked() { return true; }') && S.includes('this.bossStallCfg = { quotaSec: 1e9, enrageSec: 1e9 }'));
   ck('副将：随行系统本局临时随从 + 名将自己的首领图（4×8 首领图 / 四方向行走表）', S.includes('this.followers.addTemp(r,') && S.includes('f.look = { tex: a.tex, layout: a.layout') && F.includes('private renderLook(f: Follower, now: number): void')); }
 
@@ -94,6 +99,14 @@ if (BASE) {
   const wait = ms => p.waitForTimeout(ms), ev = (f, a) => p.evaluate(f, a);
   const until = async (f, ms, a) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (await ev(f, a)) return true; await wait(200); } return false; };
   /** 升级三选一 / 战斗支援之类的弹窗先关掉（战利品面板 bossloot 不动，测试自己选）。 */
+  /** 主菜单：名将连战漆金按钮在「匡扶汉室」正下方、不压它、不压底部一行；底部一行四项（+ 退出）一行不挤；按钮字 = 模式名常量。 */
+  const menuLayout = () => { const s = window.__game.scene.getScene('MenuScene'), R = n => { const o = s.children.getByName(n); if (!o || !o.visible) return null; const b = o.getBounds(); return { x: Math.round(b.x), r: Math.round(b.right), y: Math.round(b.y), b: Math.round(b.bottom), cx: Math.round(b.centerX) }; };
+    const pri = R('start-campaign'), g = R('home-gauntlet'), tag = R('home-gauntlet-tagline'), lab = s.children.getByName('home-gauntlet-label'), hit = s.children.getByName('home-gauntlet');
+    const row = ['home-saves', 'home-codex', 'home-review', 'home-settings', 'home-quit'].map(n => ({ n, ...R(n) })).filter(o => o.x !== undefined).sort((a, b) => a.x - b.x), rowTop = Math.min(...row.map(o => o.y));
+    const hitBox = (a, b) => !!a && !!b && a.x < b.r && b.x < a.r && a.y < b.b && b.y < a.b, W = s.scale.width, H = s.scale.height;
+    const r = { pri, g, tag, label: lab?.text, enabled: !!hit?.input?.enabled, row: row.map(o => o.n), rowTop, W, H };
+    r.ok = !!pri && !!g && !!tag && lab?.text === '名将连战幸存者' && !!lab && lab.width <= g.r - g.x - 12 && r.enabled /* 七个字放得下按钮 */ && g.y >= pri.b && Math.abs(g.cx - pri.cx) <= 2 && !hitBox(g, pri) && tag.y >= g.b - 2 && tag.b <= rowTop && g.b <= rowTop && !row.some(o => o.n === 'home-gauntlet') && row.slice(0, 4).map(o => o.n).join() === 'home-saves,home-codex,home-review,home-settings' && !row.some((a, i) => row.some((b, j) => i < j && a.x < b.r && b.x < a.r)) && g.b < H && tag.b < H;
+    return r; };
   const unblock = () => ev(() => { const s = window.__S, qiyu = () => s.mode === 'bossloot' && /^奇遇/.test(s.levelPanel.getByName('upgrade-title')?.text ?? ''); for (let i = 0; i < 6 && s.mode !== 'none' && (s.mode !== 'bossloot' || qiyu()) && !s.over; i++) { if (s.mode === 'levelup' || qiyu()) s.chooseUpgrade(0); else s.setMode('none'); } }); /* 奇遇面板也选掉 */
   try {
     // 战役存档里赵云 30 级（从 0 开局：进名将连战应是 1 级，打完也不改这条记录）
@@ -101,7 +114,7 @@ if (BASE) {
     await p.goto(BASE + '?dev=1&gauntlet=1&layout=desktop&story=off', { timeout: 180000 });
     const entered = await p.waitForFunction(() => { const s = window.__game?.scene.getScene('GauntletGameScene'); return s?.player && window.__game.scene.isActive('GauntletGameScene') && s.elapsed > .5; }, null, { timeout: 180000 }).then(() => true, () => false);
     const st0 = await ev(() => { const s = window.__game.scene.getScene('GauntletGameScene'); window.__S = s; s.player.damageImmune = true; return { name: s.chapter.name, phase: s.gPhase, wave: s.gWave, order: s.gOrder.map(b => b.name), followers: s.followers?.members.length ?? 0, troops: s.legion.count, drops: !!s.itemDrops, story: !!s.storyDir?.chapterId }; });
-    ck('开发构建 ?gauntlet=1 直接进名将连战：第 1 阵割草；没有部曲、随从、兵装掉落；十阵名单已抽好', entered && st0.name === '名将连战' && st0.phase === 'mow' && st0.wave === 1 && st0.followers === 0 && st0.troops === 0 && !st0.drops && st0.order.length === 10, st0);
+    ck('开发构建 ?gauntlet=1 直接进名将连战：第 1 阵割草；没有部曲、随从、兵装掉落；十阵名单已抽好', entered && st0.name === M.GAUNTLET_NAME && st0.phase === 'mow' && st0.wave === 1 && st0.followers === 0 && st0.troops === 0 && !st0.drops && st0.order.length === 10, st0);
     // 从 0 开局（11-21 统筹 B / 局内 build 第 5 条）：存档里 30 级的赵云进来是 1 级白板，卡池全开
     const z0 = await ev(() => { const s = window.__S; return { hero: s.runConfig.character, ...s.gauntletFrom0 }; });
     ck('从 0 开局：主将 1 级、经验 0、加点 0、没有星图 / 兵装 / 信物 / 坐骑 / 本命淬炼 / 战法心得；卡池全开（玩法不按进度藏，战法精研 5 级、战法格 7、武艺精熟 +2、专职精进 2）',
@@ -245,9 +258,10 @@ if (BASE) {
     const node = await ev(() => { const m = window.__game.scene.getScene('WorldMapScene'), v2 = m?.view?.vis?.get?.('gauntlet'), mk = m?.markers?.find?.(x => x.node.id === 'gauntlet'), v1 = mk ? mk.root.list.find(o => o.name === 'node-gauntlet')?.getData('state') : undefined;
       return { vis: v2 ?? v1 ?? null, focus: m?.selected?.node?.id ?? null, map: m?.view ? 'v2' : 'v1' }; });
     await p.screenshot({ path: OUT + '/gauntlet-4-map.png' });
-    ck('天下地图入口：开关开着时有「名将连战」点（第二章打完开放），从结算回地图时选中它', onMap && node.vis === 'open' && node.focus === 'gauntlet', node);
-    { await ev(() => { const m = window.__game.scene.getScene('WorldMapScene'); m.launch(false); }); const back = await until(() => window.__game.scene.isActive('GauntletGameScene'), 30000);
-      ck('从地图入口出战 → 进名将连战第 1 阵', back && await ev(() => window.__game.scene.getScene('GauntletGameScene').gWave === 1), back); }
+    ck('天下地图入口：一直有「名将连战」点（不看开关、不看通关），从结算回地图时选中它', onMap && node.vis === 'open' && node.focus === 'gauntlet', node);
+    { await ev(() => { const m = window.__game.scene.getScene('WorldMapScene'); m.launch(false); }); const pick = await until(() => window.__game.scene.isActive('GauntletPickScene') && !!window.__game.scene.getScene('GauntletPickScene').gauntletPicker?.root.visible, 30000);
+      await ev(() => window.__game.scene.getScene('GauntletPickScene').gauntletPicker.root.getByName('hero-confirm').emit('pointerdown')); const back = await until(() => window.__game.scene.isActive('GauntletGameScene'), 30000);
+      ck('从地图入口 → 先到本模式的选将页（不用地图上的主公）→ 出战 → 进名将连战第 1 阵', pick && back && await ev(() => window.__game.scene.getScene('GauntletGameScene').gWave === 1), back); }
     // 新接入名将巡检（适配表分批）：逐位强制登场 → 图在、有出招控制器、几秒内出招 → 斩 → 战利品（黄忠收为副将，其余取辎重）→ 下一位
     { await until(() => { const s = window.__game.scene.getScene('GauntletGameScene'); return s?.player?.alive && s.elapsed > .5; }, 30000);
       await ev(() => { const s = window.__game.scene.getScene('GauntletGameScene'); window.__S = s; s.gEndless = true; s.player.damageImmune = true; });
@@ -313,26 +327,50 @@ if (BASE) {
         ck('十阵进度条 · 无尽：第 11 阵起换一轮（节点全回到暗的、标回到起点，守关节点不再放大），小字「无尽 · 第 11 阵」', e.cycle === 1 && e.states.every(x => x === 'dark') && e.pos < .1 && !e.gate && e.caption.startsWith('无尽 · 第 11 阵'), e); }
       const fr = rows.find(r => r.want === FOLLOW)?.follower;
       ck('新名将收为副将：黄忠在场（名牌「副将 · 黄忠」、用他自己的首领图）', !!fr && fr.name === '副将 · 黄忠' && fr.look === fr.tex && fr.boss === FOLLOW, fr); }
-    // 主菜单入口（统筹 11-21：用户在主菜单找不到名将连战）：底部文字按钮一行最前面；点了用当前武将直接开打；结算「返回」回主菜单
+    // 主菜单入口（11-22 用户「这里ui需要优化」）：「匡扶汉室」正下方的漆金按钮（模式名 + 一行小字）；底部那一行恢复「存档 · 图鉴 · 战役回顾 · 设置」；点了先到选将页
     { await ev(() => { const s = window.__game.scene.getScenes(true).find(x => x.scene.key === 'GauntletGameScene'); (s ?? window.__S).scene.start('MenuScene'); });
       const menu = await until(() => window.__game.scene.isActive('MenuScene') && !!window.__game.scene.getScene('MenuScene').children.getByName('home-settings'), 30000); await wait(1500);
-      const m = await ev(() => { const s = window.__game.scene.getScene('MenuScene'), g = s.children.getByName('home-gauntlet');
-        const R = n => { const o = s.children.getByName(n); if (!o || !o.visible) return null; const b = o.getBounds(); return { n, x: Math.round(b.x), r: Math.round(b.right), y: Math.round(b.y), b: Math.round(b.bottom), cy: Math.round(b.centerY) }; };
-        const row = ['home-gauntlet', 'home-saves', 'home-codex', 'home-review', 'home-settings', 'home-quit'].map(R).filter(Boolean).sort((a, b) => a.x - b.x);
-        const st = o => o ? { font: o.style.fontFamily, size: o.style.fontSize, color: o.style.color, ls: o.letterSpacing } : null;
-        return { has: !!g, text: g?.text, locked: g?.getData('locked') ?? null, first: row[0]?.n === 'home-gauntlet', overlap: row.some((a, i) => row.some((b, j) => i < j && a.x < b.r && b.x < a.r)), oneLine: new Set(row.map(o => o.cy)).size === 1, style: st(g), review: st(s.children.getByName('home-review')), n: row.length, row: row.map(o => o.n + ':' + o.x + '-' + o.r) }; });
-      await p.screenshot({ path: OUT + '/gauntlet-12-menu.png' });
+      const m = await ev(menuLayout); await p.screenshot({ path: OUT + '/gauntlet-12-menu.png' });
       const capsBack = await ev(() => window.__game.scene.getScene('GauntletGameScene').gauntletCaps);
       ck('离开名将连战：卡池全开改的全局开关放回（玩法按进度、战法精研 / 战法格 / 精熟 / 专职上限回到进来前）', capsBack.mech === false && capsBack.rank === 3 && capsBack.slot === 6 && capsBack.extra === 0 && capsBack.over === 0, capsBack);
-      ck('主菜单入口：底部文字按钮一行最前面是「名将连战」（样式同「战役回顾」、一行不挤不换行），开发存档下可点', menu && m.has && m.text === '名将连战' && m.locked === false && m.first && !m.overlap && m.oneLine && JSON.stringify(m.style) === JSON.stringify(m.review), m);
+      ck('主菜单入口：「匡扶汉室」正下方一个漆金按钮写模式名、下面一行小字「从零开局 · 十阵斩将」，不压水墨按钮、不压底部那一行；底部一行恢复「存档 · 图鉴 · 战役回顾 · 设置」', menu && m.ok, m);
       await ev(() => window.__game.scene.getScene('MenuScene').children.getByName('home-gauntlet').emit('pointerdown'));
+      const pk = await until(() => window.__game.scene.isActive('GauntletPickScene') && !!window.__game.scene.getScene('GauntletPickScene').gauntletPicker?.root.visible, 30000);
+      await ev(() => window.__game.scene.getScene('GauntletPickScene').gauntletPicker.root.getByName('hero-confirm').emit('pointerdown'));
       const inG = await until(() => { const s = window.__game.scene.getScene('GauntletGameScene'); return window.__game.scene.isActive('GauntletGameScene') && !!s?.player?.alive && s.elapsed > .3; }, 30000);
-      const g0 = await ev(() => { const s = window.__game.scene.getScene('GauntletGameScene'), menuHero = window.__game.scene.getScene('MenuScene'); window.__S = s; return { from: s.gFrom, hero: s.runConfig.character }; });
+      const g0 = await ev(() => { const s = window.__game.scene.getScene('GauntletGameScene'); window.__S = s; return { from: s.gFrom, hero: s.runConfig.character, saved: localStorage.getItem('im_gauntlet_hero') }; });
       await ev(() => { const s = window.__S; s.player.damageImmune = false; s.player.hp = 1; s.player.takeDamage(99999, s.combatNow); });
       const over = await until(() => { const s = window.__S; return s.over && s.mode === 'result'; }, 10000); await wait(800);
       const homeText = await ev(() => { const h = window.__S.resultPanel.getByName('result-home'); const t = h?.text ?? null; h?.emit('pointerdown'); return t; });
       const back = await until(() => window.__game.scene.isActive('MenuScene'), 20000);
-      ck('从主菜单进名将连战：用当前选中的武将直接开打；阵亡结算「返回主菜单」回到主菜单', inG && g0.from === 'menu' && !!g0.hero && over && homeText === '返回主菜单' && back, { inG, ...g0, over, homeText, back }); }
+      ck('从主菜单进名将连战：先到选将页、出战后以选的武将开打（记住）；阵亡结算「返回主菜单」回到主菜单', pk && inG && g0.from === 'menu' && !!g0.hero && g0.saved === g0.hero && over && homeText === '返回主菜单' && back, { pk, inG, ...g0, over, homeText, back }); }
+    // 新存档（11-22 用户「这个模式可以一开始就玩」）：干净存档、不开测试模式，第一次进主菜单就有入口（1366×768）；点了到选将页（开局武将能选、其余剪影），
+    // 选第二位开局武将出战 → 以他开打、名将池全开、1 级；回主菜单再进，选将页记住上次选的
+    { const ctx = await b.newContext({ viewport: { width: 1366, height: 768 } }), q = await ctx.newPage(), qerr = [];
+      q.on('pageerror', e => qerr.push(e.message.slice(0, 160))); q.on('console', m => { if (m.type() === 'error' && !/favicon|Failed to load resource|Texture key already in use/.test(m.text())) qerr.push(m.text().slice(0, 160)); });
+      await q.addInitScript(() => { if (!sessionStorage.getItem('seeded')) { localStorage.setItem('im_story', 'off'); localStorage.setItem('im_home_seen', '1'); sessionStorage.setItem('seeded', '1'); } });
+      await q.goto(BASE + '?layout=desktop', { timeout: 180000 });
+      const qe = (f, a) => q.evaluate(f, a), qu = async (f, ms, a) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (await qe(f, a).catch(() => false)) return true; await q.waitForTimeout(250); } return false; };
+      const menuReady = () => window.__game?.scene.isActive('MenuScene') && !!window.__game.scene.getScene('MenuScene').children.getByName('home-gauntlet');
+      const pickReady = () => window.__game.scene.isActive('GauntletPickScene') && !!window.__game.scene.getScene('GauntletPickScene').gauntletPicker?.root.visible;
+      const inMenu = await qu(menuReady, 120000); await q.waitForTimeout(1500);
+      const ml = inMenu ? await qe(menuLayout) : null, test = await qe(() => /[?&]dev=1/.test(location.search));
+      await q.screenshot({ path: OUT + '/gauntlet-20-menu-newsave-1366.png' });
+      await qe(() => { window.__game.scene.getScene('MenuScene').children.getByName('home-gauntlet').emit('pointerdown'); });
+      const pk = await qu(pickReady, 30000); await q.waitForTimeout(3000); /* 卷轴立绘载入 */
+      const pi = await qe(async () => { const pk = window.__game.scene.getScene('GauntletPickScene').gauntletPicker, HU = await import('/src/systems/HeroUnlocks.ts'), C = await import('/src/data/characters.ts');
+        const order = pk.order.map(i => C.CHARACTERS[i].id), open = order.filter(id => HU.heroUnlocked(id)); return { title: pk.root.getByName('hero-picker-title')?.text ?? '', open, closed: order.filter(id => !HU.heroUnlocked(id)), cand: order[pk.candidate], ok: pk.root.getByName('hero-confirm') ? true : false }; });
+      await q.screenshot({ path: OUT + '/gauntlet-21-pick.png' });
+      const chosen = await qe(() => { const pk = window.__game.scene.getScene('GauntletPickScene').gauntletPicker; return import('/src/data/characters.ts').then(C => import('/src/systems/HeroUnlocks.ts').then(HU => { const ids = pk.order.map(i => C.CHARACTERS[i].id), i = ids.findIndex((id, k) => HU.heroUnlocked(id) && k > 0); pk.candidate = i; pk.page = Math.floor(i / 4); pk.refreshArt(); pk.root.getByName('hero-confirm').emit('pointerdown'); return ids[i]; })); });
+      const go = await qu(() => window.__game.scene.isActive('GauntletGameScene') && !!window.__game.scene.getScene('GauntletGameScene').player?.alive && window.__game.scene.getScene('GauntletGameScene').elapsed > .3, 180000);
+      const gi = go ? await qe(() => { const s = window.__game.scene.getScene('GauntletGameScene'); return { hero: s.runConfig.character, pool: s.gPool.length, level: s.player.level, saved: localStorage.getItem('im_gauntlet_hero'), from: s.gFrom }; }) : null;
+      await qe(() => { window.__game.scene.getScene('GauntletGameScene').scene.start('MenuScene'); }); /* 不把 ScenePlugin 整个序列化回来 */ await qu(menuReady, 30000); await q.waitForTimeout(800);
+      await qe(() => { window.__game.scene.getScene('MenuScene').children.getByName('home-gauntlet').emit('pointerdown'); }); await qu(pickReady, 30000);
+      const rem = await qe(async () => { const pk = window.__game.scene.getScene('GauntletPickScene').gauntletPicker, C = await import('/src/data/characters.ts'); return C.CHARACTERS[pk.order[pk.candidate]].id; });
+      ck('新存档（不开测试模式）第一次进主菜单就能进：「匡扶汉室」正下方的漆金「名将连战」按钮（1366×768 不压水墨按钮、不压底部一行）', inMenu && !test && !!ml?.ok, ml);
+      ck('选将页：标题写模式名；新存档能选开局武将、没归附的是剪影；选第二位开局武将出战 → 以他开打、1 级、名将池全开；回主菜单再进，选将页记住上次选的；页面无报错',
+        pk && pi.title.replace(/\s/g, '').includes('名将连战幸存者') && pi.open.length >= 2 && pi.ok && !!chosen && go && gi?.hero === chosen && gi.saved === chosen && gi.level === 1 && gi.pool >= 37 && gi.from === 'menu' && rem === chosen && qerr.length === 0, { pi, chosen, gi, rem, qerr: qerr.slice(0, 4) });
+      await ctx.close(); }
     ck('帧率：三位副将 + 名将 + 割草同屏（无头浏览器 1280×720）平均 ≥ 30', fps.avg >= 30 && fps.followers === 3, fps);
     ck('控制台无报错', errors.length === 0, errors.slice(0, 5));
   } catch (e) { fail++; console.log('FAIL 异常 · ' + e.message.split('\n')[0]); }

@@ -1,6 +1,6 @@
 import type {ChapterId} from '../data/chapters';
 import {SIDE_ROUTES,type SideRouteId} from '../data/sideRoutes';
-import {gauntletOn} from '../data/gauntlet';
+import {GAUNTLET_NAME} from '../data/gauntlet';
 export interface WorldNode{id:string;name:string;x:number;y:number;kind:'home'|'battle'|'future';chapter?:ChapterId;campaign?:'qunxiong'|'guandu'|'chibi'|'jingnan'|'shu'|'hanzhong'|'xiangfan'|'yiling'|'nanzheng'|'beifa';
  /** 天下地图挑战关（可选、可反复挑战），如「虎牢关 · 三英战吕布」。 */
  challenge?:'lubu';
@@ -25,6 +25,6 @@ export const WORLD_NODES:readonly WorldNode[]=[
  {id:'beifa',name:'北伐',x:.25,y:.36,kind:'battle',campaign:'beifa',region:'街亭 · 陈仓 · 五丈原',owner:'neutral'},
  {id:'lubu',name:'三英战吕布',x:.417,y:.488,kind:'battle',challenge:'lubu',region:'虎牢关',owner:'neutral'},
  // 名将连战（开关 im_gauntlet / ?gauntlet=1；关着时这里一个点都不加，地图和原来一样）
- ...(gauntletOn()?[{id:'gauntlet',name:'名将连战',x:.385,y:.42,kind:'battle' as const,gauntlet:true as const,region:'虎牢关',owner:'neutral' as const}]:[]),
+ {id:'gauntlet',name:GAUNTLET_NAME,x:.385,y:.42,kind:'battle' as const,gauntlet:true as const,region:'虎牢关',owner:'neutral' as const}, // 11-22 一开始就能玩：没有开关、不看通关
  ...SIDE_ROUTES.map(r=>({id:'side-'+r.id,name:'讨伐 · '+(r.flag??r.faction),x:r.x,y:r.y,kind:'battle' as const,side:r.id,region:r.region,owner:'neutral' as const})),
 ];

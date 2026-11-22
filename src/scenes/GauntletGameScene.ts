@@ -3,7 +3,7 @@ import { GameScene } from './GameScene';
 import { BALANCE, DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, actorDepth } from '../config';
 import { getBattleChapter, getChapter, type ChapterDef } from '../data/chapters';
 import type { EnemyDef } from '../data/enemies';
-import { GAUNTLET, GAUNTLET_MOVES, GAUNTLET_POOL, GAUNTLET_TROOPS, type GauntletArc, type GauntletProps, endlessBoss, gauntletReward, pickBosses, readGauntletBest, unlockedPool, waveScale, writeGauntletBest, type GauntletBoss } from '../data/gauntlet';
+import { GAUNTLET, GAUNTLET_MOVES, GAUNTLET_POOL, GAUNTLET_TROOPS, type GauntletArc, type GauntletProps, endlessBoss, gauntletReward, pickBosses, readGauntletBest, gauntletPool, GAUNTLET_NAME, waveScale, writeGauntletBest, type GauntletBoss } from '../data/gauntlet';
 import { GAUNTLET_RECRUIT, recruitCost, recruitTier } from '../data/gauntletCards';
 import { TROOPS } from '../data/legion';
 import { GAUNTLET_BUILD, RARITY, STAR_CARD_IDS, cardCategory, cardRarity, pickByRarity, rollRarity, starCardPool, type GCategory, type GRarity, type StarCard } from '../data/gauntletCards';
@@ -53,7 +53,6 @@ import { GuanduBoss } from '../systems/GuanduBoss';
 import type { ArcHost } from '../systems/ArcBossV2';
 import { ART_V2_FILES, isV2Texture, loadBossSheet, loadV2TroopSheets } from '../systems/ArtStyle';
 import { isChapterTestRun } from '../systems/ChapterProgress';
-import { stageCleared } from '../systems/HeroProgress';
 import { addScrolls } from '../systems/MasteryStore';
 import { addProvisions } from '../world/WorldStore';
 import { FollowerSquad, type Follower } from '../systems/FollowerSquad';
@@ -171,7 +170,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     preload() {
       (Base.prototype as unknown as { preload?: () => void }).preload?.call(this); // 基类（开发构建的 DevGameScene）有 preload 就先跑
       // 名将池的首领图都先载好（第一 / 二章的张梁、张宝、张角、华雄、徐荣、吕布开机就有）
-      for (const b of unlockedPool(() => true, true)) { const a = bossArt(b); if (a.sheet && !this.textures.exists(a.tex)) loadBossSheet(this.load, a.tex, a.sheet); }
+      for (const b of gauntletPool()) { const a = bossArt(b); if (a.sheet && !this.textures.exists(a.tex)) loadBossSheet(this.load, a.tex, a.sheet); }
       if (!this.textures.exists(HILL_ART[0].key)) this.load.image(HILL_ART[0].key, HILL_ART[0].url); // 高地圈（汉中山头同一张图）
       if (!this.textures.exists('gauntlet_oil_jar')) this.load.spritesheet('gauntlet_oil_jar', 'assets/props/gauntlet_oil_jar.png', { frameWidth: 256, frameHeight: 256 }); // 兀突骨火油罐（美术 11-21：完好 / 碎裂）
       if (!this.textures.exists('siege_mid_walls')) this.load.spritesheet('siege_mid_walls', 'assets/siege-v2/walls.png', { frameWidth: 384, frameHeight: 384 }); // 随身城门 / 箭楼（攻城 v2 城墙图集）
@@ -212,7 +211,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       this.gWave = 1; this.gPhase = 'mow'; this.gAt = 0; this.gKills = []; this.gCleared = false; this.gEndless = false; this.gCtrl = null; this.gLootShown = false; this.gFollowers = []; this.gPendingReplace = null; this.gResult = null; this.gPortrait.clear();
       this.gStats = { lootPicks: [], spawned: 0, cleared: 0 };
       const test = isChapterTestRun();
-      const heroName = CHARACTERS.find(c => c.id === (saved?.character ?? 'zhaoyun'))?.name, pool = unlockedPool(k => stageCleared(k), test);
+      const heroName = CHARACTERS.find(c => c.id === (saved?.character ?? 'zhaoyun'))?.name, pool = gauntletPool(); void test; // 名将池全开（11-22 一开始就能玩）
       this.gPool = pool.filter(b => b.name !== heroName).length ? pool.filter(b => b.name !== heroName) : pool; // 本局主将同名的名将不出（主将黄忠 / 孟获 / 祝融……）
       this.gOrder = pickBosses(this.gPool);
       // 从 0 开局 + 卡池全开（基类 create 里按 mechOpen 建系统、读卡池上限，所以先开）；各章兵种换色图先备好
@@ -229,7 +228,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       this.chapter = this.makeChapter(this.gOrder[0]);
       this.bossWarned = true; this.gEliteAt = GAUNTLET.eliteFirst;
       this.hudTexts.chapter.setText(''); // 关名不写（见 updateTrack）
-      this.time.delayedCall(500, () => { if (!this.over) this.showWaveBanner('名将连战 · 第 1 阵', false, `敌军 ${waveTroopSet(1).troops.name} · 割草 ${GAUNTLET.mowSec} 秒后名将登场 · 共 ${GAUNTLET.waves} 阵`); });
+      this.time.delayedCall(500, () => { if (!this.over) this.showWaveBanner(GAUNTLET_NAME + ' · 第 1 阵', false, `敌军 ${waveTroopSet(1).troops.name} · 割草 ${GAUNTLET.mowSec} 秒后名将登场 · 共 ${GAUNTLET.waves} 阵`); });
       this.moveDevBadge();
       this.gTrack?.destroy(); this.gTrack = new GauntletTrack(this, GAUNTLET.waves, 'hud_medal2_' + this.runConfig.character, SEAL_KEY); this.gTrack.setWave(1, true);
       this.gStrikes = new Strikes({ scene: this, player: this.player, army: this.legion, now: () => this.combatNow }); // 地面落点打击（手绘预警圈 → 命中序列帧）：郝昭箭楼、司马懿
@@ -237,7 +236,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       this.events.once('shutdown', () => { this.gCtrl?.clear(); this.gCtrl = null; this.gTrack?.destroy(); this.gTrack = null; this.clearProps(); this.clearEscort(); this.clearHill(); this.clearBand(); this.gStrikes?.clear(); this.gStrikes = null; });
     }
     /** 自定关：不进战役关卡逻辑（剧情、进度、段落、招降都按自定关跳过）。 */
-    protected customChapter() { return this.chapter?.name === '名将连战' ? this.chapter : { ...this.makeChapter(this.gOrder[0] ?? unlockedPool(() => true, true)[0]), bossStyle: 'lubu' as const }; } // 开局建场景时用中性的首领风格：华雄 / 徐荣的风格会让基类搭汜水关城墙、荥阳伏兵营
+    protected customChapter() { return this.chapter?.name === GAUNTLET_NAME ? this.chapter : { ...this.makeChapter(this.gOrder[0] ?? gauntletPool()[0]), bossStyle: 'lubu' as const }; } // 开局建场景时用中性的首领风格：华雄 / 徐荣的风格会让基类搭汜水关城墙、荥阳伏兵营
     protected phaseEligible() { return false; }
     protected lootBlocked() { return true; }
     protected victoryLabel() { return this.gEndless ? '无尽止步' : '十阵通关'; }
@@ -489,15 +488,15 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       ];
       return out.filter(g => g.items.length);
     }
-    /** 结算画面上的「本局打法」块：按类分栏，每栏标题 + 图标格（两行放不下写 +N）；名字写全（长了缩小字号，不截断），等级写在图标右下角。 */
+    /** 结算画面上的「本局打法」块：按类分栏（不套框，类别之间一个小墨点），每栏标题 + 图标格（两行放不下写 +N）；名字写全（长了缩小字号，不截断），等级写在图标右下角。 */
     private drawBuild(top: number, h: number): Phaser.GameObjects.GameObject[] {
-      const groups = this.gauntletBuild(), objs: Phaser.GameObjects.GameObject[] = [], gap = 12, W = Math.min(1200, (GAME_WIDTH - 48) / (this.resultPanel.scaleX || 1)), x0 = this.resultTexts.subtitle.x - W / 2; // 结算面板整体是缩放过的：按面板里的坐标算可用宽度
+      const groups = this.gauntletBuild(), objs: Phaser.GameObjects.GameObject[] = [], gap = 22, W = Math.min(1200, (GAME_WIDTH - 48) / (this.resultPanel.scaleX || 1)), x0 = this.resultTexts.subtitle.x - W / 2; // 结算面板整体是缩放过的：按面板里的坐标算可用宽度
       if (!groups.length) { objs.push(this.add.text(this.resultTexts.subtitle.x, top + h / 2, '这一局还没拿到什么', { fontFamily: HEADING_FONT, fontSize: '16px', color: '#c9b48a', resolution: 2 }).setOrigin(.5).setScrollFactor(0).setName('gauntlet-build-empty')); return objs; }
       const weight = groups.map(g => Math.max(1.2, Math.min(4, g.items.length))), tw = weight.reduce((a, b) => a + b, 0), avail = W - gap * (groups.length - 1);
       let x = x0;
       groups.forEach((g, gi) => {
         const w = avail * weight[gi] / tw, S = 30, cell = 46, cols = Math.max(1, Math.floor(w / cell)), rows = 2, max = cols * rows;
-        objs.push(this.add.rectangle(x + w / 2, top + h / 2, w, h, 0x1a120b, .55).setStrokeStyle(1, 0xd9b46a, .5).setScrollFactor(0).setName('gauntlet-build-col'));
+        if (gi > 0) objs.push(this.add.circle(x - gap / 2, top + 14, 2.5, 0xa8834c, .85).setScrollFactor(0).setName('gauntlet-build-dot')); // 类别之间一个小墨点（总制作人 11-22：不要大框）
         { const hd = this.add.text(x + w / 2, top + 6, `${g.cat} · ${g.items.length}`, { fontFamily: HEADING_FONT, fontSize: '14px', color: '#f0dcae', resolution: 2 }).setOrigin(.5, 0).setStroke('#1a120b', 3).setScrollFactor(0).setName('gauntlet-build-head'); if (hd.width > w - 8) hd.setScale((w - 8) / hd.width); objs.push(hd); } // 窄栏标题缩到放得下
         const shown = g.items.length > max ? g.items.slice(0, max - 1) : g.items, ox = x + (w - Math.min(cols, shown.length) * cell) / 2 + cell / 2;
         shown.forEach((it, i) => {
@@ -549,7 +548,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       }
       b.setText(this.gExcluding ? '点一张卡排除 · 再点取消' : this.gExcludes > 0 ? `排除一张 · ×${this.gExcludes}` : '排除 · 已用完').setColor(this.gExcluding ? '#ff9b7a' : rr.style.color as string).setAlpha(this.gExcludes > 0 ? 1 : .5);
       b.setPosition(rr.x, rr.y + rr.displayHeight - 4).setVisible(this.mode === 'levelup' && rr.visible); // 「换一批」正下方、右对齐（放左边会压住面板标题）
-      (this.levelPanel.getByName('upgrade-lock-note') as Phaser.GameObjects.Text | null)?.setText('选定后本局不可更改 · 名将连战从 0 开局，局内成长不带出'); // 战役那句「行营休整重整」本模式没有
+      (this.levelPanel.getByName('upgrade-lock-note') as Phaser.GameObjects.Text | null)?.setText('选定后本局不可更改 · ' + GAUNTLET_NAME + '从 0 开局，局内成长不带出'); // 战役那句「行营休整重整」本模式没有
     }
 
     /**
@@ -560,11 +559,11 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       const base = getChapter('hulao'), W = waveTroopSet(this.gWave), T = W.troops, src = W.chapter, art = bossArt(b), d = art.def;
       const boss: EnemyDef = { ...d, kind: 'boss', hp: T.bossHp, damage: T.bossDmg };
       const t0 = 45 + (this.gWave - 1) * 30; // 刷兵节奏按阵往后推（间隔越来越短）
-      return { ...base, name: '名将连战', label: '名将连战', description: '割草 · 斩将 · 连战', bossName: b.name, bossStyle: art.style, stage: undefined, westStage: undefined,
-        waves: [{ name: '名将连战', start: 0 }], recruitWaves: [], enemies: { ...src.enemies, ...W.defs, boss }, objective: undefined, bossAtStart: false, enemyCap: BALANCE.enemyCap,
+      return { ...base, name: GAUNTLET_NAME, label: GAUNTLET_NAME, description: '割草 · 斩将 · 连战', bossName: b.name, bossStyle: art.style, stage: undefined, westStage: undefined,
+        waves: [{ name: GAUNTLET_NAME, start: 0 }], recruitWaves: [], enemies: { ...src.enemies, ...W.defs, boss }, objective: undefined, bossAtStart: false, enemyCap: BALANCE.enemyCap,
         hpScale: () => 1, growth: { hp: 1, damage: 1 }, pace: 1,
         spawnInterval: t => base.spawnInterval(t + t0), spawnBurst: t => base.spawnBurst(t + t0), pickEnemy: t => src.pickEnemy(t + 20), // 配比取那一关中段（各关开头只出步卒）
-        victoryTitle: '名将连战', victoryText: '十阵连斩' };
+        victoryTitle: GAUNTLET_NAME, victoryText: '十阵连斩' };
     }
     /** 名将的亲兵 / 号令来的兵：用他自己那一章的兵（外形），强度按本阵；那一章的图没备好就用本阵的兵。 */
     private guard(kind: TroopKind): EnemyDef | undefined {
@@ -1006,10 +1005,10 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     private openClearChoice(): void {
       this.gPhase = 'choice'; writeGauntletBest(this.gKills.length, this.gWave, Math.round(this.elapsed * 1000), isChapterTestRun());
       const opts: UpgradeOption[] = [
-        { id: 'gauntlet_endless', name: '继续 · 无尽', desc: '名将再来一轮，一阵比一阵强，直到阵亡\n记最高连斩', kind: 'foundation', categoryLabel: '名将连战', scope: 'run', icon: 'growth_icon_might', apply: () => { this.gEndless = true; } },
-        { id: 'gauntlet_settle', name: '收兵 · 结算', desc: '十阵通关，按斩将数领奖', kind: 'foundation', categoryLabel: '名将连战', scope: 'once', icon: 'growth_icon_pickup', apply: () => { this.gPhase = 'done'; } },
+        { id: 'gauntlet_endless', name: '继续 · 无尽', desc: '名将再来一轮，一阵比一阵强，直到阵亡\n记最高连斩', kind: 'foundation', categoryLabel: GAUNTLET_NAME, scope: 'run', icon: 'growth_icon_might', apply: () => { this.gEndless = true; } },
+        { id: 'gauntlet_settle', name: '收兵 · 结算', desc: '十阵通关，按斩将数领奖', kind: 'foundation', categoryLabel: GAUNTLET_NAME, scope: 'once', icon: 'growth_icon_pickup', apply: () => { this.gPhase = 'done'; } },
       ];
-      this.showLoot('名将连战 · 十阵通关', '继续无尽，或者收兵结算', opts, () => { if (this.gEndless) this.nextWave(); else this.time.delayedCall(200, () => this.finish(true, 'boss')); });
+      this.showLoot(GAUNTLET_NAME + ' · 十阵通关', '继续无尽，或者收兵结算', opts, () => { if (this.gEndless) this.nextWave(); else this.time.delayedCall(200, () => this.finish(true, 'boss')); });
     }
     nextWave(): void {
       // 斩将后基类记着「首领已倒」（bossKilled）：收尾保护会让主将无敌、场上杂兵溃退（victoryHold）。清场那几秒要这样；进下一阵必须清掉——
@@ -1024,7 +1023,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     // ———— 结算：打到第几阵、斩了哪些名将（头像一排）、用时、最高连斩；按斩将数给钱币 / 武学残卷 ————
     protected finish(victory: boolean, reason: RunEndReason = 'death') {
       if (this.over) return;
-      this.gRecruitBtn?.setVisible(false);
+      this.gRecruitBtn?.setVisible(false); this.gTrack?.setVisible(false); // 结算画面后面不透出招兵按钮、十阵进度条和它的小字
       super.finish(victory, reason);
       const kills = this.gKills.length, debug = this.debugRun(), test = isChapterTestRun(), before = readGauntletBest(test);
       const record = writeGauntletBest(kills, this.gWave, Math.round(this.elapsed * 1000), test), best = Math.max(before.kills, kills);
@@ -1036,7 +1035,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       // 正文（逻辑 / 测试读；电脑版结算画面按它画奖励格：「永久奖励 钱币 +N」「武学残卷 +N」「武将等级 …」）
       this.resultTexts.body.setText([
         '打到　　' + reached, '斩将　　' + (kills ? kills + ' 位：' + this.gKills.map(b => b.name).join('、') : '无'), '用时　　' + this.formatTime(this.elapsed),
-        '最高连斩　' + best + (record ? '　新纪录！' : ''), `本局等级　Lv.${this.player.level}（从 0 开局 · 局内成长不带出）`, ...(debug ? ['名将连战  测试战斗不入库'] : [`永久奖励  钱币 +${rw.provisions}`, `武学残卷  +${rw.scrolls}`, ...(first ? ['首次通关  名将连战大奖'] : [])]), ...keep,
+        '最高连斩　' + best + (record ? '　新纪录！' : ''), `本局等级　Lv.${this.player.level}（从 0 开局 · 局内成长不带出）`, ...(debug ? [GAUNTLET_NAME + '  测试战斗不入库'] : [`永久奖励  钱币 +${rw.provisions}`, `武学残卷  +${rw.scrolls}`, ...(first ? ['首次通关  ' + GAUNTLET_NAME + '大奖'] : [])]), ...keep,
       ].join('\n'));
       this.gResult = { kills, best, record }; this.presentResult(victory);
       const home = this.resultPanel.getByName('result-home') as Phaser.GameObjects.Text | null;

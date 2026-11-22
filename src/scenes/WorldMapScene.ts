@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { GAUNTLET, readGauntletBest } from '../data/gauntlet';
+import { GAUNTLET, GAUNTLET_NAME, GAUNTLET_TAGLINE, readGauntletBest } from '../data/gauntlet';
 import { playMenuMusic } from '../systems/Music';
 import { startCityAmbient } from '../systems/ContentSfx';
 import { uiSfx } from '../systems/Sfx';
@@ -285,7 +285,7 @@ export class WorldMapScene extends Phaser.Scene {
       if (alert) lab.list.forEach(o => { if (o instanceof Phaser.GameObjects.Text) o.setColor('#ff9a7a'); });
     } else if (n.kind === 'challenge') {
       const img = this.add.image(0, 0, 'rt_pennant_challenge').setOrigin(.32, .92); img.setScale(46 / img.height); parts.push(img);
-      lab = this.label(n.id === 'gauntlet' ? '名将连战' : v === 'cleared' ? '虎牢关 · 三英战吕布 ✓' : '挑战 · 虎牢关', 6, false, 12); w = 40; h = 46;
+      lab = this.label(n.id === 'gauntlet' ? GAUNTLET_NAME : v === 'cleared' ? '虎牢关 · 三英战吕布 ✓' : '挑战 · 虎牢关', 6, false, 12); w = 40; h = 46;
     } else if (n.kind === 'camp') {
       const img = this.add.image(0, 0, 'rt_camp').setOrigin(.5, .7); img.setScale(76 / img.width); parts.push(img);
       const size = citySize(loadWorld().town);
@@ -507,9 +507,9 @@ export class WorldMapScene extends Phaser.Scene {
   }
   /** 名将连战（data/gauntlet.ts）：模式说明 + 最高连斩。 */
   private gauntletDetail(v: NodeVis) {
-    const locked = v === 'hidden', best = readGauntletBest(isChapterTestRun()).kills;
-    this.setDetail('rt_pennant_challenge', '', '名将连战', '模式 · 割草斩将', `${locked ? '未解锁：第二章通关后开放' : best ? '最高连斩 ' + best + ' 位' : `${GAUNTLET.waves} 阵连斩 · 通关后可继续无尽`}\n每阵割草 ${GAUNTLET.mowSec} 秒，名将带亲兵杀到；斩将后战利品三选一（收为副将 / 取其辎重 / 军资）\n奖励：按斩将数给钱币、武学残卷 · 不掉战役兵装 · 不影响战役进度`);
-    this.setAction(locked ? '尚未解锁' : '出战 · 名将连战', !locked);
+    void v; const best = readGauntletBest(isChapterTestRun()).kills; // 11-22 一开始就能玩：没有锁
+    this.setDetail('rt_pennant_challenge', '', GAUNTLET_NAME, '模式 · ' + GAUNTLET_TAGLINE, `${best ? '最高连斩 ' + best + ' 位' : `${GAUNTLET.waves} 阵连斩 · 通关后可继续无尽`}\n从零开局（1 级、不带战役成长）· 每阵割草 ${GAUNTLET.mowSec} 秒，名将带亲兵杀到；斩将后战利品三选一\n奖励：按斩将数给钱币、武学残卷 · 不影响战役进度`);
+    this.setAction('选将 · ' + GAUNTLET_NAME, true);
   }
   private intelDetail(e: IntelEvent) {
     const info = INTEL_INFO[e.kind], c = cityById(e.city), f = FACTIONS[e.faction]?.name ?? '';
@@ -551,8 +551,8 @@ export class WorldMapScene extends Phaser.Scene {
     this.goBattle('GameScene');
   }
   private goBattle(key: string) { if (this.registry.get('battleReady')) this.scene.start(key); else { this.registry.set('pendingWarlord', key); this.registry.set('loadBattle', true); this.scene.start('BootScene'); } }
-  /** 名将连战：以主公出战（不经点将页、不整军）。 */
-  private launchGauntlet() { const hero = this.lordId(); if (!isChapterTestRun()) try { localStorage.setItem('im_last_hero', hero); } catch { /* storage unavailable */ } this.registry.remove('campaignTransfer'); this.registry.set('runConfig', { character: hero }); this.registry.set('gauntletFrom', 'map'); this.goBattle('GauntletGameScene'); }
+  /** 名将连战：先进本模式自己的选将页（不继承战役，不用主公；GauntletPickScene），「返回」回地图。 */
+  private launchGauntlet() { this.registry.set('gauntletFrom', 'map'); this.scene.start('GauntletPickScene'); }
   private launchChallenge() { const hero = this.lordId(); this.registry.remove('campaignTransfer'); this.registry.set('runConfig', { character: hero }); this.goBattle('LubuGameScene'); }
   private launchSiege(city: CityDef, hero: CharacterId, defense = false) {
     if (!isChapterTestRun()) try { localStorage.setItem('im_last_hero', hero); } catch { /* storage unavailable */ }

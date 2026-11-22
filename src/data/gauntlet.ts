@@ -1,17 +1,18 @@
 /**
  * 名将连战（共享笔记 gauntlet-design.md；统筹 2026-11-21「第一版」，用户批准）：一位武将在一张开阔场地里不停割草，每阵末尾闯进来一位名将，
  * 斩将后清场、三样战利品选一样，接下一阵；十阵通关后可继续「无尽」。没有行营、没有剧情、不用整军。
- * 开关 gauntletOn()：网址 ?gauntlet=1 / 0 优先，其次存档设置 im_gauntlet = '1'；默认关（关着时天下地图没有入口、开发构建也不直接进）。
+ * 一开始就能玩（用户 11-22「这个模式可以一开始就玩」）：没有开关、没有通关条件，新存档第一次进主菜单就有入口；名将池 38 位全开；
+ * 不继承战役，所以有自己的选将页（GauntletPickScene，记住上次选的武将，和战役主将无关）。开发构建 ?gauntlet=1 仍可直接进（测试用）。
  * 所有数值都是初值（统筹合并前给用户看），集中在这一个文件。
  */
-export const GAUNTLET_KEY = 'im_gauntlet';
-export function gauntletOn(search: string = typeof location !== 'undefined' ? location.search : ''): boolean {
-  const q = new URLSearchParams(search).get('gauntlet');
-  // 网址带过一次 ?gauntlet=1 就记住（之后不带参数也开）；?gauntlet=0 关掉并清掉（统筹 11-21：主菜单入口）
-  if (q === '1') { try { if (typeof localStorage !== 'undefined') localStorage.setItem(GAUNTLET_KEY, '1'); } catch { /* 存储不可用 */ } return true; }
-  if (q === '0') { try { if (typeof localStorage !== 'undefined') localStorage.removeItem(GAUNTLET_KEY); } catch { /* 存储不可用 */ } return false; }
-  try { return typeof localStorage !== 'undefined' && localStorage.getItem(GAUNTLET_KEY) === '1'; } catch { return false; }
-}
+/** 模式名：用户 11-22 要改名（候选还没定），主菜单按钮、进场横幅、结算标题、天下地图、选将页……所有显示处都读这一个常量。 */
+export const GAUNTLET_NAME = '名将连战幸存者'; // 用户 11-22 定名（原「名将连战」；存档键、代码标识符 gauntlet 不改）
+/** 主菜单模式按钮下那行小字。 */
+export const GAUNTLET_TAGLINE = '从零开局 · 十阵斩将';
+/** 本模式上次选的武将（选将页记住；和战役主将无关）。 */
+export const GAUNTLET_HERO_KEY = 'im_gauntlet_hero';
+export function lastGauntletHero(): string | null { try { return typeof localStorage !== 'undefined' ? localStorage.getItem(GAUNTLET_HERO_KEY) : null; } catch { return null; } }
+export function saveGauntletHero(id: string): void { try { if (typeof localStorage !== 'undefined') localStorage.setItem(GAUNTLET_HERO_KEY, id); } catch { /* 存储不可用 */ } }
 
 import type { BossMovesetDef, MoveDef } from './bossMoves';
 
@@ -39,7 +40,7 @@ export interface GauntletProps { art: 'granary' | 'cart' | 'tent' | 'gate' | 'to
 export interface GauntletEscort { id: string; takenMul: number; hpFrac: number; leaveAt: number; line: string }
 export interface GauntletBoss {
   id: string; name: string; chapter: number; arc: GauntletArc; stage: 1 | 2 | 3; ctrl: GauntletCtrl; tier: GauntletTier;
-  /** 战役里打败过他的那一关（HeroProgress.stageCleared 的键）：没打过的不抽（开发测试存档全开）。同场出现的跟着那一关。 */
+  /** 战役里是哪一关的首领（HeroProgress.stageCleared 的键）。11-22 起名将池全开，不再按它限抽，只作记录。 */
   clearKey: string;
   /** 本模式每位最多 3 招：从招式框架里去掉的招（按招名；二阶段同名加强版不另算）。 */
   drop?: readonly string[];
@@ -212,10 +213,8 @@ export function waveScale(n: number): WaveScale {
 }
 
 /** 能抽的名将：战役里打败过的（cleared 判断）；all = 开发测试存档全开。一个都没有时保底第一章张角。 */
-export function unlockedPool(cleared: (key: string) => boolean, all = false): GauntletBoss[] {
-  const out = GAUNTLET_POOL.filter(b => all || cleared(b.clearKey));
-  return out.length ? out : [GAUNTLET_POOL.find(b => b.id === 'zhangjiao') ?? GAUNTLET_POOL[0]];
-}
+/** 能抽的名将：全部 38 位（11-22 一开始就能玩：新玩家一个都没打败过，不再按战役进度限；clearKey 只留作「战役里是哪一关」的记录）。 */
+export function gauntletPool(): GauntletBoss[] { return [...GAUNTLET_POOL]; }
 
 /**
  * 本模式新配的招式框架（战役里没有的）：陆逊 10-3 原来是场景层的火势蔓延，这里配两招（羽扇纵火落点、八阵图迷踪），

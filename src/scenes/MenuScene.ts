@@ -35,8 +35,7 @@ import { buildSettingsPanel, type SettingSpec } from '../ui/SettingsPanel';
 import { BARKS_LABEL, heroBarks, setHeroBarks, type HeroBarks, SCHOOL_HINT_LABEL, schoolHint, setSchoolHint, type SchoolHint, ORDERS_PANEL_LABEL, ordersPanelSetting, setOrdersPanelSetting, type OrdersPanelSetting } from '../systems/BattleSettings';
 import { CHAPTER_SCENES, openChapterSelect } from '../ui/ChapterSelect';
 import { requestDirectDepart } from '../systems/DirectDepart';
-import { gauntletOn } from '../data/gauntlet';
-import { chapterStagesDone } from '../world/ChapterTimeline';
+import { GAUNTLET_NAME, GAUNTLET_TAGLINE } from '../data/gauntlet';
 import type { TimelineChapterId } from '../world/ChapterTimeline';
 import { checkHeroJoins } from '../ui/HeroJoinReveal';
 
@@ -223,15 +222,14 @@ export class MenuScene extends Phaser.Scene {
     if(startFolded)heroEntry.setY(entryY(true));
     card.hit.on('pointerup',()=>{const next=!card.isFolded;this.registry.set('heroCardFolded',next);card.setFolded(next,true);const sfx=uiSfx();sfx.unlock();sfx.play('uiClick');
       const from=heroEntry.y,to=entryY(next);this.tweens.addCounter({from:0,to:1,duration:380,ease:'Cubic.easeInOut',onUpdate:tw=>heroEntry.setY(from+(to-from)*(tw.getValue()??0))});});
-    // 底部一行：（名将连战 ·）存档 · 图鉴 · 战役回顾 · 设置（· 退出游戏，仅桌面版）；名将连战开关开着时排最前面（统筹 11-21：用户在主菜单找不到入口）
-    const gOn=gauntletOn(),o=gOn?1:0,navItems=(IS_DESKTOP_APP?5:4)+o,navX=(k:number)=>D?cx+(k-(navItems-1)/2)*(navItems>4?100:116):gOn?W*(.1+k*.2):W*(.14+k*.24),navRowY=D?476:924+this.padY;
-    if(gOn)this.homeGauntletButton(navX(0),navRowY);
-    this.homeSaveButton(navX(0+o),navRowY);
-    if(IS_DESKTOP_APP)this.homeQuitButton(navX(4+o),navRowY);
+    // 底部一行：存档 · 图鉴 · 战役回顾 · 设置（· 退出游戏，仅桌面版）。名将连战 11-22 起挪到「匡扶汉室」正下方的漆金按钮（homeGauntletButton），这一行恢复原样、往下让出位置
+    const navItems=IS_DESKTOP_APP?5:4,navX=(k:number)=>D?cx+(k-(navItems-1)/2)*(navItems>4?100:116):W*(.14+k*.24),navRowY=D?516:924+this.padY;
+    this.homeSaveButton(navX(0),navRowY);
+    if(IS_DESKTOP_APP)this.homeQuitButton(navX(4),navRowY);
     // 战役回顾：乱世编年（已平定的关显示史录，未打到的锁住）；“前往选关”沿用原入口。
-    text(navX(2+o),navRowY,'战役回顾',D?18:20,'#e5ccb0').setLetterSpacing(D?2:0).setPadding(16,16).setInteractive({useHandCursor:true}).setName('home-review').on('pointerdown',()=>{if(this.children.getByName('campaign-chronicle'))return;new CampaignChronicle(this,arc=>{if(arc==='qunxiong'){requestDirectDepart(this);this.scene.start('ThirdChapterScene');return;}if(arc==='chibi'){requestDirectDepart(this);this.scene.start('ChibiChapterScene');return;}if(arc==='guandu'){requestDirectDepart(this);this.scene.start('GuanduChapterScene');return;}this.registry.set('menuChapterPicker',true);this.scene.restart();},(arc,stage)=>this.replayStage(arc,stage));});
-    text(navX(3+o),navRowY,'设置',D?18:20,'#e5ccb0').setLetterSpacing(4).setPadding(18,16).setInteractive({useHandCursor:true}).setName('home-settings').on('pointerdown',()=>this.openHomeSettings());
-    text(navX(1+o),navRowY,'图鉴',D?18:20,'#e5ccb0').setLetterSpacing(4).setOrigin(.5,.5).setPadding(12,16).setInteractive({useHandCursor:true}).setName('home-codex').on('pointerdown',()=>{if(this.children.getByName('game-codex'))return;this.ensureHomeArt(true);new GameCodex(this,index=>{if(!heroOwned(CHARACTERS[index].id))return;this.selectedChar=index;this.registry.set('heroConfirmed',true);try{localStorage.setItem('im_last_hero',CHARACTERS[index].id);}catch{}this.renderSelection();});});
+    text(navX(2),navRowY,'战役回顾',D?18:20,'#e5ccb0').setLetterSpacing(D?2:0).setPadding(16,16).setInteractive({useHandCursor:true}).setName('home-review').on('pointerdown',()=>{if(this.children.getByName('campaign-chronicle'))return;new CampaignChronicle(this,arc=>{if(arc==='qunxiong'){requestDirectDepart(this);this.scene.start('ThirdChapterScene');return;}if(arc==='chibi'){requestDirectDepart(this);this.scene.start('ChibiChapterScene');return;}if(arc==='guandu'){requestDirectDepart(this);this.scene.start('GuanduChapterScene');return;}this.registry.set('menuChapterPicker',true);this.scene.restart();},(arc,stage)=>this.replayStage(arc,stage));});
+    text(navX(3),navRowY,'设置',D?18:20,'#e5ccb0').setLetterSpacing(4).setPadding(18,16).setInteractive({useHandCursor:true}).setName('home-settings').on('pointerdown',()=>this.openHomeSettings());
+    text(navX(1),navRowY,'图鉴',D?18:20,'#e5ccb0').setLetterSpacing(4).setOrigin(.5,.5).setPadding(12,16).setInteractive({useHandCursor:true}).setName('home-codex').on('pointerdown',()=>{if(this.children.getByName('game-codex'))return;this.ensureHomeArt(true);new GameCodex(this,index=>{if(!heroOwned(CHARACTERS[index].id))return;this.selectedChar=index;this.registry.set('heroConfirmed',true);try{localStorage.setItem('im_last_hero',CHARACTERS[index].id);}catch{}this.renderSelection();});});
     // 成就入口（右上角；天下已开时排在主城 / 天下地图左侧）
     try{checkWorld(save);}catch{/* 存档不可用 */}
     {const got=Object.keys(unlockedMap()).filter(id=>ACHIEVEMENTS.some(a=>a.id===id)).length,py=D?34:54;let rx=W-24;
@@ -247,17 +245,15 @@ export class MenuScene extends Phaser.Scene {
     this.heroModal=this.heroPicker.root;const modal=this.heroModal;
     const openHeroes=(startAfter=false)=>{startAfterPick=startAfter;this.ensureHomeArt(true);this.heroPicker?.open(this.selectedChar,startAfter);this.heroEntryPaint?.('selected');};pick.on('pointerdown',()=>openHeroes());
     {const l=lordRules()?lordHero():null;if(l&&!lordFinal()&&!this.registry.get('lordNoticeShown')){this.registry.set('lordNoticeShown',true);showLordNotice(this,l,()=>{confirmLord();paintLord();},()=>openHeroes());}}
-    const startY=D?414:857+this.padY,startW=D?292:W-156,startH=D?56:64;
+    const startY=D?396:820+this.padY,startW=D?292:W-156,startH=D?56:64; // 11-22：往上让出名将连战漆金按钮的位置
     const primary=homeCommand(this,D?W*.73:W/2,startY,startW,startH,'匡扶汉室',true);this.startButton=primary.hit.setName('start-campaign').setData('padDefault',true);this.startLabel=primary.caption;
+    this.homeGauntletButton(D?W*.73:W/2,startY,startH);
     // W4：有城池告急时提示“出征将失守”
     const lossWarn=isChapterTestRun()?'':alertLossWarning();if(lossWarn)text(D?W*.73:W/2,startY-startH/2-(D?14:16),lossWarn,D?12:13,'#ff8a70').setStroke('#1a0e08',3).setName('home-alert-warning');
     this.startButton.on('pointerdown',()=>{let chosen=!!this.registry.get('heroConfirmed');try{chosen=chosen||!!localStorage.getItem('im_last_hero');}catch{}if(!chosen&&!params.has('autostart')&&!params.has('perf')){openHeroes(true);return;}if(this.children.getByName('chapter-select'))return;this.campaignEntry();});
-    // 名将连战开着（电脑版）：一行五项字数不一（四字 / 两字），按实际字宽排、字间留一样的空，「·」放在空的正中（原来按中心等距排，四字项挨着两字项时圆点贴字）；开关关着照旧
-    let sepX=(k:number)=>(navX(k)+navX(k+1))/2;
-    if(gOn&&D){const row=['home-gauntlet','home-saves','home-codex','home-review','home-settings','home-quit'].map(n=>this.children.getByName(n) as Phaser.GameObjects.Text|null).filter((t):t is Phaser.GameObjects.Text=>!!t),wd=row.map(t=>t.width-(t.padding.left??0)-(t.padding.right??0)),gap=36,total=wd.reduce((x,y)=>x+y,0)+gap*(row.length-1),mids:number[]=[];
-      let x=cx-total/2;row.forEach((t,i)=>{t.setX(x+wd[i]/2);x+=wd[i];if(i<row.length-1)mids.push(x+gap/2);x+=gap;});sepX=k=>mids[k]??(navX(k)+navX(k+1))/2;}
+    const sepX=(k:number)=>(navX(k)+navX(k+1))/2;
     for(let k=0;k<navItems-1;k++)text(sepX(k),navRowY,'·',D?18:20,'#a68a57');
-    if(isChapterTestRun())text(W/2,D?529:955+this.padY,'测试战斗不记录正式进度',10,'#8c806f');
+    if(isChapterTestRun())text(W/2,D?534:955+this.padY,'测试战斗不记录正式进度',10,'#8c806f');
     if(isChapterTestRun())text(W-34,24,'测试选关 ›',14,'#dcc399').setOrigin(1,.5).setPadding(12,10).setInteractive({useHandCursor:true}).setName('dev-stage-picker').on('pointerdown',()=>this.openTestStages());
     const keys=this.input.keyboard,enter=()=>{if(modal.visible)modal.getByName('hero-confirm')?.emit('pointerdown');else this.startButton.emit('pointerdown');},escape=()=>closeHeroes();
     keys?.on('keydown-ENTER',enter);keys?.on('keydown-ESC',escape);this.events.once('shutdown',()=>{keys?.off('keydown-ENTER',enter);keys?.off('keydown-ESC',escape);});
@@ -323,17 +319,16 @@ export class MenuScene extends Phaser.Scene {
     this.load.once('complete',()=>{if(!this.sys.isActive())return;for(const [key]of files)if(this.textures.exists(key))this.textures.get(key).setFilter(Phaser.Textures.FilterMode.LINEAR);if(this.homeBackground&&this.homeBackground.scene&&this.textures.exists(background)){this.homeBackground.setTexture(background);this.homeBackground.setScale(Math.max(W/this.homeBackground.width,H/this.homeBackground.height));}this.renderSelection();});this.load.start();
   }
   /** 主页「存档」：3 个存档位。 */
-  /** 名将连战入口（底部文字按钮一行的最前面，样式同「战役回顾」）：第二章通关后开放（开发测试存档全开）；用当前选中的武将直接开打，结算「返回」回主菜单。 */
-  private homeGauntletButton(x:number,y:number):void{
-    const locked=!isChapterTestRun()&&chapterStagesDone('hulao',loadWorld())<3;
-    const t=this.add.text(x,y,'名将连战',{fontFamily:HEADING_FONT,fontSize:(D?18:20)+'px',color:locked?'#8a7d6a':'#e5ccb0',resolution:2}).setOrigin(.5).setLetterSpacing(D?2:0).setPadding(16,16).setName('home-gauntlet').setData('locked',locked).setInteractive({useHandCursor:!locked});
-    if(locked){let tip:Phaser.GameObjects.Text|undefined;t.setAlpha(.7).on('pointerover',()=>{tip?.destroy();tip=this.add.text(x,y-34,'第二章通关后开放',{fontFamily:FONT,fontSize:'13px',color:'#f0e2bc',resolution:2,stroke:'#140e08',strokeThickness:3}).setOrigin(.5).setDepth(t.depth+1).setName('home-gauntlet-tip');}).on('pointerout',()=>{tip?.destroy();tip=undefined;});return;}
-    t.on('pointerdown',()=>{
-      const hero=CHARACTERS[this.selectedChar]?.id??'zhaoyun';
-      if(!isChapterTestRun())try{localStorage.setItem('im_last_hero',hero);}catch{/* 存储不可用 */}
-      this.registry.remove('campaignTransfer');this.registry.set('runConfig',{character:hero});this.registry.set('gauntletFrom','menu');
-      if(this.registry.get('battleReady'))this.scene.start('GauntletGameScene');else{this.registry.set('pendingWarlord','GauntletGameScene');this.registry.set('loadBattle',true);this.scene.start('BootScene');}
-    });
+  /**
+   * 名将连战入口（用户 11-22「这里ui需要优化」「这个模式可以一开始就玩」）：和战役并列的完整模式，放在「匡扶汉室」水墨按钮正下方——
+   * 一屏只留一个水墨按钮，所以它是次一级的漆金按钮（同左侧「更换武将」），写模式名，下面一行小字说明；没有开关、不看通关。
+   * 点了进本模式自己的选将页（GauntletPickScene：不继承战役，不用这里的当前主将），「返回」回主菜单。
+   */
+  private homeGauntletButton(x:number,primaryY:number,primaryH:number):void{
+    const w=D?236:Math.min(W-196,400),h=D?38:44,y=primaryY+primaryH/2+(D?6:8)+h/2;
+    const b=D?homeLqCommand(this,x,y,w,h,GAUNTLET_NAME,17):homeCommand(this,x,y,w,h,GAUNTLET_NAME);
+    b.hit.setName('home-gauntlet').on('pointerdown',()=>{this.registry.set('gauntletFrom','menu');this.scene.start('GauntletPickScene');});b.caption.setName('home-gauntlet-label');
+    if(D)this.add.text(x,y+h/2+9,GAUNTLET_TAGLINE,{fontFamily:FONT,fontSize:'11px',color:'#d8c49a',resolution:2}).setOrigin(.5).setLetterSpacing(1).setStroke('#120904',3).setName('home-gauntlet-tagline');
   }
   private homeSaveButton(x:number,y:number):void{
     this.add.text(x,y,'存档',{fontFamily:FONT,fontSize:(D?18:20)+'px',color:'#e5ccb0',resolution:2}).setOrigin(.5).setLetterSpacing(4).setPadding(18,16).setInteractive({useHandCursor:true}).setName('home-saves')

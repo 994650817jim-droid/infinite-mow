@@ -43,18 +43,47 @@ function commandTexture(scene:Phaser.Scene,width:number,height:number,primary:bo
 }
 
 /** 水墨按钮美术（public/assets/ui-buttons，BootScene 加载；tools/prepare-button-art.mjs 切图）。
- * 每张贴图 1061×204，墨身约占中间 68% 高、中心比画布中心高约 6%；左右各 18% 为笔锋，拉伸时不变形。 */
-const INK={capRatio:.18,bodyRatio:.68,bodyOffset:-.06,overhang:1.1};
+ * 每张贴图约 1058×202，墨身约占中间 68% 高；左右各 18% 为笔锋，拉伸时不变形。
+ * 墨迹的视觉中心按像素实测（inkCentre），对到按钮中心（字和点击区）上；量不到时退回 bodyDrop（实测墨身中心比画布中心低约 3%）。 */
+const INK={capRatio:.18,bodyRatio:.68,bodyDrop:.03,overhang:1.1};
 export function buttonArt(scene:Phaser.Scene,primary:boolean,state:CommandState):{key:string;w:number;h:number;cap:number}|null{
  const key=state==='disabled'?'btn_ink_disabled':`btn_ink_${primary?'primary':'secondary'}_${state==='selected'?'hover':state}`;
  if(!scene.textures.exists(key))return null;
  const src=scene.textures.get(key).getSourceImage() as {width:number;height:number};
  return{key,w:src.width,h:src.height,cap:Math.round(src.width*INK.capRatio)};
 }
-/** 把墨身对齐到按钮矩形：高按墨身比例放大，笔锋略超出两端；窄按钮横向压缩笔锋。 */
-export function fitArt(g:Phaser.GameObjects.NineSlice,a:{w:number;h:number;cap:number},width:number,height:number,y:number,pressed:boolean):void{
- const dispH=height/INK.bodyRatio,k=a.h/dispH,dispW=width*INK.overhang,nsW=Math.max(dispW*k,a.cap*2+4);
- g.setSlices(nsW,a.h,a.cap,a.cap,0,0);g.setScale(dispW/nsW,1/k).setY(y-INK.bodyOffset*dispH+(pressed?1:0));
+/** 墨迹的质量分布（不透明度 ≥ .5 的像素按不透明度加权）：列质量，两端笔锋 / 中段分开的行质量。按贴图缓存，读不到像素时为 null。 */
+type InkMass={col:Float32Array;rowCap:Float32Array;rowMid:Float32Array};
+const inkMassCache=new Map<string,InkMass|null>();
+function inkMass(scene:Phaser.Scene,key:string,w:number,h:number,cap:number):InkMass|null{
+ const id=key+':'+cap;if(inkMassCache.has(id))return inkMassCache.get(id)!;
+ let m:InkMass|null=null;
+ try{
+  const c=document.createElement('canvas');c.width=w;c.height=h;const ctx=c.getContext('2d',{willReadFrequently:true})!;
+  ctx.drawImage(scene.textures.get(key).getSourceImage() as CanvasImageSource,0,0);const d=ctx.getImageData(0,0,w,h).data;
+  m={col:new Float32Array(w),rowCap:new Float32Array(h),rowMid:new Float32Array(h)};
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){const v=d[(y*w+x)*4+3]/255;if(v<.5)continue;m.col[x]+=v;if(x<cap||x>=w-cap)m.rowCap[y]+=v;else m.rowMid[y]+=v;}
+ }catch{m=null;}
+ inkMassCache.set(id,m);return m;
+}
+/**
+ * 九宫拉伸后，墨迹视觉中心（质心）相对贴图中心的偏移（显示像素）。中段被拉伸 / 压缩，质量和坐标都按拉伸比换算。
+ * 悬停 / 按下的贴图形状略有不同，一律按同类的常态贴图量，免得悬停时墨迹左右跳。
+ */
+function inkCentre(scene:Phaser.Scene,a:{key:string;w:number;h:number;cap:number},nsW:number,sx:number,sy:number):{dx:number;dy:number}{
+ const base=a.key.replace(/_(hover|pressed)$/,'_normal'),key=scene.textures.exists(base)?base:a.key;
+ const m=inkMass(scene,key,a.w,a.h,a.cap);if(!m)return{dx:0,dy:INK.bodyDrop*a.h*sy};
+ const s=(nsW-2*a.cap)/Math.max(1,a.w-2*a.cap);let mx=0,sxm=0,my=0,sym=0;
+ for(let x=0;x<a.w;x++){const v=m.col[x];if(!v)continue;const mid=x>=a.cap&&x<a.w-a.cap,X=x<a.cap?x+.5:mid?a.cap+(x-a.cap+.5)*s:nsW-(a.w-x)+.5,wt=mid?v*s:v;mx+=wt;sxm+=wt*X;}
+ for(let y=0;y<a.h;y++){const wt=m.rowCap[y]+s*m.rowMid[y];my+=wt;sym+=wt*(y+.5);}
+ if(!mx||!my)return{dx:0,dy:INK.bodyDrop*a.h*sy};
+ return{dx:(sxm/mx-nsW/2)*sx,dy:(sym/my-a.h/2)*sy};
+}
+/** 把墨身对齐到按钮矩形：高按墨身比例放大，笔锋略超出两端；窄按钮横向压缩笔锋；墨迹的视觉中心落在 (x, y)（字和点击区的中心）。 */
+export function fitArt(g:Phaser.GameObjects.NineSlice,a:{key:string;w:number;h:number;cap:number},width:number,height:number,x:number,y:number,pressed:boolean):void{
+ const dispH=height/INK.bodyRatio,k=a.h/dispH,dispW=width*INK.overhang,nsW=Math.max(dispW*k,a.cap*2+4),sx=dispW/nsW,sy=1/k;
+ g.setSlices(nsW,a.h,a.cap,a.cap,0,0);g.setScale(sx,sy);
+ const c=inkCentre(g.scene,a,nsW,sx,sy);g.setPosition(x-c.dx,y-c.dy+(pressed?1:0));
 }
 
 /**
@@ -68,7 +97,7 @@ export function homeCommand(scene:Phaser.Scene,x:number,y:number,width:number,he
  // 有青铜按钮美术时用三段拉伸（两端花纹不变形）；缺图时退回程序画底板
  const art=buttonArt(scene,primary,enabled?'normal':'disabled');
  let g:Phaser.GameObjects.Image|Phaser.GameObjects.NineSlice;
- if(art){g=scene.add.nineslice(x,y,art.key,undefined,art.w,art.h,art.cap,art.cap,0,0);fitArt(g,art,width,height,y,false);}
+ if(art){g=scene.add.nineslice(x,y,art.key,undefined,art.w,art.h,art.cap,art.cap,0,0);fitArt(g,art,width,height,x,y,false);}
  else g=scene.add.image(x,y,commandTexture(scene,width,height,primary,enabled?'normal':'disabled')).setDisplaySize(width+PAD*2,height+PAD*2);
  const hit=scene.add.rectangle(x,y,width,height,0,0.001);if(enabled)hit.setInteractive({useHandCursor:true});
  const size=fontSize??(primary?Math.min(24,Math.round(height*.4)):Math.min(18,Math.round(height*.34)));
@@ -80,7 +109,7 @@ export function homeCommand(scene:Phaser.Scene,x:number,y:number,width:number,he
   if(!enabled)return;
   const s:CommandState=state==='hover'||state==='pressed'||state==='selected'?state:'normal';current=s;
   const a=buttonArt(scene,primary,s);
-  if(a&&g instanceof Phaser.GameObjects.NineSlice){g.setTexture(a.key);fitArt(g,a,width,height,y,s==='pressed');}
+  if(a&&g instanceof Phaser.GameObjects.NineSlice){g.setTexture(a.key);fitArt(g,a,width,height,x,y,s==='pressed');}
   else if(g instanceof Phaser.GameObjects.Image)g.setTexture(commandTexture(scene,width,height,primary,s)).setDisplaySize(width+PAD*2,height+PAD*2).setY(y+(s==='pressed'?1:0));
   caption.setY(y+(s==='pressed'?1:0)).setColor(s==='hover'||s==='selected'?(opts.hoverColor??'#fff3d4'):opts.color??(primary?'#f8e6bf':'#e8d3a6'));
  };
@@ -146,7 +175,7 @@ export function upgradeCardTexture(scene:Phaser.Scene,width:number,height:number
 export function inkPlate(scene:Phaser.Scene,prev:Phaser.GameObjects.NineSlice|null|undefined,cx:number,cy:number,width:number,height:number,primary:boolean,state:'normal'|'hover'|'pressed'|'disabled'):Phaser.GameObjects.NineSlice|null{
  const a=buttonArt(scene,primary,state);if(!a)return null;
  const g=prev??scene.add.nineslice(cx,cy,a.key,undefined,a.w,a.h,a.cap,a.cap,0,0);
- g.setTexture(a.key).setX(cx);fitArt(g,a,width,height,cy,state==='pressed');return g;
+ g.setTexture(a.key);fitArt(g,a,width,height,cx,cy,state==='pressed');return g;
 }
 
 /**

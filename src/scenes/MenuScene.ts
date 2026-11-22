@@ -35,7 +35,7 @@ import { buildSettingsPanel, type SettingSpec } from '../ui/SettingsPanel';
 import { BARKS_LABEL, heroBarks, setHeroBarks, type HeroBarks, SCHOOL_HINT_LABEL, schoolHint, setSchoolHint, type SchoolHint, ORDERS_PANEL_LABEL, ordersPanelSetting, setOrdersPanelSetting, type OrdersPanelSetting } from '../systems/BattleSettings';
 import { CHAPTER_SCENES, openChapterSelect } from '../ui/ChapterSelect';
 import { requestDirectDepart } from '../systems/DirectDepart';
-import { GAUNTLET_NAME, GAUNTLET_TAGLINE } from '../data/gauntlet';
+import { GAUNTLET_NAME } from '../data/gauntlet';
 import type { TimelineChapterId } from '../world/ChapterTimeline';
 import { checkHeroJoins } from '../ui/HeroJoinReveal';
 
@@ -222,14 +222,14 @@ export class MenuScene extends Phaser.Scene {
     if(startFolded)heroEntry.setY(entryY(true));
     card.hit.on('pointerup',()=>{const next=!card.isFolded;this.registry.set('heroCardFolded',next);card.setFolded(next,true);const sfx=uiSfx();sfx.unlock();sfx.play('uiClick');
       const from=heroEntry.y,to=entryY(next);this.tweens.addCounter({from:0,to:1,duration:380,ease:'Cubic.easeInOut',onUpdate:tw=>heroEntry.setY(from+(to-from)*(tw.getValue()??0))});});
-    // 底部一行：存档 · 图鉴 · 战役回顾 · 设置（· 退出游戏，仅桌面版）。名将连战 11-22 起挪到「匡扶汉室」正下方的漆金按钮（homeGauntletButton），这一行恢复原样、往下让出位置
-    const navItems=IS_DESKTOP_APP?5:4,navX=(k:number)=>D?cx+(k-(navItems-1)/2)*(navItems>4?100:116):W*(.14+k*.24),navRowY=D?516:924+this.padY;
+    // 底部一行：存档 · 图鉴 · 战役回顾 · 设置（· 退出游戏，仅桌面版）——11-22 用户「这四个也要设计一下」：改成一组小图标按钮（homeNavIcon），在两颗水墨按钮下方等距排开
+    const navItems=IS_DESKTOP_APP?5:4,navX=(k:number)=>D?cx+(k-(navItems-1)/2)*(navItems>4?84:92):W*(.14+k*.24),navRowY=D?490:918+this.padY;
     this.homeSaveButton(navX(0),navRowY);
     if(IS_DESKTOP_APP)this.homeQuitButton(navX(4),navRowY);
     // 战役回顾：乱世编年（已平定的关显示史录，未打到的锁住）；“前往选关”沿用原入口。
-    text(navX(2),navRowY,'战役回顾',D?18:20,'#e5ccb0').setLetterSpacing(D?2:0).setPadding(16,16).setInteractive({useHandCursor:true}).setName('home-review').on('pointerdown',()=>{if(this.children.getByName('campaign-chronicle'))return;new CampaignChronicle(this,arc=>{if(arc==='qunxiong'){requestDirectDepart(this);this.scene.start('ThirdChapterScene');return;}if(arc==='chibi'){requestDirectDepart(this);this.scene.start('ChibiChapterScene');return;}if(arc==='guandu'){requestDirectDepart(this);this.scene.start('GuanduChapterScene');return;}this.registry.set('menuChapterPicker',true);this.scene.restart();},(arc,stage)=>this.replayStage(arc,stage));});
-    text(navX(3),navRowY,'设置',D?18:20,'#e5ccb0').setLetterSpacing(4).setPadding(18,16).setInteractive({useHandCursor:true}).setName('home-settings').on('pointerdown',()=>this.openHomeSettings());
-    text(navX(1),navRowY,'图鉴',D?18:20,'#e5ccb0').setLetterSpacing(4).setOrigin(.5,.5).setPadding(12,16).setInteractive({useHandCursor:true}).setName('home-codex').on('pointerdown',()=>{if(this.children.getByName('game-codex'))return;this.ensureHomeArt(true);new GameCodex(this,index=>{if(!heroOwned(CHARACTERS[index].id))return;this.selectedChar=index;this.registry.set('heroConfirmed',true);try{localStorage.setItem('im_last_hero',CHARACTERS[index].id);}catch{}this.renderSelection();});});
+    this.homeNavIcon(navX(2),navRowY,{name:'home-review',label:'战役回顾',icon:'ach_events_10',onClick:()=>{if(this.children.getByName('campaign-chronicle'))return;new CampaignChronicle(this,arc=>{if(arc==='qunxiong'){requestDirectDepart(this);this.scene.start('ThirdChapterScene');return;}if(arc==='chibi'){requestDirectDepart(this);this.scene.start('ChibiChapterScene');return;}if(arc==='guandu'){requestDirectDepart(this);this.scene.start('GuanduChapterScene');return;}this.registry.set('menuChapterPicker',true);this.scene.restart();},(arc,stage)=>this.replayStage(arc,stage));}});
+    this.homeNavIcon(navX(3),navRowY,{name:'home-settings',label:'设置',icon:'ach_level_20',onClick:()=>this.openHomeSettings()});
+    this.homeNavIcon(navX(1),navRowY,{name:'home-codex',label:'图鉴',icon:'ach_all_heroes',onClick:()=>{if(this.children.getByName('game-codex'))return;this.ensureHomeArt(true);new GameCodex(this,index=>{if(!heroOwned(CHARACTERS[index].id))return;this.selectedChar=index;this.registry.set('heroConfirmed',true);try{localStorage.setItem('im_last_hero',CHARACTERS[index].id);}catch{}this.renderSelection();});}});
     // 成就入口（右上角；天下已开时排在主城 / 天下地图左侧）
     try{checkWorld(save);}catch{/* 存档不可用 */}
     {const got=Object.keys(unlockedMap()).filter(id=>ACHIEVEMENTS.some(a=>a.id===id)).length,py=D?34:54;let rx=W-24;
@@ -245,14 +245,12 @@ export class MenuScene extends Phaser.Scene {
     this.heroModal=this.heroPicker.root;const modal=this.heroModal;
     const openHeroes=(startAfter=false)=>{startAfterPick=startAfter;this.ensureHomeArt(true);this.heroPicker?.open(this.selectedChar,startAfter);this.heroEntryPaint?.('selected');};pick.on('pointerdown',()=>openHeroes());
     {const l=lordRules()?lordHero():null;if(l&&!lordFinal()&&!this.registry.get('lordNoticeShown')){this.registry.set('lordNoticeShown',true);showLordNotice(this,l,()=>{confirmLord();paintLord();},()=>openHeroes());}}
-    const startY=D?372:812+this.padY,startW=D?292:W-156,startH=D?56:64; // 11-22：往上让出名将连战水墨按钮的位置（两颗按钮之间至少半个按钮高）
+    const startY=D?358:800+this.padY,startW=D?292:W-156,startH=D?56:64; // 11-22：往上让出名将连战水墨按钮和底部图标行的位置（两颗按钮之间至少半个按钮高）
     const primary=homeCommand(this,D?W*.73:W/2,startY,startW,startH,'匡扶汉室',true);this.startButton=primary.hit.setName('start-campaign').setData('padDefault',true);this.startLabel=primary.caption;
     this.homeGauntletButton(D?W*.73:W/2,startY,startH);
     // W4：有城池告急时提示“出征将失守”
     const lossWarn=isChapterTestRun()?'':alertLossWarning();if(lossWarn)text(D?W*.73:W/2,startY-startH/2-(D?14:16),lossWarn,D?12:13,'#ff8a70').setStroke('#1a0e08',3).setName('home-alert-warning');
     this.startButton.on('pointerdown',()=>{let chosen=!!this.registry.get('heroConfirmed');try{chosen=chosen||!!localStorage.getItem('im_last_hero');}catch{}if(!chosen&&!params.has('autostart')&&!params.has('perf')){openHeroes(true);return;}if(this.children.getByName('chapter-select'))return;this.campaignEntry();});
-    const sepX=(k:number)=>(navX(k)+navX(k+1))/2;
-    for(let k=0;k<navItems-1;k++)text(sepX(k),navRowY,'·',D?18:20,'#a68a57');
     if(isChapterTestRun())text(W/2,D?534:955+this.padY,'测试战斗不记录正式进度',10,'#8c806f');
     if(isChapterTestRun())text(W-34,24,'测试选关 ›',14,'#dcc399').setOrigin(1,.5).setPadding(12,10).setInteractive({useHandCursor:true}).setName('dev-stage-picker').on('pointerdown',()=>this.openTestStages());
     const keys=this.input.keyboard,enter=()=>{if(modal.visible)modal.getByName('hero-confirm')?.emit('pointerdown');else this.startButton.emit('pointerdown');},escape=()=>closeHeroes();
@@ -328,16 +326,29 @@ export class MenuScene extends Phaser.Scene {
     const w=D?250:Math.min(W-196,380),h=D?46:50,gap=D?28:12,y=primaryY+primaryH/2+gap+h/2;
     const b=homeCommand(this,x,y,w,h,GAUNTLET_NAME,false,true,D?19:18,{ink:true,color:'#f0cf86',hoverColor:'#fff1c8'});
     b.hit.setName('home-gauntlet').on('pointerdown',()=>{this.registry.set('gauntletFrom','menu');this.scene.start('GauntletPickScene');});b.caption.setName('home-gauntlet-label');
-    if(D)this.add.text(x,y+h/2+11,GAUNTLET_TAGLINE,{fontFamily:FONT,fontSize:'11px',color:'#d8c49a',resolution:2}).setOrigin(.5).setLetterSpacing(1).setStroke('#120904',3).setName('home-gauntlet-tagline');
+  }
+  /**
+   * 主页底部的小图标按钮（11-22 用户「这四个也要设计一下 优化」）：手绘圆章图标 + 下方一行小字，不要底框；
+   * 常态略压暗，悬停 / 手柄聚焦时图标和字提亮、轻微上浮，按下回落 1px。点击区（name）盖住图标和字。
+   * 图标暂借成就圆章（ach_*，BootScene 开机就载）：设置 / 退出是代用图，专用图标见统筹的美术清单。
+   */
+  private homeNavIcon(x:number,y:number,o:{name:string;label:string;icon:string;onClick:()=>void;color?:string}):void{
+    const size=D?36:34,labelY=y+size/2+(D?13:14),dim=0xcbbda4,color=o.color??'#d6c098',lit='#fff1c8';
+    const icon=this.textures.exists(o.icon)?this.add.image(x,y,o.icon).setDisplaySize(size,size).setTint(dim).setName(o.name+'-icon'):null,base=icon?.scale??1;
+    const label=this.add.text(x,labelY,o.label,{fontFamily:FONT,fontSize:(D?13:15)+'px',color,resolution:2}).setOrigin(.5).setLetterSpacing(o.label.length>2?1:4).setStroke('#120904',3).setShadow(0,1,'#000000',3,true,true).setName(o.name+'-label');
+    const top=y-size/2-4,bottom=labelY+11,hit=this.add.zone(x,(top+bottom)/2,Math.max(size,label.width)+18,bottom-top).setInteractive({useHandCursor:true}).setName(o.name);
+    const set=(lift:number,on:boolean)=>{const parts=icon?[icon,label]:[label];this.tweens.killTweensOf(parts);
+      if(icon){this.tweens.add({targets:icon,y:y-lift,scale:base*(on?1.08:1),duration:140,ease:'Quad.easeOut'});icon.setTint(on?0xffffff:dim);}
+      this.tweens.add({targets:label,y:labelY-lift,duration:140,ease:'Quad.easeOut'});label.setColor(on?lit:color);};
+    hit.on('pointerover',()=>{set(3,true);uiSfx().play('uiHover');}).on('pointerout',()=>set(0,false)).on('pointerup',()=>set(3,true))
+      .on('pointerdown',()=>{set(1,true);const s=uiSfx();s.unlock();s.play('uiClick');o.onClick();});
   }
   private homeSaveButton(x:number,y:number):void{
-    this.add.text(x,y,'存档',{fontFamily:FONT,fontSize:(D?18:20)+'px',color:'#e5ccb0',resolution:2}).setOrigin(.5).setLetterSpacing(4).setPadding(18,16).setInteractive({useHandCursor:true}).setName('home-saves')
-      .on('pointerdown',()=>{if(!this.children.getByName('save-slots-panel'))new SaveSlotsUI(this);});
+    this.homeNavIcon(x,y,{name:'home-saves',label:'存档',icon:'ach_year_190',onClick:()=>{if(!this.children.getByName('save-slots-panel'))new SaveSlotsUI(this);}});
   }
   /** 主页「退出游戏」（桌面版）：弹出确认。 */
   private homeQuitButton(x:number,y:number):void{
-    this.add.text(x,y,'退出',{fontFamily:FONT,fontSize:'18px',color:'#e7b68e',resolution:2}).setOrigin(.5).setLetterSpacing(4).setPadding(18,16).setInteractive({useHandCursor:true}).setName('home-quit')
-      .on('pointerdown',()=>this.confirmQuit());
+    this.homeNavIcon(x,y,{name:'home-quit',label:'退出',icon:'ach_caravan',color:'#e7b68e',onClick:()=>this.confirmQuit()});
   }
   private confirmQuit():void{
     if(this.children.getByName('quit-confirm')||!desktop)return;

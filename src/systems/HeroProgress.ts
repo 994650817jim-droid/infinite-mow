@@ -27,7 +27,7 @@ export interface HeroRecord { level: number; xp: number; attributes: Record<Attr
  * attrSet = 4（2026-11-20 起：四维本色 + 取消单项上限，旧点数全部返还）；3 = 2026-11-17 的四项（力量 / 敏捷 / 智力 / 统御）。旧记录（六项）读档时全部退回、不换算，
  * attrNotice 置位，进游戏提示一次「属性已改版，点数已返还」（takeAttrNotice）。
  */
-interface HeroSave { version: 1; heroes: Record<string, HeroRecord>; migrated: boolean; firstClears: string[]; attrSet?: number; attrNotice?: boolean }
+interface HeroSave { version: 1; heroes: Record<string, HeroRecord>; migrated: boolean; firstClears: string[]; attrSet?: number; attrNotice?: boolean; /** 星图换代说明已经处理过（takeStarNotice）。 */ starNotice?: boolean }
 
 const ATTRS: readonly AttributeId[] = ATTRIBUTE_IDS;
 const zeroAttrs = (): Record<AttributeId, number> => ({ strength: 0, agility: 0, intellect: 0, command: 0 });
@@ -64,7 +64,7 @@ function read(): HeroSave {
   try {
     const v = JSON.parse(localStorage.getItem(HEROES_KEY) ?? 'null');
     if (v && v.version === 1 && v.heroes && typeof v.heroes === 'object') {
-      s.migrated = v.migrated === true; s.attrSet = v.attrSet === 4 ? 4 : 1; s.attrNotice = v.attrNotice === true;
+      s.migrated = v.migrated === true; s.attrSet = v.attrSet === 4 ? 4 : 1; s.attrNotice = v.attrNotice === true; if (v.starNotice === true) s.starNotice = true;
       // 旧六项：有没有加过点（决定要不要提示）
       if (s.attrSet !== 4) s.attrNotice = Object.values(v.heroes as Record<string, { attributes?: Record<string, unknown> }>).some(r => Object.values(r?.attributes ?? {}).some(n => Number(n) > 0));
       s.firstClears = Array.isArray(v.firstClears) ? [...new Set((v.firstClears as unknown[]).filter((k): k is string => typeof k === 'string' && /^[a-z]+-\d$/.test(k)))].slice(0, 60) : [];
@@ -188,6 +188,17 @@ export function heroStatE(id: HeroKey, attr: AttributeId): number {
 }
 
 // —— 星图（data/starMap.ts；开关 starMapOn() 默认关。下面的读写接口不看开关，方便测试 / 模拟器直接摆星；开关只决定结算用不用它们） ——
+/**
+ * 旧存档第一次打开星图时的一次性说明（星图开着、存档里有武将加过旧的属性点、还没提示过）：返回 true 一次并记进存档。
+ * 旧属性点开着星图时不生效（等于全部退回，改成每级 1 星），数据留着不删。
+ */
+export function takeStarNotice(): boolean {
+  if (!starMapOn()) return false;
+  const s = read(); if (s.starNotice) return false;
+  const had = Object.values(s.heroes).some(r => ATTRS.some(a => r.attributes[a] > 0));
+  s.starNotice = true; commit();
+  return had;
+}
 /** 这位武将的入口（主属性；招募武将按本色最高的一维）。 */
 export function heroStarGate(id: HeroKey): string { return heroGate(id); }
 /** 已点亮的星（副本，不含自己的入口，按点亮先后）。 */

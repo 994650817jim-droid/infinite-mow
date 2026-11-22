@@ -35,7 +35,7 @@ import {LORD_LEVEL_HINT,followerLevel,followerLevelCap,hallLevel,loadRoster,rank
 import {COMMONER_SKILLS} from '../data/commonerSkills';
 import {QUALITIES, lootBand} from '../data/items';
 import {chaptersOpen,heroFreePoints} from '../systems/HeroProgress';
-import {pointsHint,pointsCityToast} from '../data/pointsHint';
+import {pointsHint,pointsCityToast,starWord} from '../data/pointsHint';
 import {starMapOn} from '../data/starMap';
 import {PANO_ZOOM,CAMP_BARS,CAMP_PAN,PANO_W,PANO_H,CITY_SLOTS,LEVEL_SCALE,CITY_BG_SIZES,CITY_ART_LEVELS,ART_ALIAS} from '../town/CityLayout';
 import {cityById,TIER_NAME} from '../world/WorldCities';
@@ -190,7 +190,7 @@ export class CityScene extends Phaser.Scene {
   this.sizeText.setText(`${CITY_TITLE[size]}`).setVisible(CITY_TITLE[size] !== '义军营寨'); // 与左上标题同名时不再重复写一遍（2026-11-20 夜间 UI 审查）
   this.hint.setText(this.nextHint(s));
   const tech=techTotals(t.tech),pav=levelOf(t,'pavilion')>0?1:0,pts=tech.attributePoints+pav,dmg=Math.round((tech.damage+pav*.06)*100),hp=Math.round((tech.maxHp+pav*.06)*100);
-  this.boonText?.destroy();const drill=drillInfo(s),parts=[drill.level?`部曲 ×${drill.multiplier.toFixed(2)}`:'',tech.potions?`回血药 ${tech.potions.count}`:'',pts?`属性点 +${pts}`:'',dmg?`伤害 +${dmg}%`:'',hp?`生命 +${hp}%`:''].filter(Boolean);
+  this.boonText?.destroy();const drill=drillInfo(s),parts=[drill.level?`部曲 ×${drill.multiplier.toFixed(2)}`:'',tech.potions?`回血药 ${tech.potions.count}`:'',pts?starWord(`星 +${pts}`,`属性点 +${pts}`):'',dmg?`伤害 +${dmg}%`:'',hp?`生命 +${hp}%`:''].filter(Boolean);
   if(parts.length)this.boonText=txt(this,W-24,D?54:72,'出征加成 · '+parts.join(' · '),12,'#b9d2a8').setOrigin(1,.5).setName('city-boon');
   this.drawPano();
  }

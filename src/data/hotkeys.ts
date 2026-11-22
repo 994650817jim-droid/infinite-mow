@@ -1,3 +1,4 @@
+import { starWord } from './pointsHint';
 /**
  * 战斗快捷键表（用户 2026-11-18「帮我做快捷键游戏战斗的」，电脑版为主）。
  * 每个动作一个主键（可在设置「快捷键」里改，存 localStorage）+ 固定的副键（如 Esc 之外的 P、Enter 之外的 Space、数字小键盘）。
@@ -30,7 +31,7 @@ export const HOTKEYS: Record<HotkeyAction, HotkeyDef> = {
   // 军阵（formation-design.md）：主阵 ⇄ 备阵，有冷却；军阵开放前无反应
   formation: { label: '变阵', where: '战斗中（军阵开放后）：主阵 ⇄ 备阵', key: 'KeyX' },
   bag: { label: '行囊', where: '战斗中开关；行营休整', key: 'KeyB', alt: ['Tab'] },
-  attributes: { label: '属性加点', where: '战斗中有属性点时开关', key: 'KeyC' },
+  attributes: { get label() { return starWord('星图', '属性加点'); }, get where() { return starWord('战斗中开关', '战斗中有属性点时开关'); }, key: 'KeyC' },
   build: { label: '战法构筑', where: '战斗中开关', key: 'KeyV' },
   // 2026-11-18 用户「小地图换成m快捷键」：战斗中 M 展开 / 卷起舆图卷轴；M 同时是天下地图 / 义军营寨的「返回主菜单」（不同界面，不冲突，见 SHARED_KEYS）。
   // 战斗中回主菜单走 Esc 暂停 → 「返回主菜单」（暂停菜单里不再标 M）。

@@ -5,6 +5,8 @@
  */
 import { starMapOn } from './starMap';
 /** 星图开着（data/starMap.ts）：「属性点 N 未加」一类的字样改说「N 星未点」。下面三个函数给结算 / 行营 / 营寨三处提醒用。 */
+/** 星图开着用 star，关着用 old（各处「属性点 / 加点」字样的统一出口）。 */
+export function starWord(star: string, old: string): string { return starMapOn() ? star : old; }
 export function pointsLeftText(n: number): string { return starMapOn() ? n + ' 星未点' : '属性点 ' + n + ' 未加'; }
 export function pointsResultLine(h: { n: number; where: string }): string { return starMapOn() ? '星图  ' + h.n + ' 星未点 · 去' + h.where + '点亮' : '属性点  ' + h.n + ' 点未加 · 去' + h.where + '加点'; }
 export function pointsCityToast(n: number): string { return starMapOn() ? '有 ' + n + ' 星未点 · 主帐「武将谱」里点亮' : '有 ' + n + ' 点属性点没加 · 主帐「武将谱」里加点'; }

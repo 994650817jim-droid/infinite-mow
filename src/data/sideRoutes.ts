@@ -1,3 +1,4 @@
+import { starWord } from './pointsHint';
 import type { ChapterDef } from './chapters';
 import type { BossMovesetDef } from './bossMoves';
 import type { Specialty } from '../world/WorldCities';
@@ -132,7 +133,7 @@ export const SIDE_ROUTES: readonly SideRouteDef[] = [
         boss: B('zhanglu', '张鲁', '五斗米师君', 'side_zhanglu', 'phase23/yuanshu', 'liuzhang'),
         partner: B('yanpu', '阎圃', '汉中功曹', 'side_yanpu', 'phase23/yuanshu', 'liudu') },
     ],
-    annex: ['hanzhong'], specialty: { title: '五斗米义舍', text: '每次出征开局获得 1 点属性点', attributePoints: 1 }, lord: 'zhanglu' },
+    annex: ['hanzhong'], specialty: { title: '五斗米义舍', get text() { return starWord('每位武将多 1 颗星', '每次出征开局获得 1 点属性点'); }, attributePoints: 1 }, lord: 'zhanglu' },
   { id: 'xiliang', name: '西凉 · 马韩', faction: '西凉', region: '凉州 · 陇右', x: .1, y: .24, props: 1,
     open: { arc: 'xiangfan', stages: 3, hint: '第九章「襄樊之战」平定后开放' }, base: 'hanzhong', look: 'qunxiong',
     stages: [

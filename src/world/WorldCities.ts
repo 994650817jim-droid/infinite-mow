@@ -1,3 +1,4 @@
+import { starWord } from '../data/pointsHint';
 /**
  * 天下地图城池、势力与时代（WORLD_MAP_PLAN.md · W1）。
  * 坐标为 strategy-map.webp（1536×1024）上原画聚落的位置，名称按大致方位分配，并非精确历史地理。
@@ -146,7 +147,7 @@ export const SPECIALTIES: Readonly<Record<string, Specialty>> = {
   luoyang: {title: '天子旧都', text: '本命武器伤害 +3%', damage: .03},
   changan: {title: '关中要塞', text: '最大生命 +8%', maxHp: .08},
   ye: {title: '河北兵源', text: '出征可多带 1 名后备兵', reserveSlots: 1},
-  xiangyang: {title: '荆襄书院', text: '每次出征开局获得 1 点属性点', attributePoints: 1},
+  xiangyang: {title: '荆襄书院', get text() { return starWord('每位武将多 1 颗星', '每次出征开局获得 1 点属性点'); }, attributePoints: 1},
   shouchun: {title: '淮南粮仓', text: '战后粮草收益 +10%', provisions: .1},
   xiapi: {title: '徐州精兵', text: '开局增援 +1 名士兵', reinforcements: 1},
 };

@@ -2,6 +2,7 @@
  * 讲武堂科技树（CITY_SIMPLIFY：用户 2026-11-16 批准）。三条分支 × 三层，每个科技花军粮研究一次、永久生效。
  * 层数受讲武堂等级限制（第 n 层需要讲武堂 Lv n）。数值为占位初值，由「平衡与数值」会话调整。
  */
+import { starWord } from './pointsHint';
 import type {TroopKind} from './legion';
 
 export type TechBranch = 'supply' | 'troops' | 'arms';
@@ -49,7 +50,7 @@ export const TECHS: Record<TechId, TechDef> = {
 
   forge: {name: '磨砺兵刃', branch: 'arms', tier: 1, cost: 150, desc: '主将伤害 +4%', effect: {damage: .04}},
   armor: {name: '坚甲', branch: 'arms', tier: 2, cost: 400, desc: '主将生命上限 +6%', effect: {maxHp: .06}},
-  drill_points: {name: '操练', branch: 'arms', tier: 2, cost: 400, needs: 'forge', desc: '出征开局属性点 +1', effect: {attributePoints: 1}},
+  drill_points: {name: '操练', branch: 'arms', tier: 2, cost: 400, needs: 'forge', get desc() { return starWord('每位武将星 +1', '出征开局属性点 +1'); }, effect: {attributePoints: 1}},
   forge2: {name: '百炼', branch: 'arms', tier: 3, cost: 800, needs: 'forge', desc: '主将伤害再 +6%', effect: {damage: .06}},
 };
 export const TECH_IDS = Object.keys(TECHS) as TechId[];

@@ -39,7 +39,8 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 const { SM, HP, MS, RG, HS, AT, PA, PH, MU, FX } = await load(ENTRY, false);
 const ATTRS = AT.ATTRIBUTE_IDS, byName = new Map(SM.STAR_NODES.filter(n => n.kind === 'notable' || n.kind === 'keystone').map(n => [n.name, n]));
-ck('开关默认关', SM.starMapOn() === false);
+ck('开关默认开（2026-11-22 正式打开；纯 node 下也是开），setStarMap(false) 强制关、setStarMap(null) 还给默认', SM.STAR_MAP_DEFAULT === true && SM.starMapOn() === true && (SM.setStarMap(false), SM.starMapOn() === false) && (SM.setStarMap(null), SM.starMapOn() === true));
+SM.setStarMap(false); // 下面各组按「先关着、需要时再开」写的：统一从强制关开始（「开关关闭时行为不变」那组也在强制关下跑）
 
 // ① 构成与连通
 {

@@ -245,7 +245,7 @@ export class HeroCodexUI {
   private deskOverview(x: number, y: number, w: number, bottom: number): void {
     const c = this.playable, a = heroAttrs(this.hero), cap = attributeCap(heroInfo(this.hero).level), prim = primaryAttribute(this.hero);
     const sw = 214, lw = c ? w - sw - 18 : w;
-    let yy = this.section(x, y + 10, lw, '属性', `未分配 ${heroFreePoints(this.hero)} 点 · 单项不封顶`);
+    let yy = this.section(x, y + 10, lw, '属性', starMapOn() ? `可点 ${heroFreePoints(this.hero)} 颗星` : `未分配 ${heroFreePoints(this.hero)} 点 · 单项不封顶`);
     (Object.keys(ATTRIBUTE_INFO) as AttributeId[]).forEach((id, i) => {
       const ry = yy + 4 + i * 22, isP = prim === id;
       if (this.scene.textures.exists(attributeIcon(id))) this.add(this.scene.add.image(x + 12, ry + 6, attributeIcon(id)).setDisplaySize(18, 18));
@@ -409,7 +409,7 @@ export class HeroCodexUI {
     { const nm = this.body.getByName('codex-name') as Phaser.GameObjects.Text | null, b = attrBadge(this.scene, x + (nm?.width ?? 60) + 22, y + 15, this.hero, 26); if (b) this.add(b); }
     this.text(x, y + 36, `等级 Lv.${info.level}（本章上限 Lv.${info.cap}）· 经验 ${info.xp} / ${info.next}${info.level >= info.cap ? '（已到上限，经验暂存）' : ''}`, 14, '#d8ccb0').setName('codex-level');
     const a = heroAttrs(this.hero), attrs = (Object.keys(ATTRIBUTE_INFO) as AttributeId[]).map(id => `${ATTRIBUTE_INFO[id].name}${primaryAttribute(this.hero) === id ? '（主）' : ''} ${a[id]}`).join('　');
-    this.text(x, y + 64, `属性：${attrs}　· 未分配 ${heroFreePoints(this.hero)} 点`, 14, '#d8ccb0').setWordWrapWidth(w);
+    this.text(x, y + 64, `属性：${attrs}　· ` + (starMapOn() ? `可点 ${heroFreePoints(this.hero)} 颗星` : `未分配 ${heroFreePoints(this.hero)} 点`), 14, '#d8ccb0').setWordWrapWidth(w);
     if (!c) { this.text(x, y + 100, '招募武将：随行时按等级成长（每级生命、伤害提高），将阶请到讲武堂「随行操练」提升。', 13, '#9c8c6c').setWordWrapWidth(w); return; }
     const weapon = WEAPON_DEFS[CHARACTERS.find(h => h.id === c)!.startWeapon];
     this.text(x, y + 100, `本命：${weapon?.name ?? ''} · 淬炼 ${temperLevel(c)}/${TEMPER.max}（本命伤害 +${Math.round(temperLevel(c) * TEMPER.step * 100)}%）`, 14, '#e8d6a4');

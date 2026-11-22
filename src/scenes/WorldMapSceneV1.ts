@@ -1,3 +1,4 @@
+import { starWord } from '../data/pointsHint';
 import { DEFENSE_RULES } from '../data/defenseRules';
 import { abandonCity, alertLossWarning } from '../world/WorldStore';
 import { sortieBlocked } from '../ui/SortieGuard';
@@ -440,7 +441,7 @@ export class WorldMapSceneV1 extends Phaser.Scene {
  private showRetreat(r:DefeatRetreatNote){
   const desk=W>600,pw=Math.min(W-40,500),root=this.add.container(0,0).setDepth(1031).setName('defeat-modal');
   root.add(this.add.rectangle(W/2,H/2,W,H,0x07100b,W>600?.9:.72).setInteractive());
-  const lines=[`【${r.stage}】失利，全军退守${r.name}。`,...(r.notes.length?['战败惩罚：\n· '+r.notes.join('\n· ')]:[]),r.kind==='home'?'营寨军医可治伤、补部曲；整顿之后，这一仗照样可以再出征。':'城中军医可治伤、补部曲；整顿之后，这一仗照样可以再出征。','关卡未平定 · 等级、属性点、已招武将都不受影响。'];
+  const lines=[`【${r.stage}】失利，全军退守${r.name}。`,...(r.notes.length?['战败惩罚：\n· '+r.notes.join('\n· ')]:[]),r.kind==='home'?'营寨军医可治伤、补部曲；整顿之后，这一仗照样可以再出征。':'城中军医可治伤、补部曲；整顿之后，这一仗照样可以再出征。','关卡未平定 · 等级、'+starWord('星图','属性点')+'、已招武将都不受影响。'];
   const text=worldText(this,0,0,lines.join('\n\n'),desk?15:16,'#e4dcc4').setWordWrapWidth(pw-48,true).setLineSpacing(5);
   const ph=Math.min(H-80,text.height+150),px=W/2-pw/2,py=H/2-ph/2;root.add(this.modalPanel(pw,ph));
   root.add(worldText(this,px+24,py+20,'败退 · 退守'+r.name,24,'#e8a08a'));text.setPosition(px+24,py+64);root.add(text);

@@ -158,7 +158,7 @@ if (BASE) {
       const keysLeft = s.extraCards().filter(x => x.option.id.startsWith('gauntlet_star_') && x.rarity === 'legend').length, r = { hp0, hp1, on: g.starOn('strength.NR1'), key: g.keyOn('strength.K'), keysLeft, attrs: Object.values(g.attributes).reduce((n, v) => n + v, 0) };
       g.stars = g.stars.slice(0, k); s.player.heal(s.player.maxHp); if (s.mode === 'levelup') s.chooseUpgrade(0); return r; }); /* 用完放回，不影响后面 */
     ck('三选一三类各一（抽 40 次没有同类两张；本模式专有卡常出，其中有将星卡）；卡面右上角标稀有度（普通 / 精良 / 稀有 / 传说）', cb.dup === 0 && cb.extra >= 10 && cb.stars >= 2 && /* 专有卡（将星 / 兵装 / 信物 / 坐骑）常出；将星是其中一类，按权重约四成 */ cb.marks.length === 3 && cb.marks.every(m => m.label === { common: '普通', fine: '精良', rare: '稀有', legend: '传说' }[m.r]) && cb.marks.some(m => m.id.startsWith('gauntlet_star_')), cb);
-    ck('将星卡：星图开关关着也生效（铁骨生命上限涨）、主星生效且拿满 2 颗后不再出；四维点数不变', !cb.starMap && sc.hp1 > sc.hp0 && sc.on && sc.key && sc.keysLeft === 0 && sc.attrs === 0, sc);
+    ck('将星卡：不看星图开关都生效（铁骨生命上限涨；2026-11-22 星图默认开，原来这里断言开关是关的）、主星生效且拿满 2 颗后不再出；四维点数不变', typeof cb.starMap === 'boolean' && sc.hp1 > sc.hp0 && sc.on && sc.key && sc.keysLeft === 0 && sc.attrs === 0, sc);
     // 兵装 / 信物 / 坐骑卡（局内有效、不进行囊）：传说兵装 + 稀有信物 + 传说坐骑，拿了穿上 / 戴上 / 骑上；三选一里四类专有卡都会出
     const kit = await ev(async () => { const s = window.__S, C = await import('/src/data/gauntletCards.ts'), bag0 = localStorage.getItem('im_items_v2'), kinds = new Set(); s.gWave = 8;
       for (let i = 0; i < 80; i++) for (const o of s.upgradeChoices()) { const m = /^gauntlet_(star|gear|charm|horse)_/.exec(o.id); if (m) kinds.add(m[1]); }

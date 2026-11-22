@@ -1,5 +1,5 @@
 import { loadFormationArt } from '../systems/FormationFx';
-import {pointsLeftText} from '../data/pointsHint';
+import {pointsLeftText,starWord} from '../data/pointsHint';
 import {starMapOn} from '../data/starMap';
 import { drawFormationPanel } from './FormationPanel';
 import { MECHANICS, mechLockText, mechOpen, mechShown, takeMechIntros, type MechId } from '../data/mechanicUnlocks';
@@ -329,7 +329,7 @@ export class CampRestUI {
   m.add(this.text(x+28,y+24,'重整构筑',D?24:24).setFontFamily(HEADING_FONT).setColor('#f6dc9a'));
   const parts=[c.weapon?'本命兵器 '+c.weapon+' 级':'',c.branch?'兵器专职':'',c.over?'专职加深 '+c.over+' 级':'',c.martial?'武艺 '+c.martial+' 级':'',c.tactic?'战法 '+c.tactic+' 级':'',c.manual?'心法 '+c.manual+' 派':''].filter(Boolean);
   const body='退回初始：'+(parts.length?parts.join('、'):'（暂无三选一选来的强化）')+'，共 '+c.picks+' 次强化。\n'+
-   '保留：武将等级与属性点、兵装信物、随从、军需商人买的战法与心法。\n'+
+   '保留：武将等级与'+starWord('星图','属性点')+'、兵装信物、随从、军需商人买的战法与心法。\n'+
    '退回的 '+c.picks+' 次强化马上在这里一张张重选（三选一，只出永久构筑卡）；选不完的下一关开打时补上，关掉游戏也不会丢。\n\n'+
    '花费：随军钱币 '+cost+'（现有 '+food+'）　·　本章还可重整 '+left+' 次';
   const t=this.text(x+28,y+72,body,D?15:16).setLineSpacing(6).setWordWrapWidth(w-56,true).setColor('#e6d3ad').setName('camp-respec-body');m.add(t);

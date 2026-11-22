@@ -24,7 +24,7 @@ import { buildSettingsPanel, type SettingSpec } from '../ui/SettingsPanel';
 import {FollowerSquad,type Follower} from '../systems/FollowerSquad';
 import {showBarkCard,clearBarkCards} from '../ui/StoryBarkCard';
 import { BATTLE_LOOT_CAP, type BattleCapKind } from '../data/battleLootCap';
-import { POINTS_GUIDE_KEY, pointsGuideText, pointsHint, pointsResultLine } from '../data/pointsHint';
+import { POINTS_GUIDE_KEY, pointsGuideText, pointsHint, pointsResultLine, starWord } from '../data/pointsHint';
 import { DEFEAT, buildCarryNote, defeatTip, defeatLines } from '../data/defeatFlow';
 import { battleNodeId, battlePoint, retreatTarget, type RetreatTarget } from '../world/DefeatRetreat';
 import { patchCampaignDefeat } from '../systems/Campaign';
@@ -3422,7 +3422,7 @@ export class GameScene extends Phaser.Scene {
     this.reinforcements?.panel.setVisible(mode === 'aid');
     if (this.pausePanel) {
       this.pausePanel.setVisible(mode === 'pause');
-      this.attributePauseText?.setText(`分配属性点 · ${this.player?.growth.unallocated ?? 0}`);
+      this.attributePauseText?.setText(starWord('星图 · 可点 ', '分配属性点 · ') + (this.player?.growth.unallocated ?? 0));
       const exit=this.pausePanel.getByName('pause-exit') as Phaser.GameObjects.Text|null;
       exit?.setData('confirm',false).setText(IS_DESKTOP?'撤退':'返回选将').setColor('#b5c4b2').setScale(1);
       (this.pausePanel.getByName('pause-menu') as Phaser.GameObjects.Text|null)?.setData('confirm',false).setText('返回主菜单').setColor('#b5c4b2').setScale(1);
@@ -3478,7 +3478,7 @@ export class GameScene extends Phaser.Scene {
     (this.levelPanel.getByName('upgrade-title') as Phaser.GameObjects.Text)?.setText('选择本次强化');
     { const lv = this.player.level, n = this.player.growth.unallocated, military = this.militaryPending > 0;
       (this.levelPanel.getByName('upgrade-title') as Phaser.GameObjects.Text)?.setText(military ? '军略 · 本关保底强化' : '武将升级 · 选择本次强化');
-      (this.levelPanel.getByName('upgrade-points-hint') as Phaser.GameObjects.Text)?.setVisible(true).setText(`${military ? '不给属性点 · ' : ''}武将 Lv.${lv}${n > 0 ? ` · 待分配属性点 ${n}` : ''}`).setName('upgrade-points-hint'); }
+      (this.levelPanel.getByName('upgrade-points-hint') as Phaser.GameObjects.Text)?.setVisible(true).setText(`${military ? starWord('不给星 · ', '不给属性点 · ') : ''}武将 Lv.${lv}${n > 0 ? starWord(` · 可点 ${n} 星`, ` · 待分配属性点 ${n}`) : ''}`).setName('upgrade-points-hint'); }
     this.rerolls=0;
     if (this.paceOn()) { this.lastPickAt = this.elapsed; this.forcePickNow = false; this.pickBatch = this.pendingLevels; this.pickBatchDone = 0; this.batchHint(); }
     this.upgradeOptions = this.upgradeChoices();
@@ -3655,7 +3655,7 @@ export class GameScene extends Phaser.Scene {
     if (this.pickBatch <= 1) return;
     const lv = this.player.level, n = this.player.growth.unallocated, military = this.militaryPending > 0;
     (this.levelPanel.getByName('upgrade-title') as Phaser.GameObjects.Text)?.setText(`${military ? '军略' : '武将升级'} · 连选 ${this.pickBatch} 张（第 ${this.pickBatchDone + 1} 张）`);
-    (this.levelPanel.getByName('upgrade-points-hint') as Phaser.GameObjects.Text)?.setVisible(true).setText(`武将 Lv.${lv}${n > 0 ? ` · 待分配属性点 ${n}` : ''}`);
+    (this.levelPanel.getByName('upgrade-points-hint') as Phaser.GameObjects.Text)?.setVisible(true).setText(`武将 Lv.${lv}${n > 0 ? starWord(` · 可点 ${n} 星`, ` · 待分配属性点 ${n}`) : ''}`);
   }
 
   protected showGrowthNotice(message: string): void {
@@ -3902,6 +3902,7 @@ export class GameScene extends Phaser.Scene {
   protected pointsGuide(): void {
     const h = this.pointsHint(); if (!h || isChapterTestRun()) return;
     try { if (localStorage.getItem(POINTS_GUIDE_KEY) === '1') return; localStorage.setItem(POINTS_GUIDE_KEY, '1'); } catch { return; }
+    if (starMapOn()) { showBarkCard(this, { side: 'left', name: '新玩法 · 星图', text: pointsGuideText(h) }); return; }
     showBarkCard(this, { side: 'left', name: '新玩法 · 属性点', text: pointsGuideText(h) });
   }
   /**
@@ -4312,7 +4313,7 @@ export class GameScene extends Phaser.Scene {
     g.temperDamage = temperBonus(id); g.xinde = getXinde(id); if (!carried) g.xindeFirst = g.xinde.length > 0;
     this.player.passive.areaMul = g.areaMultiplier();
     // 属性改版（四项）：老存档的点数已全部退回，提示一次
-    if (takeAttrNotice()) this.time.delayedCall(1200, () => this.showGrowthNotice('属性已改版（武将自带四维）：点数已全部返还，暂停 →「分配属性点」重新分配'));
+    if (takeAttrNotice()) this.time.delayedCall(1200, () => this.showGrowthNotice(starWord('四维加点已换成星图：升级得星，按 C 点亮相连的星', '属性已改版（武将自带四维）：点数已全部返还，暂停 →「分配属性点」重新分配')));
     this.player.hp = carried ? Math.max(1, Math.min(this.player.maxHp, Math.round(this.player.maxHp * ratio))) : this.player.maxHp;
   }
   /** 经验倍率（2026-11-17 只留武将等级）：主线首次打 1.0；攻城 / 军情 / 挑战 / 重打旧关 0.5。 */
@@ -5148,7 +5149,7 @@ export class GameScene extends Phaser.Scene {
     this.hudTexts.details.setVisible(false);
     const weapon = this.player.weapons[0];
     const mastery = '\n'+this.player.growth.masteryLabel();
-    this.hudTexts.gear.setText(`${weapon ? `${weaponName(weapon.id,this.runConfig.character)} Lv.${weapon.level + (weapon.over ?? 0)}${branchById(weapon.branch) ? ' · ' + branchById(weapon.branch)!.name : ''}` : '本命武器'}${mastery}\n属性点 ${this.player.growth.unallocated}${this.player.growth.unallocated>0?'':` · 武将 Lv.${this.heroLv}`} · ${this.passiveHud.description}`);
+    this.hudTexts.gear.setText(`${weapon ? `${weaponName(weapon.id,this.runConfig.character)} Lv.${weapon.level + (weapon.over ?? 0)}${branchById(weapon.branch) ? ' · ' + branchById(weapon.branch)!.name : ''}` : '本命武器'}${mastery}\n${starWord('可点星', '属性点')} ${this.player.growth.unallocated}${this.player.growth.unallocated>0?'':` · 武将 Lv.${this.heroLv}`} · ${this.passiveHud.description}`);
     // 信物（2026-11-17 本局遗物并入信物库）：穿着的信物 + 已激活的同流派套装
     const tokens = this.campaignCharms(), sets = this.charmInfo ? (Object.keys(this.charmInfo.schools) as CharmSchool[]).filter(sc => this.charmInfo!.schools[sc] >= 2) : [];
     this.hudTexts.relics.setText(tokens.length ? !IS_DESKTOP && !this.relicExpanded ? `信物 ${tokens.length}  · 点按展开` : `信物 ${tokens.map(t => charmDef(t.base)?.name ?? itemName(t)).join(' · ')}${sets.map(sc => `  ${CHARM_SCHOOL_NAMES[sc]}套装 ${CHARM_SET_DESC[sc]}`).join('')}` : '');

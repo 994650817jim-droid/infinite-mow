@@ -7,6 +7,7 @@
  * - 原医馆 / 铁匠铺 / 校场 / 城墙的出征加成搬进讲武堂科技树（src/data/tech.ts）。
  * 数值为占位初值，由「平衡与数值」会话调整。
  */
+import { starWord } from '../data/pointsHint';
 import type { CityTier } from '../world/WorldCities';
 import { TECH_IDS, type TechId } from '../data/tech';
 import { RECRUIT } from '../data/recruits';
@@ -85,7 +86,7 @@ export const TOWN_BUILDINGS: Record<TownBuildingId, BuildingDef> = {
   stable: { name: '马厩', build: 200, upgrade: [450, 900], minHall: 2, blurb: '养马换马之所：第一章通关后营中自动设立；只能在营中休整时换马。', effect: l => `可养马 ${STABLE_HORSES[l]} 匹；在此更换坐骑` },
   granary: { name: '粮仓', build: 120, upgrade: [260, 540], minHall: 2, blurb: '广积粮：后备兵吃得少，荒时可开仓募兵。', effect: l => `后备兵口粮 −${GRANARY_CUT[l] * 100}%；每季可开仓募兵 ${LEVY_SOLDIERS[l]} 人` },
   talent: { name: '招贤馆', build: 0, upgrade: [RECRUIT.hallUpgrade[0].provisions, RECRUIT.hallUpgrade[1].provisions], noHallCap: true, blurb: '延揽四方英才：招募武将，随你出征。', effect: l => `席位 ${RECRUIT.seats[l - 1]} · 随行 ${RECRUIT.followerCap[l - 1]} 人` },
-  pavilion: { name: '麒麟阁', build: 3200, maxLevel: 1, minHall: 3, blurb: '奇观：图画功臣、表彰忠义，天下英雄慕名来投。', effect: () => '出征时伤害 +6%、主将生命 +6%、开局属性点 +1' },
+  pavilion: { name: '麒麟阁', build: 3200, maxLevel: 1, minHall: 3, blurb: '奇观：图画功臣、表彰忠义，天下英雄慕名来投。', effect: () => '出征时伤害 +6%、主将生命 +6%、' + starWord('每位武将星 +1', '开局属性点 +1') },
 };
 /** 主帐扩建：花费与章节前提。 */
 export const HALL_UPGRADE: Record<number, { cost: Cost; needs: string; ok: (p: TownProgress) => boolean }> = {

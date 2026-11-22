@@ -5,19 +5,22 @@ import { STAT_ORDER, statSource, type StatSource } from './heroStats';
  * 星图（2026-11-21 用户批准 docs/STAR_MAP_DESIGN.md：用技能树取代四维加点）第一期：数据 + 纯函数，不依赖 Phaser / 存档。
  * 节点、坐标、连线由设计稿的 docs/star-map/nodes.json 转来（84 颗：4 入口、52 小星、24 要星、4 主星；四个区 + 四座桥）。
  *
- * 开关 starMapOn()：默认关，关着时游戏行为与没有这个文件时完全一样。
- * - 开发构建网址带 ?starMap=1 打开（正式构建里网址开关恒为关）；
- * - 测试 / 模拟器直接 setStarMap(true) 置位（setStarMap(null) 还给网址判断）；浏览器里的模拟器也可以在页面加载前写 window.__starMap = true。
+ * 开关 starMapOn()：**默认开**（2026-11-22 用户：「我想正式打开可以应用上去游戏游玩」）——开发版、正式版、纯 node 都是开。
+ * 关闭的口子只留给对照 / 测试，关着时游戏行为与接入星图之前完全一样（旧的四维加点）：
+ * - 开发构建网址带 ?starMap=0，或页面加载前写 window.__starMap = false（正式构建里这两个都不生效，没有关闭入口）；
+ * - 测试 / 模拟器 setStarMap(false) 强制关（setStarMap(null) 还给默认）。
  * 规则（设计稿第 2 节）：武将从主属性入口进图，自己的入口免费、自动点亮、不加属性；每升 1 级 1 颗星；只能点亮与已点亮的星相连的星；
  * 小星（含别人的入口、桥上的小星）= +1 点对应属性，结算仍走 heroStats 的等效点与分段折扣；主星要求本区已点亮 ≥ keystoneNeed、每人最多 keystoneMax 颗。
  */
+export const STAR_MAP_DEFAULT = true;
 let forced: boolean | null = null;
-const fromUrl: boolean = (() => {
-  if (!import.meta.env?.DEV) return false; // 纯 node 测试里没有 import.meta.env：按「关」处理
-  try { return (window as unknown as { __starMap?: boolean }).__starMap === true || new URLSearchParams(window.location.search).get('starMap') === '1'; } catch { return false; }
+/** 只有开发构建认网址 / window 上的关闭口子；正式构建和纯 node（没有 import.meta.env）恒为 false = 用默认。 */
+const devOff: boolean = (() => {
+  if (!import.meta.env?.DEV) return false;
+  try { return (window as unknown as { __starMap?: boolean }).__starMap === false || new URLSearchParams(window.location.search).get('starMap') === '0'; } catch { return false; }
 })();
-export function starMapOn(): boolean { return forced ?? fromUrl; }
-/** 测试 / 模拟器用：true / false 强制开关，null = 还给网址判断。 */
+export function starMapOn(): boolean { return forced ?? (devOff ? false : STAR_MAP_DEFAULT); }
+/** 测试 / 模拟器用：true / false 强制开关，null = 还给默认。 */
 export function setStarMap(on: boolean | null): void { forced = on; }
 
 export type StarKind = 'gate' | 'small' | 'notable' | 'keystone';

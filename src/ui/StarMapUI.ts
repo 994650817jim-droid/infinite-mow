@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { takeStarNotice } from '../systems/HeroProgress';
 import { FONT, HEADING_FONT, TITLE_FONT, GAME_WIDTH, GAME_HEIGHT, IS_DESKTOP } from '../config';
 import { STAR_EDGES, STAR_NODES, STAR_BY_ID, STAR_REGIONS, STAR_RULES, keystonesLit, lightBlock, litSet, starPoints, type StarNode } from '../data/starMap';
 import type { AttributeId } from '../data/attributes';
@@ -176,8 +177,11 @@ export class StarMapUI {
     this.applyView();
     this.buildText();
     this.bind();
+    // 旧存档第一次打开星图：一次性说明，写在右栏「选一颗星」的说明里（HeroProgress.takeStarNotice 只返回一次 true；选中任意一颗星后不再显示）
+    if (takeStarNotice()) this.intro = '四维加点已换成星图：升级得星，点亮相连的星获得加成；原先的属性点已退回。\n\n';
     this.render();
   }
+  private intro = '';
   private home = { x: 0, y: 0 };
   /** 星图可见区（左右文字栏与底部操作提示之外）；区外的星、线、头像淡出到 0 并关掉点击（2026-11-21 验收：放大 / 拖动后文字栏压在星上）。 */
   private clip = { l: 0, r: 0, t: 0, b: 0 };
@@ -278,7 +282,7 @@ export class StarMapUI {
 
   private click(id: string, p: Phaser.Input.Pointer): void {
     const now = p.upTime || this.scene.time.now, dbl = this.lastClick.id === id && now - this.lastClick.t < 360;
-    this.lastClick = { id, t: now }; this.selected = id; this.msg.setText('');
+    this.lastClick = { id, t: now }; this.selected = id; this.msg.setText(''); this.intro = '';
     if (dbl) this.tryLight(id); else this.render();
   }
   private say(m: string): void { this.msg.setText(m); }
@@ -335,7 +339,7 @@ export class StarMapUI {
     this.lightBtn?.g.destroy(); this.lightBtn?.hit.destroy(); this.lightBtn?.caption.destroy(); this.lightBtn = undefined;
     const W = this.W, H = this.H;
     if (!sel) {
-      this.rTitle.setText('选一颗星'); this.rKind.setText(''); this.rDesc.setText('单击星看说明；可点的星外圈有一道亮笔触。\n双击或按下方「点亮」确认。'); this.rStatus.setText('');
+      this.rTitle.setText('选一颗星'); this.rKind.setText(''); this.rDesc.setText(this.intro + '单击星看说明；可点的星外圈有一道亮笔触。\n双击或按下方「点亮」确认。'); this.rStatus.setText('');
     } else {
       const where = sel.region === 'bridge' ? `${ATTR_SHORT[sel.between![0]]} ↔ ${ATTR_SHORT[sel.between![1]]}` : ATTR_SHORT[sel.region as AttributeId] + '区';
       this.rTitle.setText(sel.name); this.rKind.setText(`${KIND_NAME[sel.kind]} · ${where}`).setY(this.rTitle.y + this.rTitle.height + 4);

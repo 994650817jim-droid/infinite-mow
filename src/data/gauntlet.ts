@@ -6,7 +6,10 @@
  */
 export const GAUNTLET_KEY = 'im_gauntlet';
 export function gauntletOn(search: string = typeof location !== 'undefined' ? location.search : ''): boolean {
-  const q = new URLSearchParams(search).get('gauntlet'); if (q === '1') return true; if (q === '0') return false;
+  const q = new URLSearchParams(search).get('gauntlet');
+  // 网址带过一次 ?gauntlet=1 就记住（之后不带参数也开）；?gauntlet=0 关掉并清掉（统筹 11-21：主菜单入口）
+  if (q === '1') { try { if (typeof localStorage !== 'undefined') localStorage.setItem(GAUNTLET_KEY, '1'); } catch { /* 存储不可用 */ } return true; }
+  if (q === '0') { try { if (typeof localStorage !== 'undefined') localStorage.removeItem(GAUNTLET_KEY); } catch { /* 存储不可用 */ } return false; }
   try { return typeof localStorage !== 'undefined' && localStorage.getItem(GAUNTLET_KEY) === '1'; } catch { return false; }
 }
 

@@ -209,6 +209,24 @@ if (BASE) {
         ck('十阵进度条 · 无尽：第 11 阵起换一轮（节点全回到暗的、标回到起点，守关节点不再放大），小字「无尽 · 第 11 阵」', e.cycle === 1 && e.states.every(x => x === 'dark') && e.pos < .1 && !e.gate && e.caption.startsWith('无尽 · 第 11 阵'), e); }
       const fr = rows.find(r => r.want === FOLLOW)?.follower;
       ck('新名将收为副将：黄忠在场（名牌「副将 · 黄忠」、用他自己的首领图）', !!fr && fr.name === '副将 · 黄忠' && fr.look === fr.tex && fr.boss === FOLLOW, fr); }
+    // 主菜单入口（统筹 11-21：用户在主菜单找不到名将连战）：底部文字按钮一行最前面；点了用当前武将直接开打；结算「返回」回主菜单
+    { await ev(() => { const s = window.__game.scene.getScenes(true).find(x => x.scene.key === 'GauntletGameScene'); (s ?? window.__S).scene.start('MenuScene'); });
+      const menu = await until(() => window.__game.scene.isActive('MenuScene') && !!window.__game.scene.getScene('MenuScene').children.getByName('home-settings'), 30000); await wait(1500);
+      const m = await ev(() => { const s = window.__game.scene.getScene('MenuScene'), g = s.children.getByName('home-gauntlet');
+        const R = n => { const o = s.children.getByName(n); if (!o || !o.visible) return null; const b = o.getBounds(); return { n, x: Math.round(b.x), r: Math.round(b.right), y: Math.round(b.y), b: Math.round(b.bottom), cy: Math.round(b.centerY) }; };
+        const row = ['home-gauntlet', 'home-saves', 'home-codex', 'home-review', 'home-settings', 'home-quit'].map(R).filter(Boolean).sort((a, b) => a.x - b.x);
+        const st = o => o ? { font: o.style.fontFamily, size: o.style.fontSize, color: o.style.color, ls: o.letterSpacing } : null;
+        return { has: !!g, text: g?.text, locked: g?.getData('locked') ?? null, first: row[0]?.n === 'home-gauntlet', overlap: row.some((a, i) => row.some((b, j) => i < j && a.x < b.r && b.x < a.r)), oneLine: new Set(row.map(o => o.cy)).size === 1, style: st(g), review: st(s.children.getByName('home-review')), n: row.length, row: row.map(o => o.n + ':' + o.x + '-' + o.r) }; });
+      await p.screenshot({ path: OUT + '/gauntlet-12-menu.png' });
+      ck('主菜单入口：底部文字按钮一行最前面是「名将连战」（样式同「战役回顾」、一行不挤不换行），开发存档下可点', menu && m.has && m.text === '名将连战' && m.locked === false && m.first && !m.overlap && m.oneLine && JSON.stringify(m.style) === JSON.stringify(m.review), m);
+      await ev(() => window.__game.scene.getScene('MenuScene').children.getByName('home-gauntlet').emit('pointerdown'));
+      const inG = await until(() => { const s = window.__game.scene.getScene('GauntletGameScene'); return window.__game.scene.isActive('GauntletGameScene') && !!s?.player?.alive && s.elapsed > .3; }, 30000);
+      const g0 = await ev(() => { const s = window.__game.scene.getScene('GauntletGameScene'), menuHero = window.__game.scene.getScene('MenuScene'); window.__S = s; return { from: s.gFrom, hero: s.runConfig.character }; });
+      await ev(() => { const s = window.__S; s.player.damageImmune = false; s.player.hp = 1; s.player.takeDamage(99999, s.combatNow); });
+      const over = await until(() => { const s = window.__S; return s.over && s.mode === 'result'; }, 10000); await wait(800);
+      const homeText = await ev(() => { const h = window.__S.resultPanel.getByName('result-home'); const t = h?.text ?? null; h?.emit('pointerdown'); return t; });
+      const back = await until(() => window.__game.scene.isActive('MenuScene'), 20000);
+      ck('从主菜单进名将连战：用当前选中的武将直接开打；阵亡结算「返回主菜单」回到主菜单', inG && g0.from === 'menu' && !!g0.hero && over && homeText === '返回主菜单' && back, { inG, ...g0, over, homeText, back }); }
     ck('帧率：三位副将 + 名将 + 割草同屏（无头浏览器 1280×720）平均 ≥ 30', fps.avg >= 30 && fps.followers === 3, fps);
     ck('控制台无报错', errors.length === 0, errors.slice(0, 5));
   } catch (e) { fail++; console.log('FAIL 异常 · ' + e.message.split('\n')[0]); }

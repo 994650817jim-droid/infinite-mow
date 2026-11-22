@@ -552,7 +552,7 @@ export class WorldMapScene extends Phaser.Scene {
   }
   private goBattle(key: string) { if (this.registry.get('battleReady')) this.scene.start(key); else { this.registry.set('pendingWarlord', key); this.registry.set('loadBattle', true); this.scene.start('BootScene'); } }
   /** 名将连战：以主公出战（不经点将页、不整军）。 */
-  private launchGauntlet() { const hero = this.lordId(); if (!isChapterTestRun()) try { localStorage.setItem('im_last_hero', hero); } catch { /* storage unavailable */ } this.registry.remove('campaignTransfer'); this.registry.set('runConfig', { character: hero }); this.goBattle('GauntletGameScene'); }
+  private launchGauntlet() { const hero = this.lordId(); if (!isChapterTestRun()) try { localStorage.setItem('im_last_hero', hero); } catch { /* storage unavailable */ } this.registry.remove('campaignTransfer'); this.registry.set('runConfig', { character: hero }); this.registry.set('gauntletFrom', 'map'); this.goBattle('GauntletGameScene'); }
   private launchChallenge() { const hero = this.lordId(); this.registry.remove('campaignTransfer'); this.registry.set('runConfig', { character: hero }); this.goBattle('LubuGameScene'); }
   private launchSiege(city: CityDef, hero: CharacterId, defense = false) {
     if (!isChapterTestRun()) try { localStorage.setItem('im_last_hero', hero); } catch { /* storage unavailable */ }

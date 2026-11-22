@@ -117,6 +117,8 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     gWave = 1; gPhase: 'mow' | 'boss' | 'clear' | 'choice' | 'done' = 'mow'; gAt = 0; gOrder: GauntletBoss[] = []; gCur: GauntletBoss | null = null;
     gKills: GauntletBoss[] = []; gCleared = false; gEndless = false; private gPool: GauntletBoss[] = [];
     private gCtrl: GCtrl | null = null; private gLootShown = false; private gEliteAt = 0; private gFollowers: Array<{ f: Follower; boss: GauntletBoss }> = [];
+    /** 从哪进来的（结算「返回」回哪）：主菜单 / 天下地图（开发直进算天下地图）。 */
+    gFrom: 'menu' | 'map' = 'map';
     private gPendingReplace: GauntletBoss | null = null; private gTrack: GauntletTrack | null = null; private gStrikes: Strikes | null = null; private gPortrait = new Map<string, string>();
     /** 测试读：帧率采样（三位副将 + 名将 + 割草同屏）。 */
     gStats = { lootPicks: [] as string[], spawned: 0, cleared: 0 };
@@ -132,6 +134,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     }
     create() {
       const saved = this.registry.get('runConfig') as RunConfig | undefined;
+      this.gFrom = this.registry.get('gauntletFrom') === 'menu' ? 'menu' : 'map';
       this.registry.remove('campaignTransfer'); this.registry.remove('worldCampaign'); // 无行营 / 无整军：不带部曲、不读征程构筑
       this.registry.set('runConfig', { ...saved, character: saved?.character ?? 'zhaoyun', chapter: 'hulao', westStage: 3, encounter: 'qunxiong' }); // encounter：不建剧情、不记战役进度、不建西凉专属机制（同篇章场景）
       this.gWave = 1; this.gPhase = 'mow'; this.gAt = 0; this.gKills = []; this.gCleared = false; this.gEndless = false; this.gCtrl = null; this.gLootShown = false; this.gFollowers = []; this.gPendingReplace = null; this.gResult = null; this.gPortrait.clear();
@@ -622,7 +625,9 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       ].join('\n'));
       this.gResult = { kills, best, record }; this.presentResult(victory);
       const home = this.resultPanel.getByName('result-home') as Phaser.GameObjects.Text | null;
-      home?.setText('返回天下地图').removeAllListeners('pointerdown').on('pointerdown', () => { this.registry.set('mapFocusNode', 'gauntlet'); this.scene.start('WorldMapScene'); });
+      // 从哪来回哪去：主菜单进的回主菜单，天下地图进的回天下地图（选中名将连战入口）
+      if (this.gFrom === 'menu') home?.setText('返回主菜单').removeAllListeners('pointerdown').on('pointerdown', () => this.scene.start('MenuScene'));
+      else home?.setText('返回天下地图').removeAllListeners('pointerdown').on('pointerdown', () => { this.registry.set('mapFocusNode', 'gauntlet'); this.scene.start('WorldMapScene'); });
       const restart = this.resultPanel.getByName('result-restart') as Phaser.GameObjects.Image | null;
       restart?.removeAllListeners('pointerdown').on('pointerdown', () => this.scene.restart());
     }

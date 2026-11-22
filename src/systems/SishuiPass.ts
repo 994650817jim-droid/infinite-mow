@@ -187,7 +187,7 @@ export class SishuiPass {
     this.h.merit(1, 0);
     if (!this.buffed) { this.buffed = true; this.h.player.stats.damageMul *= P.buffMul; }
     this.buffUntil = this.h.now() + P.buffSec * 1000;
-    this.h.banner('箭楼已毁', false, `箭雨停了 · 战功 +1 · 攻击 +${Math.round((P.buffMul - 1) * 100)}%（${P.buffSec} 秒）`);
+    this.h.banner('箭楼已毁', false, `箭雨停了 · 攻击 +${Math.round((P.buffMul - 1) * 100)}%（${P.buffSec} 秒）`);
   }
   /**
    * 这一点在关闭的关墙后面（关内 / 城里）吗？关门开了、营栅（辕门一直能过）、没有关墙都不算。

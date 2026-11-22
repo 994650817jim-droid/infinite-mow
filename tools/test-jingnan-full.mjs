@@ -25,7 +25,9 @@ try {
     const info = await p.evaluate(S0 => { const s = eval(S0); s.devTimeScale = 4; s.player.damageImmune = true; return { name: s.chapter.name, boss: s.chapter.bossName }; }, S);
     ck(`6-${stage}：进入 ${info.name}`, info.name.startsWith('6-' + stage), info);
     const choices = [...plan[stage]]; let sawEnd = false, parleys = 0, chest = false, end = null, sawBosses = [];
-    for (let t = 0; t < 900 && !end; t++) {
+    // 按墙钟给 7 分钟（原 900 拍 ≈ 3~4 分钟：机器忙时帧率低、游戏时间走得慢，6-1 等赵范出阵 + 劝降收尾要约 300 游戏秒，主工作区并发跑时 900 拍不够，见共享笔记 chapter-softlock-1122.md）
+    const deadline = Date.now() + 420000;
+    for (let t = 0; Date.now() < deadline && !end; t++) {
       const st = await p.evaluate(S0 => {
         const s = eval(S0); if (!s) return { gone: true };
         if (s.mode === 'levelup' || s.mode === 'recruit') s.__DEV_ACTIONS?.closePopup?.();

@@ -25,7 +25,8 @@ try {
     let early = null;
     if (stage === 2) {
       // 拆营：逐顶打破（走 BattlefieldSupplies 的打破通路），营帐尽破 → 朱然提前出营
-      for (let i = 0; i < 8 && !early; i++) {
+      // 营帐打破后播完塌掉才算倒（t.active=false），机器忙时一顶要 2~3 拍；给到 30 拍（原 8 拍，5187 空载就要 7 拍）
+      for (let i = 0; i < 30 && !early; i++) {
         early = await p.evaluate(S0 => { const s = eval(S0); if (s.mode === 'levelup' || s.mode === 'recruit') s.__DEV_ACTIONS?.closePopup?.(); const t = s.env.tents()[0]; if (t) { s.player.sprite.setPosition(t.x, t.y + 90); s.supplies.breakEnv(t); } const y = s.snapshotYiling(); return y.campsDown >= y.camps && s.boss?.active ? { ...y, elapsed: s.elapsed } : null; }, S);
         await p.waitForTimeout(400);
       }
@@ -51,10 +52,13 @@ try {
       await p.evaluate(S0 => { const s = eval(S0); s.player.damageImmune = true; s.devTimeScale = 4; }, S);
     }
     let chest = false, end = null, sawEnd = false, bossSeen = false;
-    for (let t = 0; t < 900 && !end; t++) {
+    const deadline = Date.now() + 420000; // 按墙钟给 7 分钟（原 900 拍，机器忙时不够）
+    for (let t = 0; Date.now() < deadline && !end; t++) {
       const st = await p.evaluate(S0 => {
         const s = eval(S0); if (!s) return { gone: true };
         if (s.mode === 'levelup' || s.mode === 'recruit') s.__DEV_ACTIONS?.closePopup?.();
+        // 残血劝降面板（宁死不降的也弹，只有「斩杀」可按）：游戏停在 mode 'parley' 等玩家点，这里按斩杀（2026-11-22：原脚本不点，8-2 夏侯渊 / 10-1 孙桓卡在面板上）
+        if (s.children.getByName('parley-panel')) s.choose('execute');
         const end = s.children.getByName('story-yiling-end'); if (end && s.__endShot) (end.list.find(o => o.name === 'story-yiling-end-next' || o.name === 'story-yiling-end-confirm'))?.emit('pointerup');
         const c = s.bossChests?.find(c => !c.done && c.ready);
         if (c) { const dx = c.x - s.player.x, dy = c.y - s.player.y, d = Math.hypot(dx, dy) || 1; s.player.sprite.x += dx / d * Math.min(d, 18); s.player.sprite.y += dy / d * Math.min(d, 18); }

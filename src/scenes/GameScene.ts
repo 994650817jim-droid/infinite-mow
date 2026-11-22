@@ -530,8 +530,13 @@ export class GameScene extends Phaser.Scene {
    * 加 lockTarget——所有武器（范围 / 环绕 / 近战）都当敌人打（原来只有单体武器在射程内会打，赵云这类环绕武器站在营垒边 74 秒还拆不完）；
    * 舆图画小帐、屏外边缘提示；tier 给了就加营寨攻坚的每秒掉血上限（保留关卡设计的耐久，不刷守军 / 伏兵 / 守将）。
    */
-  markGate(e:Enemy,tier?:CampTier):void{e.lockTarget=true;this.gateSet.add(e);if(tier)this.campSiege?.add(e,tier,{guards:false,phases:false,keepHp:true});this.gateUnreg??=registerTents(this,()=>[...this.gateSet].filter(o=>o.active&&o.hp>0).map(o=>({x:o.x,y:o.y,ratio:o.hp/Math.max(1,o.maxHp),hit:false,awake:true})));}
-  private gateSet=new Set<Enemy>();private gateUnreg:(()=>void)|null=null;
+  markGate(e:Enemy,tier?:CampTier):void{e.lockTarget=true;this.gateSet.set(e,e.spawnId);if(tier)this.campSiege?.add(e,tier,{guards:false,phases:false,keepHp:true});this.gateUnreg??=registerTents(this,()=>[...this.gateSet.keys()].filter(o=>this.gateLive(o)).map(o=>({x:o.x,y:o.y,ratio:o.hp/Math.max(1,o.maxHp),hit:false,awake:true})));}
+  /**
+   * 营垒 / 连营 / 城门 → 标记时的 spawnId。物件槽（BattlefieldSupplies 的 crates）打破后会被新物件复用，同一个 Enemy 对象又 active 了：
+   * 只认标记时那一条命，复用后的从表里拿掉、撤掉 lockTarget（2026-11-22 夷陵 10-2「拆完 6 顶只算 5 顶、朱然不出营」同一类问题）。
+   */
+  private gateSet=new Map<Enemy,number>();
+  private gateLive(e:Enemy):boolean{if(this.gateSet.get(e)!==e.spawnId){this.gateSet.delete(e);if(e.isSupplySlot)e.lockTarget=false;return false;}return e.active&&e.hp>0;}private gateUnreg:(()=>void)|null=null;
   /** 刷兵帐篷统一规则的上下文（data/spawnTents）：章节、首领是否出场、同屏敌兵数、拆营奖励（随军粮 + 干粮）。 */
   tentCtx():TentCtx{return{chapter:()=>this.phasePlan?.chapter??CHAPTER_INDEX[this.hardKey()]??2,bossOn:()=>this.bossSpawned,crowd:()=>this.combatNow<this.bossQuietUntil?Infinity:this.activeEnemyCount(), /* 首领登场静场：各处刷兵帐篷按「同屏太满」先不出 */sfx:k=>this.sfx.play(k),reward:(x,y,g,food)=>{this.legion.food+=g;if(food)this.battleHeal?.dropFood(x+24,y+18,BATTLE_HEAL.food.grain.ratio,BATTLE_HEAL.food.grain.name);},armor:(e,tier,o)=>this.campSiege?.add(e,tier,o),campMul:e=>this.campSiege?.intervalMul(e)??1};}
   /** 场景可放东西的位置：夹进场地、挪出墙 / 营栅 / 房子，再避开水与树（机缘、回血点共用）。 */
@@ -2535,7 +2540,7 @@ export class GameScene extends Phaser.Scene {
   protected priorityWeaponTarget(range:number,bodyRadius=true):Enemy|null{
     const px=this.player.x,py=this.player.y;let boss:Enemy|null=null,elite:Enemy|null=null,bd=Infinity,ed=Infinity;
     { const lock=this.objective?.lockedTarget(px,py,range); if(lock)return lock; } // 关卡锁定目标（敌营等）排第一：用户「武将攻击逻辑会一直不打营寨」
-    { let g:Enemy|null=null,gd=Infinity;for(const e of this.gateSet){if(!e.active||e.hp<=0)continue;const d=Math.hypot(e.x-px,e.y-py)-(bodyRadius?e.radius:0);if(d<=range&&d<gd){gd=d;g=e;}}if(g)return g; } // 首领关卡要先拆的营垒 / 连营 / 城门（markGate）：走到射程内就先打它
+    { let g:Enemy|null=null,gd=Infinity;for(const e of [...this.gateSet.keys()]){if(!this.gateLive(e))continue;const d=Math.hypot(e.x-px,e.y-py)-(bodyRadius?e.radius:0);if(d<=range&&d<gd){gd=d;g=e;}}if(g)return g; } // 首领关卡要先拆的营垒 / 连营 / 城门（markGate）：走到射程内就先打它
     // 首领的护法符柱（1-2 张宝，Enemy.ward）：符柱没碎时首领几乎不受伤，射程内有符柱就先打最近的符柱
     { let ward:Enemy|null=null,wd=Infinity;for(const e of this.grid.query(px,py,range+60)){if(!e.active||!e.ward||e.hp<=0)continue;const d=Math.hypot(e.x-px,e.y-py)-(bodyRadius?e.radius:0);if(d<=range&&d<wd){wd=d;ward=e;}}if(ward)return ward; }
     for(const e of this.grid.query(px,py,range+60)){if(!e.active||e.isSupplySlot||e.invulnerable)continue; /* 刀枪不入的（城头董卓、劝降中）不当首选目标 */const d=Math.hypot(e.x-px,e.y-py)-(bodyRadius?e.radius:0);if(d>range)continue;
@@ -3028,7 +3033,7 @@ export class GameScene extends Phaser.Scene {
     bolt.lastHit = null;
     bolt.hitIds = new Set();
     // 射向营垒 / 连营 / 城门的主将箭：锁定它，途中伏兵不挡（11-20：黄月英连弩站营垒边 270 秒只拆 1 座，箭全被身边伏兵挡掉）
-    bolt.aim = null; if (fromPlayer && this.gateSet.size) for (const g of this.gateSet) if (g.active && g.hp > 0 && Math.hypot(g.x - tx, g.y - ty) <= g.radius + 8) { bolt.aim = g; break; }
+    bolt.aim = null; if (fromPlayer && this.gateSet.size) for (const g of [...this.gateSet.keys()]) if (this.gateLive(g) && Math.hypot(g.x - tx, g.y - ty) <= g.radius + 8) { bolt.aim = g; break; }
     bolt.ally = this.boltAlly;
     if (fromPlayer && !bolt.ally) this.sfx.attack();
     bolt.img

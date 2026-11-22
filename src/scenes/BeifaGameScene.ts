@@ -86,7 +86,7 @@ export function beifaGameSceneClass(Base: typeof GameScene, cfg: ArcSceneConfig)
       const smy = this.simayi;
       if (smy && smy.phase === 'hold' && smy.fortsAlive > 0) {
         const p = (this as unknown as Host).player; let best: Enemy | null = null, bd = Infinity;
-        for (const f of smy.forts) { if (!f.active) continue; const d = Math.hypot(f.x - p.x, f.y - p.y) - (bodyRadius ? f.radius : 0); if (d <= range && d < bd) { bd = d; best = f; } }
+        for (const f of smy.forts) { if (!smy.fortUp(f)) continue; const d = Math.hypot(f.x - p.x, f.y - p.y) - (bodyRadius ? f.radius : 0); if (d <= range && d < bd) { bd = d; best = f; } }
         if (best) return best;
       }
       return super.priorityWeaponTarget(range, bodyRadius);

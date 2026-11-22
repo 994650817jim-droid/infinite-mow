@@ -38,6 +38,10 @@ export function yilingGameSceneClass(Base: typeof GameScene, cfg: ArcSceneConfig
   return class YilingGameScene extends Third {
     fire?: YilingFire;
     private camps: Enemy[] = [];
+    /** 每顶营帐摆下时的 spawnId：物件槽打破后会被新物件 / 补给复用（同一个 Enemy 又 active），只认摆下时那一条命，否则拆完 6 顶只算 5 顶、朱然不出营（2026-11-22）。 */
+    private campLife: number[] = [];
+    private campUp(t: Enemy, i: number): boolean { return t.active && t.spawnId === this.campLife[i]; }
+    private campsDownNow(): number { return this.camps.filter((t, i) => !this.campUp(t, i)).length; }
     private campsPlaced = false;
     private campsDown = 0;
     private rageShown = false;
@@ -45,7 +49,7 @@ export function yilingGameSceneClass(Base: typeof GameScene, cfg: ArcSceneConfig
     private mazeAt = 0; private mazeUntil = 0; mazes = 0;
     preload(): void { super.preload(); loadV2TroopSheets(this, [...YILING_TROOP_SHEETS.jiefan, ...YILING_TROOP_SHEETS.crossbow]); ensureMoves(this, LUXUN_MOVES); }
     create(): void {
-      this.camps = []; this.campsPlaced = false; this.campsDown = 0; this.rageShown = false; this.fire = undefined;
+      this.camps = []; this.campLife = []; this.campsPlaced = false; this.campsDown = 0; this.rageShown = false; this.fire = undefined;
       super.create();
       const s = this as unknown as Host;
       if (!s.player) return;
@@ -65,14 +69,14 @@ export function yilingGameSceneClass(Base: typeof GameScene, cfg: ArcSceneConfig
         for (let i = 0; i < CAMPS.count; i++) {
           const a = i / CAMPS.count * Math.PI * 2 + .3, r = CAMPS.ringMin + (i % 2) * (CAMPS.ringMax - CAMPS.ringMin);
           const t = s.env.placeTent(p.x + Math.cos(a) * r, p.y + Math.sin(a) * r * .75, `fixed-yiling-camp-${i}`, CAMPS.hp, 3);
-          if (t) { this.camps.push(t); (this as unknown as GameScene).markGate(t, 'tent'); } // 连营：所有武器都打、舆图 / 屏外提示、营寨攻坚小营帐档
+          if (t) { this.camps.push(t); this.campLife.push(t.spawnId); (this as unknown as GameScene).markGate(t, 'tent'); } // 连营：所有武器都打、舆图 / 屏外提示、营寨攻坚小营帐档
         }
       } else if (this.arcStage === 3) {
         // 我军连营：主将前方（北面）成排营帐，火烧过来会一片片塌
         const { rows, perRow, gapX, gapY } = SHU_CAMP;
         for (let r = 0; r < rows; r++) for (let c = 0; c < perRow; c++) {
           const x = p.x + (c - (perRow - 1) / 2) * gapX + (r % 2) * gapX / 2, y = p.y - 260 - r * gapY;
-          const t = s.env.placeTent(x, y, `fixed-yiling-shu-${r}-${c}`, 120, 1); if (t) this.camps.push(t);
+          const t = s.env.placeTent(x, y, `fixed-yiling-shu-${r}-${c}`, 120, 1); if (t) { this.camps.push(t); this.campLife.push(t.spawnId); }
         }
       }
     }
@@ -82,7 +86,7 @@ export function yilingGameSceneClass(Base: typeof GameScene, cfg: ArcSceneConfig
       if (!s.player || s.over) return;
       this.placeCamps();
       if (this.arcStage === 2 && this.campsPlaced && this.campsDown < this.camps.length) {
-        const down = this.camps.filter(t => !t.active).length;
+        const down = this.campsDownNow();
         if (down > this.campsDown) {
           this.campsDown = down;
           if (down >= this.camps.length) { s.showWaveBanner('连营尽破', true, '朱然出营决战！'); if (!s.bossSpawned && !s.boss?.active) this.spawnBoss(); }
@@ -163,6 +167,6 @@ export function yilingGameSceneClass(Base: typeof GameScene, cfg: ArcSceneConfig
           { text: '南中诸郡乘乱生变，孟获起兵……（第十一章 · 南征）' },
         ], reward: '火海突围 · 退守白帝', confirm: '收兵 · 退守白帝', background: 'rest_camp', onDone: () => { close(); next(); } }));
     }
-    snapshotYiling() { return { mazes: this.mazes, double: !!this.fire?.double, stage: this.arcStage, camps: this.camps.length, campsDown: this.camps.filter(t => !t.active).length, fire: this.fire?.snapshot() ?? null, rage: this.rageShown }; }
+    snapshotYiling() { return { mazes: this.mazes, double: !!this.fire?.double, stage: this.arcStage, camps: this.camps.length, campsDown: this.campsDownNow(), fire: this.fire?.snapshot() ?? null, rage: this.rageShown }; }
   };
 }

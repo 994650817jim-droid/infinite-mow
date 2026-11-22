@@ -42,6 +42,7 @@ export const CATEGORY_NAME: Record<GCategory, string> = { own: '本命 · 武艺
 export function cardCategory(id: string): GCategory {
   if (/^(signature_weapon_|weapon_over_|martial_|branch_)/.test(id)) return 'own';
   if (id.startsWith('tactic_')) return 'tactic';
+  if (id === 'gauntlet_qiyu_weapon') return 'own'; // 奇遇的本命连升两级
   if (id.startsWith('gauntlet_star_')) return 'star';
   if (id.startsWith('gauntlet_gear_') || id.startsWith('gauntlet_charm_') || id.startsWith('gauntlet_horse_')) return 'gear';
   return 'other';

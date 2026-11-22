@@ -269,7 +269,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     // ———— 局内 build（gauntlet-build.md）：稀有度四档、三选一类别分散、将星卡 ————
     /** 本模式专有卡的稀有度（id → 档），基类出的卡按 cardRarity 推。 */
     private gRarity = new Map<string, GRarity>();
-    /** 本局拿到的卡（结算「本局 build」用）：名字、图标、稀有度、类别。 */
+    /** 本局拿到的卡（结算「本局打法」用）：名字、图标、稀有度、类别。 */
     gBuildLog: Array<{ id: string; name: string; icon?: string; rarity: GRarity; cat: GCategory }> = [];
     rarityOf(o: UpgradeOption): GRarity { return cardRarity(o, this.gRarity.get(o.id)); }
     /** 现在能出的本模式专有卡（将星；兵装 / 信物 / 坐骑在第二部分接）。 */
@@ -429,7 +429,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
 
     // ———— 花钱币招兵（钱币小出口）：斩将后清场那几秒，屏幕下方一个按钮 ————
     private gRecruitBtn: Phaser.GameObjects.Text | null = null;
-    /** 本局招了几次 / 几名兵（结算「本局 build」用）。 */
+    /** 本局招了几次 / 几名兵（结算「本局打法」用）。 */
     gRecruits = { times: 0, men: 0 };
     /** 现在能不能招：清场阶段、没有面板。 */
     private recruitOpen(): boolean { return this.gPhase === 'clear' && this.mode === 'none' && !this.over && !!this.player?.alive; }
@@ -455,13 +455,26 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       const cost = recruitCost(this.gWave), T = recruitTier(this.gWave), ok = this.legion.food >= cost;
       b.setText(`招兵 · ${GAUNTLET_RECRUIT.per} 名 · ${cost} 钱币\n${T.kinds.map(k => TROOPS[k].name).join(' / ')} · ${T.level} 阶 · 兵力 ${this.legion.count}`).setVisible(true).setAlpha(ok ? 1 : .55);
     }
-    // ———— 结算「本局 build」（局内 build 第 6 条）：斩将头像那一块加两个页签，「本局 build」按类列出这一局拿到的东西 ————
-    /** 本局 build 按类汇总：本命·武艺、战法、将星、兵装（兵装 / 信物 / 坐骑）、军阵·部曲、副将；每项 图标 + 短名 + 稀有度。 */
-    gauntletBuild(): Array<{ cat: string; items: Array<{ name: string; icon: string; rarity: GRarity }> }> {
-      const fam = (id: string) => id.replace(/^(martial_.+)_\d+$/, '$1').replace(/^weapon_over_\d+$/, 'weapon_over');
+    // ———— 结算「本局打法」（局内 build 第 6 条；界面上不写英文）：斩将头像那一块加两个页签，「本局打法」按类列出这一局拿到的东西 ————
+    /**
+     * 卡名 → 结算格子里的短名 + 等级：去掉「锦囊 · 」「军阵 · 」「兵装 · 」这类前缀只写本名（「火计」「鹤翼阵」），
+     * 名将来投 / 研读心法保留意思（「张飞来投」「火攻心法」）；「· Lv.N」「Lv.a→b」拆成等级角标。
+     */
+    static shortName(name: string): { label: string; lv?: string } {
+      let base = name, lv: string | undefined;
+      const m = / · Lv\.(\d+)(?:→(\d+))?$/.exec(base); if (m) { base = base.slice(0, m.index); lv = m[2] ?? m[1]; }
+      base = base.replace(/ · 连升两级$/, '');
+      const parts = base.split(' · ').map(x => x.trim()).filter(Boolean); if (parts.length < 2) return { label: base, lv };
+      const [head, tail] = [parts[0], parts[parts.length - 1]];
+      return { label: head === '名将来投' ? tail + '来投' : head === '研读心法' ? tail + '心法' : tail, lv };
+    }
+    /** 本局打法按类汇总：本命·武艺、战法、将星、兵装（兵装 / 信物 / 坐骑）、军阵·部曲、副将、机缘；每项 图标 + 短名（+ 等级）+ 稀有度。 */
+    gauntletBuild(): Array<{ cat: string; items: Array<{ name: string; icon: string; rarity: GRarity; lv?: string }> }> {
+      const ownId = CHARACTERS.find(c => c.id === this.runConfig.character)?.startWeapon, ownLv = this.player.weapons.find(w => w.id === ownId)?.level;
+      const fam = (id: string) => id === 'gauntlet_qiyu_weapon' ? 'signature_weapon_' + ownId : id.replace(/^(martial_.+)_\d+$/, '$1').replace(/^weapon_over_\d+$/, 'weapon_over'); // 奇遇的「本命连升两级」和本命升级算同一项
       const last = new Map<string, { id: string; name: string; icon?: string; rarity: GRarity; cat: GCategory }>();
-      for (const e of this.gBuildLog) if (!/^gauntlet_(follow|spoils|replace_|keep|endless|settle)/.test(e.id)) last.set(fam(e.id), e); // 收副将 / 取辎重 / 收兵这些是面板动作，不算 build（副将另列）
-      const pick = (cat: GCategory) => [...last.values()].filter(e => e.cat === cat && !/^gauntlet_(gear|charm|horse)_/.test(e.id)).map(e => ({ name: e.name.replace(/^(将星|主星) · /, ''), icon: e.icon ?? 'icon_passive', rarity: e.rarity }));
+      for (const e of this.gBuildLog) if (!/^gauntlet_(follow|spoils|replace_|keep|endless|settle|formation_)/.test(e.id)) last.set(fam(e.id), e); // 收副将 / 取辎重 / 收兵这些是面板动作，不算；军阵在「军阵 · 部曲」里列（副将另列）
+      const pick = (cat: GCategory) => [...last.values()].filter(e => e.cat === cat && !/^gauntlet_(gear|charm|horse)_/.test(e.id)).map(e => { const sn = GauntletGameScene.shortName(e.name), own = fam(e.id) === 'signature_weapon_' + ownId; return { name: sn.label, lv: own && ownLv ? String(ownLv) : sn.lv, icon: e.icon ?? 'icon_passive', rarity: e.rarity }; }); // 本命写现在的实际等级
       const kit: Array<{ name: string; icon: string; rarity: GRarity }> = [];
       const qr = (q: ItemQuality): GRarity => q === 'orange' ? 'legend' : q === 'purple' ? 'rare' : q === 'blue' ? 'fine' : 'common';
       for (const it of [...Object.values(this.gGear).filter((x): x is ItemInstance => !!x), ...this.gCharms]) kit.push({ name: itemName(it), icon: this.kitIcon(itemIcon(this, it)), rarity: qr(it.quality) });
@@ -476,7 +489,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       ];
       return out.filter(g => g.items.length);
     }
-    /** 结算画面上的「本局 build」块：按类分栏，每栏标题 + 图标格（两行放不下写 +N）。 */
+    /** 结算画面上的「本局打法」块：按类分栏，每栏标题 + 图标格（两行放不下写 +N）；名字写全（长了缩小字号，不截断），等级写在图标右下角。 */
     private drawBuild(top: number, h: number): Phaser.GameObjects.GameObject[] {
       const groups = this.gauntletBuild(), objs: Phaser.GameObjects.GameObject[] = [], gap = 12, W = Math.min(1200, (GAME_WIDTH - 48) / (this.resultPanel.scaleX || 1)), x0 = this.resultTexts.subtitle.x - W / 2; // 结算面板整体是缩放过的：按面板里的坐标算可用宽度
       if (!groups.length) { objs.push(this.add.text(this.resultTexts.subtitle.x, top + h / 2, '这一局还没拿到什么', { fontFamily: HEADING_FONT, fontSize: '16px', color: '#c9b48a', resolution: 2 }).setOrigin(.5).setScrollFactor(0).setName('gauntlet-build-empty')); return objs; }
@@ -491,7 +504,8 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
           const cx = ox + (i % cols) * cell, cy = top + 40 + Math.floor(i / cols) * 48, R = RARITY[it.rarity];
           objs.push(this.add.circle(cx, cy, S / 2 + 3, 0x0d0905, .9).setStrokeStyle(2, R.color, it.rarity === 'common' ? .5 : 1).setScrollFactor(0).setName('gauntlet-build-ring'));
           const img = this.add.image(cx, cy, this.textures.exists(it.icon) ? it.icon : 'icon_passive').setScrollFactor(0).setName('gauntlet-build-icon'); img.setScale(Math.min(S / img.width, S / img.height)); objs.push(img);
-          objs.push(this.add.text(cx, cy + S / 2 + 1, it.name.length > 4 ? it.name.slice(0, 4) : it.name, { fontFamily: FONT, fontSize: '10px', color: R.css, resolution: 2 }).setOrigin(.5, 0).setStroke('#120904', 3).setScrollFactor(0).setName('gauntlet-build-name'));
+          { const t = this.add.text(cx, cy + S / 2 + 1, it.name, { fontFamily: FONT, fontSize: '10px', color: R.css, resolution: 2 }).setOrigin(.5, 0).setStroke('#120904', 3).setScrollFactor(0).setName('gauntlet-build-name'); if (t.width > cell - 2) t.setScale((cell - 2) / t.width); objs.push(t); } // 名字写全：放不下缩字号，不截断
+          const lv = (it as { lv?: string }).lv; if (lv) objs.push(this.add.text(cx + S / 2 + 2, cy + S / 2 - 1, lv, { fontFamily: HEADING_FONT, fontSize: '11px', color: '#ffd76a', resolution: 2 }).setOrigin(1, 1).setPadding(3, 0).setBackgroundColor('#2a1a0c').setStroke('#120904', 2).setScrollFactor(0).setName('gauntlet-build-lv')); // 等级角标
         });
         if (g.items.length > max) objs.push(this.add.text(ox + ((max - 1) % cols) * cell, top + 40 + Math.floor((max - 1) / cols) * 48, '+' + (g.items.length - max + 1), { fontFamily: HEADING_FONT, fontSize: '18px', color: '#f0dcae', resolution: 2 }).setOrigin(.5).setScrollFactor(0).setName('gauntlet-build-more'));
         x += w + gap;
@@ -1034,7 +1048,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     }
     /** 结算画面（电脑版）：基类画完奖励格以后，底下一行战况换成本模式的、副标题下面排斩将头像（基类可能晚些再画一遍，所以挂在这里）。 */
     private gResult: { kills: number; best: number; record: boolean } | null = null;
-    /** 结算那一块现在显示哪个页签：斩将头像 / 本局 build。 */
+    /** 结算那一块现在显示哪个页签：斩将头像 / 本局打法。 */
     gResultTab: 'kills' | 'build' = 'kills';
     protected presentResult(victory: boolean): void {
       super.presentResult(victory); const r = this.gResult; if (!r || !this.resultPanel) return; const { kills, best, record } = r;
@@ -1052,11 +1066,11 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       });
       if (!n) faces.push(this.add.text(this.resultTexts.subtitle.x, cy, '这一局还没斩将', { fontFamily: HEADING_FONT, fontSize: '16px', color: '#c9b48a', resolution: 2 }).setOrigin(.5).setScrollFactor(0).setName('gauntlet-face-empty'));
       this.resultPanel.add(faces);
-      // 「本局 build」（局内 build 第 6 条）：和斩将头像共用这一块，分隔线上两个页签切换
+      // 「本局打法」（局内 build 第 6 条；界面不写英文）：和斩将头像共用这一块，分隔线上两个页签切换
       const build = this.drawBuild(top + 2, PH + 14); this.resultPanel.add(build); // 两行图标 + 小字，底边不超过斩将名字那一行（下面是奖励格）
       const tab = (label: string, key: 'kills' | 'build', x: number) => this.add.text(x, top - 13, label, { fontFamily: HEADING_FONT, fontSize: '14px', color: '#f0dcae', resolution: 2 }).setOrigin(.5).setPadding(12, 2) /* 骑在分隔线上，不压副标题 */.setBackgroundColor('#1a120b').setStroke('#0a0603', 3).setScrollFactor(0).setName('gauntlet-tab-' + key)
         .setInteractive({ useHandCursor: true }).on('pointerdown', () => setTab(key));
-      const tabs = { kills: tab('斩将 · ' + n, 'kills', this.resultTexts.subtitle.x - 78), build: tab('本局 build', 'build', this.resultTexts.subtitle.x + 78) }; this.resultPanel.add([tabs.kills, tabs.build]);
+      const tabs = { kills: tab('斩将 · ' + n, 'kills', this.resultTexts.subtitle.x - 78), build: tab('本局打法', 'build', this.resultTexts.subtitle.x + 78) }; this.resultPanel.add([tabs.kills, tabs.build]);
       const setTab = (key: 'kills' | 'build') => { this.gResultTab = key; for (const o of faces) (o as Phaser.GameObjects.Text).setVisible(key === 'kills'); for (const o of build) (o as Phaser.GameObjects.Text).setVisible(key === 'build');
         for (const k of ['kills', 'build'] as const) tabs[k].setColor(k === key ? '#ffd76a' : '#9d8f78').setBackgroundColor(k === key ? '#3a2614' : '#1a120b'); };
       setTab(this.gResultTab);

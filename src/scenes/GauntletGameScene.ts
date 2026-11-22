@@ -1,9 +1,11 @@
 import Phaser from 'phaser';
 import { GameScene } from './GameScene';
-import { BALANCE, DEPTH, FONT, HEADING_FONT, actorDepth } from '../config';
+import { BALANCE, DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, actorDepth } from '../config';
 import { getBattleChapter, getChapter, type ChapterDef } from '../data/chapters';
 import type { EnemyDef } from '../data/enemies';
 import { GAUNTLET, GAUNTLET_MOVES, GAUNTLET_POOL, GAUNTLET_TROOPS, type GauntletArc, type GauntletProps, endlessBoss, gauntletReward, pickBosses, readGauntletBest, unlockedPool, waveScale, writeGauntletBest, type GauntletBoss } from '../data/gauntlet';
+import { GAUNTLET_RECRUIT, recruitCost, recruitTier } from '../data/gauntletCards';
+import { TROOPS } from '../data/legion';
 import { GAUNTLET_BUILD, RARITY, STAR_CARD_IDS, cardCategory, cardRarity, pickByRarity, rollRarity, starCardPool, type GCategory, type GRarity, type StarCard } from '../data/gauntletCards';
 import { STAR_BY_ID, STAR_REGIONS } from '../data/starMap';
 import { starIconKey, starIconUrl } from '../data/starFx';
@@ -214,7 +216,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       this.gPool = pool.filter(b => b.name !== heroName).length ? pool.filter(b => b.name !== heroName) : pool; // 本局主将同名的名将不出（主将黄忠 / 孟获 / 祝融……）
       this.gOrder = pickBosses(this.gPool);
       // 从 0 开局 + 卡池全开（基类 create 里按 mechOpen 建系统、读卡池上限，所以先开）；各章兵种换色图先备好
-      this.gGear = {}; this.gCharms = []; this.gHorse = undefined; // 本局兵装 / 信物 / 坐骑：从 0 开局，空
+      this.gGear = {}; this.gCharms = []; this.gHorse = undefined; this.gRecruitBtn = null; this.gRecruits = { times: 0, men: 0 }; // 本局兵装 / 信物 / 坐骑：从 0 开局，空
       const F = GAUNTLET.from0; this.gRerollFree = F.freeRerolls; this.gRerollPaid = 0; this.gExcludes = F.excludes; this.gExcluded.clear(); this.gExcluding = false; this.gExcludeBtn = null;
       this.openPool(); this.events.once('shutdown', () => this.closePool());
       this.ensureTroopArt();
@@ -425,6 +427,34 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       return null;
     }
 
+    // ———— 花钱币招兵（钱币小出口）：斩将后清场那几秒，屏幕下方一个按钮 ————
+    private gRecruitBtn: Phaser.GameObjects.Text | null = null;
+    /** 本局招了几次 / 几名兵（结算「本局 build」用）。 */
+    gRecruits = { times: 0, men: 0 };
+    /** 现在能不能招：清场阶段、没有面板。 */
+    private recruitOpen(): boolean { return this.gPhase === 'clear' && this.mode === 'none' && !this.over && !!this.player?.alive; }
+    /** 招一次：按本阵兵种表随机一种，per 名，花 recruitCost(阵数) 钱币；兵的阶抬到本阵档位。钱不够返回 false。 */
+    recruitTroops(): boolean {
+      const cost = recruitCost(this.gWave), T = recruitTier(this.gWave); if (this.legion.food < cost) return false;
+      const kind = T.kinds[Math.floor(Math.random() * T.kinds.length)];
+      this.legion.food -= cost; for (let i = 0; i < 3 && this.legion.levels[kind] < T.level; i++) this.legion.train(kind, true);
+      this.legion.recruit(kind, GAUNTLET_RECRUIT.per, true); this.gRecruits.times++; this.gRecruits.men += GAUNTLET_RECRUIT.per;
+      this.sfx.play('gong'); this.showGrowthNotice(`招兵 · ${TROOPS[kind].name} ×${GAUNTLET_RECRUIT.per}（${this.legion.levels[kind]} 阶）· −${cost} 钱币`);
+      this.paintRecruit(); return true;
+    }
+    /** 招兵按钮：清场时出现在屏幕下方正中（不压技能栏），写这一阵能招的兵种、价格；钱不够变灰。 */
+    private paintRecruit(): void {
+      const show = this.recruitOpen();
+      if (!show) { this.gRecruitBtn?.setVisible(false); return; }
+      let b = this.gRecruitBtn;
+      if (!b || !b.scene) {
+        b = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 132, '', { fontFamily: HEADING_FONT, fontSize: '20px', color: '#f6e6c2', resolution: 2, align: 'center' }).setOrigin(.5).setPadding(22, 10).setBackgroundColor('rgba(40,26,14,0.88)').setStroke('#120904', 4).setScrollFactor(0).setDepth(DEPTH.hud + 5).setName('gauntlet-recruit')
+          .setInteractive({ useHandCursor: true }).on('pointerdown', () => { if (this.recruitOpen()) this.recruitTroops(); });
+        this.gRecruitBtn = b;
+      }
+      const cost = recruitCost(this.gWave), T = recruitTier(this.gWave), ok = this.legion.food >= cost;
+      b.setText(`招兵 · ${GAUNTLET_RECRUIT.per} 名 · ${cost} 钱币\n${T.kinds.map(k => TROOPS[k].name).join(' / ')} · ${T.level} 阶 · 兵力 ${this.legion.count}`).setVisible(true).setAlpha(ok ? 1 : .55);
+    }
     // ———— 换一批 / 排除（掌控感）：每局 2 次免费换一批，之后花钱币、逐次涨价；每局 1 次排除（点一张卡，本局不再出现）————
     private gRerollFree = 0; private gRerollPaid = 0; private gExcludes = 0; private gExcluded = new Set<string>(); private gExcluding = false;
     private gExcludeBtn: Phaser.GameObjects.Text | null = null;
@@ -506,7 +536,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       this.gCtrl?.updateDeath?.(delta);
       if (this.over || !this.player?.alive) return;
       this.hudTexts.wave.setText(''); // 阵数看顶部十阵进度条（总制作人 11-21：去掉左上角那行，兵力行保留）
-      this.updateTrack();
+      this.updateTrack(); this.paintRecruit();
       if (this.mode !== 'none') return;
       this.gStrikes?.update();
       if (this.gPhase === 'mow' && this.waveT >= GAUNTLET.mowSec) this.startBoss();
@@ -936,6 +966,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     // ———— 结算：打到第几阵、斩了哪些名将（头像一排）、用时、最高连斩；按斩将数给钱币 / 武学残卷 ————
     protected finish(victory: boolean, reason: RunEndReason = 'death') {
       if (this.over) return;
+      this.gRecruitBtn?.setVisible(false);
       super.finish(victory, reason);
       const kills = this.gKills.length, debug = this.debugRun(), test = isChapterTestRun(), before = readGauntletBest(test);
       const record = writeGauntletBest(kills, this.gWave, Math.round(this.elapsed * 1000), test), best = Math.max(before.kills, kills);

@@ -173,6 +173,15 @@ if (BASE) {
     await ev(() => window.__S.chooseUpgrade(0)); await wait(400);
     const fol = await ev(() => { const s = window.__S, f = s.gauntletFollowers[0]?.f; return { n: s.gauntletFollowers.length, name: f?.label.text, tex: f?.sprite.texture.key, look: f?.look?.tex, mode: s.mode }; });
     ck('收为副将：他在场（名牌「副将 · 名字」、用他自己的首领图）', fol.n === 1 && fol.name === '副将 · ' + b1.name && fol.tex === fol.look && (fol.mode === 'none' || fol.mode === 'levelup'), fol); /* 选完战利品可能接着弹攒着的升级三选一 */
+    // 花钱币招兵（钱币小出口）：清场时屏幕下方出「招兵」按钮；点一次 3 名、价格随阵数；兵种 / 阶随阵数（第 7 阵起有轻骑 / 精锐戟兵、3 阶）
+    { await until(() => { const s = window.__S; if (s.mode === 'levelup') s.chooseUpgrade(0); return s.mode === 'none' && s.gPhase === 'clear'; }, 6000); await wait(200);
+      const rc = await ev(() => { const s = window.__S, b = s.children.getByName('gauntlet-recruit'), n0 = s.legion.count; s.legion.food = 500; s.update(s.time.now, 16); const vis = !!b?.visible, text = b?.text;
+        b?.emit('pointerdown'); const n1 = s.legion.count, food1 = s.legion.food, kinds1 = s.legion.units.filter(u => u.active).map(u => u.kind);
+        const w0 = s.gWave; s.gWave = 7; s.recruitTroops(); const k7 = s.legion.units.filter(u => u.active).map(u => u.kind).slice(-3), lv7 = s.legion.levels[k7[0]]; s.gWave = w0;
+        s.legion.food = 0; s.update(s.time.now, 16); const dim = b?.alpha; return { vis, text, n0, n1, food1, kinds1, k7, lv7, dim, times: s.gRecruits.times }; });
+      await p.screenshot({ path: OUT + '/gauntlet-18-recruit.png' });
+      ck('花钱币招兵：斩将后清场时屏幕下方出「招兵」按钮（写兵种、阶、价格）；点一次招 3 名、扣 70 钱币（第 1 阵：刀盾 / 长枪）；第 7 阵起出轻骑 / 精锐戟兵等、3 阶；钱不够按钮变灰',
+        rc.vis && /招兵 · 3 名 · 70 钱币/.test(rc.text) && rc.n1 === rc.n0 + 3 && rc.food1 === 430 && rc.kinds1.every(k => k === 'swordsman' || k === 'spearman') && rc.k7.length === 3 && ['spearman', 'archer', 'guardian', 'rider', 'halberdier'].includes(rc.k7[0]) && rc.lv7 === 3 && rc.dim < 1 && rc.times === 2, rc); }
     await ev(() => { const s = window.__S; s.gAt = s.elapsed - 10; }); await until(() => { const s = window.__S; if (s.mode === 'levelup') s.chooseUpgrade(0); return s.gPhase === 'mow' && s.gWave === 2; }, 6000); await ev(() => { const s = window.__S, f = s.gauntletFollowers[0]?.f; if (f) for (let i = 0; i < 3; i++) s.spawnEnemy('elite', f.x + 26 + i * 12, f.y + 8, undefined, true); }); /* 精锐贴着副将刷（杂兵从屏边走过来、又先被主将砍光，副将摸不到） */
     for (let i = 0; i < 10 && !(await ev(() => (window.__S.gauntletFollowers[0]?.f.dealt ?? 0) > 0)); i++) { await wait(600); await unblock(); }
     const atk = await ev(() => { const s = window.__S, f = s.gauntletFollowers[0]?.f; return { wave: s.gWave, dealt: Math.round(f?.dealt ?? 0), hits: f?.hits ?? 0, inf: s.chapter.enemies.infantry.hp, arc: s.gauntletFrom0.troops.arc }; });

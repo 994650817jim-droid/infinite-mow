@@ -6,6 +6,7 @@ import './platform/desktop';
 // 中途退出不算：上次没打完就关了 / 刷新 / 崩溃 → 先把存档回滚到那场进关前（必须在任何模块缓存存档之前）
 import './systems/BattleSnapshotBoot';
 import {NanzhengChapterScene} from './scenes/NanzhengChapterScene';import {nanzhengGameSceneClass} from './scenes/NanzhengGameScene';import {YILING_STAGES,YILING_SHEETS,yilingBattle,yilingTexture} from './data/yilingChapter';import {YilingChapterScene} from './scenes/YilingChapterScene';import {yilingGameSceneClass} from './scenes/YilingGameScene';import {BEIFA_STAGES,BEIFA_SHEETS,beifaBattle,beifaTexture} from './data/beifaChapter';import {BeifaChapterScene} from './scenes/BeifaChapterScene';import {beifaGameSceneClass} from './scenes/BeifaGameScene';import {EndingScene} from './scenes/EndingScene';import {XiangfanChapterScene} from './scenes/XiangfanChapterScene';import {xiangfanGameSceneClass} from './scenes/XiangfanGameScene';import {ShuChapterScene} from './scenes/ShuChapterScene';import {shuGameSceneClass} from './scenes/ShuGameScene';import {ThirdChapterScene} from './scenes/ThirdChapterScene';import {ChibiChapterScene} from './scenes/ChibiChapterScene';import {CHIBI_STAGES,chibiBattle} from './data/chibiChapter';import {JINGNAN_STAGES,JINGNAN_SHEETS,jingnanBattle,jingnanTexture} from './data/jingnanChapter';import {JingnanChapterScene} from './scenes/JingnanChapterScene';import {jingnanGameSceneClass} from './scenes/JingnanGameScene';import {HANZHONG_STAGES,HANZHONG_SHEETS,hanzhongBattle,hanzhongTexture} from './data/hanzhongChapter';import {HanzhongChapterScene} from './scenes/HanzhongChapterScene';import {hanzhongGameSceneClass} from './scenes/HanzhongGameScene';import {thirdGameSceneClass} from './scenes/ThirdGameScene';import {GuanduChapterScene} from './scenes/GuanduChapterScene';import {guanduGameSceneClass} from './scenes/GuanduGameScene';import {siegeGameSceneClass} from './scenes/SiegeGameScene';import {intelGameSceneClass} from './scenes/IntelGameScene';import {lubuGameSceneClass} from './scenes/LubuGameScene';
+import { gauntletGameSceneClass } from './scenes/GauntletGameScene';
 import {loadGameFonts} from './ui/GameFonts';
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH, IS_DESKTOP, RENDER_SCALE, initLayout, switchLayout } from './config';
@@ -93,6 +94,7 @@ async function startGame(): Promise<void> {
   const SiegeBattleScene=siegeGameSceneClass(BattleScene);
   const IntelBattleScene=intelGameSceneClass(BattleScene);
   const LubuBattleScene=lubuGameSceneClass(BattleScene);
+  const GauntletBattleScene=gauntletGameSceneClass(BattleScene); // 名将连战（data/gauntlet.ts；开关默认关，关着时没有入口）
   // 其他势力支线（data/sideRoutes.ts）：每条支线一个三关框架场景 + 下邳白门楼的吕布战
   const SideBattleScenes=sideGameScenes(BattleScene),SideLubuBattleScene=sideLubuGameSceneClass(BattleScene);
   installFastFill(); // 凸多边形填充走扇形三角化（systems/RenderTweaks）
@@ -113,7 +115,7 @@ async function startGame(): Promise<void> {
     input: {
       activePointers: 3,
     },
-    scene: [BootScene, OpeningScene, CityScene, CityRecruitScene, TownScene, TalentHallScene, WorldMapScene, MenuScene, BattleScene, ThirdChapterScene, ThirdBattleScene, GuanduChapterScene, GuanduBattleScene, ChibiChapterScene, ChibiBattleScene, JingnanChapterScene, JingnanBattleScene, ShuChapterScene, ShuBattleScene, HanzhongChapterScene, HanzhongBattleScene, XiangfanChapterScene, XiangfanBattleScene, YilingChapterScene, YilingBattleScene, NanzhengChapterScene, NanzhengBattleScene, BeifaChapterScene, BeifaBattleScene, EndingScene, SiegeBattleScene, IntelBattleScene, LubuBattleScene, ...SideBattleScenes, SideLubuBattleScene],
+    scene: [BootScene, OpeningScene, CityScene, CityRecruitScene, TownScene, TalentHallScene, WorldMapScene, MenuScene, BattleScene, ThirdChapterScene, ThirdBattleScene, GuanduChapterScene, GuanduBattleScene, ChibiChapterScene, ChibiBattleScene, JingnanChapterScene, JingnanBattleScene, ShuChapterScene, ShuBattleScene, HanzhongChapterScene, HanzhongBattleScene, XiangfanChapterScene, XiangfanBattleScene, YilingChapterScene, YilingBattleScene, NanzhengChapterScene, NanzhengBattleScene, BeifaChapterScene, BeifaBattleScene, EndingScene, SiegeBattleScene, IntelBattleScene, LubuBattleScene, GauntletBattleScene, ...SideBattleScenes, SideLubuBattleScene],
   });
 
   // 手柄：每帧轮询 + 界面焦点导航（STEAM_PLAN.md · S2）

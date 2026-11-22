@@ -92,6 +92,11 @@ export class Follower {
   sigAt = 0; sigReadyAt = 0;
   /** 累计造成的伤害（测试 / 平衡用）。 */
   dealt = 0;
+  /**
+   * 自带形象（名将连战「收为副将」：用这位名将自己的首领图，不套兵种行走图）：arc = 第三章起的 4×8 首领图（行走 方向×4+步、出手 16 / 17 帧）；
+   * walk = 第一 / 二章首领的四方向行走表（帧名 方向_步）。size = 显示边长（像素）。没设 = 原来的画法。
+   */
+  look: { tex: string; layout: 'arc' | 'walk'; size: number } | null = null;
   private readonly fits = new Map<string, { k: number; originY: number; foot: number; frameH: number }>();
   /** 倒地标记与屏幕外箭头的文字（用到才建）。 */
   mark?: Phaser.GameObjects.Text; arrowText?: Phaser.GameObjects.Text;
@@ -658,7 +663,8 @@ export class FollowerSquad {
   }
   private render(f: Follower, now: number) {
     const a = f.act;
-    if (a && (a.hold || now < a.until)) {
+    if (f.look) this.renderLook(f, now);
+    else if (a && (a.hold || now < a.until)) {
       const t = Math.min(.999, Math.max(0, (now - a.start) / Math.max(1, a.until - a.start))), fr = a.frames[a.hold && now >= a.until ? a.frames.length - 1 : Math.floor(t * a.frames.length)];
       const key = visualTextureKey(this.scene, a.key), fit = f.fitFor(key, a.frames);
       if (f.sprite.texture.key !== key || f.sprite.frame.name !== String(fr)) f.sprite.setTexture(key, fr);
@@ -674,12 +680,25 @@ export class FollowerSquad {
     // 倒地：没有倒地帧的（兵种）复用站立帧侧倒 + 下沉；都变暗
     if (f.downed) { if (!f.act) f.sprite.setAngle(f.dir === 'left' ? -84 : 84).setOrigin(.5, .7); f.sprite.setTint(0x8a7a6a); f.sprite.setAlpha(.92); }
     else if (now < f.hurtUntil) f.sprite.setTintFill(0xffd0c0); else if (f.sprite.tintFill || f.sprite.isTinted) { f.sprite.clearTint(); if (!f.recruit.hero && f.sheet === 'hero_walk_sheet') f.sprite.setTint(QUALITIES[f.recruit.quality].color); }
-    f.shadow.setPosition(f.x, f.y + 2); f.label.setPosition(f.x, f.y - 66);
+    f.shadow.setPosition(f.x, f.y + 2); f.label.setPosition(f.x, f.y - (f.look ? f.look.size * .72 : 66));
     // 站得离主将太近时隐藏名牌和血条（用户 2026-11-18 截图：随行名牌 / 血条压在主将身上，和「主将」标记叠在一起）
     const pl = this.player, near = Math.hypot(f.x - pl.x, f.y - pl.y) < 96; f.label.setAlpha(near && !f.recruit.id.startsWith('fortune_defector_') ? 0 : 1); // 机缘降将（临时随从）一直挂名牌
     f.sprite.setDepth(actorDepth(f.y + 2)); // 和主将 / 部曲 / 敌兵同一套按脚底 y 排序（原来固定在主将层，站得近时总压在部曲身上）
     const w = 36, r = Math.max(0, f.hp / f.maxHp); f.bar.clear();
     if (r < 1 && !near) { f.bar.fillStyle(0x1a0f08, .8).fillRect(f.x - w / 2, f.y - 58, w, 4); f.bar.fillStyle(r > .4 ? 0x6fd06a : 0xe0603a, 1).fillRect(f.x - w / 2, f.y - 58, w * r, 4); }
+  }
+  /** 自带形象的随从（名将连战副将）：首领图按方向 / 步伐取帧，出手时用出手帧；动作播完照常收回。 */
+  private renderLook(f: Follower, now: number): void {
+    const L = f.look!, a = f.act, acting = !!a && !a.hold && now < a.until, moving = !f.downed && f.walk > 0, step = moving ? Math.floor(f.walk / 14) % 4 : 0;
+    if (a && !(a.hold || now < a.until)) f.act = null;
+    if (!this.scene.textures.exists(L.tex)) return;
+    if (L.layout === 'arc') {
+      const d = f.dir === 'down' ? 0 : f.dir === 'left' ? 1 : f.dir === 'right' ? 2 : 3, frame = acting ? 16 + Math.floor((now - a!.start) / 130) % 2 : d * 4 + step;
+      f.sprite.setTexture(L.tex, frame).setDisplaySize(L.size, L.size).setOrigin(.5, 114 / 128).setFlipX(acting && f.dir === 'left');
+    } else {
+      const tex = this.scene.textures.get(L.tex), name = `${f.dir}_${step}`, fr = tex.has(name) ? name : tex.has('down_0') ? 'down_0' : 0;
+      f.sprite.setTexture(L.tex, fr); const fh = f.sprite.frame.height || 96; f.sprite.setScale(L.size / fh * (acting ? 1.06 : 1)).setOrigin(.5, .9).setFlipX(false);
+    }
   }
   clear(): void { this.allyHazards.length = 0; for (const f of this.members) f.destroy(); this.members.length = 0; for (const fx of this.fx) fx.img?.destroy(); for (const img of this.fxPool) img.destroy(); this.fxPool.length = 0; this.fxLive = 0; this.fx.length = 0; this.gfx.destroy(); this.rescueGfx.destroy(); this.rescueText.destroy(); this.hud.destroy(); }
 }

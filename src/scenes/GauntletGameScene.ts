@@ -1,9 +1,14 @@
 import Phaser from 'phaser';
 import { GameScene } from './GameScene';
-import { BALANCE, DEPTH, FONT, HEADING_FONT, actorDepth } from '../config';
+import { BALANCE, DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, actorDepth } from '../config';
 import { getBattleChapter, getChapter, type ChapterDef } from '../data/chapters';
 import type { EnemyDef } from '../data/enemies';
 import { GAUNTLET, GAUNTLET_MOVES, GAUNTLET_POOL, GAUNTLET_TROOPS, type GauntletArc, type GauntletProps, endlessBoss, gauntletReward, pickBosses, readGauntletBest, unlockedPool, waveScale, writeGauntletBest, type GauntletBoss } from '../data/gauntlet';
+import { GAUNTLET_RECRUIT, recruitCost, recruitTier } from '../data/gauntletCards';
+import { TROOPS } from '../data/legion';
+import { GAUNTLET_BUILD, RARITY, STAR_CARD_IDS, cardCategory, cardRarity, pickByRarity, rollRarity, starCardPool, type GCategory, type GRarity, type StarCard } from '../data/gauntletCards';
+import { STAR_BY_ID, STAR_REGIONS } from '../data/starMap';
+import { starIconKey, starIconUrl } from '../data/starFx';
 import { ARC_CHAPTER, guardDef, troopChapter, troopTextures, waveTroopSet, type TroopKind } from '../data/gauntletTroops';
 import { BOSS_MOVES, type BossMovesetDef } from '../data/bossMoves';
 import { supplyOption } from '../data/upgrades';
@@ -24,7 +29,12 @@ import { MECH_FLAGS } from '../data/mechanicUnlocks';
 import { BuildState } from '../data/builds';
 import { WEAPON_OVER } from '../data/weaponBranches';
 import { RunGrowth, attributeCap, type AttributeId } from '../systems/RunGrowth';
-import { emptyGear } from '../systems/ItemEffects';
+import { gearFromItems, horseBonusText } from '../systems/ItemEffects';
+import { AFFIXES, QUALITIES, QUALITY_ORDER, SLOTS, SPECIALS, itemName, rollCharm, rollItem, type ItemInstance, type ItemQuality } from '../data/items';
+import { charmDef } from '../data/charms';
+import { HORSES, horseQuality, type HorseDef } from '../data/mounts';
+import { FORMATIONS, FORMATION_IDS, type FormationId } from '../data/formations';
+import { ensureItemTextures, horseIcon, itemIcon } from '../ui/ItemQuality';
 import { SHU_CONFIG } from './ShuGameScene';
 import { XIANGFAN_CONFIG } from './XiangfanGameScene';
 import { NANZHENG_CONFIG } from './NanzhengGameScene';
@@ -165,6 +175,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       if (!this.textures.exists(HILL_ART[0].key)) this.load.image(HILL_ART[0].key, HILL_ART[0].url); // 高地圈（汉中山头同一张图）
       if (!this.textures.exists('gauntlet_oil_jar')) this.load.spritesheet('gauntlet_oil_jar', 'assets/props/gauntlet_oil_jar.png', { frameWidth: 256, frameHeight: 256 }); // 兀突骨火油罐（美术 11-21：完好 / 碎裂）
       if (!this.textures.exists('siege_mid_walls')) this.load.spritesheet('siege_mid_walls', 'assets/siege-v2/walls.png', { frameWidth: 384, frameHeight: 384 }); // 随身城门 / 箭楼（攻城 v2 城墙图集）
+      for (const id of STAR_CARD_IDS) if (!this.textures.exists(starIconKey(id))) this.load.image(starIconKey(id), starIconUrl(id)); // 将星卡图标（星图页同一套）
       if (!this.textures.exists(SEAL_KEY)) this.load.image(SEAL_KEY, 'assets/ending/seal_red_2.png'); // 进度条斩将盖的朱印（结局麒麟阁同一枚，缩小用）
       // 每阵杂兵 / 名将亲兵用到的各章兵种图（data/gauntletTroops.ts）：蜀 / 襄樊 / 南中按 176 格载，其余 v2 兵种表走 loadV2TroopSheets（同各章场景）
       const keys = troopArtKeys(), grid = gridTroops(), gridKeys = new Set(grid.map(t => t.walk));
@@ -205,12 +216,15 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       this.gPool = pool.filter(b => b.name !== heroName).length ? pool.filter(b => b.name !== heroName) : pool; // 本局主将同名的名将不出（主将黄忠 / 孟获 / 祝融……）
       this.gOrder = pickBosses(this.gPool);
       // 从 0 开局 + 卡池全开（基类 create 里按 mechOpen 建系统、读卡池上限，所以先开）；各章兵种换色图先备好
+      this.gGear = {}; this.gCharms = []; this.gHorse = undefined; this.gRecruitBtn = null; this.gRecruits = { times: 0, men: 0 }; this.gResultTab = 'kills'; // 本局兵装 / 信物 / 坐骑：从 0 开局，空
       const F = GAUNTLET.from0; this.gRerollFree = F.freeRerolls; this.gRerollPaid = 0; this.gExcludes = F.excludes; this.gExcluded.clear(); this.gExcluding = false; this.gExcludeBtn = null;
       this.openPool(); this.events.once('shutdown', () => this.closePool());
       this.ensureTroopArt();
       super.create();
       // 不带随从（副将位只给本局收的名将）、不掉战役兵装
       this.followers?.clear(); this.followers = null;
+      this.gFormations = []; this.gQiyuWaves = []; this.gQiyuPending = false; this.formationRt?.setLoadout([]); // 军阵从 0：只靠奇遇拿
+      this.player.growth.cardStars = true; this.gRarity.clear(); this.gBuildLog = []; this.gRarityMarks = []; ensureItemTextures(this); // 将星卡：星图开关关着也生效
       this.itemDrops = null;
       this.chapter = this.makeChapter(this.gOrder[0]);
       this.bossWarned = true; this.gEliteAt = GAUNTLET.eliteFirst;
@@ -231,9 +245,6 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     // ———— 从 0 开局（用户 11-21「名将挑战是从 0 开始 build 起来」「全新从 0 开始的不继承主剧情的 build」）————
     // 主将 1 级、加点 0；不带星图 / 兵装 / 信物 / 坐骑 / 武将谱（本命淬炼、战法心得）/ 城建 / 部曲；专属兵器与招牌被动照有（武将自带）。
     // 局内升级照给加点和三选一，等级 / 经验不写回武将存档；结算只写钱币、武学残卷和最高连斩（finish）。
-    protected campaignGear() { return emptyGear(); }
-    protected campaignCharms(): ReturnType<GameScene['campaignCharms']> { return []; }
-    protected campaignHorse() { return undefined; }
     protected persistHeroProgress(): boolean { return false; }
     protected lordHeroXp(): number { return 0; }
     protected heroXpRate(): number { return GAUNTLET.from0.xpRate; }
@@ -255,29 +266,263 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     /** 三选一节奏：前期升级快，两次面板最短隔 pickGapSec 秒（中间升的级攒着连选）。 */
     protected pickGapOk(): boolean { return this.forcePickNow || this.elapsed - this.lastPickAt >= GAUNTLET.from0.pickGapSec; }
 
+    // ———— 局内 build（gauntlet-build.md）：稀有度四档、三选一类别分散、将星卡 ————
+    /** 本模式专有卡的稀有度（id → 档），基类出的卡按 cardRarity 推。 */
+    private gRarity = new Map<string, GRarity>();
+    /** 本局拿到的卡（结算「本局 build」用）：名字、图标、稀有度、类别。 */
+    gBuildLog: Array<{ id: string; name: string; icon?: string; rarity: GRarity; cat: GCategory }> = [];
+    rarityOf(o: UpgradeOption): GRarity { return cardRarity(o, this.gRarity.get(o.id)); }
+    /** 现在能出的本模式专有卡（将星；兵装 / 信物 / 坐骑在第二部分接）。 */
+    protected extraCards(): Array<{ rarity: GRarity; option: UpgradeOption }> {
+      const g = this.player.growth, out: Array<{ rarity: GRarity; option: UpgradeOption }> = [];
+      for (const c of starCardPool(g.stars, (a, t) => g.perk(a, t))) out.push({ rarity: c.rarity, option: this.starOption(c) });
+      return out.filter(x => !this.gExcluded.has(x.option.id));
+    }
+    private starOption(c: StarCard): UpgradeOption {
+      const keys = this.player.growth.stars.filter(id => STAR_BY_ID.get(id)?.kind === 'keystone').length;
+      const extra = c.kind === 'keystone' ? '\n主星 · 每局最多 ' + GAUNTLET_BUILD.keystoneMax + ' 颗（已有 ' + keys + ' 颗）' : c.kind === 'perk' && c.attr ? '\n' + STAR_REGIONS[c.attr].name + '专精 · 第 ' + c.tier + ' 档' : '';
+      const id = 'gauntlet_star_' + c.star, icon = this.textures.exists(starIconKey(c.star)) ? starIconKey(c.star) : 'growth_icon_wanrendi';
+      this.gRarity.set(id, c.rarity);
+      return { id, name: (c.kind === 'keystone' ? '主星 · ' : '将星 · ') + c.name, desc: c.desc + extra, kind: c.kind === 'keystone' ? 'rare' : 'passive', categoryLabel: c.kind === 'keystone' ? '主星' : '将星', scope: 'run', icon, apply: () => this.lightCardStar(c.star) };
+    }
+    /** 将星卡：点亮这颗星（不走连线 / 点数；开关关着也生效），生命上限涨了补上这一截。 */
+    lightCardStar(id: string): void {
+      const pl = this.player, g = pl.growth; if (g.stars.includes(id)) return;
+      g.cardStars = true; const oldMax = pl.maxHp; g.stars = [...g.stars, id]; pl.passive.areaMul = g.areaMultiplier();
+      if (pl.maxHp > oldMax) pl.heal(pl.maxHp - oldMax);
+    }
+    /** 按本阵稀有度表抽一张本模式专有卡（不和已在面板上的重复）。 */
+    private drawExtra(current: readonly UpgradeOption[], avoid: ReadonlySet<GCategory> = new Set()): UpgradeOption | null {
+      const r = rollRarity(this.gWave), W = GAUNTLET_BUILD.extraWeights, kinds = (Object.keys(W) as Array<keyof typeof W>).filter(k => !avoid.has(k === 'star' ? 'star' : 'gear'));
+      const order: Array<keyof typeof W> = []; const left = [...kinds]; while (left.length) { const t = left.reduce((n, k) => n + W[k], 0); let x = Math.random() * t, i = 0; for (; i < left.length - 1; i++) { x -= W[left[i]]; if (x < 0) break; } order.push(left.splice(i, 1)[0]); }
+      for (const k of order) {
+        const o = k === 'star' ? pickByRarity(this.extraCards().filter(x => !current.some(c => c.id === x.option.id)), r)?.option ?? null : k === 'gear' ? this.gearCard(r) : k === 'charm' ? this.charmCard(r) : this.horseCard(r);
+        if (o && !this.gExcluded.has(o.id) && !current.some(c => c.id === o.id)) return o;
+      }
+      return null;
+    }
+    /** 三选一尽量三类各一：同类重了，后一张换成本模式专有卡；本来就不重样时也有 extraChance 把「机缘」那张换掉。 */
+    private spreadCategories(opts: UpgradeOption[]): UpgradeOption[] {
+      const out = [...opts], seen = new Set<GCategory>(); let swapped = false;
+      for (let i = 0; i < out.length; i++) { const c = cardCategory(out[i].id); if (!seen.has(c)) { seen.add(c); continue; } const x = this.drawExtra(out, seen); if (x) { out[i] = x; seen.add(cardCategory(x.id)); swapped = true; } }
+      if (!swapped && out.length && Math.random() < GAUNTLET_BUILD.extraChance) { const k = out.findIndex(o => cardCategory(o.id) === 'other'), i = k >= 0 ? k : out.length - 1, others = new Set(out.filter((_, j) => j !== i).map(o => cardCategory(o.id))), x = this.drawExtra(out, others); if (x) out[i] = x; }
+      return out;
+    }
+    /** 卡面上的稀有度：右上角一行字（普通 / 精良 / 稀有 / 传说，品质色），精良以上加一圈同色描边。 */
+    private gRarityMarks: Array<{ g: Phaser.GameObjects.Graphics; t: Phaser.GameObjects.Text }> = [];
+    private paintRarity(): void {
+      this.cardViews.forEach((v, i) => {
+        let m = this.gRarityMarks[i];
+        if (!m || !m.g.scene) {
+          const g = this.add.graphics().setScrollFactor(0).setName('gauntlet-rarity-frame-' + i), t = this.add.text(v.w / 2 - 16, 16 - v.h / 2, '', { fontFamily: HEADING_FONT, fontSize: '13px', color: '#ffffff', resolution: 2 }).setOrigin(1, 0).setPadding(6, 2).setStroke('#120904', 3).setScrollFactor(0).setName('gauntlet-rarity-' + i);
+          v.root.add([g, t]); m = this.gRarityMarks[i] = { g, t };
+        }
+        const o = this.upgradeOptions[i], show = !!o && (this.mode === 'levelup' || this.gRarity.has(o.id)); // 升级三选一都标；战利品 / 抉择面板只标本模式专有卡
+        m.g.clear(); m.t.setVisible(!!o && show); if (!o || !show) return;
+        const r = this.rarityOf(o), R = RARITY[r];
+        m.t.setText(R.name).setColor(R.css);
+        if (r !== 'common') m.g.lineStyle(r === 'legend' ? 3 : 2.5, R.color, .95).strokeRoundedRect(-v.w / 2 + 5, -v.h / 2 + 5, v.w - 10, v.h - 10, 12);
+      });
+    }
+
+    // ———— 兵装 / 信物 / 坐骑卡（第二批第二部分；统筹确认：局内有效、不进行囊、结算不给）————
+    /** 本局穿的兵装（甲 / 盔 / 靴，每栏一件）、戴的信物（最多 GAUNTLET_BUILD.charmSlots 件，同名只一件）、骑的马。 */
+    private gGear: Partial<Record<'armor' | 'helm' | 'boots', ItemInstance>> = {}; private gCharms: ItemInstance[] = []; private gHorse: HorseDef | undefined;
+    /** 测试读：本局兵装 / 信物 / 坐骑。 */
+    get gauntletKit() { return { gear: Object.fromEntries(Object.entries(this.gGear).map(([k, v]) => [k, v ? itemName(v) + '·' + v.quality : null])), charms: this.gCharms.map(c => itemName(c) + '·' + c.quality), horse: this.gHorse?.name ?? null, mounted: !!this.mount, specials: [...this.player.growth.gear.specials], treasures: [...this.player.growth.build.treasures] }; }
+    /** 卡面图标：兵装 / 马的图在道具图集里（按帧），三选一卡只认整张贴图——第一次用时裁成一张单图。 */
+    private kitIcon(ic: { key: string; frame?: string }): string {
+      if (!ic.frame) return ic.key;
+      const key = 'gauntlet_item_' + ic.frame; if (this.textures.exists(key)) return key;
+      const f = this.textures.getFrame(ic.key, ic.frame); if (!f) return ic.key;
+      const c = this.textures.createCanvas(key, Math.max(1, f.cutWidth), Math.max(1, f.cutHeight)); if (!c) return ic.key;
+      c.context.drawImage(f.source.image as CanvasImageSource, f.cutX, f.cutY, f.cutWidth, f.cutHeight, 0, 0, f.cutWidth, f.cutHeight); c.refresh(); return key;
+    }
+    private affixText(item: ItemInstance): string {
+      const parts = item.affixes.map(a => { const d = AFFIXES[a.id]; return d.name + ' +' + (d.percent ? Math.round(a.value * 1000) / 10 + '%' : a.value.toFixed(1)); }), lines: string[] = [];
+      for (let i = 0; i < parts.length; i += 2) lines.push(parts.slice(i, i + 2).join(' · ')); // 两条一行：传说兵装 4 条词条 + 专属特效也放得下
+      if (item.special) lines.push(SPECIALS[item.special].name + '：' + SPECIALS[item.special].desc);
+      return lines.join('\n');
+    }
+    /** 稀有度 → 兵装品质（普通出白 / 绿，精良蓝、稀有紫、传说橙）。 */
+    private qualityOf(r: GRarity): ItemQuality { return r === 'legend' ? 'orange' : r === 'rare' ? 'purple' : r === 'fine' ? 'blue' : Math.random() < .5 ? 'white' : 'green'; }
+    private kitChapter(): number { return ARC_CHAPTER[waveTroopSet(this.gWave).troops.arc]; }
+    /** 一张兵装卡：随机一栏、这一档品质，比这一栏现在穿的好才出（每栏一件，新的换旧的）。 */
+    private gearCard(r: GRarity): UpgradeOption | null {
+      const q = this.qualityOf(r), slots = (['armor', 'helm', 'boots'] as const).filter(s => { const cur = this.gGear[s]; return !cur || QUALITY_ORDER.indexOf(cur.quality) < QUALITY_ORDER.indexOf(q); });
+      if (!slots.length) return null;
+      const slot = slots[Math.floor(Math.random() * slots.length)], item = rollItem(q, Math.random, slot, this.kitChapter()), cur = this.gGear[slot];
+      const id = 'gauntlet_gear_' + item.uid; this.gRarity.set(id, r);
+      return { id, name: '兵装 · ' + itemName(item), desc: this.affixText(item) + (cur ? '\n换下：' + itemName(cur) : ''), kind: 'relic', categoryLabel: SLOTS[slot].name + ' · ' + QUALITIES[q].name + ' · 不进行囊', scope: 'run', icon: this.kitIcon(itemIcon(this, item)),
+        apply: () => { this.gGear[slot] = item; this.refreshGear(); } };
+    }
+    /** 一张信物卡：这一档品质能出的信物（同名只一件）；戴满了换下品质最低的那件。 */
+    private charmCard(r: GRarity): UpgradeOption | null {
+      const q = this.qualityOf(r), held = new Set(this.gCharms.map(c => c.base));
+      let item: ItemInstance | null = null; for (let i = 0; i < 8 && !item; i++) { const c = rollCharm(q, Math.random, undefined, this.kitChapter()); if (c && !held.has(c.base)) item = c; }
+      if (!item) return null;
+      const full = this.gCharms.length >= GAUNTLET_BUILD.charmSlots, worst = full ? [...this.gCharms].sort((a, b) => QUALITY_ORDER.indexOf(a.quality) - QUALITY_ORDER.indexOf(b.quality))[0] : null;
+      if (worst && QUALITY_ORDER.indexOf(worst.quality) >= QUALITY_ORDER.indexOf(q)) return null; // 戴满了、这件不比最差的那件好：不出
+      const def = charmDef(item.base), it = item, id = 'gauntlet_charm_' + it.uid; this.gRarity.set(id, r);
+      return { id, name: '信物 · ' + itemName(it), desc: (def?.desc(q) ?? '') + '\n' + this.affixText(it) + (worst ? '\n换下：' + itemName(worst) : ''), kind: 'relic', categoryLabel: '信物 · ' + QUALITIES[q].name + ' · 不进行囊', scope: 'run', icon: this.kitIcon(itemIcon(this, it)),
+        apply: () => { this.gCharms = [...this.gCharms.filter(c => c !== worst), it]; this.refreshGear(); } };
+    }
+    /** 一张坐骑卡：这一档的马（驽马普通、名驹精良、赤兔 / 绝影 / 的卢传说；没有稀有档的马）；只能骑一匹，新的换旧的。 */
+    private horseCard(r: GRarity): UpgradeOption | null {
+      const want = (h: HorseDef) => { const q = horseQuality(h); return r === 'legend' ? q === 'orange' : r === 'common' ? q === 'white' : r === 'fine' && q === 'blue'; };
+      const pool = HORSES.filter(h => want(h) && h.id !== this.gHorse?.id); if (!pool.length) return null;
+      const h = pool[Math.floor(Math.random() * pool.length)], id = 'gauntlet_horse_' + h.id; this.gRarity.set(id, r);
+      return { id, name: '坐骑 · ' + h.name + (h.legend ? ' ★' : ''), desc: horseBonusText(h) + '\n骑马冲阵（同战役坐骑）' + (this.gHorse ? '\n换下：' + this.gHorse.name : ''), kind: h.legend ? 'rare' : 'relic', categoryLabel: '坐骑', scope: 'run', icon: this.kitIcon(horseIcon(this, h.id)),
+        apply: () => { this.gHorse = h; this.refreshGear(); this.equipMount(h); } };
+    }
+    protected campaignGear() { return gearFromItems([...Object.values(this.gGear ?? {}).filter((x): x is ItemInstance => !!x), ...(this.gCharms ?? [])], this.gHorse); }
+    protected campaignCharms(): ReturnType<GameScene['campaignCharms']> { return [...(this.gCharms ?? [])]; }
+    protected campaignHorse() { return this.gHorse; }
+
+    // ———— 奇遇（第 3 / 6 / 9 阵斩将后额外一次三选一，只出改变打法的大件）与战利品保底稀有卡 ————
+    /** 本局已拿的军阵（奇遇给；最多两个阵位，新的当主阵）。 */
+    private gFormations: FormationId[] = [];
+    /** 测试读：奇遇开过哪几阵、本局军阵。 */
+    gQiyuWaves: number[] = [];
+    get gauntletFormations() { return { held: [...this.gFormations], loadout: [...(this.formationRt?.loadout ?? [])], current: this.formationRt?.current ?? null }; }
+    /** 本命兵器的下一级卡（本命 Lv5 前 = 本命升级；之后 = 专职精进），从基类出卡里找。 */
+    private ownUpgrade(): UpgradeOption | null {
+      for (let i = 0; i < 24; i++) { const o = super.upgradeChoices().find(x => /^(signature_weapon_|weapon_over_)/.test(x.id)); if (o) return o; }
+      return null;
+    }
+    /** 奇遇的候选：主星、传说坐骑、军阵、本命精进（连升两级）、传说兵装（兜底）。每类一张，按顺序挑三类。 */
+    private qiyuOptions(): UpgradeOption[] {
+      const out: UpgradeOption[] = [], g = this.player.growth;
+      const key = starCardPool(g.stars, (a, t) => g.perk(a, t)).filter(c => c.kind === 'keystone'); if (key.length) out.push(this.starOption(key[Math.floor(Math.random() * key.length)]));
+      if (!this.gHorse?.legend) { const h = this.horseCard('legend'); if (h) out.push(h); }
+      const fs = FORMATION_IDS.filter(id => !this.gFormations.includes(id));
+      if (fs.length && this.formationRt) { const id = fs[Math.floor(Math.random() * fs.length)], F = FORMATIONS[id], oid = 'gauntlet_formation_' + id; this.gRarity.set(oid, id === 'bazhen' ? 'legend' : 'rare');
+        out.push({ id: oid, name: '军阵 · ' + F.name, desc: F.main + '\n主将：' + F.hero + '\n要带部曲（花钱币招兵）· 按 X 变阵', kind: 'rare', categoryLabel: '军阵 · ' + (this.gFormations.length ? '新阵当主阵' : '第一个阵'), scope: 'run', icon: this.textures.exists('formation_icon_' + id) ? 'formation_icon_' + id : 'growth_icon_eight_trigrams', apply: () => this.takeFormation(id) }); }
+      const w = this.ownUpgrade(); if (w) { const id = 'gauntlet_qiyu_weapon'; this.gRarity.set(id, 'rare');
+        out.push({ ...w, id, name: w.name.replace(/ · Lv\.\d+$/, '') + ' · 连升两级', desc: '本命兵器连升两级（Lv5 后为专职精进）\n' + w.desc, categoryLabel: '本命精进', apply: (p, ws, gr) => { w.apply(p, ws, gr); this.ownUpgrade()?.apply(p, ws, gr); } }); }
+      const gear = this.gearCard('legend'); if (gear) out.push(gear);
+      return out.slice(0, 3);
+    }
+    /** 拿一个军阵：新的当主阵，原来的主阵退成备阵（两个阵位）。 */
+    takeFormation(id: FormationId): void { this.gFormations = [id, ...this.gFormations.filter(x => x !== id)]; this.formationRt?.setLoadout(this.gFormations.slice(0, 2)); }
+    /**
+     * 斩将的战利品之后：第 3 / 6 / 9 阵再开一次奇遇（无尽不开）。先记下，等面板都关了（战利品之后基类会接着弹攒着的升级三选一）
+     * 再由 update 打开——直接开会被随后弹出的升级面板顶掉，选了也不生效。
+     */
+    private gQiyuPending = false;
+    private maybeQiyu(): void { if (!this.gEndless && GAUNTLET_BUILD.qiyuWaves.includes(this.gWave) && !this.gQiyuWaves.includes(this.gWave)) this.gQiyuPending = true; }
+    private openQiyu(): void {
+      this.gQiyuPending = false;
+      const opts = this.qiyuOptions(); if (!opts.length) return;
+      this.gQiyuWaves.push(this.gWave);
+      this.showLoot(`奇遇 · 第 ${this.gWave} 阵`, '只出改变打法的大件 · 选一样', opts, () => {});
+    }
+    /** 战利品第三张：保底一张稀有以上的本模式专有卡（将星 / 兵装 / 信物 / 坐骑；传说约四分之一），都没有就给军资。 */
+    private lootRareCard(): UpgradeOption | null {
+      const r: GRarity = Math.random() < .25 ? 'legend' : 'rare';
+      for (const k of ['star', 'gear', 'charm', 'horse'].sort(() => Math.random() - .5)) {
+        const o = k === 'star' ? pickByRarity(this.extraCards().filter(x => x.rarity === 'rare' || x.rarity === 'legend'), r)?.option ?? null : k === 'gear' ? this.gearCard(r) : k === 'charm' ? this.charmCard(r) : this.horseCard('legend');
+        if (o) return o;
+      }
+      return null;
+    }
+
+    // ———— 花钱币招兵（钱币小出口）：斩将后清场那几秒，屏幕下方一个按钮 ————
+    private gRecruitBtn: Phaser.GameObjects.Text | null = null;
+    /** 本局招了几次 / 几名兵（结算「本局 build」用）。 */
+    gRecruits = { times: 0, men: 0 };
+    /** 现在能不能招：清场阶段、没有面板。 */
+    private recruitOpen(): boolean { return this.gPhase === 'clear' && this.mode === 'none' && !this.over && !!this.player?.alive; }
+    /** 招一次：按本阵兵种表随机一种，per 名，花 recruitCost(阵数) 钱币；兵的阶抬到本阵档位。钱不够返回 false。 */
+    recruitTroops(): boolean {
+      const cost = recruitCost(this.gWave), T = recruitTier(this.gWave); if (this.legion.food < cost) return false;
+      const kind = T.kinds[Math.floor(Math.random() * T.kinds.length)];
+      this.legion.food -= cost; for (let i = 0; i < 3 && this.legion.levels[kind] < T.level; i++) this.legion.train(kind, true);
+      this.legion.recruit(kind, GAUNTLET_RECRUIT.per, true); this.gRecruits.times++; this.gRecruits.men += GAUNTLET_RECRUIT.per;
+      this.sfx.play('gong'); this.showGrowthNotice(`招兵 · ${TROOPS[kind].name} ×${GAUNTLET_RECRUIT.per}（${this.legion.levels[kind]} 阶）· −${cost} 钱币`);
+      this.paintRecruit(); return true;
+    }
+    /** 招兵按钮：清场时出现在屏幕下方正中（不压技能栏），写这一阵能招的兵种、价格；钱不够变灰。 */
+    private paintRecruit(): void {
+      const show = this.recruitOpen();
+      if (!show) { this.gRecruitBtn?.setVisible(false); return; }
+      let b = this.gRecruitBtn;
+      if (!b || !b.scene) {
+        b = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 132, '', { fontFamily: HEADING_FONT, fontSize: '20px', color: '#f6e6c2', resolution: 2, align: 'center' }).setOrigin(.5).setPadding(22, 10).setBackgroundColor('rgba(40,26,14,0.88)').setStroke('#120904', 4).setScrollFactor(0).setDepth(DEPTH.hud + 5).setName('gauntlet-recruit')
+          .setInteractive({ useHandCursor: true }).on('pointerdown', () => { if (this.recruitOpen()) this.recruitTroops(); });
+        this.gRecruitBtn = b;
+      }
+      const cost = recruitCost(this.gWave), T = recruitTier(this.gWave), ok = this.legion.food >= cost;
+      b.setText(`招兵 · ${GAUNTLET_RECRUIT.per} 名 · ${cost} 钱币\n${T.kinds.map(k => TROOPS[k].name).join(' / ')} · ${T.level} 阶 · 兵力 ${this.legion.count}`).setVisible(true).setAlpha(ok ? 1 : .55);
+    }
+    // ———— 结算「本局 build」（局内 build 第 6 条）：斩将头像那一块加两个页签，「本局 build」按类列出这一局拿到的东西 ————
+    /** 本局 build 按类汇总：本命·武艺、战法、将星、兵装（兵装 / 信物 / 坐骑）、军阵·部曲、副将；每项 图标 + 短名 + 稀有度。 */
+    gauntletBuild(): Array<{ cat: string; items: Array<{ name: string; icon: string; rarity: GRarity }> }> {
+      const fam = (id: string) => id.replace(/^(martial_.+)_\d+$/, '$1').replace(/^weapon_over_\d+$/, 'weapon_over');
+      const last = new Map<string, { id: string; name: string; icon?: string; rarity: GRarity; cat: GCategory }>();
+      for (const e of this.gBuildLog) if (!/^gauntlet_(follow|spoils|replace_|keep|endless|settle)/.test(e.id)) last.set(fam(e.id), e); // 收副将 / 取辎重 / 收兵这些是面板动作，不算 build（副将另列）
+      const pick = (cat: GCategory) => [...last.values()].filter(e => e.cat === cat && !/^gauntlet_(gear|charm|horse)_/.test(e.id)).map(e => ({ name: e.name.replace(/^(将星|主星) · /, ''), icon: e.icon ?? 'icon_passive', rarity: e.rarity }));
+      const kit: Array<{ name: string; icon: string; rarity: GRarity }> = [];
+      const qr = (q: ItemQuality): GRarity => q === 'orange' ? 'legend' : q === 'purple' ? 'rare' : q === 'blue' ? 'fine' : 'common';
+      for (const it of [...Object.values(this.gGear).filter((x): x is ItemInstance => !!x), ...this.gCharms]) kit.push({ name: itemName(it), icon: this.kitIcon(itemIcon(this, it)), rarity: qr(it.quality) });
+      if (this.gHorse) kit.push({ name: this.gHorse.name, icon: this.kitIcon(horseIcon(this, this.gHorse.id)), rarity: this.gHorse.legend ? 'legend' : horseQuality(this.gHorse) === 'white' ? 'common' : 'fine' });
+      const army: Array<{ name: string; icon: string; rarity: GRarity }> = this.gFormations.map(id => ({ name: FORMATIONS[id].name, icon: this.textures.exists('formation_icon_' + id) ? 'formation_icon_' + id : 'growth_icon_eight_trigrams', rarity: id === 'bazhen' ? 'legend' : 'rare' as GRarity }));
+      if (this.gRecruits.men) army.push({ name: '招兵 ' + this.gRecruits.men + ' 名', icon: 'growth_icon_tiger_tally', rarity: 'common' });
+      const out = [
+        { cat: '本命 · 武艺', items: pick('own') }, { cat: '战法', items: pick('tactic') }, { cat: '将星', items: pick('star') },
+        { cat: '兵装 · 信物 · 坐骑', items: kit }, { cat: '军阵 · 部曲', items: army },
+        { cat: '副将', items: this.gFollowers.map(({ boss }) => ({ name: boss.name, icon: this.portrait(boss), rarity: 'rare' as GRarity })) },
+        { cat: '机缘', items: pick('other') },
+      ];
+      return out.filter(g => g.items.length);
+    }
+    /** 结算画面上的「本局 build」块：按类分栏，每栏标题 + 图标格（两行放不下写 +N）。 */
+    private drawBuild(top: number, h: number): Phaser.GameObjects.GameObject[] {
+      const groups = this.gauntletBuild(), objs: Phaser.GameObjects.GameObject[] = [], gap = 12, W = Math.min(1200, (GAME_WIDTH - 48) / (this.resultPanel.scaleX || 1)), x0 = this.resultTexts.subtitle.x - W / 2; // 结算面板整体是缩放过的：按面板里的坐标算可用宽度
+      if (!groups.length) { objs.push(this.add.text(this.resultTexts.subtitle.x, top + h / 2, '这一局还没拿到什么', { fontFamily: HEADING_FONT, fontSize: '16px', color: '#c9b48a', resolution: 2 }).setOrigin(.5).setScrollFactor(0).setName('gauntlet-build-empty')); return objs; }
+      const weight = groups.map(g => Math.max(1.2, Math.min(4, g.items.length))), tw = weight.reduce((a, b) => a + b, 0), avail = W - gap * (groups.length - 1);
+      let x = x0;
+      groups.forEach((g, gi) => {
+        const w = avail * weight[gi] / tw, S = 30, cell = 46, cols = Math.max(1, Math.floor(w / cell)), rows = 2, max = cols * rows;
+        objs.push(this.add.rectangle(x + w / 2, top + h / 2, w, h, 0x1a120b, .55).setStrokeStyle(1, 0xd9b46a, .5).setScrollFactor(0).setName('gauntlet-build-col'));
+        { const hd = this.add.text(x + w / 2, top + 6, `${g.cat} · ${g.items.length}`, { fontFamily: HEADING_FONT, fontSize: '14px', color: '#f0dcae', resolution: 2 }).setOrigin(.5, 0).setStroke('#1a120b', 3).setScrollFactor(0).setName('gauntlet-build-head'); if (hd.width > w - 8) hd.setScale((w - 8) / hd.width); objs.push(hd); } // 窄栏标题缩到放得下
+        const shown = g.items.length > max ? g.items.slice(0, max - 1) : g.items, ox = x + (w - Math.min(cols, shown.length) * cell) / 2 + cell / 2;
+        shown.forEach((it, i) => {
+          const cx = ox + (i % cols) * cell, cy = top + 40 + Math.floor(i / cols) * 48, R = RARITY[it.rarity];
+          objs.push(this.add.circle(cx, cy, S / 2 + 3, 0x0d0905, .9).setStrokeStyle(2, R.color, it.rarity === 'common' ? .5 : 1).setScrollFactor(0).setName('gauntlet-build-ring'));
+          const img = this.add.image(cx, cy, this.textures.exists(it.icon) ? it.icon : 'icon_passive').setScrollFactor(0).setName('gauntlet-build-icon'); img.setScale(Math.min(S / img.width, S / img.height)); objs.push(img);
+          objs.push(this.add.text(cx, cy + S / 2 + 1, it.name.length > 4 ? it.name.slice(0, 4) : it.name, { fontFamily: FONT, fontSize: '10px', color: R.css, resolution: 2 }).setOrigin(.5, 0).setStroke('#120904', 3).setScrollFactor(0).setName('gauntlet-build-name'));
+        });
+        if (g.items.length > max) objs.push(this.add.text(ox + ((max - 1) % cols) * cell, top + 40 + Math.floor((max - 1) / cols) * 48, '+' + (g.items.length - max + 1), { fontFamily: HEADING_FONT, fontSize: '18px', color: '#f0dcae', resolution: 2 }).setOrigin(.5).setScrollFactor(0).setName('gauntlet-build-more'));
+        x += w + gap;
+      });
+      return objs;
+    }
+
     // ———— 换一批 / 排除（掌控感）：每局 2 次免费换一批，之后花钱币、逐次涨价；每局 1 次排除（点一张卡，本局不再出现）————
     private gRerollFree = 0; private gRerollPaid = 0; private gExcludes = 0; private gExcluded = new Set<string>(); private gExcluding = false;
     private gExcludeBtn: Phaser.GameObjects.Text | null = null;
     protected rerollCost(): number { return this.gRerollFree > 0 ? 0 : GAUNTLET.from0.rerollBase + GAUNTLET.from0.rerollStep * this.gRerollPaid; }
-    protected rerollLabel(cost: number): string { return this.gRerollFree > 0 ? `换一批 · 免费（本局还剩 ${this.gRerollFree} 次）` : `换一批 · ${cost} 钱币`; }
+    protected rerollLabel(cost: number): string { return this.gRerollFree > 0 ? `换一批 · 免费 ×${this.gRerollFree}` : `换一批 · ${cost} 钱币`; }
     protected rerollSpent(cost: number): void { if (this.gRerollFree > 0) this.gRerollFree--; else { this.legion.food -= cost; this.gRerollPaid++; } }
     /** 三选一：排除过的卡不出（缺的位置重抽补上）。 */
     protected upgradeChoices(): UpgradeOption[] {
-      let out = super.upgradeChoices().filter(o => !this.gExcluded.has(o.id));
+      const first = super.upgradeChoices(); let out: UpgradeOption[] = [];
+      for (const o of first) { if (!this.gExcluded.has(o.id)) { out.push(o); continue; } let rep: UpgradeOption | null = null; for (let i = 0; i < 12 && !rep; i++) rep = super.upgradeChoices().find(x => cardCategory(x.id) === cardCategory(o.id) && !this.gExcluded.has(x.id) && !out.some(y => y.id === x.id) && !first.some(y => y.id === x.id)) ?? null; if (rep) out.push(rep); } // 排除掉的那张：同类补一张
       for (let i = 0; i < 12 && out.length < 3; i++) for (const o of super.upgradeChoices()) if (out.length < 3 && !this.gExcluded.has(o.id) && !out.some(x => x.id === o.id)) out.push(o);
       if (!out.length) out = super.upgradeChoices();
-      return out;
+      return this.spreadCategories(out);
     }
     protected chooseUpgrade(index: number): void {
-      if (!this.gExcluding || this.mode !== 'levelup') { super.chooseUpgrade(index); return; }
+      if (!this.gExcluding || this.mode !== 'levelup') { const o = this.upgradeOptions[index]; if (o && ((this.mode === 'levelup' && this.pendingLevels > 0) || (this.mode === 'bossloot' && this.lootContinue))) this.gBuildLog.push({ id: o.id, name: o.name, icon: o.icon, rarity: this.rarityOf(o), cat: cardCategory(o.id) }); super.chooseUpgrade(index); return; }
       const o = this.upgradeOptions[index]; if (!o) return;
       this.gExcluding = false; this.gExcludes--; this.gExcluded.add(o.id);
       const rep = this.upgradeChoices().find(x => !this.upgradeOptions.some(y => y.id === x.id));
       if (rep) this.upgradeOptions[index] = rep; else this.upgradeOptions.splice(index, 1);
       this.showGrowthNotice(`已排除「${o.name}」· 本局不再出现`); this.renderCards();
     }
-    protected renderCards(): void { super.renderCards(); this.paintExclude(); }
-    protected setMode(mode: Parameters<GameScene['setMode']>[0]): void { if (mode !== 'levelup') this.gExcluding = false; super.setMode(mode); this.paintExclude(); }
+    protected renderCards(): void { super.renderCards(); this.paintExclude(); this.paintRarity(); }
+    protected setMode(mode: Parameters<GameScene['setMode']>[0]): void { if (mode !== 'levelup') this.gExcluding = false; super.setMode(mode); this.paintExclude(); this.paintRarity(); }
     /** 排除按钮：在「换一批」左边，同一套字样；只在升级三选一时显示。 */
     private paintExclude(): void {
       const panel = this.levelPanel, rr = panel?.getByName('upgrade-reroll') as Phaser.GameObjects.Text | null; if (!panel || !rr) return;
@@ -288,8 +533,9 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
           .setInteractive({ useHandCursor: true }).on('pointerdown', () => { if (this.mode === 'levelup' && this.gExcludes > 0) { this.gExcluding = !this.gExcluding; this.paintExclude(); } });
         panel.add(b); this.gExcludeBtn = b;
       }
-      b.setText(this.gExcluding ? '点一张卡排除 · 再点这里取消' : this.gExcludes > 0 ? `排除一张 · 本局 ${this.gExcludes} 次` : '排除 · 本局已用完').setColor(this.gExcluding ? '#ff9b7a' : rr.style.color as string).setAlpha(this.gExcludes > 0 ? 1 : .5);
-      b.setPosition(rr.x - rr.displayWidth - 6, rr.y).setVisible(this.mode === 'levelup' && rr.visible);
+      b.setText(this.gExcluding ? '点一张卡排除 · 再点取消' : this.gExcludes > 0 ? `排除一张 · ×${this.gExcludes}` : '排除 · 已用完').setColor(this.gExcluding ? '#ff9b7a' : rr.style.color as string).setAlpha(this.gExcludes > 0 ? 1 : .5);
+      b.setPosition(rr.x, rr.y + rr.displayHeight - 4).setVisible(this.mode === 'levelup' && rr.visible); // 「换一批」正下方、右对齐（放左边会压住面板标题）
+      (this.levelPanel.getByName('upgrade-lock-note') as Phaser.GameObjects.Text | null)?.setText('选定后本局不可更改 · 名将连战从 0 开局，局内成长不带出'); // 战役那句「行营休整重整」本模式没有
     }
 
     /**
@@ -334,13 +580,14 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       this.gCtrl?.updateDeath?.(delta);
       if (this.over || !this.player?.alive) return;
       this.hudTexts.wave.setText(''); // 阵数看顶部十阵进度条（总制作人 11-21：去掉左上角那行，兵力行保留）
-      this.updateTrack();
+      this.updateTrack(); this.paintRecruit();
       if (this.mode !== 'none') return;
       this.gStrikes?.update();
       if (this.gPhase === 'mow' && this.waveT >= GAUNTLET.mowSec) this.startBoss();
       else if (this.gPhase === 'boss' && !this.boss?.active && !this.bossKilled) this.spawnBoss(); // 首领没刷出来（落点被挡）：下一帧再试
       else if (this.gPhase === 'clear') {
-        if (!this.gLootShown && this.waveT >= 1.8) { this.gLootShown = true; this.openLoot(); }
+        if (this.gQiyuPending) this.openQiyu();
+        else if (!this.gLootShown && this.waveT >= 1.8) { this.gLootShown = true; this.openLoot(); }
         else if (this.gLootShown && this.waveT >= GAUNTLET.clearSec) { if (this.gWave === GAUNTLET.waves && !this.gEndless) this.openClearChoice(); else this.nextWave(); }
       }
     }
@@ -708,9 +955,9 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       const opts: UpgradeOption[] = [
         { id: 'gauntlet_follow', name: '收为副将 · ' + fb.name, desc: `${fb.name}本局跟着你打（用他自己的形象，名将招式能用的照用）\n副将最多 ${GAUNTLET.followerMax} 位${full ? ' · 已满，选了再挑替换谁' : ''}`, kind: 'foundation', categoryLabel: '战利品', scope: 'run', icon: this.portrait(fb), apply: () => this.takeFollower(fb) },
         { id: 'gauntlet_spoils', name: '取其辎重', desc: `钱币 +${food}\n立刻回满生命`, kind: 'foundation', categoryLabel: '战利品', scope: 'once', icon: 'growth_icon_pickup', apply: () => { this.coinBurst(this.player.x, this.player.y, food); this.legion.food += food; this.player.heal(this.player.maxHp); } }, // 钱不飘字：铜钱从主将处飞进行囊（coins.md）
-        supplyOption(b.chapter),
+        this.lootRareCard() ?? supplyOption(b.chapter), // 第三张：保底一张稀有以上（统筹 11-21 局内 build 第 3 条）
       ];
-      this.showLoot(`斩将 · ${b.name} · 战利品三选一`, '本局有效 · 选一样', opts, () => { if (this.gPendingReplace) { const nb = this.gPendingReplace; this.gPendingReplace = null; this.openReplace(nb); } });
+      this.showLoot(`斩将 · ${b.name} · 战利品三选一`, '本局有效 · 选一样', opts, () => { if (this.gPendingReplace) { const nb = this.gPendingReplace; this.gPendingReplace = null; this.openReplace(nb); } else this.maybeQiyu(); });
     }
     private showLoot(title: string, hint: string, opts: UpgradeOption[], after: () => void): void {
       this.sfx.level();
@@ -735,7 +982,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       const opts: UpgradeOption[] = this.gFollowers.slice(0, 3).map(({ f, boss }) => ({ id: 'gauntlet_replace_' + boss.id, name: '换下 ' + boss.name, desc: `${boss.name}离队，${nb.name}入队`, kind: 'foundation' as const, categoryLabel: '副将', scope: 'run' as const, icon: this.portrait(boss),
         apply: () => { this.dropFollower(f); this.takeFollower(nb); } }));
       opts.push({ id: 'gauntlet_keep', name: '不收 ' + nb.name, desc: '副将不变', kind: 'foundation', categoryLabel: '副将', scope: 'once', icon: this.portrait(nb), apply: () => {} });
-      this.showLoot(`副将已满 · 收 ${nb.name} 换下谁`, '选一位离队，或者不收', opts, () => {});
+      this.showLoot(`副将已满 · 收 ${nb.name} 换下谁`, '选一位离队，或者不收', opts, () => this.maybeQiyu());
     }
     private dropFollower(f: Follower): void {
       const sq = this.followers; if (!sq) return; const i = sq.members.indexOf(f); if (i >= 0) { f.destroy(); sq.members.splice(i, 1); sq.members.forEach((m, k) => { m.slot = k; }); }
@@ -763,6 +1010,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     // ———— 结算：打到第几阵、斩了哪些名将（头像一排）、用时、最高连斩；按斩将数给钱币 / 武学残卷 ————
     protected finish(victory: boolean, reason: RunEndReason = 'death') {
       if (this.over) return;
+      this.gRecruitBtn?.setVisible(false);
       super.finish(victory, reason);
       const kills = this.gKills.length, debug = this.debugRun(), test = isChapterTestRun(), before = readGauntletBest(test);
       const record = writeGauntletBest(kills, this.gWave, Math.round(this.elapsed * 1000), test), best = Math.max(before.kills, kills);
@@ -786,20 +1034,32 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     }
     /** 结算画面（电脑版）：基类画完奖励格以后，底下一行战况换成本模式的、副标题下面排斩将头像（基类可能晚些再画一遍，所以挂在这里）。 */
     private gResult: { kills: number; best: number; record: boolean } | null = null;
+    /** 结算那一块现在显示哪个页签：斩将头像 / 本局 build。 */
+    gResultTab: 'kills' | 'build' = 'kills';
     protected presentResult(victory: boolean): void {
       super.presentResult(victory); const r = this.gResult; if (!r || !this.resultPanel) return; const { kills, best, record } = r;
-      for (const o of [...this.resultPanel.list]) if (o.name.startsWith('gauntlet-face')) o.destroy();
+      for (const o of [...this.resultPanel.list]) if (/^gauntlet-(face|build|tab)/.test(o.name)) o.destroy();
       // 电脑版：底下一行战况换成本模式的（第几阵 · 斩将 · 用时 · 最高连斩）；斩将头像排在分隔线下面
       (this.resultPanel.getByName('result-stats') as Phaser.GameObjects.Text | null)?.setText([`第 ${this.gWave} 阵`, `斩将 ${kills} 位`, '用时 ' + this.formatTime(this.elapsed), `最高连斩 ${best}${record ? '（新纪录）' : ''}`].join('　·　'));
       // 斩将一排（11-21 总制作人「头像太小」）：每位一块同尺寸的底牌，人像裁掉留白后等比放进底牌、脚踩同一条底线，名字在牌下；最多 12 位（无尽多了取最后 12 位）
-      const row = this.gKills.slice(-12), n = row.length; if (!n) return;
+      const row = this.gKills.slice(-12), n = row.length, faces: Phaser.GameObjects.GameObject[] = [];
       const PW = 76, PH = 92, gap = n > 10 ? 10 : 16, w = n * PW + (n - 1) * gap, x0 = this.resultTexts.subtitle.x - w / 2 + PW / 2, top = this.resultTop + 146, cy = top + PH / 2;
       row.forEach((b, i) => {
         const x = x0 + i * (PW + gap), plate = this.add.rectangle(x, cy, PW, PH, 0x1a120b, .72).setStrokeStyle(1.5, 0xd9b46a, .8).setScrollFactor(0).setName('gauntlet-face-plate');
         const img = this.add.image(x, top + PH - 6, this.portrait(b)).setOrigin(.5, 1).setScrollFactor(0).setName('gauntlet-face'); img.setScale(Math.min((PW - 10) / img.width, (PH - 12) / img.height));
         const t = this.add.text(x, top + PH + 7, b.name, { fontFamily: HEADING_FONT, fontSize: '15px', color: '#f0dcae', resolution: 2 }).setOrigin(.5, 0).setStroke('#1a120b', 3).setScrollFactor(0).setName('gauntlet-face-name');
-        this.resultPanel.add([plate, img, t]);
+        faces.push(plate, img, t);
       });
+      if (!n) faces.push(this.add.text(this.resultTexts.subtitle.x, cy, '这一局还没斩将', { fontFamily: HEADING_FONT, fontSize: '16px', color: '#c9b48a', resolution: 2 }).setOrigin(.5).setScrollFactor(0).setName('gauntlet-face-empty'));
+      this.resultPanel.add(faces);
+      // 「本局 build」（局内 build 第 6 条）：和斩将头像共用这一块，分隔线上两个页签切换
+      const build = this.drawBuild(top + 2, PH + 14); this.resultPanel.add(build); // 两行图标 + 小字，底边不超过斩将名字那一行（下面是奖励格）
+      const tab = (label: string, key: 'kills' | 'build', x: number) => this.add.text(x, top - 13, label, { fontFamily: HEADING_FONT, fontSize: '14px', color: '#f0dcae', resolution: 2 }).setOrigin(.5).setPadding(12, 2) /* 骑在分隔线上，不压副标题 */.setBackgroundColor('#1a120b').setStroke('#0a0603', 3).setScrollFactor(0).setName('gauntlet-tab-' + key)
+        .setInteractive({ useHandCursor: true }).on('pointerdown', () => setTab(key));
+      const tabs = { kills: tab('斩将 · ' + n, 'kills', this.resultTexts.subtitle.x - 78), build: tab('本局 build', 'build', this.resultTexts.subtitle.x + 78) }; this.resultPanel.add([tabs.kills, tabs.build]);
+      const setTab = (key: 'kills' | 'build') => { this.gResultTab = key; for (const o of faces) (o as Phaser.GameObjects.Text).setVisible(key === 'kills'); for (const o of build) (o as Phaser.GameObjects.Text).setVisible(key === 'build');
+        for (const k of ['kills', 'build'] as const) tabs[k].setColor(k === key ? '#ffd76a' : '#9d8f78').setBackgroundColor(k === key ? '#3a2614' : '#1a120b'); };
+      setTab(this.gResultTab);
       // 奖励格挪到头像排下面（基类按分隔线到要事之间居中摆，会和头像排重叠）
       const rw = this.resultPanel.getByName('result-rewards') as Phaser.GameObjects.Container | null, below = top + PH + 36;
       if (rw) { const empty = rw.list.length === 1 && rw.list[0] instanceof Phaser.GameObjects.Text; /* 「本场没有新的奖励」一行字：容器原点在字中间 */ rw.setY(Math.max(rw.y, empty ? below + 14 : below)); }

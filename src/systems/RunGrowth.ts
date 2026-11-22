@@ -150,7 +150,7 @@ export class RunGrowth {
   /** 主属性专精档位（0–3）：主属性满 4 / 7 / 10 点各一档。 */
   primaryTier(): number { const p = primaryAttribute(this.character); if (p && starMapOn()) return [1, 2, 3].filter(t => perkLit(this.stars, p, t)).length; return p ? PRIMARY_TIERS.filter(n => this.attributes[p] >= n).length : 0; }
   /** 是否已解锁某属性的第 tier 档专精（只看主属性）。星图开着：改查对应要星是否点亮（第 1 / 2 / 3 档 = 该区 NC / NL1 / NL2，任何武将都能跨区拿）。 */
-  perk(id: AttributeId, tier: number): boolean { return starMapOn() ? perkLit(this.stars, id, tier) : primaryAttribute(this.character) === id && this.primaryTier() >= tier; }
+  perk(id: AttributeId, tier: number): boolean { return starMapOn() ? perkLit(this.stars, id, tier) : (primaryAttribute(this.character) === id && this.primaryTier() >= tier) || (this.cardStars && perkLit(this.stars, id, tier)); } // 将星卡：主属性靠加点、其余三区的专精靠卡
   /** 敏捷「疾影」：暴击后攻速提升的截止时刻；力量「破阵」：武器命中计数。 */
   hasteUntil = -Infinity; crushCount = 0;
   /**
@@ -158,6 +158,13 @@ export class RunGrowth {
    * 专精 perk() 查要星；关着时这个字段没人读。
    */
   stars: string[] = [];
+  /**
+   * 名将连战的将星卡：星做成局内三选一卡（拿一颗点亮一颗，不走连线 / 点数）。开关关着时也让点亮的星生效——只管效果，
+   * 四维点数与加点方式照旧（setStars 不改 attributes、lightStar 不可用）。
+   */
+  cardStars = false;
+  /** 星的效果算不算：星图开着，或本局的星来自将星卡。 */
+  get starsLive(): boolean { return starMapOn() || this.cardStars; }
   get starGate(): string { return heroGate(this.character); }
   /** 读入一组已点亮的星（按规则整理过）；星图开着时同时把四维点数改成小星汇总。 */
   setStars(ids: Iterable<string>): void { this.stars = orderStars(ids, this.starGate); if (starMapOn()) Object.assign(this.attributes, starPoints(this.stars, this.starGate)); }
@@ -175,21 +182,21 @@ export class RunGrowth {
    * 第二期：12 颗新要星（数值在 starMap.STAR_EFFECT）。starOn(id) = 开关开着且这颗星点亮；关着时下面每个量都是「没有效果」的那个值（0 或 1）。
    * moving / hpRatio 由 recordMovement / Player.update 每帧写；spellSurgeUntil = 奇谋的截止时刻。
    */
-  starOn(id: StarEffectId): boolean { return starMapOn() && this.stars.includes(id); }
+  starOn(id: StarEffectId): boolean { return this.starsLive && this.stars.includes(id); }
   moving = false; hpRatio = 1; spellSurgeUntil = -Infinity;
   /**
    * 第四期：战斗内反馈的信号（data/starFx.ts）。pulse(id) = 这颗星刚触发了一下（开关关着 / 没点亮时什么都不记）；
    * x / y 是触发点（命中点、击杀点），没有就是主将身上。界面（ui/StarBuffHud）和特效挂点（systems/StarFx）每帧 takePulses() 取走。
    */
   private pulses: Array<{ id: string; x?: number; y?: number }> = [];
-  pulse(id: string, x?: number, y?: number): void { if (starMapOn() && this.stars.includes(id) && this.pulses.length < 64) this.pulses.push({ id, x, y }); }
+  pulse(id: string, x?: number, y?: number): void { if (this.starsLive && this.stars.includes(id) && this.pulses.length < 64) this.pulses.push({ id, x, y }); }
   takePulses(): Array<{ id: string; x?: number; y?: number }> { if (!this.pulses.length) return this.pulses; const p = this.pulses; this.pulses = []; return p; }
   /**
    * 状态式 / 限时式的星现在是否「成立」：背水 = 生命低于 40%；追风 = 移动中；号令 / 身先士卒 = 有部曲在主将身边（alliesNear 由战斗场景给）；
    * 疾影 = 暴击后的攻速加成还在；奇谋 = 暴击后的法术加成还在。其余的星（常驻 / 触发式）返回 null。
    */
   starActive(id: string, now: number, alliesNear: boolean): boolean | null {
-    if (!starMapOn() || !this.stars.includes(id)) return null;
+    if (!this.starsLive || !this.stars.includes(id)) return null;
     switch (id) {
       case 'strength.NR2': return this.hpRatio < STAR_EFFECT['strength.NR2'].below;
       case 'agility.NR2': return this.moving;
@@ -202,7 +209,7 @@ export class RunGrowth {
   /** 受伤时掷闪避（Player.takeDamage）：和原来一样只掷一次骰子；闪掉了给游刃 / 一骑当千发一个触发信号。 */
   rollDodge(): boolean { const hit = Math.random() < this.dodgeChance(); if (hit) { this.pulse('agility.NL1'); this.pulse('agility.K'); } return hit; }
   /** 第三期：4 颗主星（数值在 starMap.STAR_KEYSTONE）。keyOn(id) = 开关开着且这颗主星点亮。 */
-  keyOn(id: StarKeystoneId): boolean { return starMapOn() && this.stars.includes(id); }
+  keyOn(id: StarKeystoneId): boolean { return this.starsLive && this.stars.includes(id); }
   /** 万人敌（主将全伤害 +15%）× 三军统帅（主将自身伤害 −25%）：乘在全伤害 ×2 封顶之外。 */
   private keystoneDamage(): number { return (this.keyOn('strength.K') ? 1 + STAR_KEYSTONE['strength.K'].damage : 1) * (this.keyOn('command.K') ? 1 + STAR_KEYSTONE['command.K'].selfDamage : 1); }
   /** 一骑当千：最终生命上限倍率（Player.maxHp 整体乘）。 */
@@ -244,7 +251,7 @@ export class RunGrowth {
    * 奇谋 = 暴击后 3 秒内法术伤害（非武器伤害、法术武器的武器命中）+12%，触发它的那一下暴击本身不吃。
    */
   starHit(time: number, weaponHit: boolean, crit: boolean, spellWeapon: boolean): number {
-    if (!starMapOn()) return 1;
+    if (!this.starsLive) return 1;
     let mul = 1;
     if (weaponHit && this.starOn('bridge0.h')) mul *= 1 + STAR_EFFECT['bridge0.h'].weapon;
     if (this.starOn('bridge1.h')) {
@@ -254,11 +261,11 @@ export class RunGrowth {
     return mul;
   }
   /** 力量「破阵」重击倍率（星图开着 ×1.6，平衡评审第 30 节；关着是原值 ×2）。 */
-  crushMul(at?: { x: number; y: number }): number { this.pulse('strength.NL1', at?.x, at?.y); return starMapOn() ? STAR_TUNING.crushMul : PRIMARY_PERK.strength.crushMul; } // at = 重击的命中点（给反馈用）
+  crushMul(at?: { x: number; y: number }): number { this.pulse('strength.NL1', at?.x, at?.y); return this.starsLive ? STAR_TUNING.crushMul : PRIMARY_PERK.strength.crushMul; } // at = 重击的命中点（给反馈用）
   /** 「破阵」这一下能不能定身：星图开着时每秒最多一次（关着每次重击都定）。返回 true 时记下时刻。 */
   private crushStunAt = -Infinity;
   crushStunReady(time: number): boolean {
-    if (!starMapOn()) return true;
+    if (!this.starsLive) return true;
     if (time - this.crushStunAt < STAR_TUNING.crushStunCdMs) return false;
     this.crushStunAt = time; return true;
   }
@@ -345,7 +352,7 @@ export class RunGrowth {
   /** 智力：范围倍率（经 CharacterPassives.rangeMultiplier 作用到武器）。 */
   areaMultiplier(): number { return (1 + ATTRIBUTE_EFFECT.intellect.area * this.pts('intellect')) * (this.perk('intellect', 3) ? 1 + PRIMARY_PERK.intellect.area : 1); }
   /** 敏捷「游刃」：受伤时闪避的几率。 */
-  dodgeChance(): number { const d = this.perk('agility', 2) ? PRIMARY_PERK.agility.dodge : 0; return starMapOn() ? Math.min(STAR_TUNING.dodgeCap, d + (this.keyOn('agility.K') ? STAR_KEYSTONE['agility.K'].dodge : 0)) : d; } // 星图开着：闪避合计封顶 20%
+  dodgeChance(): number { const d = this.perk('agility', 2) ? PRIMARY_PERK.agility.dodge : 0; return this.starsLive ? Math.min(STAR_TUNING.dodgeCap, d + (this.keyOn('agility.K') ? STAR_KEYSTONE['agility.K'].dodge : 0)) : d; } // 星图开着：闪避合计封顶 20%
   /** 智力「连珠」：法术伤害翻倍的倍率（掷骰）。 */
   spellEcho(at?: { x: number; y: number }): number { const m = this.perk('intellect', 2) && Math.random() < PRIMARY_PERK.intellect.echoChance ? 2 : 1; if (m > 1) this.pulse('intellect.NL1', at?.x, at?.y); return m; } // at = 翻倍那一下的命中点（给反馈用）
   /** 统御「募众」：每次免费招兵多给的人数。 */

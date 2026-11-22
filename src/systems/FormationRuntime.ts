@@ -38,9 +38,12 @@ export class FormationRuntime {
   constructor(private readonly h: FormationHost) { h.legion.fm = this; h.legion.onOrder = o => this.onOrder(o); this.refresh(); }
 
   /** 重读学会的阵与布阵（开局、行营改布阵后）。 */
+  /** 名将连战：阵靠局内奇遇卡拿（不读主线进度 / 行营布阵）。setLoadout 之后 refresh 只用这一组，前两个是主阵 / 备阵。 */
+  private fixed: FormationId[] | null = null;
+  setLoadout(ids: readonly FormationId[]): void { this.fixed = [...ids]; this.refresh(); }
   refresh(): void {
-    this.known = formationsKnown(this.h.hero, this.h.followerHeroes());
-    this.loadout = formationLoadout(this.h.hero, this.known);
+    this.known = this.fixed ? [...this.fixed] : formationsKnown(this.h.hero, this.h.followerHeroes());
+    this.loadout = this.fixed ? this.fixed.slice(0, 2) : formationLoadout(this.h.hero, this.known);
     this.idx = 0; this.current = this.loadout[0] ?? null; this.settleUntil = 0; this.powerAt = -1e9; this.apply();
   }
   private apply(): void { this.h.legion.formation.setShape(this.current, this.current ? formationSlots(this.h.command()) : Infinity); }

@@ -985,7 +985,7 @@ export class GameScene extends Phaser.Scene {
     this.setupObjective();
     this.setupBattleMap();
     // 坐骑：马厩里给该武将分配的马（第一章通关后马厩开放；换马只在休整时，下一关出征生效）
-    {const horse=this.campaignHorse();this.mount=horse?new HeroMount({barDy:()=>this.passiveGauge?.showing?FOOT_HUD.barBelowGauge:FOOT_HUD.bar,scene:this,player:this.player,enemies:this.enemies,hit:(e,d,now)=>this.hitEnemy(e,d,now,'melee',false,false),notice:t=>this.showGrowthNotice(t)},{base:horse.id,name:horse.name},this.runConfig.character,this.player.growth.gear.specials.includes('hubao')?{trampleMul:RELIC.hubaoTrample,remountMs:RELIC.hubaoRemountMs}:{}):null;this.player.mountGuard=this.mount?(n,now)=>this.mount?.guard(n,now)??n:undefined;this.mountHint=MountRideHint.maybeShow(this,!!this.mount);this.events.once('shutdown',()=>{this.mount?.clear();this.mount=null;});}
+    this.mount=null;this.equipMount(this.campaignHorse());this.events.once('shutdown',()=>{this.mount?.clear();this.mount=null;});
     this.bossPace=new BossPace(this as unknown as ConstructorParameters<typeof BossPace>[0]); // 首领走路提速 / 追击（BALANCE.bossPace）
     this.itemDrops=new ItemDrops(this,this.player,this.itemTier(),this.lootChapter(),()=>this.elapsed,()=>this.isFinalBoss(),()=>{this.sfx.play('pickup');this.mechEvent('gear');},()=>this.bossRelicKey());this.itemDrops.deferBossRelic=true; // 首领遗珍由首领宝箱发（BossChest）
     {const c=BATTLE_LOOT_CAP[this.battleCapKind()];if(this.itemDrops)this.itemDrops.cap={scrolls:c.scrolls,drops:c.drops};} // 单场收益上限（总制作人第四轮：一场守城精锐 83 个 → 兵装 10 件、残卷 +6）
@@ -1387,7 +1387,7 @@ export class GameScene extends Phaser.Scene {
     this.syncGround();
     this.battlefieldDetails.update(this.cameras.main.scrollX, this.cameras.main.scrollY);
     this.hudAcc += dt;
-    if (this.starFeedback && starMapOn()) this.starFeedback.tick(this.player, this.combatNow); // 星图战斗反馈：特效逐帧跟随 / 触发（图标排的重画仍跟 HUD 每 0.1 秒一次）
+    if (this.starFeedback && this.player.growth.starsLive) this.starFeedback.tick(this.player, this.combatNow); // 星图战斗反馈：特效逐帧跟随 / 触发（图标排的重画仍跟 HUD 每 0.1 秒一次）
     this.updateHud();
     this.updateBossHud();
     // 被动满层台词每帧检测（HUD 0.1 秒一刷，孙尚香这类攒满后马上触发的会漏掉）
@@ -4433,6 +4433,13 @@ export class GameScene extends Phaser.Scene {
   protected persistHeroProgress(): boolean { return !this.debugRun(); }
   /** 开局骑的坐骑（战役马厩；名将连战「不继承」覆盖成没有）。 */
   protected campaignHorse() { return heroHorse(this.runConfig.character); }
+  /** 骑上一匹马（开局读马厩；名将连战的局内坐骑卡换马也走这里）：先收掉骑着的那匹；第一次骑马时出骑乘提示。 */
+  protected equipMount(horse: ReturnType<typeof heroHorse>): void {
+    this.mount?.clear();
+    this.mount=horse?new HeroMount({barDy:()=>this.passiveGauge?.showing?FOOT_HUD.barBelowGauge:FOOT_HUD.bar,scene:this,player:this.player,enemies:this.enemies,hit:(e,d,now)=>this.hitEnemy(e,d,now,'melee',false,false),notice:t=>this.showGrowthNotice(t)},{base:horse.id,name:horse.name},this.runConfig.character,this.player.growth.gear.specials.includes('hubao')?{trampleMul:RELIC.hubaoTrample,remountMs:RELIC.hubaoRemountMs}:{}):null;
+    this.player.mountGuard=this.mount?(n,now)=>this.mount?.guard(n,now)??n:undefined;
+    if(!this.mountHint)this.mountHint=MountRideHint.maybeShow(this,!!this.mount);
+  }
   /** 新卡「名将来投」按哪一章的时代出人（缺省 = 新卡章节）。 */
   protected newCardEra(): number | undefined { return undefined; }
   /** 一次升级三选一的三张卡（基类：本命 / 武艺 + 战法 + 新卡替换位）。 */
@@ -5087,7 +5094,7 @@ export class GameScene extends Phaser.Scene {
     { const st = branchStatus(this.player.weapons[0], s => this.player.growth.build.tags()[s] ?? 0, s => SCHOOLS[s].name); this.passiveHud.updateBranch(st); this.buffHud?.root.setY(st ? 214 : 180); } // 专职行在被动栏下，增益栏往下让
     buildVfx(this).density=this.enemies.filter(e=>e.active&&!e.isSupplySlot).length+this.legion.count;
     this.buffHud.update(this.player,this.combatNow,!overlay&&!this.over&&!this.relicExpanded,(id,now)=>this.buffProgress(id,now));
-    if(starMapOn()){if(this.starFeedback&&!this.starFeedback.alive)this.starFeedback=undefined;(this.starFeedback??=new StarFeedback(this)).update(this.player,this.combatNow,!overlay&&!this.over&&!this.relicExpanded,this.buffHud,this.legion.units);}else this.starFeedback?.hide(); // 星图 · 战斗内反馈（增益栏图标排 + 特效挂点；开关关着不建）
+    if(this.player.growth.starsLive){if(this.starFeedback&&!this.starFeedback.alive)this.starFeedback=undefined;(this.starFeedback??=new StarFeedback(this)).update(this.player,this.combatNow,!overlay&&!this.over&&!this.relicExpanded,this.buffHud,this.legion.units);}else this.starFeedback?.hide(); // 星图 · 战斗内反馈（增益栏图标排 + 特效挂点；开关关着不建）
     this.hudGfx.setVisible(!overlay);
     if (this.hudTexts) for (const t of Object.values(this.hudTexts)) t.setVisible(!overlay && (t !== this.hudTexts.bag || mechShown('gear')));
     if (this.statusFrame) { this.statusFrame.setVisible(!overlay); this.hudTexts?.level.setVisible(false); }

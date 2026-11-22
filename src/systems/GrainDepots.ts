@@ -53,7 +53,7 @@ export class GrainDepots {
   onDestroyed(enemy: Enemy, now: number): boolean {
     const d = this.depots.find(d => d.enemy === enemy && d.life === enemy.spawnId && d.state === 'intact'); if (!d) return false;
     d.state = 'burned'; d.at = now; if (this.focus === d) this.cancel(); this.h.reward(GRAIN.grainReward);
-    d.label.setText('粮草已焚 · 钱币 +' + GRAIN.grainReward).setColor('#ffd59a').setBackgroundColor('#241c15dc').setPadding(5, 3);
+    d.label.setText('粮草已焚').setColor('#ffd59a').setBackgroundColor('#241c15dc').setPadding(5, 3);
     this.ignite(d); return true;
   }
   /** 首领劫粮：最近的完好粮草（无则 null）。 */

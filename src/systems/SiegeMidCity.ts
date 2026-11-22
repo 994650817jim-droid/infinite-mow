@@ -817,7 +817,7 @@ export class SiegeMidCity {
       case 'armory': return `守军不再出弓手 · 我军伤害 +${Math.round((F.armoryDamage - 1) * 100)}%`;
       case 'barracks': return `城内守军少来 ${Math.round(F.barracksSkip * 100)}%`;
       case 'tower': return this.points.some(q => q.kind === 'tower' && q.state !== 'secured') ? '角楼箭雨减弱' : '城头箭雨已停';
-      case 'market': this.h.gainFood?.(F.marketFood); return `百姓归附 · 随军钱币 +${F.marketFood}`;
+      case 'market': this.h.gainFood?.(F.marketFood); return '百姓归附';
     }
   }
   /** 已占要点的累计（第三步结算用）。 */

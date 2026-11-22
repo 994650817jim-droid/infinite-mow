@@ -28,6 +28,9 @@ await p.waitForTimeout(160);
 const mid = await ev(s => ({ food: s.legion.food, count: s.children.getByName('hud-coin-count')?.text, flying: s.coinFly.flying, bag: s.bagBundle?.icon?.texture.key })); await p.screenshot({ path: `${OUT}/battle-coins-to-bag.png` });
 await p.waitForTimeout(140);
 const mid2 = await ev(s => ({ bag: s.bagBundle?.icon?.texture.key }));
+// 用户「我觉得不需要字」：捡钱币时画面上不再飘「…钱币 +N」之类的字（只有铜钱飞入 + 数字跳 + 音效）
+const words = await ev(s => { const out = []; const walk = (l, vis) => { for (const o of l) { const v = vis && o.visible !== false && (o.alpha ?? 1) > .02; if (o.list) walk(o.list, v); else if (v && o.type === 'Text' && /钱币\s*\+|随军钱币/.test(o.text ?? '')) out.push(o.text.slice(0, 40)); } }; walk(s.children.list, true); return out; });
+ck('捡钱币：画面上没有「钱币 +N」之类的飘字 / 横幅', words.length === 0, words);
 await p.waitForTimeout(1000);
 const after = await ev(s => ({ food: s.legion.food, count: s.children.getByName('hud-coin-count')?.text, flying: s.coinFly.flying, bag: s.bagBundle?.icon?.texture.key, sfx: { coin: s.sfx.stats?.coin, purse: s.sfx.stats?.coinPurse } }));
 ck('捡粮袋：钱立即入账，铜钱在飞向行囊，行囊旁的数字先不跳', mid.food > before.food && mid.flying > 0 && mid.count === String(before.food), { before, mid });

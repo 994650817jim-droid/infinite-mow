@@ -186,7 +186,7 @@ export function sideLubuGameSceneClass(Base: typeof GameScene) {
       enemy.deactivate(); this.kills += 1;
       if (storyMode() !== 'off') castBark(this, at, cg.name, '今日有死而已！请出就戮，以明军法。', 'chengong');
       let cap = '吕布势孤';
-      if (surrenderLive() && markSurrender('honored', cg.id)) { gainProvisions(SURRENDER.persuadeProvisions); cap = '以礼厚葬 · 钱币 +' + SURRENDER.persuadeProvisions + ' · 仁名 +1'; }
+      if (surrenderLive() && markSurrender('honored', cg.id)) { gainProvisions(SURRENDER.persuadeProvisions); cap = '以礼厚葬 · 仁名 +1'; }
       this.showWaveBanner('陈宫拒降就义', false, cap); this.sfx.play('gong');
     }
     update(time: number, delta: number) {

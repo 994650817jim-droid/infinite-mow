@@ -99,7 +99,7 @@ export class Parley {
       else { const r = captureBoss({ id: d.id, name: d.name, template: d.template ?? 'blade' }); if (r?.evicted.length) where += ` · ${r.evicted.join('、')}久候不至，已离去`; }
       if (first) gainProvisions(SURRENDER.persuadeProvisions);
     } else where = '试炼不入册';
-    this.h.banner(`${d.name}归降`, false, where + (live ? ` · 钱币 +${SURRENDER.persuadeProvisions}` : ''));
+    this.h.banner(`${d.name}归降`, false, where);
     this.h.sfx('parleyYes'); this.h.sfx('kneel');
     this.kneel(b);
   }

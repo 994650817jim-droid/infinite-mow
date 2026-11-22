@@ -164,7 +164,7 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
  protected bossHasDeathArt(){return !!this.controller;}
  protected killEnemy(enemy:Enemy){this.qijin?.onKill(enemy);this.enemyCamps?.onDestroyed(enemy,this.combatNow);if(enemy===this.boss){if(this.bossRetreats(enemy))this.controller?.clear();else this.controller?.defeat(); /* 败退型（8-1 张郃、5-3 曹仁）不倒地、淡出退走 */
   // 典韦守营结果（剧情旗标 dianwei，第四章、编年史读）：张绣倒下时典韦还活着 = saved（军功 +80），否则 fell
-  if(this.dianwei){const saved=this.dianwei.alive;this.dianwei.finish();setStoryFlag('dianwei',saved?'saved':'fell');if(saved){addMerit(DIANWEI.meritSaved);this.showWaveBanner('典韦得救',false,'恶来无恙 · 钱币 +'+rewardGrain(DIANWEI.meritSaved,0));}}}
+  if(this.dianwei){const saved=this.dianwei.alive;this.dianwei.finish();setStoryFlag('dianwei',saved?'saved':'fell');if(saved){addMerit(DIANWEI.meritSaved);this.showWaveBanner('典韦得救',false,'恶来无恙');}}}
   super.killEnemy(enemy);}
  update(time:number,delta:number){const before=this.combatNow;super.update(time,delta);if(this.combatNow>before&&!this.over&&this.mode==='none'){if(!this.awaitingChest)this.enemyCamps?.update(this.combatNow);this.dianwei?.update((this.combatNow-before)/1000,this.combatNow);this.fireShips?.update(this.combatNow);}this.spearWarnings?.draw(this.enemies,this.spear,this.combatNow,this.player,!this.over);this.controller?.updateDeath(delta);if(this.boss?.active&&this.controller)this.hudTexts.bossEnergy.setText(this.controller.label+(this.legion.count>12?' · 军势护阵':''));}
  protected renderRecruit(){if(this.resting){this.campUI?.open(cfg.campPrefix+this.thirdStage,cfg.stages[this.thirdStage]?.name??'返回天下地图');return;}super.renderRecruit();}

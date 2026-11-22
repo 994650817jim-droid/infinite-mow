@@ -378,7 +378,7 @@ export class GameScene extends Phaser.Scene {
       trail:(()=>{const last=new Map<number,number>();return (id:number,ratio:number)=>{const rn=performance.now(),dt=Math.min(.25,(rn-(last.get(id)??rn))/1000);last.set(id,rn);this.bossStagger.track(id,ratio);return this.bossStagger.trailRatio(ratio,rn,dt);};})(),
       live:()=>surrenderLive(),setFlag:(k,v)=>setStoryFlag(k,v),
       hurt:(e,dmg)=>{this.hitEnemy(e,dmg,this.combatNow,'melee',true,false);},
-      doubleSurrender:g=>{if(surrenderLive())gainProvisions(DUAL.doubleProvisions);this.showWaveBanner(g+' · 同归麾下',false,'双双归降 · 钱币 +'+DUAL.doubleProvisions);this.sfx.play('gong');},
+      doubleSurrender:g=>{if(surrenderLive())gainProvisions(DUAL.doubleProvisions);this.showWaveBanner(g+' · 同归麾下',false,'双双归降');this.sfx.play('gong');},
       spawn:(k,x,y)=>this.spawnEnemy(k,x,y,1,true)},plan,now);
     const mk=(e:Enemy,key:string|null)=>{const ref:{x?:ReturnType<DualBoss['entryOf']>}={};const p=this.makeParley(()=>ref.x&&!ref.x.done&&e.active?e:null,surrenderDef(key),{partner:()=>ref.x?d.partnerOdds(ref.x):undefined});return {p,ref};};
     {const {p,ref}=mk(first.enemy,first.key);ref.x=d.add({id:first.id,name:first.name,enemy:first.enemy,ctrl:first.ctrl,parley:p,mount:first.mount??null,ownKit:first.ownKit},now);}
@@ -3777,7 +3777,7 @@ export class GameScene extends Phaser.Scene {
   protected propLoot(kind: PropLootKind, x: number, y: number): void {
     const L = PROP_LOOT, rng = this.propRng, now = this.combatNow;
     this.battleHeal?.onPropBroken(kind, x, y, rng); // 粮袋 / 木箱：概率掉干粮 / 酒肉（data/battleHeal）
-    if (kind === 'grain') { this.coinBurst(x, y, L.grain.food); this.legion.food += L.grain.food; this.showGrowthNotice('缴获粮草 · 随军钱币 +' + L.grain.food); return; } // 铜钱从粮袋 / 粮车处飞进行囊
+    if (kind === 'grain') { this.coinBurst(x, y, L.grain.food); this.legion.food += L.grain.food; return; } /* 不再飘「缴获粮草 · 随军钱币 +N」（用户「我觉得不需要字」） */ // 铜钱从粮袋 / 粮车处飞进行囊
     if (kind !== 'weapons' && kind !== 'armor' && kind !== 'crate' && kind !== 'coins') return;
     const c = L[kind];
     for (let i = 0; i < c.gems; i++) { const a = i / Math.max(1, c.gems) * Math.PI * 2; this.spawnGem(x + Math.cos(a) * 22, y + 8 + Math.sin(a) * 10, 1); }
@@ -4472,7 +4472,7 @@ export class GameScene extends Phaser.Scene {
     const m = this.momentum, M = NEW_CARDS.momentum;
     if (m.on && m.stacks < M.max && ++m.kills % M.per === 0) { m.stacks++; applyStageBuff(this.player, s => { s.damageMul *= 1 + M.step; }); }
     const b = this.bounties.elites;
-    if (b && b.elites !== undefined && enemy.kind === 'elite' && ++b.elites >= 8) { b.elites = undefined; this.legion.food += 60; this.grantCharm(); this.showWaveBanner('悬赏 · 破锐 达成', false, '随军钱币 +60 · 信物一件'); }
+    if (b && b.elites !== undefined && enemy.kind === 'elite' && ++b.elites >= 8) { b.elites = undefined; this.legion.food += 60; this.grantCharm(); this.showWaveBanner('悬赏 · 破锐 达成', false, '信物一件'); }
   }
   /** 每帧：草船借箭到期放箭雨；悬赏斩将计时。 */
   private tickStageCards(): void {
@@ -4627,9 +4627,9 @@ export class GameScene extends Phaser.Scene {
   private fortuneReward(kind: FortuneEventKind, mult: number, x: number, y: number): string {
     const P = this.player, ch = this.phasePlan?.chapter ?? 2;
     if (kind === 'cart') {
-      const g = Math.round(FORTUNE.cartGrain(ch) * mult); this.legion.food += g;
-      if (this.supplies && this.supplies.pouch.length < POUCH_MAX) { this.supplies.pouch.push({ amount: Math.round(P.maxHp * .3), texture: this.textures.exists('heal_props') ? 'heal_props' : 'healing_potion', frame: this.textures.exists('heal_props') ? 1 : undefined, name: '回春丹' }); return '随军钱币 +' + g + ' · 回春丹已入药囊（Q）'; }
-      P.heal(Math.round(P.maxHp * .2)); return '随军钱币 +' + g + ' · 药囊已满，回复 20% 生命';
+      const g = Math.round(FORTUNE.cartGrain(ch) * mult); this.coinBurst(x, y, g); this.legion.food += g; // 钱不写字，铜钱从粮车处飞进行囊
+      if (this.supplies && this.supplies.pouch.length < POUCH_MAX) { this.supplies.pouch.push({ amount: Math.round(P.maxHp * .3), texture: this.textures.exists('heal_props') ? 'heal_props' : 'healing_potion', frame: this.textures.exists('heal_props') ? 1 : undefined, name: '回春丹' }); return '回春丹已入药囊（Q）'; }
+      P.heal(Math.round(P.maxHp * .2)); return '药囊已满，回复 20% 生命';
     }
     if (kind === 'armory') {
       const q = capLootQuality(ch <= 4 ? 'blue' : ch <= 8 ? 'purple' : 'orange', this.itemTier()), item = rollItem(q, Math.random, undefined, this.lootChapter());

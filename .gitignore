@@ -227,6 +227,7 @@ assets/raw/*
 !/tools/make-bagua-layers.mjs
 !/tools/make-star-sky.mjs
 !/tools/make-star-fx.mjs
+!/tools/make-ending-art.mjs
 !/tools/compose-star-fx-preview.mjs
 !/tools/shot-story-portraits.mjs
 !/tools/resize-image.mjs

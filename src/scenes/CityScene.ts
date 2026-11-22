@@ -34,7 +34,8 @@ import {LORD_LEVEL_HINT,followerLevel,followerLevelCap,hallLevel,loadRoster,rank
 import {COMMONER_SKILLS} from '../data/commonerSkills';
 import {QUALITIES, lootBand} from '../data/items';
 import {chaptersOpen,heroFreePoints} from '../systems/HeroProgress';
-import {pointsHint} from '../data/pointsHint';
+import {pointsHint,pointsCityToast} from '../data/pointsHint';
+import {starMapOn} from '../data/starMap';
 import {PANO_ZOOM,CAMP_BARS,CAMP_PAN,PANO_W,PANO_H,CITY_SLOTS,LEVEL_SCALE,CITY_BG_SIZES,CITY_ART_LEVELS,ART_ALIAS} from '../town/CityLayout';
 import {cityById,TIER_NAME} from '../world/WorldCities';
 import {retreatToast,takeRetreatReturn} from '../world/DefeatRetreat';
@@ -134,7 +135,7 @@ export class CityScene extends Phaser.Scene {
   if(!this.introSeen())this.time.delayedCall(250,()=>this.openIntro());
   if(stableNew)this.time.delayedCall(400,()=>this.toast('营中已设马厩 · 点马厩换马、看已有的马'));
   // 属性点提醒（data/pointsHint.ts）：主公有没加的点 → 进营一句（马厩那句之后）
-  {let h='zhaoyun';try{h=localStorage.getItem('im_last_hero')||h;}catch{/* 存储不可用 */}const ph=pointsHint(heroFreePoints(h as never),{world:true,battle:mechOpen('attributes')});if(ph)this.time.delayedCall(stableNew?2600:600,()=>this.toast('有 '+ph.n+' 点属性点没加 · 主帐「武将谱」里加点'));}
+  {let h='zhaoyun';try{h=localStorage.getItem('im_last_hero')||h;}catch{/* 存储不可用 */}const sh=starMapOn()?pointsHint(heroFreePoints(h as never),{world:true,battle:mechOpen('attributes')}):null;if(sh)this.time.delayedCall(stableNew?2600:600,()=>this.toast(pointsCityToast(sh.n))); /* 星图开着：「N 星未点」 */const ph=starMapOn()?null:pointsHint(heroFreePoints(h as never),{world:true,battle:mechOpen('attributes')});if(ph)this.time.delayedCall(stableNew?2600:600,()=>this.toast('有 '+ph.n+' 点属性点没加 · 主帐「武将谱」里加点'));}
   // 坐骑引导（第一次有马：马厩 → 骑乘 → 效果说明），只出一次，设置「重看新手引导」可重看
   this.mountGuide=MountGuide.maybeStart(this,()=>{let h='zhaoyun';try{h=localStorage.getItem('im_last_hero')||h;}catch{/* 存储不可用 */}return (CHARACTERS.some(c=>c.id===h)?h:'zhaoyun') as CharacterId;});
  }

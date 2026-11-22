@@ -159,7 +159,8 @@ export class Player {
   }
 
   get maxHp(): number {
-    return BALANCE.player.maxHp + this.stats.maxHpBonus + this.growth.bonusMaxHp() + vigorHp(this.level); // 体魄：武将等级生命（2026-11-19）
+    const k = this.growth.maxHpMultiplier(), hp = BALANCE.player.maxHp + this.stats.maxHpBonus + this.growth.bonusMaxHp() + vigorHp(this.level);
+    return k === 1 ? hp : Math.max(1, Math.round(hp * k)); // k：星图主星「一骑当千」生命上限 −20%（开关关着恒为 1） // 体魄：武将等级生命（2026-11-19）
   }
 
   get radius(): number {
@@ -436,7 +437,7 @@ export class Player {
   victoryGuard = false;
   takeDamage(raw: number, now: number): boolean {
     if (!this.alive || this.damageImmune || this.victoryGuard || now < this.invulnUntil || this.passive.isInvulnerable(now)) return false; // 马超锦马冲锋中无敌
-    if (Math.random() < this.growth.dodgeChance()) return false; // 敏捷·游刃：闪避
+    if (this.growth.rollDodge()) return false; // 敏捷·游刃：闪避（rollDodge 里掷同一次骰子，星图开着时顺带发反馈信号）
     const afterArmor = Math.max(1, raw - this.stats.armor);
     const unguarded = Math.max(1, Math.round(afterArmor * this.stats.damageTakenMul * this.armyDamageTakenMul * this.formationTakenMul * this.rageTakenMul * this.growth.incomingDamageMultiplier() * this.passive.damageTakenMultiplier(now) * (now < this.propGuardUntil ? this.propGuardMul : 1)));
     const ridden=this.mountGuard?this.mountGuard(unguarded,now):unguarded;if(ridden<=0)return false;
@@ -496,7 +497,7 @@ export class Player {
     this.sprite.setOrigin(.5, this.baseOriginY + (lift + this.riseY + this.gaitLift) / Math.max(1, this.sprite.displayHeight));
     const regen = this.stats.regen + this.growth.gear.regen;
     if (regen > 0) this.heal(regen * dt);
-    this.growth.lowHp = this.hp < this.maxHp * .35;
+    this.growth.lowHp = this.hp < this.maxHp * .35; this.growth.hpRatio = this.hp / Math.max(1, this.maxHp); // hpRatio：星图「背水」（RunGrowth）
     const blinking = now < this.invulnUntil;
     this.sprite.setAlpha(blinking ? (Math.floor(now / 80) % 2 === 0 ? 0.35 : 1) : 1);
     if (this.action?.hold) this.renderAction(false);

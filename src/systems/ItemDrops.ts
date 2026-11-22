@@ -164,7 +164,7 @@ export class ItemDrops {
       this.spawnChest(q.x, q.y);
     }
     if (!this.player.alive) return;
-    const px = this.player.x, py = this.player.y, reach = Math.max(36, this.player.stats.pickupRadius * (1 + this.player.growth.gear.pickup) * .6);
+    const px = this.player.x, py = this.player.y, reach = Math.max(36, this.player.stats.pickupRadius * this.player.growth.pickupMultiplier() * .6);
     for (let i = this.ground.length - 1; i >= 0; i--) {
       const g = this.ground[i];
       if (Math.hypot(g.x - px, g.y - py) > reach) continue;

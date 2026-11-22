@@ -1,0 +1,171 @@
+{
+  "note": "透明底序列帧横条（2× 图，显示尺寸 = 帧尺寸 / 2）。anchor 为帧内锚点（2× 像素）。fps 为建议播放帧率。",
+  "beishui": {
+    "name": "背水",
+    "file": "fx_beishui.png",
+    "frames": 8,
+    "frame": [
+      192,
+      224
+    ],
+    "display": [
+      96,
+      112
+    ],
+    "anchor": [
+      96,
+      208
+    ],
+    "anchorMeaning": "主将脚底中心；火焰绕身，中间人形空位不挡人",
+    "loop": true,
+    "fps": 10,
+    "use": "生命 < 40% 时挂在主将身上"
+  },
+  "pozhen": {
+    "name": "破阵",
+    "file": "fx_pozhen.png",
+    "frames": 8,
+    "frame": [
+      256,
+      256
+    ],
+    "display": [
+      128,
+      128
+    ],
+    "anchor": [
+      128,
+      128
+    ],
+    "anchorMeaning": "爆点中心 = 命中点",
+    "loop": false,
+    "fps": 16,
+    "use": "第 5 下重击命中点播一次，播完销毁"
+  },
+  "wanrendi": {
+    "name": "万人敌（v2，加粗提亮放大）",
+    "file": "fx_wanrendi.png",
+    "frames": 6,
+    "frame": [
+      320,
+      180
+    ],
+    "display": [
+      160,
+      90
+    ],
+    "anchor": [
+      160,
+      90
+    ],
+    "anchorMeaning": "椭圆中心 = 主将脚底；贴地，depth 在主将之下",
+    "loop": true,
+    "fps": 6,
+    "use": "万人敌点亮后常驻主将脚下，纹路缓慢顺时针转动"
+  },
+  "haoling": {
+    "name": "号令 / 身先士卒 范围光环",
+    "file": "fx_haoling.png",
+    "frames": 1,
+    "frame": [
+      912,
+      454
+    ],
+    "display": [
+      456,
+      227
+    ],
+    "anchor": [
+      456,
+      227
+    ],
+    "anchorMeaning": "椭圆中心 = 主将脚底；环宽 ≈ 440（半径 ≈ 220）",
+    "loop": false,
+    "fps": 0,
+    "use": "单张静图，很淡：建议 alpha 0.35；可整张缓慢转 / 呼吸（不要闪），贴地，depth 在主将之下"
+  },
+  "sanjun": {
+    "name": "三军统帅 帅旗虚影",
+    "file": "fx_sanjun.png",
+    "frames": 6,
+    "frame": [
+      224,
+      240
+    ],
+    "display": [
+      112,
+      120
+    ],
+    "anchor": [
+      24,
+      229
+    ],
+    "anchorMeaning": "旗杆底部；放在主将身后（左后方），旗面朝右飘；半透明",
+    "loop": true,
+    "fps": 6,
+    "use": "三军统帅点亮后常驻，depth 在主将之下，建议 alpha 0.8"
+  },
+  "lianzhu": {
+    "name": "连珠 双环回响",
+    "file": "fx_lianzhu.png",
+    "frames": 8,
+    "frame": [
+      224,
+      224
+    ],
+    "display": [
+      112,
+      112
+    ],
+    "anchor": [
+      112,
+      112
+    ],
+    "anchorMeaning": "圆心 = 命中点",
+    "loop": false,
+    "fps": 14,
+    "use": "法术伤害翻倍时命中点播一次"
+  },
+  "youren": {
+    "name": "游刃 风痕残影",
+    "file": "fx_youren.png",
+    "frames": 6,
+    "frame": [
+      192,
+      192
+    ],
+    "display": [
+      96,
+      96
+    ],
+    "anchor": [
+      96,
+      96
+    ],
+    "anchorMeaning": "帧中心 = 主将身侧（风痕朝左掠过，主将在右侧；向右闪避时水平翻转）",
+    "loop": false,
+    "fps": 14,
+    "use": "闪避成功时播一次"
+  },
+  "huoshao": {
+    "name": "火烧连营 贴地火环",
+    "file": "fx_huoshao.png",
+    "frames": 8,
+    "frame": [
+      320,
+      320
+    ],
+    "display": [
+      160,
+      160
+    ],
+    "anchor": [
+      160,
+      160
+    ],
+    "anchorMeaning": "环心 = 被击杀敌人脚底，贴地",
+    "loop": false,
+    "fps": 12,
+    "use": "敌人被法术击杀后原地播一次；depth 在单位之下"
+  }
+}

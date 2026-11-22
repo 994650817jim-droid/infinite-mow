@@ -34,6 +34,8 @@ export class BuildCombat {
  /** 手绘特效钩子（GameScene 接 BuildVfx）：style = 图集里的额外样式 ember / stun_burst / sunder_hit / heavy。 */
  onFx?:(style:string,x:number,y:number,size:number)=>void;
  onNapalm?:(x:number,y:number,r:number,tickDamage:number,level:number)=>void;
+ /** 星图「余烬」（RunGrowth.dotBonus，GameScene 接）：灼烧 / 地火每跳伤害倍率与多烧的毫秒数；不接 = 没有加成。 */
+ dot?:()=>{mul:number;extraMs:number};
  /** 火油罐出手（只管画面）：起点 / 落点 / 飞行毫秒；落地起火仍走 onNapalm。 */
  onNapalmThrow?:(sx:number,sy:number,x:number,y:number,ms:number)=>void;
  private napalmFlying:Array<{at:number;x:number;y:number;dmg:number;burn:number;lv:number}>=[];
@@ -107,7 +109,7 @@ export class BuildCombat {
  private burnMs():number{return 3000+(this.tier('fire')>=2?T.fire.burnExtraMs:0);}
  private burn(e:Enemy,damage:number,now:number,spread=false,ms=this.burnMs()):void{
   if(!e.active||(e.isSupplySlot && !e.lockTarget))return;const old=this.burns.get(e.spawnId);if(!old&&this.burns.size>=160)return;if(!old)this.onFx?.('ember',e.x,e.y-6,56);
-  this.burns.set(e.spawnId,{enemy:e,spawn:e.spawnId,until:Math.max(old?.until??0,now+ms),next:old?.next??now+500,damage:Math.max(old?.damage??0,damage),spread:old?old.spread&&spread:spread});
+  this.burns.set(e.spawnId,{enemy:e,spawn:e.spawnId,until:Math.max(old?.until??0,now+ms+(this.dot?.().extraMs??0)),next:old?.next??now+500,damage:Math.max(old?.damage??0,damage),spread:old?old.spread&&spread:spread});
  }
  /** 震退（不对首领、免控、城头的）：0.25 秒滑开 push 像素（不瞬移），update 里逐帧推。 */
  private shoves=new Map<Enemy,{spawn:number;vx:number;vy:number;until:number}>();
@@ -199,7 +201,7 @@ export class BuildCombat {
   for(const [id,b]of this.burns){if(!b.enemy.active||b.enemy.spawnId!==b.spawn||now>b.until){this.burns.delete(id);continue;}if(now>=b.next){b.next=now+500;this.stats.burnTicks++;
    // 合击「火借风势」：被控制的燃烧敌人灼烧 ×2
    const ctl=windFire&&!!this.controlled?.(b.enemy,now);if(ctl)this.noteCombo('fire_wind');
-   this.fx(b.enemy,true);this.deal(b.enemy,b.damage*fireMul*(boosted&&b.enemy.kind==='boss'?this.burnBoost.bossMul/this.burnBoost.mul:1)*(ctl?CV.fireWindBurnMul:1),true);}}
+   this.fx(b.enemy,true);this.deal(b.enemy,b.damage*(this.dot?.().mul??1)*fireMul*(boosted&&b.enemy.kind==='boss'?this.burnBoost.bossMul/this.burnBoost.mul:1)*(ctl?CV.fireWindBurnMul:1),true);}}
   for(const [id,t] of this.windUntil)if(t<now)this.windUntil.delete(id);
   // 合击「火借风势」：被风吹开的燃烧敌人一路点着撞到的人
   for(const [e,w] of this.winds){if(!e.active||e.spawnId!==w.spawn||now>w.until){this.winds.delete(e);continue;}if(!windFire||now<w.next||!this.isBurning(e,now))continue;w.next=now+200;
@@ -208,7 +210,7 @@ export class BuildCombat {
   const raw=this.rawBase(),pos=this.position();
   // 火油罐：每 9/8/7 秒往身边敌人最密处扔（320 内），地上烧 3 秒（GameScene 用 MartialFields 画火、扣血），落点内的人先点燃
   // 飞行中的罐子落地：这时才起火 / 点燃（2026-11-20 用户「火油罐没看到扔出的动画」：原来扔出的瞬间就地起火；视觉飞行见 systems/PotThrow，用同一个飞行时间对齐）
-  for(let i=this.napalmFlying.length-1;i>=0;i--){const p=this.napalmFlying[i];if(now<p.at)continue;this.napalmFlying.splice(i,1);this.onNapalm?.(p.x,p.y,70,p.dmg,p.lv);for(const t of this.targets(p,70))this.burn(t,p.burn,now,true);}
+  for(let i=this.napalmFlying.length-1;i>=0;i--){const p=this.napalmFlying[i];if(now<p.at)continue;this.napalmFlying.splice(i,1);this.onNapalm?.(p.x,p.y,70,p.dmg*(this.dot?.().mul??1),p.lv);for(const t of this.targets(p,70))this.burn(t,p.burn,now,true);}
   const np=this.lv('napalm');if(np&&now>=this.napalmAt){const near=this.targets(pos,320);if(near.length){this.napalmAt=now+[9000,8000,7000][np-1];this.stats.napalm++;
    let best=near[0],bn=-1;for(const c of near.slice(0,40)){let n=0;for(const o of near)if(Math.hypot(o.x-c.x,o.y-c.y)<=70)n++;if(n>bn){bn=n;best=c;}}
    const ms=Math.round(Math.max(400,Math.min(700,380+Math.hypot(best.x-pos.x,best.y-pos.y)*.8))); // 与 PotThrow.potFlightMs 同一公式（0.4–0.7 秒）

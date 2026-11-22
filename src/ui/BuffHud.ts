@@ -75,6 +75,8 @@ export class BuffHud {
   if(now<slot.flashUntil)g.lineStyle(2,0xfff2c8,(slot.flashUntil-now)/FLASH_MS).strokeRect(-2,-2,40,44);
  }
  /** 合击 / 觉醒再次触发时（不出小签）：让这些流派的徽印（觉醒 / 势档图标）闪一下。 */
+ /** 现在显示了几行图标（星图图标排接在下面，见 ui/StarBuffHud）。 */
+ rowsShown=0;
  flashSchools(schools:string[]):void{const ids=new Set(schools.flatMap(s=>['awakening_'+s,'school_'+s]));for(const sl of this.slots)if(ids.has(sl.key))sl.flashUntil=this.now+FLASH_MS;}
  update(player:Player,now:number,visible:boolean,progressOf?:BuffProgressSource):void{
   this.now=now;if(!visible){this.root.setVisible(false);this.hideTip();return;}
@@ -102,7 +104,7 @@ export class BuffHud {
   if(overflow){const rest=entries.slice(this.maximum-1);show.push({id:'overflow',icon:'icon_passive',name:'其余'+rest.length+'项增益',desc:rest.map(e=>e.name).join('、')+'。完整战法和宝物说明可在暂停菜单查看。',kind:'更多',badge:'+'+rest.length});}
   // 只为显示中的条目取进度（武学已在上面算好）
   if(progressOf)for(const e of show)if(e.progress===undefined&&e.id!=='overflow')e.progress=progressOf(e.id,now);
-  this.root.setVisible(show.length>0);
+  this.root.setVisible(show.length>0);this.rowsShown=Math.ceil(show.length/2);
   for(let i=0;i<this.slots.length;i++){
    const slot=this.slots[i],entry=show[i];slot.root.setVisible(!!entry);slot.entry=entry;if(!entry)continue;
    if(slot.key!==entry.id){slot.key=entry.id;slot.wasReady=!!entry.progress?.ready;slot.flashUntil=0;slot.image.setTexture(player.scene.textures.exists(entry.icon)?entry.icon:'icon_passive').setDisplaySize(27,27);}

@@ -128,7 +128,7 @@ export function drawBuildOverview(o: BuildOverviewOpts): void {
     text(nx, L.y + pad + 26, `武将 Lv.${o.level}`, 13, '#d9c58f').setName(P + '-hero-level');
     const main = primaryAttribute(g.character);
     // 主属性摘要（与加点面板同一份，ui/PrimaryAttrInfo）：「主属性：敏捷 · 每点效果 ×1.5」+ 专精进度；悬停看完整说明
-    const sum = main ? primarySummary(g.character, g.attributes[main] ?? 0, g.attrMax) : null;
+    const sum = main ? primarySummary(g.character, g.attributes[main] ?? 0, g.attrMax, g.stars) : null;
     const fit = (t: Phaser.GameObjects.Text, max: number) => { if (t.width > max) t.setScale(max / t.width); return t; };
     let y = L.y + pad + ph + 8;
     if (main && sum) {

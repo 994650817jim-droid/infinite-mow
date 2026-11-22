@@ -4,7 +4,8 @@ import { attributePointsAt } from '../data/attributes';
 import type { CharacterId } from '../data/characters';
 import { ATTRIBUTE_IDS, ATTRIBUTE_MAX, ATTRIBUTE_POINT_EVERY, attributeCap, xpToNext, type AttributeId } from './RunGrowth';
 import { chapterOneCleared } from './ChapterProgress';
-import { arcUnlocked } from '../world/WorldStore';
+import { arcUnlocked, permanentEffects } from '../world/WorldStore';
+import { STAR_BY_ID, canLight, heroGate, orderStars, starMapOn, starPoints, starsAt } from '../data/starMap';
 
 /**
  * 武将等级（跨战斗永久，2026-11-16 用户批准 hero-level-proposal.md 做法 A）：
@@ -20,7 +21,8 @@ export const HEROES_KEY = 'im_heroes_v1';
 /** 2026-11-19 波数 / 等级重做（wave-progression-redesign.md §3）：上限提高，经验按章节放大，各章打完正好到上限；点数与等级脱钩（attributePointsAt）。 */
 export const LEVEL_CAPS: readonly number[] = [10, 14, 18, 22, 26, 30, 34, 38, 42, 46, 50, 54]; // 2026-11-19 用户选 B（每章 +4）
 export type HeroKey = CharacterId | `r_${number}`;
-export interface HeroRecord { level: number; xp: number; attributes: Record<AttributeId, number> }
+/** stars = 星图已点亮的星（data/starMap.ts，不含自己的入口；按点亮先后）。新字段，和 attributes 互不影响；一颗都没点时不写进存档。 */
+export interface HeroRecord { level: number; xp: number; attributes: Record<AttributeId, number>; stars?: string[] }
 /**
  * attrSet = 4（2026-11-20 起：四维本色 + 取消单项上限，旧点数全部返还）；3 = 2026-11-17 的四项（力量 / 敏捷 / 智力 / 统御）。旧记录（六项）读档时全部退回、不换算，
  * attrNotice 置位，进游戏提示一次「属性已改版，点数已返还」（takeAttrNotice）。
@@ -70,6 +72,7 @@ function read(): HeroSave {
         if (!isKey(k) || !r) continue;
         const attributes = zeroAttrs(); if (s.attrSet === 4) for (const a of ATTRS) attributes[a] = int(r.attributes?.[a], ATTRIBUTE_MAX);
         s.heroes[k] = { level: int(r.level, 99, 1), xp: int(r.xp, 1e8), attributes };
+        { const stars = Array.isArray(r.stars) ? orderStars((r.stars as unknown[]).filter((x): x is string => typeof x === 'string' && STAR_BY_ID.has(x)), heroGate(k)) : []; if (stars.length) s.heroes[k].stars = stars; } // 星图：只留认识的、按规则点得到的
         // 2026-11-19 点数改版（Lv20 后每 4 级 1 点、单项上限 10）：已加的点超过新规则就全部退回重加（提示一次）
         { const h = s.heroes[k], spent = ATTRS.reduce((n, a) => n + h.attributes[a], 0); if (spent > attributePointsAt(h.level) || ATTRS.some(a => h.attributes[a] > attributeCap(h.level))) { h.attributes = zeroAttrs(); s.attrNotice = true; } }
       }
@@ -115,18 +118,20 @@ export function heroLevel(id: HeroKey): number { return record(id, false).level;
 /** 武将谱显示用：等级、当前经验、升下一级所需、本章上限（不写存档）。 */
 export function heroInfo(id: HeroKey): { level: number; xp: number; next: number; cap: number } { const r = record(id, false), cap = levelCap(); return { level: r.level, xp: r.xp, next: need(r.level), cap }; }
 /** 已加的属性点（副本）。 */
-export function heroAttrs(id: HeroKey): Record<AttributeId, number> { return { ...record(id, false).attributes }; }
+export function heroAttrs(id: HeroKey): Record<AttributeId, number> { return starMapOn() ? heroStarPoints(id) : { ...record(id, false).attributes }; } // 星图开着：四维点数 = 小星汇总
 /** 还没分配的永久属性点（受单项上限 attributeCap(等级) 约束）。 */
 export function heroFreePoints(id: HeroKey): number {
+  if (starMapOn()) return heroFreeStars(id); // 星图开着：没点的星
   const r = record(id, false), spent = ATTRS.reduce((n, a) => n + r.attributes[a], 0), room = ATTRS.reduce((n, a) => n + attributeCap(r.level) - r.attributes[a], 0);
   return Math.max(0, Math.min(room, pointsAt(r.level) - spent));
 }
 /** 出战时调用：确保有记录（第一次出战即写入），返回记录副本。 */
-export function enlistHero(id: HeroKey): HeroRecord { const r = record(id, true); return { level: r.level, xp: r.xp, attributes: { ...r.attributes } }; }
+export function enlistHero(id: HeroKey): HeroRecord { const r = record(id, true); return { level: r.level, xp: r.xp, attributes: starMapOn() ? heroStarPoints(id) : { ...r.attributes } }; }
 /** 永久加 1 点属性。 */
 /** 洗点：已加的属性点全部退回（等级、经验不变）。花费由武将谱（MasteryStore.respec）处理。 */
-export function resetHeroAttrs(id: HeroKey): void { const r = record(id, true); r.attributes = zeroAttrs(); commit(); }
+export function resetHeroAttrs(id: HeroKey): void { if (starMapOn()) { resetHeroStars(id); return; } /* 星图开着：洗点 = 清空已点亮的星（旧点数不动） */ const r = record(id, true); r.attributes = zeroAttrs(); commit(); }
 export function allocateHeroAttr(id: HeroKey, attr: AttributeId): boolean {
+  if (starMapOn()) return false; // 星图开着：不能再直接加点，走 lightHeroStar
   if (heroFreePoints(id) <= 0) return false;
   const r = record(id, true); if (r.attributes[attr] >= attributeCap(r.level)) return false;
   r.attributes[attr]++; commit(); return true;
@@ -179,5 +184,36 @@ export function setHeroProgress(id: HeroKey, level: number, xp: number): void {
 
 /** 武将某项属性的生效点数（本色折算 + 加点，折扣与擅长倍率之后）；武将谱 / 随从 / 面板共用（2026-11-20 属性改版）。 */
 export function heroStatE(id: HeroKey, attr: AttributeId): number {
-  const r = record(id, false); return statEffective(statSource(id), attr, r.attributes[attr], r.level);
+  const r = record(id, false); return statEffective(statSource(id), attr, heroAttrs(id)[attr], r.level);
+}
+
+// —— 星图（data/starMap.ts；开关 starMapOn() 默认关。下面的读写接口不看开关，方便测试 / 模拟器直接摆星；开关只决定结算用不用它们） ——
+/** 这位武将的入口（主属性；招募武将按本色最高的一维）。 */
+export function heroStarGate(id: HeroKey): string { return heroGate(id); }
+/** 已点亮的星（副本，不含自己的入口，按点亮先后）。 */
+export function heroStars(id: HeroKey): string[] { return [...(record(id, false).stars ?? [])]; }
+/** 星图小星汇总出的四维点数（结算与旧式加点完全一样：heroStats 等效点 + 分段折扣）。 */
+export function heroStarPoints(id: HeroKey): Record<AttributeId, number> { return starPoints(record(id, false).stars ?? [], heroGate(id)); }
+/** 城建 / 讲武堂 / 城池特产赠送的属性点：星图开着时算作额外的星（每位武将都有；关着时为 0，仍按旧规则在出征开局发属性点）。 */
+export function heroStarBonus(): number { if (!starMapOn()) return 0; try { return Math.max(0, Math.floor(permanentEffects().attributePoints) || 0); } catch { return 0; } }
+/** 一共有几颗星可花：每升 1 级 1 颗 + 城建赠星。 */
+export function heroStarsTotal(id: HeroKey): number { return starsAt(record(id, false).level) + heroStarBonus(); }
+/** 还没点的星。 */
+export function heroFreeStars(id: HeroKey): number { return Math.max(0, heroStarsTotal(id) - (record(id, false).stars?.length ?? 0)); }
+/** 点亮一颗星（要有星可花、与已点亮的相连、主星满足门槛且不超过 2 颗）。 */
+export function lightHeroStar(id: HeroKey, star: string): boolean {
+  if (heroFreeStars(id) <= 0 || !canLight(record(id, false).stars ?? [], star, heroGate(id))) return false;
+  const r = record(id, true); r.stars = [...(r.stars ?? []), star]; commit(); return true;
+}
+/** 洗点：已点亮的星全部退回（等级、经验、旧属性点不变）。花费由武将谱（MasteryStore.respec）处理。 */
+export function resetHeroStars(id: HeroKey): void { const r = record(id, true); delete r.stars; commit(); }
+/**
+ * 测试 / 模拟器 / 平衡对照用：直接给某位武将摆一组已点亮的星（不看有没有星可花；不相连、不够主星门槛的会被丢掉）。
+ * 给 level 时顺便把等级设成该级（经验清零）。返回实际摆上的星。预设走法见 starMap.presetStars。
+ */
+export function setHeroStars(id: HeroKey, ids: Iterable<string>, level?: number): string[] {
+  const r = record(id, true), stars = orderStars(ids, heroGate(id));
+  if (level !== undefined) { r.level = Math.max(1, Math.min(99, Math.floor(level))); r.xp = 0; }
+  if (stars.length) r.stars = stars; else delete r.stars;
+  commit(); return [...stars];
 }

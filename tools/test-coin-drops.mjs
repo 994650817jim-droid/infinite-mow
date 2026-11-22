@@ -137,7 +137,9 @@ ck('归档：首领 / 精锐按兵种；role fodder = 炮灰档；pack / swim �
   else {
     const norm = s => s.replace(/\r\n/g, '\n'), old = f => norm(execFileSync('git', ['show', `${BASE}:${f}`], { encoding: 'utf8', maxBuffer: 1 << 28 })), cur = f => norm(readFileSync(f, 'utf8'));
     ck(`开关关闭走的旧入账 Legion.onKill（杂兵 +1、精锐 +5、首领 +20）：src/systems/Legion.ts 与 ${BASE} 一字不差`, old('src/systems/Legion.ts') === cur('src/systems/Legion.ts') && /this\.food \+= enemy\.kind === 'boss' \? 20 : enemy\.kind === 'elite' \? 5 : 1;/.test(cur('src/systems/Legion.ts')));
-    ck(`首领阶段额度 data/bossStall.ts 与 ${BASE} 一字不差`, old('src/data/bossStall.ts') === cur('src/data/bossStall.ts'));
+    // bossStall.ts 之后被 ac6a6f3c（1-2 不再战线推进，用户批准）有意改过；这里只确认钱币接入没动它，所以对照它最后一次有意修改的提交。
+    const STALL_BASE = process.env.STALL_BASE ?? 'ac6a6f3c', oldAt = (c, f) => norm(execFileSync('git', ['show', `${c}:${f}`], { encoding: 'utf8', maxBuffer: 1 << 28 }));
+    ck(`首领阶段额度 data/bossStall.ts 与 ${STALL_BASE} 一字不差`, oldAt(STALL_BASE, 'src/data/bossStall.ts') === cur('src/data/bossStall.ts'));
     const o = old('src/scenes/GameScene.ts'), c = cur('src/scenes/GameScene.ts');
     ck('GameScene.killEnemy 里原来那一行「if (grant.food) this.legion.onKill(enemy);」只是前面加了开关分支：关着时执行的就是它', o.includes('    if (grant.food) this.legion.onKill(enemy); // 首领阶段超额：随军粮 0') && c.includes('    else if (grant.food) this.legion.onKill(enemy);') && !c.includes('\n    if (grant.food) this.legion.onKill(enemy);'));
     ck('经验信物的吸取半径算法没变（只是提成了 pickupRadiusNow，钱币共用）', o.includes('this.combatNow < this.gemMagnetUntil ? 1e9 : this.player.stats.pickupRadius * this.player.growth.pickupMultiplier()') && c.includes('protected pickupRadiusNow(): number { return this.combatNow < this.gemMagnetUntil ? 1e9 : this.player.stats.pickupRadius * this.player.growth.pickupMultiplier(); }'));

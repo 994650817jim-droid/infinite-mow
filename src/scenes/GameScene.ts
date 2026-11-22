@@ -149,6 +149,9 @@ import { StagePhaseRunner } from '../systems/StagePhases';
 import { BattleFortunes } from '../systems/BattleFortunes';
 import { BattleHeal } from '../systems/BattleHeal';
 import { CH1_TRIAL_ID, CH1V6, ch1TrialOn } from '../data/ch1Trial';
+import { CoinRoller, coinDropsOn, coinKindOf } from '../data/coinDrops';
+import { CoinDropField } from '../systems/CoinDropField';
+import { ROSTER } from '../data/enemyRoster';
 import { BATTLE_HEAL } from '../data/battleHeal';
 import { TentEdgeHints, registerTents, tentMarks, type TentCtx } from '../systems/SpawnTents';
 import type { CampTier } from '../data/campSiege';
@@ -1228,6 +1231,7 @@ export class GameScene extends Phaser.Scene {
     this.bolts = [];
     this.bullets = [];
     this.gems = [];
+    this.coinField = null; this.coinRoller = new CoinRoller(); // 钱币掉落物：每场一个新的池、保底计数与余数
     this.dmgFx = [];
     this.blades = [];
     this.elapsed = 0;
@@ -1510,6 +1514,7 @@ export class GameScene extends Phaser.Scene {
     this.updateBolts(dt, time);
     this.updateBullets(dt);
     this.updateGems(dt);
+    this.coinField?.update(this.combatNow, dt, this.player.x, this.player.y - 6, this.pickupRadiusNow()); // 钱币掉落物：吸取范围与经验信物同一个
     if (this.mode === 'none' && !this.over) this.player.passive.update(time, (enemy, amount) => this.hitEnemy(enemy, amount, time, 'fire', false, false));
     this.updateDmgFx(dt);
     this.checkEnd();
@@ -2933,7 +2938,9 @@ export class GameScene extends Phaser.Scene {
     if (this.starSpellKill) { this.starSpellKill = false; this.starPyre(enemy); } // 星图主星·火烧连营（开关关着 / 没点亮时 starPyre 立刻返回）
     this.buildCombat.onKill(enemy,this.combatNow);
     this.controlBuild?.onKill(enemy,this.combatNow);
-    if (grant.food) this.legion.onKill(enemy); // 首领阶段超额：随军粮 0
+    // 首领阶段超额（grant.food = false）：钱币 0——不掉、保底也不计数。开关 coinDropsOn() 关着时仍是击杀直接入账；第一章试验数值开着时掉落用 CH1V6.coins 那张表
+    if (coinDropsOn()) { if (grant.food) this.dropCoins(enemy); }
+    else if (grant.food) this.legion.onKill(enemy); // 旧的击杀直接入账（tools/test-boss-stall 按这一句原文断言）
     if (grant.drops) this.itemDrops?.onKill(enemy); // 超额：不掉兵装、不掉残卷
     if(kind==='elite')this.battleHeal?.onEliteDown(enemy.x,enemy.y); // 精锐：概率掉军中伤药（保底）
     if(enemy.kind==='boss')this.runMerit.boss++;else if(enemy.kind==='elite'&&grant.merit&&this.runMerit.elite<BATTLE_LOOT_CAP[this.battleCapKind()].merit)this.runMerit.elite++; // 战功：精英 / 首领（首领阶段超额的精锐不计）
@@ -3210,8 +3217,41 @@ export class GameScene extends Phaser.Scene {
 
   /** “搜集辎重”：此时刻之前全场宝石无视距离飞向主将。 */
   gemMagnetUntil = 0;
+  /** 掉落物的吸取半径（经验信物与钱币共用）：主将拾取范围 × 兵装 / 星图加成；鸣金、搜集辎重期间全场。 */
+  protected pickupRadiusNow(): number { return this.combatNow < this.gemMagnetUntil ? 1e9 : this.player.stats.pickupRadius * this.player.growth.pickupMultiplier(); }
+  /**
+   * 钱币掉落（data/coinDrops.ts，共享笔记 coin-drops.md；开关 coinDropsOn() 默认开）：敌人倒下不再直接给钱，按表掉「钱币掉落物」，
+   * 捡到（碰到主将）那一刻才入账，再播铜钱绕身飞进行囊（coinBurst）。落地 12 秒没捡自动飞来；一关打完 / 进行营前把地上的全部收走，不会丢。
+   * 池满（60）或铜钱贴图没载入时直接入账。首领 4 堆撒开。
+   */
+  protected coinRoller = new CoinRoller();
+  protected coinField: CoinDropField | null = null;
+  protected dropCoins(enemy: Enemy): void {
+    const piles = this.coinRoller.roll(coinKindOf(enemy.kind, ROSTER[enemy.def.roster ?? '']?.role), Math.random, ch1TrialOn(this.hardKey()) ? CH1V6.coins : undefined); if (!piles) return;
+    const x = enemy.sprite.x, y = enemy.sprite.y, n = piles.length, a0 = Math.random() * Math.PI * 2;
+    for (let i = 0; i < n; i++) {
+      const ox = n > 1 ? Math.cos(a0 + i / n * Math.PI * 2) * 30 : 0, oy = n > 1 ? Math.sin(a0 + i / n * Math.PI * 2) * 20 : 0;
+      if (!this.textures.exists(COIN_ART.flip) || !this.coinDropField().spawn(x + ox, y + oy, piles[i], this.combatNow)) this.gainCoins(piles[i], x + ox, y + oy);
+    }
+  }
+  private coinDropField(): CoinDropField {
+    return this.coinField ??= new CoinDropField({
+      view: () => { const img = this.add.image(0, 0, COIN_ART.flip, 0).setDisplaySize(18, 18).setDepth(DEPTH.gem).setName('coin-drop').setVisible(false); return { place: (px, py, f) => { img.setPosition(px, py); if (Number(img.frame.name) !== f) img.setFrame(f); }, show: on => { img.setVisible(on); } }; },
+      onCollect: (value, px, py) => this.gainCoins(value, px, py),
+      otherLive: () => this.gems.reduce((k, g) => k + (g.active ? 1 : 0), 0),
+      alwaysLite: !IS_DESKTOP,
+    });
+  }
+  /** 钱币入账 + 铜钱从 (x, y) 飞进行囊（不飘字；枚数分档与音效在 ui/CoinFly）。 */
+  private gainCoins(value: number, x: number, y: number): void { this.coinBurst(x, y, value); this.legion.food += value; }
+  /** 地上还没捡的钱币全部入账（一关打完、进行营、结算前调）。 */
+  protected sweepCoins(): void { const v = this.coinField?.collectAll() ?? 0; if (v > 0) this.gainCoins(v, this.player.x, this.player.y); }
+  /** 在场的钱币掉落物（机器人「顺路捡钱币」用）：世界坐标 x / y、面值 value、状态 phase（drop 落地中 / rest 在地上 / fly 飞向主将）。 */
+  coinDropList(): Array<{ x: number; y: number; value: number; phase: 'drop' | 'rest' | 'fly' }> { return this.coinField?.list() ?? []; }
+  /** 钱币掉落统计（平衡记录用）：判定 / 掉落 / 保底次数与掉出的总额，以及掉落物的生成 / 捡到 / 自动入囊 / 池满次数。 */
+  coinDropStats(): { rolls: number; drops: number; pity: number; total: number; spawned: number; collected: number; auto: number; overflow: number; live: number } { const f = this.coinField; return { ...this.coinRoller.stats, spawned: f?.stats.spawned ?? 0, collected: f?.stats.collected ?? 0, auto: f?.stats.auto ?? 0, overflow: f?.stats.overflow ?? 0, live: f?.live ?? 0 }; }
   protected updateGems(dt: number): void {
-    const radius = this.combatNow < this.gemMagnetUntil ? 1e9 : this.player.stats.pickupRadius * this.player.growth.pickupMultiplier(), now = this.combatNow, art = this.gemArt();
+    const radius = this.pickupRadiusNow(), now = this.combatNow, art = this.gemArt();
     for (const sp of this.gemSparks) { const t = (now - sp.at) / GEM_FX.sparkMs; if (t >= 1) { if (sp.img.visible) sp.img.setVisible(false); continue; } sp.img.setFrame(Math.min(3, Math.floor(t * 4))).setPosition(this.player.x, this.player.y - 18); }
     for (const gem of this.gems) {
       if (!gem.active) continue;
@@ -3391,6 +3431,7 @@ export class GameScene extends Phaser.Scene {
     if (this.resultPanel) this.resultPanel.setVisible(mode === 'result');
     // 告捷：按进度补查武将来投（第一章通关诸葛亮、白门楼 / 三英战吕布貂蝉……），揭幕压在结算上面
     if (mode === 'result' && this.victory) window.setTimeout(() => { if (this.scene.isActive() && this.mode === 'result') checkHeroJoins(this); }, 700);
+    if (mode === 'rest') this.sweepCoins(); // 进行营前把地上的钱币收走（行营里要花）
     if (mode === 'rest') commitBattle(); // 关卡告捷进行营：本场所得生效
     if (mode === 'rest' && !this.restIntroPlayed) { this.restIntroPlayed = true; this.playRestIntro(); }
     if (mode === 'rest') this.pointsGuide(); // 属性点：第一次能加时引导一次
@@ -4703,6 +4744,7 @@ export class GameScene extends Phaser.Scene {
 
   protected finish(victory: boolean, reason: RunEndReason = 'death'): void {
     if (this.over) return;
+    this.sweepCoins(); // 地上没捡的钱币先入账（结算、战报按入账后的数）
     this.over = true;
     if (victory) this.fortunes?.farewell(); // 机缘降将：本关结束告别一句
     commitBattle(); // 告捷（战报）与战败都按现行规则结算，本场写入生效

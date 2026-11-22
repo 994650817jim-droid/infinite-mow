@@ -34,6 +34,11 @@ export const CH1V6 = {
   archerDamage: .85 as number,
   /** 随军粮（原 每杀 1 粮、精锐 5、首领 20）：每 2 杀 1 粮、精锐 3、首领 40。 */
   food: { perKills: 2, elite: 3, boss: 40 },
+  /**
+   * 钱币掉落开着时（data/coinDrops coinDropsOn）第一章试验用的钱币表（2026-11-22 平衡，coin-drops.md 8.2），对齐上面的「每 2 杀 1、精锐 3、首领 40」：
+   * 掉率、分档、保底同正式表；普通兵每次面值 × minionMul（每杀期望减半）；精锐必掉 elite；首领必掉 boss，分 bossPiles 堆（各 5）。
+   */
+  coins: { minionMul: .5, elite: 3, boss: 40, bossPiles: 8 },
   /** 部曲生命倍率（原 1；第一章新手期）。 */
   troopHp: 1.5,
   /** 1-1 首领出场时主将生命 < below：在主将与首领之间必出一处回血点（泉眼 / 水井），这一处水量 charge 最大生命（原泉眼 .15）。 */

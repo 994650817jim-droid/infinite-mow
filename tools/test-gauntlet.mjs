@@ -18,9 +18,10 @@ const M = await load('src/data/gauntlet.ts'), G = M.GAUNTLET, P = M.GAUNTLET_POO
 ck('开关默认关；?gauntlet=1 开、?gauntlet=0 关', M.gauntletOn('') === false && M.gauntletOn('?gauntlet=1') === true && M.gauntletOn('?gauntlet=0') === false && M.gauntletOn('?dev=1') === false);
 // 名将池（适配表 gauntlet-roster.md，分批接入）：BATCH = 已接入的批次名单
 const BATCH1 = ['zhangliang', 'zhangbao', 'lijue', 'guosi', 'zhangxiu', 'caochun', 'caimao', 'zhaofan', 'liudu', 'huangzhong'];
-const NEW = [...BATCH1];
+const BATCH2 = ['huaxiong', 'xurong', 'yanliang', 'yanghuai', 'zhangren', 'pangde', 'sunhuan', 'mangyachang', 'zhurong', 'zhanghe'];
+const NEW = [...BATCH1, ...BATCH2];
 { const M2 = await load('src/data/bossMoves.ts'), BM = M2.BOSS_MOVES, ids = P.map(b => b.id);
-  ck('名将池：第一版 12 位 + 第一批 10 位，不重名；每位有出场段（前 / 中 / 后 / 守关）与解锁关卡', P.length === 22 && new Set(P.map(b => b.name)).size === P.length && BATCH1.every(id => ids.includes(id)) && P.every(b => ['front', 'mid', 'late', 'gate'].includes(b.tier) && /^[a-z]+-[123]$/.test(b.clearKey)), P.map(b => b.name + ':' + b.tier));
+  ck(`名将池：第一版 12 位 + 已接入 ${NEW.length} 位，不重名；每位有出场段（前 / 中 / 后 / 守关）与解锁关卡`, P.length === 12 + NEW.length && new Set(P.map(b => b.name)).size === P.length && NEW.every(id => ids.includes(id)) && P.every(b => ['front', 'mid', 'late', 'gate'].includes(b.tier) && /^[a-z]+-[123]$/.test(b.clearKey)), P.map(b => b.name + ':' + b.tier));
   const over = P.filter(b => b.ctrl === 'moveset').map(b => { const d = BM[b.arc + '.' + b.id] ?? BM[b.id], drop = b.drop ?? [], names = d ? [...new Set([...d.p1.moves, ...d.p2.moves].map(m => m.name).filter(n => !drop.includes(n)))] : null; return { id: b.id, names, dropOk: drop.every(n => d && [...d.p1.moves, ...d.p2.moves].some(m => m.name === n)) }; });
   ck('招式框架名将都有招式配置；按适配表删的招确实存在（删完每阶段仍有招）', over.every(o => o.names && o.names.length && o.dropOk), over.filter(o => !o.names || !o.dropOk)); }
 { const rnd = (s => () => (s = (s * 16807) % 2147483647) / 2147483647)(7), T = ['front', 'mid', 'late', 'gate'];
@@ -126,20 +127,21 @@ if (BASE) {
     // 新接入名将巡检（适配表分批）：逐位强制登场 → 图在、有出招控制器、几秒内出招 → 斩 → 战利品（黄忠收为副将，其余取辎重）→ 下一位
     { await until(() => { const s = window.__game.scene.getScene('GauntletGameScene'); return s?.player?.alive && s.elapsed > .5; }, 30000);
       await ev(() => { const s = window.__game.scene.getScene('GauntletGameScene'); window.__S = s; s.gEndless = true; s.player.damageImmune = true; });
-      const rows = [], FOLLOW = 'huangzhong', SHOT = 'caochun';
+      const rows = [], FOLLOW = 'huangzhong', SHOTS = { caochun: 'gauntlet-5-newboss.png', huaxiong: 'gauntlet-7-huaxiong.png' };
       for (const id of NEW) {
         await unblock();
         await ev(async id => { const s = window.__S, G = await import('/src/data/gauntlet.ts'); s.gOrder[s.gWave - 1] = G.GAUNTLET_POOL.find(x => x.id === id); s.gPhase = 'mow'; s.gAt = s.elapsed - 999; }, id);
         const up = await until(() => window.__S.gPhase === 'boss' && !!window.__S.boss?.active, 8000);
         await ev(() => { const s = window.__S, bz = s.boss; if (bz) { s.player.x = bz.x - 150; s.player.y = bz.y; } });
-        const cast = await until(() => { const s = window.__S; if (s.mode === 'levelup') s.chooseUpgrade(0); return (s.gauntletCtrl?.metrics?.moves ?? 0) > 0; }, 10000); /* 开局 / 升级三选一会暂停战斗：等的时候顺手选掉 */
-        if (id === SHOT) { await wait(400); await p.screenshot({ path: OUT + '/gauntlet-5-newboss.png' }); }
-        const row = await ev(() => { const s = window.__S, bz = s.boss, c = s.gauntletCtrl, tex = bz?.sprite.texture.key; return { id: s.gCur?.id, tex, texOk: !!tex && tex !== '__MISSING' && tex !== '__DEFAULT' && s.textures.get(tex).frameTotal > 4, ctrl: c?.constructor?.name ?? null, moves: c?.metrics?.moves ?? 0, mounted: !!c?.mounted }; });
+        await ev(() => { window.__castSeen = false; });
+        const cast = await until(() => { const s = window.__S, st = s.gauntletState; if (s.mode === 'levelup') s.chooseUpgrade(0); if (st && !['approach', 'idle', 'dead'].includes(st)) window.__castSeen = true; return (s.gauntletCtrl?.metrics?.moves ?? 0) > 0 || window.__castSeen; }, 10000); /* 开局 / 升级三选一会暂停战斗：等的时候顺手选掉；原生控制器（华雄 / 徐荣）看状态离开「逼近」 */
+        if (SHOTS[id]) { await wait(400); await p.screenshot({ path: OUT + '/' + SHOTS[id] }); }
+        const row = await ev(() => { const s = window.__S, bz = s.boss, c = s.gauntletCtrl, tex = bz?.sprite.texture.key; return { id: s.gCur?.id, tex, texOk: !!tex && tex !== '__MISSING' && tex !== '__DEFAULT' && s.textures.get(tex).frameTotal > 4, ctrl: c?.constructor?.name ?? (s.huaxiong ? 'HuaxiongBoss' : s.xurong ? 'XurongBoss' : null), moves: c?.metrics?.moves ?? 0, mounted: !!c?.mounted }; });
         await ev(() => { const s = window.__S, bz = s.boss; if (bz) { bz.hp = 0; s.killEnemy(bz); } });
         const down = await until(() => window.__S.gPhase === 'clear', 6000), loot = await until(() => { const s = window.__S; if (s.mode === 'levelup') s.chooseUpgrade(0); return s.mode === 'bossloot'; }, 8000);
         await ev(follow => window.__S.chooseUpgrade(follow ? 0 : 1), id === FOLLOW);
         if (id === FOLLOW) { await wait(1200); const f = await ev(() => { const s = window.__S, g = s.gauntletFollowers.at(-1); return g ? { name: g.f.label.text, look: g.f.look?.tex, tex: g.f.sprite.texture.key, boss: g.boss.id } : null; }); row.follower = f;
-          await ev(() => { const s = window.__S, g = s.gauntletFollowers.at(-1); if (g) { s.player.x = g.f.sprite.x - 60; s.player.y = g.f.sprite.y; } }); await wait(500); await p.screenshot({ path: OUT + '/gauntlet-6-newfollower.png' }); }
+          await ev(() => { const s = window.__S, g = s.gauntletFollowers.at(-1); if (g) { s.player.x = g.f.sprite.x - 220; s.player.y = g.f.sprite.y; } }); await wait(150); await p.screenshot({ path: OUT + '/gauntlet-6-newfollower.png' }); }
         await ev(() => { const s = window.__S; s.gAt = s.elapsed - 60; });
         rows.push({ ...row, want: id, up, cast, down, loot });
       }

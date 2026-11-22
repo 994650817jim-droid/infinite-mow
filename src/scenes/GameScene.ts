@@ -329,7 +329,7 @@ export class GameScene extends Phaser.Scene {
   private worldCampaign=false;
   /** 乱世难度（天下地图对已平定章节发起）：敌军生命 / 伤害放大，见 data/hardMode.ts。 */
   protected hardMode=false;
-  private huaxiong:HuaxiongBoss|null=null;private xurong:XurongBoss|null=null;
+  protected huaxiong:HuaxiongBoss|null=null;protected xurong:XurongBoss|null=null;
   protected sishuiObstacles:SishuiObstacles|null=null;
   // ———— 首领招降（systems/Parley.ts + data/surrender.ts） ————
   parley:Parley|null=null;

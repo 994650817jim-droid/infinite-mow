@@ -10,6 +10,8 @@ export function gauntletOn(search: string = typeof location !== 'undefined' ? lo
   try { return typeof localStorage !== 'undefined' && localStorage.getItem(GAUNTLET_KEY) === '1'; } catch { return false; }
 }
 
+import type { MoveDef } from './bossMoves';
+
 /** 名将怎么出招：native = 战斗场景原生控制器（张角 / 吕布）；moveset = 首领招式框架（data/bossMoves）；yuanshu / caoren / guandu = 各自的专属控制器。 */
 export type GauntletCtrl = 'native' | 'moveset' | 'yuanshu' | 'caoren' | 'guandu';
 /** 名将属于哪一篇（取首领图、首领数值用）。 */
@@ -26,14 +28,19 @@ export interface GauntletBoss {
   clearKey: string;
   /** 本模式每位最多 3 招：从招式框架里去掉的招（按招名；二阶段同名加强版不另算）。 */
   drop?: readonly string[];
+  /** 按适配表加的招（如孙桓的吴军军旗：原关卡目标「砍倒吴军军旗」改成随身插旗）。 */
+  add?: { p1?: readonly MoveDef[]; p2?: readonly MoveDef[] };
+  /** 二阶段加强（庞德：原场景层的「抬棺狂暴」并进二阶段）：移速 / 招式伤害倍率。 */
+  p2Boost?: { speed: number; dmg: number };
   /** 换掉了本章哪位最终首领（依赖关卡机关）；关掉了他招式之外的哪些关卡机关（写进交接）。 */
   replaces?: string; off?: string;
 }
 /**
  * 名将池（适配表 gauntlet-roster.md，统筹 11-21 同意；分四批接入，这里是已接入的）：
- * - 第一版 12 位 + 第一批 10 位（纯招式框架：张梁、张宝、李傕、郭汜、张绣、曹纯、蔡瑁、赵范、刘度、黄忠）。
+ * - 第一版 12 位 + 第一批 10 位（纯招式框架：张梁、张宝、李傕、郭汜、张绣、曹纯、蔡瑁、赵范、刘度、黄忠）
+ *   + 第二批 10 位（华雄、徐荣原生控制器；颜良官渡控制器；杨怀、张任、庞德、孙桓、忙牙长、祝融、张郃招式框架）。
  * - 招式框架首领（moveset）的招式只有冲锋 / 扇射 / 横扫 / 地裂 / 落点 / 突刺 / 奔射 / 隐身 / 召兵 / 插旗，都不依赖关卡机关；关卡层的机关（山头、攻城、限时突围、七擒、劝降）在本模式不建，第三、四批按适配表改成随身布置 / 全场险情 / 阶段。
- * - 还没接入的（第二～四批）：华雄、徐荣、董卓、颜良、文丑、杨怀、张任、张郃、夏侯渊、庞德、孙桓、陆逊、忙牙长、兀突骨、祝融、司马懿。
+ * - 还没接入的（第三、四批）：董卓、文丑、夏侯渊、陆逊、兀突骨、司马懿；第一版里的几位（淳于琼、朱然、郝昭、刘璋、曹操、孟获、韩玄、吕蒙、袁术、曹仁）第三、四批按适配表升级。
  */
 export const GAUNTLET_POOL: readonly GauntletBoss[] = [
   // 第一章
@@ -41,6 +48,8 @@ export const GAUNTLET_POOL: readonly GauntletBoss[] = [
   { id: 'zhangbao', name: '张宝', chapter: 1, arc: 'huangjin', stage: 2, ctrl: 'moveset', tier: 'front', clearKey: 'huangjin-2', drop: ['撒豆成兵'] },
   { id: 'zhangjiao', name: '张角', chapter: 1, arc: 'huangjin', stage: 3, ctrl: 'native', tier: 'front', clearKey: 'huangjin-3', off: '1-3 法坛、广宗城门（场景布景）' },
   // 第二章
+  { id: 'huaxiong', name: '华雄', chapter: 2, arc: 'hulao', stage: 1, ctrl: 'native', tier: 'front', clearKey: 'hulao-1', off: '汜水关城墙、箭楼、温酒彩蛋（布景）' },
+  { id: 'xurong', name: '徐荣', chapter: 2, arc: 'hulao', stage: 2, ctrl: 'native', tier: 'front', clearKey: 'hulao-2', off: '荥阳伏兵营帐（布景）' },
   { id: 'lubu', name: '吕布', chapter: 2, arc: 'hulao', stage: 3, ctrl: 'native', tier: 'gate', clearKey: 'hulao-3' },
   // 第三章
   { id: 'lijue', name: '李傕', chapter: 3, arc: 'qunxiong', stage: 1, ctrl: 'moveset', tier: 'front', clearKey: 'third-1', drop: ['西凉残部'], off: '李郭双首领（单独出场）' },
@@ -48,6 +57,7 @@ export const GAUNTLET_POOL: readonly GauntletBoss[] = [
   { id: 'zhangxiu', name: '张绣', chapter: 3, arc: 'qunxiong', stage: 2, ctrl: 'moveset', tier: 'front', clearKey: 'third-2', drop: ['白马突阵', '二连扇刺'] },
   { id: 'yuanshu', name: '袁术', chapter: 3, arc: 'qunxiong', stage: 3, ctrl: 'yuanshu', tier: 'mid', clearKey: 'third-3' },
   // 第四章
+  { id: 'yanliang', name: '颜良', chapter: 4, arc: 'guandu', stage: 1, ctrl: 'guandu', tier: 'mid', clearKey: 'guandu-1', off: '焚粮军心（不减伤）、4-1 负伤败走（本模式正常斩杀）' },
   { id: 'chunyuqiong', name: '淳于琼', chapter: 4, arc: 'guandu', stage: 3, ctrl: 'guandu', tier: 'mid', clearKey: 'guandu-3', off: '焚粮减伤（乌巢粮仓；第三批改随身粮垛）' },
   // 第五章
   { id: 'caochun', name: '曹纯', chapter: 5, arc: 'chibi', stage: 1, ctrl: 'moveset', tier: 'mid', clearKey: 'chibi-1', drop: ['马刀横扫'], off: '护百姓辎重（关卡目标）' },
@@ -59,14 +69,21 @@ export const GAUNTLET_POOL: readonly GauntletBoss[] = [
   { id: 'huangzhong', name: '黄忠', chapter: 6, arc: 'jingnan', stage: 3, ctrl: 'moveset', tier: 'mid', clearKey: 'jingnan-3', off: '先战黄忠 / 劝降（单独出场）' },
   { id: 'hanxuan', name: '韩玄', chapter: 6, arc: 'jingnan', stage: 3, ctrl: 'moveset', tier: 'mid', clearKey: 'jingnan-3', off: '先战黄忠、劝降（关卡层；第三批改黄忠随行）' },
   // 第七章
+  { id: 'yanghuai', name: '杨怀', chapter: 7, arc: 'shu', stage: 1, ctrl: 'moveset', tier: 'mid', clearKey: 'shu-1', off: '山道两侧伏兵与滚石（关卡层）' },
+  { id: 'zhangren', name: '张任', chapter: 7, arc: 'shu', stage: 2, ctrl: 'moveset', tier: 'mid', clearKey: 'shu-2', off: '护住凤雏（护送）' },
   { id: 'liuzhang', name: '刘璋', chapter: 7, arc: 'shu', stage: 3, ctrl: 'moveset', tier: 'mid', clearKey: 'shu-3', off: '冲车破城、巷战、州府（关卡层；第三批改随身城门）' },
   // 第八章
+  { id: 'zhanghe', name: '张郃', chapter: 8, arc: 'hanzhong', stage: 1, ctrl: 'moveset', tier: 'late', clearKey: 'hanzhong-1', drop: ['连环枪击'], off: '8-1 山头、12-1 断汲道（场地）；8-2 双首领（单独出场）' },
   { id: 'caocao', name: '曹操', chapter: 8, arc: 'hanzhong', stage: 3, ctrl: 'moveset', tier: 'gate', clearKey: 'hanzhong-3', off: '汉水两处山头（关卡层；第四批改高地圈）' },
   // 第九章
+  { id: 'pangde', name: '庞德', chapter: 9, arc: 'xiangfan', stage: 2, ctrl: 'moveset', tier: 'late', clearKey: 'xiangfan-2', p2Boost: { speed: 1.3, dmg: 1.2 }, off: '水淹七军（场地）；抬棺狂暴并进二阶段' },
   { id: 'lvmeng', name: '吕蒙', chapter: 9, arc: 'xiangfan', stage: 3, ctrl: 'moveset', tier: 'late', clearKey: 'xiangfan-3', off: '麦城限时突围（关卡层；第三批改伪装伏兵）' },
   // 第十章
+  { id: 'sunhuan', name: '孙桓', chapter: 10, arc: 'yiling', stage: 1, ctrl: 'moveset', tier: 'late', clearKey: 'yiling-1', drop: ['夷道死守'], add: { p1: [{ kind: 'flags', name: '吴军军旗', windupMs: 700, cd: 16000, dmg: 0, count: 3, radius: 170, hp: 90, takenMul: .5 }] }, off: '砍倒吴军军旗（关卡目标 → 随身插旗）' },
   { id: 'zhuran', name: '朱然', chapter: 10, arc: 'yiling', stage: 2, ctrl: 'moveset', tier: 'late', clearKey: 'yiling-2', off: '连营营帐（关卡层；第三批改随身营帐）' },
   // 第十一章
+  { id: 'mangyachang', name: '忙牙长', chapter: 11, arc: 'nanzheng', stage: 1, ctrl: 'moveset', tier: 'late', clearKey: 'nanzheng-1', off: '泸水瘴气毒泉（场地；瘴气由招式自带）' },
+  { id: 'zhurong', name: '祝融', chapter: 11, arc: 'nanzheng', stage: 3, ctrl: 'moveset', tier: 'late', clearKey: 'nanzheng-3', off: '孟获祝融双首领（单独出场）' },
   { id: 'menghuo', name: '孟获', chapter: 11, arc: 'nanzheng', stage: 3, ctrl: 'moveset', tier: 'gate', clearKey: 'nanzheng-3', off: '七擒（擒而复纵，关卡层；第三批改原地再起）' },
   // 第十二章
   { id: 'haozhao', name: '郝昭', chapter: 12, arc: 'beifa', stage: 2, ctrl: 'moveset', tier: 'late', clearKey: 'beifa-2', off: '陈仓城门、城头箭楼（关卡层；第四批改随身箭楼）' },

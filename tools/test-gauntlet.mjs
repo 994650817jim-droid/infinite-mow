@@ -18,7 +18,7 @@ const src = p => readFileSync(join(root, p), 'utf8').replace(/\r\n/g, '\n');
 
 // ———— 一、纯 node
 const M = await load('src/data/gauntlet.ts'), G = M.GAUNTLET, P = M.GAUNTLET_POOL;
-ck('一开始就能玩：没有开关（gauntletOn 去掉了）；模式名是一个常量 GAUNTLET_NAME（用户 11-22 定名「名将连战幸存者」），主菜单按钮下的小字是 GAUNTLET_TAGLINE', M.gauntletOn === undefined && M.GAUNTLET_NAME === '名将连战幸存者' && M.GAUNTLET_TAGLINE === '从零开局 · 十阵斩将' && M.GAUNTLET_HERO_KEY === 'im_gauntlet_hero');
+ck('一开始就能玩：没有开关（gauntletOn 去掉了）；模式名是一个常量 GAUNTLET_NAME（用户 11-22 定名「名将连战幸存者」），选将页说明 / 天下地图详情的小字是 GAUNTLET_TAGLINE（11-22 主菜单按钮下不再写）', M.gauntletOn === undefined && M.GAUNTLET_NAME === '名将连战幸存者' && M.GAUNTLET_TAGLINE === '从零开局 · 十阵斩将' && M.GAUNTLET_HERO_KEY === 'im_gauntlet_hero');
 // 名将池（适配表 gauntlet-roster.md，分批接入）：BATCH = 已接入的批次名单
 const BATCH1 = ['zhangliang', 'zhangbao', 'lijue', 'guosi', 'zhangxiu', 'caochun', 'caimao', 'zhaofan', 'liudu', 'huangzhong'];
 const BATCH2 = ['huaxiong', 'xurong', 'yanliang', 'yanghuai', 'zhangren', 'pangde', 'sunhuan', 'mangyachang', 'zhurong', 'zhanghe'];
@@ -99,13 +99,28 @@ if (BASE) {
   const wait = ms => p.waitForTimeout(ms), ev = (f, a) => p.evaluate(f, a);
   const until = async (f, ms, a) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (await ev(f, a)) return true; await wait(200); } return false; };
   /** 升级三选一 / 战斗支援之类的弹窗先关掉（战利品面板 bossloot 不动，测试自己选）。 */
-  /** 主菜单：名将连战漆金按钮在「匡扶汉室」正下方、不压它、不压底部一行；底部一行四项（+ 退出）一行不挤；按钮字 = 模式名常量。 */
+  /** 主菜单（11-22 用户「这四个也要设计一下 优化。然后名将连战幸存者 名字没对齐按钮，下面那行字可以不要」）：
+   *  两颗水墨按钮的字都在墨迹的视觉中心上（页面里按贴图像素独立算九宫拉伸后的质心）；名将连战按钮下面没有小字；
+   *  底部一行是小图标按钮（手绘圆章 + 下方名字、无框、无「·」），在两颗按钮正下方等距排开、不压按钮、不出屏。 */
   const menuLayout = () => { const s = window.__game.scene.getScene('MenuScene'), R = n => { const o = s.children.getByName(n); if (!o || !o.visible) return null; const b = o.getBounds(); return { x: Math.round(b.x), r: Math.round(b.right), y: Math.round(b.y), b: Math.round(b.bottom), cx: Math.round(b.centerX) }; };
-    const pri = R('start-campaign'), g = R('home-gauntlet'), tag = R('home-gauntlet-tagline'), lab = s.children.getByName('home-gauntlet-label'), hit = s.children.getByName('home-gauntlet');
-    const row = ['home-saves', 'home-codex', 'home-review', 'home-settings', 'home-quit'].map(n => ({ n, ...R(n) })).filter(o => o.x !== undefined).sort((a, b) => a.x - b.x), rowTop = Math.min(...row.map(o => o.y));
-    const hitBox = (a, b) => !!a && !!b && a.x < b.r && b.x < a.r && a.y < b.b && b.y < a.b, W = s.scale.width, H = s.scale.height;
-    const r = { pri, g, tag, label: lab?.text, enabled: !!hit?.input?.enabled, row: row.map(o => o.n), rowTop, W, H };
-    r.ok = !!pri && !!g && !!tag && lab?.text === '名将连战幸存者' && !!lab && lab.width <= g.r - g.x - 12 && r.enabled /* 七个字放得下按钮 */ && g.y >= pri.b && Math.abs(g.cx - pri.cx) <= 2 && !hitBox(g, pri) && tag.y >= g.b - 2 && tag.b <= rowTop && g.b <= rowTop && !row.some(o => o.n === 'home-gauntlet') && row.slice(0, 4).map(o => o.n).join() === 'home-saves,home-codex,home-review,home-settings' && !row.some((a, i) => row.some((b, j) => i < j && a.x < b.r && b.x < a.r)) && g.b < H && tag.b < H;
+    const pri = R('start-campaign'), g = R('home-gauntlet'), lab = s.children.getByName('home-gauntlet-label'), hit = s.children.getByName('home-gauntlet'), W = s.cameras.main.worldView.width, H = s.cameras.main.worldView.height /* 逻辑尺寸（scale 是渲染倍率后的） */, L = s.children.list;
+    const art = o => o && o.type === 'NineSlice' && /^btn_ink_/.test(o.texture?.key ?? ''), artNear = (b, kind) => L.find(o => art(o) && o.texture.key.includes(kind) && Math.abs(o.x - b.cx) < 14 && Math.abs(o.y - (b.y + b.b) / 2) < 14);
+    const centroid = o => { const src = o.texture.getSourceImage(), w = src.width, h = src.height, c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d'); x.drawImage(src, 0, 0); const d = x.getImageData(0, 0, w, h).data, cap = o.leftWidth, nsW = o.width, sM = (nsW - 2 * cap) / (w - 2 * cap); let m = 0, sx = 0, sy = 0;
+      for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++) { const v = d[(yy * w + xx) * 4 + 3] / 255; if (v < .5) continue; const mid = xx >= cap && xx < w - cap, X = xx < cap ? xx + .5 : mid ? cap + (xx - cap + .5) * sM : nsW - (w - xx) + .5, wt = mid ? v * sM : v; m += wt; sx += wt * X; sy += wt * (yy + .5); }
+      return { x: o.x + (sx / m - nsW / 2) * o.scaleX, y: o.y + (sy / m - h / 2) * o.scaleY }; };
+    const capOff = (artObj, cap) => { if (!artObj || !cap) return null; const c = centroid(artObj); return { dx: +(cap.x - c.x).toFixed(1), dy: +(cap.y - c.y).toFixed(1) }; };
+    const pArt = pri && artNear(pri, 'primary'), gArt = g && artNear(g, 'secondary'), offP = capOff(pArt, s.startLabel), offG = capOff(gArt, lab);
+    const centred = o => !!o && Math.abs(o.dx) <= 1.5 && Math.abs(o.dy) <= 1.5;
+    const tagGone = !s.children.getByName('home-gauntlet-tagline') && !L.some(o => o.type === 'Text' && o.visible && /从零开局/.test(o.text)), noDots = !L.some(o => o.type === 'Text' && o.visible && o.text.trim() === '·');
+    const row = ['home-saves', 'home-codex', 'home-review', 'home-settings', 'home-quit'].map(n => { const zo = s.children.getByName(n), ic = s.children.getByName(n + '-icon'), lb = s.children.getByName(n + '-label'); if (!zo || !zo.visible || !lb) return null; const zb = zo.getBounds(), ib = ic?.getBounds(), lbb = lb.getBounds();
+      return { n, zone: zo.type === 'Zone' && !!zo.input?.enabled, icon: ic?.type === 'Image' && /^ach_/.test(ic.texture.key) ? ic.texture.key : null, label: lb.text, cx: Math.round((ib ?? lbb).centerX), x: Math.round(zb.x), r: Math.round(zb.right), top: Math.round(ib?.y ?? lbb.y), bot: Math.round(lbb.bottom), above: !!ib && ib.bottom <= lbb.y + 2 && Math.abs(ib.centerX - lbb.centerX) <= 1 }; }).filter(Boolean).sort((a, b) => a.cx - b.cx);
+    const gaps = row.slice(1).map((o, i) => o.cx - row[i].cx), even = gaps.length >= 3 && Math.max(...gaps) - Math.min(...gaps) <= 1, rowTop = Math.min(...row.map(o => o.top)), rowBot = Math.max(...row.map(o => o.bot)), rowL = Math.min(...row.map(o => o.x)), rowR = Math.max(...row.map(o => o.r)), rowMid = row.length ? (row[0].cx + row[row.length - 1].cx) / 2 : -1;
+    const frames = L.filter(o => o.visible && typeof o.getBounds === 'function' && (o.type === 'NineSlice' || (o.type === 'Rectangle' && o.fillAlpha > .05)) && (() => { /* Graphics 没有 getBounds，主页底部本来也不画 */ const b = o.getBounds(); return b.width < 320 && b.y < rowBot && b.bottom > rowTop && b.x < rowR && b.right > rowL; })()).map(o => o.type + ':' + (o.name || o.texture?.key || ''));
+    const overlap = row.some((a, i) => row.some((b, j) => i < j && a.x < b.r && b.x < a.r));
+    const r = { pri, g, label: lab?.text, enabled: !!hit?.input?.enabled, offP, offG, tagGone, noDots, row: row.map(o => o.n + ':' + o.icon + (o.zone ? '' : ':nozone') + (o.above ? '' : ':notabove')), gaps, rowMid, rowTop, rowBot, frames, W, H };
+    r.ok = !!pri && !!g && lab?.text === '名将连战幸存者' && lab.width <= g.r - g.x - 12 && r.enabled /* 七个字放得下按钮 */ && g.y - pri.b >= (g.b - g.y) / 2 && Math.abs(g.cx - pri.cx) <= 2 && (g.r - g.x) < (pri.r - pri.x) /* 模式按钮小一号，中间至少空半个按钮高 */
+      && centred(offP) && centred(offG) /* 字在墨迹视觉中心上 */ && tagGone && noDots
+      && row.slice(0, 4).map(o => o.n).join() === 'home-saves,home-codex,home-review,home-settings' && row.every(o => o.zone && o.icon && o.above) && even && Math.abs(rowMid - pri.cx) <= 2 && rowTop >= g.b + 4 && rowBot <= H - 4 && !overlap && frames.length === 0;
     return r; };
   const unblock = () => ev(() => { const s = window.__S, qiyu = () => s.mode === 'bossloot' && /^奇遇/.test(s.levelPanel.getByName('upgrade-title')?.text ?? ''); for (let i = 0; i < 6 && s.mode !== 'none' && (s.mode !== 'bossloot' || qiyu()) && !s.over; i++) { if (s.mode === 'levelup' || qiyu()) s.chooseUpgrade(0); else s.setMode('none'); } }); /* 奇遇面板也选掉 */
   try {
@@ -343,7 +358,10 @@ if (BASE) {
       const m = await ev(menuLayout); await p.screenshot({ path: OUT + '/gauntlet-12-menu.png' });
       const capsBack = await ev(() => window.__game.scene.getScene('GauntletGameScene').gauntletCaps);
       ck('离开名将连战：卡池全开改的全局开关放回（玩法按进度、战法精研 / 战法格 / 精熟 / 专职上限回到进来前）', capsBack.mech === false && capsBack.rank === 3 && capsBack.slot === 6 && capsBack.extra === 0 && capsBack.over === 0, capsBack);
-      ck('主菜单入口：「匡扶汉室」正下方一个漆金按钮写模式名、下面一行小字「从零开局 · 十阵斩将」，不压水墨按钮、不压底部那一行；底部一行恢复「存档 · 图鉴 · 战役回顾 · 设置」', menu && m.ok, m);
+      ck('主菜单：「匡扶汉室」正下方小一号的水墨「名将连战幸存者」，两颗按钮的字都在墨迹视觉中心上（±1.5）、下面没有小字；底部「存档 · 图鉴 · 战役回顾 · 设置」是等距的小图标按钮（图标在上、名字在下、无框），在按钮正下方不压按钮', menu && m.ok, m);
+      const hv = await ev(async () => { const s = window.__game.scene.getScene('MenuScene'), z = s.children.getByName('home-codex'), ic = s.children.getByName('home-codex-icon'), lb = s.children.getByName('home-codex-label'), y0 = ic.y, ly0 = lb.y, c0 = lb.style.color, t0 = ic.tintTopLeft, s0 = ic.scale; z.emit('pointerover'); await new Promise(r => setTimeout(r, 400));
+        const on = { dy: +(y0 - ic.y).toFixed(1), ldy: +(ly0 - lb.y).toFixed(1), c: lb.style.color, tint: ic.tintTopLeft, grow: +(ic.scale / s0).toFixed(2) }; z.emit('pointerout'); await new Promise(r => setTimeout(r, 400)); return { c0, t0, on, back: Math.abs(ic.y - y0) < .5 && Math.abs(lb.y - ly0) < .5 && lb.style.color === c0 && ic.tintTopLeft === t0 }; });
+      ck('底部图标按钮悬停：图标和字提亮、一起上浮 2–4px，移开回原样', hv.on.dy >= 2 && hv.on.dy <= 4 && hv.on.ldy >= 2 && hv.on.tint === 0xffffff && hv.t0 !== 0xffffff && hv.on.c !== hv.c0 && hv.back, hv);
       await ev(() => window.__game.scene.getScene('MenuScene').children.getByName('home-gauntlet').emit('pointerdown'));
       const pk = await until(() => window.__game.scene.isActive('GauntletPickScene') && !!window.__game.scene.getScene('GauntletPickScene').gauntletPicker?.root.visible, 30000);
       await ev(() => window.__game.scene.getScene('GauntletPickScene').gauntletPicker.root.getByName('hero-confirm').emit('pointerdown'));
@@ -366,6 +384,7 @@ if (BASE) {
       const inMenu = await qu(menuReady, 120000); await q.waitForTimeout(1500);
       const ml = inMenu ? await qe(menuLayout) : null, test = await qe(() => /[?&]dev=1/.test(location.search));
       await q.screenshot({ path: OUT + '/gauntlet-20-menu-newsave-1366.png' });
+      await q.setViewportSize({ width: 1600, height: 1000 }); await q.waitForTimeout(1500); const ml16 = inMenu ? await qe(menuLayout) : null; await q.screenshot({ path: OUT + '/gauntlet-20-menu-newsave-1600.png' });
       await qe(() => { window.__game.scene.getScene('MenuScene').children.getByName('home-gauntlet').emit('pointerdown'); });
       const pk = await qu(pickReady, 30000); await q.waitForTimeout(3000); /* 卷轴立绘载入 */
       const pi = await qe(async () => { const pk = window.__game.scene.getScene('GauntletPickScene').gauntletPicker, HU = await import('/src/systems/HeroUnlocks.ts'), C = await import('/src/data/characters.ts');
@@ -377,7 +396,7 @@ if (BASE) {
       await qe(() => { window.__game.scene.getScene('GauntletGameScene').scene.start('MenuScene'); }); /* 不把 ScenePlugin 整个序列化回来 */ await qu(menuReady, 30000); await q.waitForTimeout(800);
       await qe(() => { window.__game.scene.getScene('MenuScene').children.getByName('home-gauntlet').emit('pointerdown'); }); await qu(pickReady, 30000);
       const rem = await qe(async () => { const pk = window.__game.scene.getScene('GauntletPickScene').gauntletPicker, C = await import('/src/data/characters.ts'); return C.CHARACTERS[pk.order[pk.candidate]].id; });
-      ck('新存档（不开测试模式）第一次进主菜单就能进：「匡扶汉室」正下方的漆金「名将连战」按钮（1366×768 不压水墨按钮、不压底部一行）', inMenu && !test && !!ml?.ok, ml);
+      ck('新存档（不开测试模式）第一次进主菜单就能进：「匡扶汉室」正下方的水墨「名将连战幸存者」按钮；1366×768、1600×1000 两种窗口下字对墨迹中心、底部图标行等距不压按钮', inMenu && !test && !!ml?.ok && !!ml16?.ok, { ml, ml16 });
       ck('选将页：标题写模式名；新存档能选开局武将、没归附的是剪影；选第二位开局武将出战 → 以他开打、1 级、名将池全开；回主菜单再进，选将页记住上次选的；页面无报错',
         pk && pi.title.replace(/\s/g, '').includes('名将连战幸存者') && pi.open.length >= 2 && pi.ok && !!chosen && go && gi?.hero === chosen && gi.saved === chosen && gi.level === 1 && gi.pool >= 37 && gi.from === 'menu' && rem === chosen && qerr.length === 0, { pi, chosen, gi, rem, qerr: qerr.slice(0, 4) });
       await ctx.close(); }

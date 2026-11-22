@@ -38,6 +38,22 @@ const flashes = await ev(s => s.coinFly.flashes);
 ck('铜钱到达：行囊切到鼓起贴图（bundle_full）一下再切回', flashes > 0 && after.bag === 'bag_bundle', { flashes, mid: mid.bag, mid2: mid2.bag, after: after.bag });
 ck('全部落袋：数字跳到新值、铜钱都没了', after.flying === 0 && after.count === String(after.food), after);
 ck('捡钱音效与落袋音效真的播放了（Sfx.stats played > 0）', (after.sfx.coin?.played ?? 0) > 0 && (after.sfx.purse?.played ?? 0) > 0, after.sfx);
+// ②′ 绕身（2026-11-21 用户「捡起来的时候不会立刻飞过去，会在身边转一下才飞过去」）：先贴着主将绕转（世界坐标、跟主将走），约 0.35 秒后才换成飞向行囊；钱在捡到那一刻已入账
+{
+  await p.waitForTimeout(600);
+  const o0 = await ev(s => { const f0 = s.legion.food; s.coinBurst(s.player.x + 10, s.player.y, 12); s.legion.food += 12; return { f0, food: s.legion.food, t: performance.now() }; });
+  let orbitShot = false, flyShot = false, sawOrbit = null, sawFly = null;
+  for (let i = 0; i < 20 && !(orbitShot && flyShot); i++) {
+    const r = await ev(s => { const pl = s.player, o = s.children.list.filter(c => c.name === 'coin-orbit' && c.visible), hud = s.children.list.filter(c => c.name === 'coin-fly' && c.visible);
+      return { dt: performance.now() - 0, orbit: o.map(c => ({ d: Math.round(Math.hypot(c.x - pl.x, c.y - pl.y)), above: c.depth > pl.sprite.depth })), fly: hud.length, food: s.legion.food, count: s.children.getByName('hud-coin-count')?.text }; });
+    if (!orbitShot && r.orbit.length) { orbitShot = true; sawOrbit = r; await p.screenshot({ path: `${OUT}/battle-orbit.png` }); }
+    else if (orbitShot && !flyShot && r.fly && !r.orbit.length) { flyShot = true; sawFly = r; await p.screenshot({ path: `${OUT}/battle-fly.png` }); }
+    await p.waitForTimeout(40);
+  }
+  const seen = await ev(s => s.coinFly.orbitsSeen);
+  ck('捡钱：先绕主将转（贴身：半径 26–34 屏幕像素 + 上浮，离主将 ≤ 45 世界像素），再换成飞向行囊；钱在捡到时就入账、数字落袋才跳', !!sawOrbit && !!sawFly && seen > 0 && sawOrbit.orbit.every(o => o.d >= 8 && o.d <= 45) && sawOrbit.food === o0.food && sawOrbit.count === String(o0.f0), { sawOrbit, sawFly, seen });
+  await p.waitForTimeout(1200);
+}
 // ② 通用入口 coinBurst：从世界坐标飞 30，再把 30 加进数值 —— 只飞一次（5 枚），不会被「盯数值」再飞一遍
 await ev(s => { s.coinBurst(s.player.x - 160, s.player.y + 60, 30); s.legion.food += 30; });
 await p.waitForTimeout(160);
@@ -53,20 +69,22 @@ ck('同屏飞行铜钱不超过 12 枚', cap <= 12 && cap > 0, cap);
 await ev(s => { s.legion.food += 40; }); await p.waitForTimeout(80); await ev(s => s.togglePause()); await p.waitForTimeout(1200); await ev(s => s.togglePause()); await p.waitForTimeout(400);
 const pz = await ev(s => ({ food: s.legion.food, lag: s.coinFly.displayLag(), count: s.children.getByName('hud-coin-count')?.text })); // 主将还在自动打怪，可能刚好又有 1 枚在飞
 ck('飞到一半暂停：不丢计数，恢复后显示 = 真值（减去刚刚又在飞的）', pz.count === String(pz.food - pz.lag) && pz.food - pz.lag >= pz.food - 5, pz);
-// ⑤ 经验信物（2026-11-21 用户「军功符也要飞进行囊」）：在主将身边撒 40 颗，吸取到主将时经验立即入账；再从主将处飞进行囊（限流：同屏 ≤ 10）
+// ⑤ 经验信物（2026-11-21 用户「军功捡起来会飞向经验条」）：在主将身边撒 40 颗，吸取到主将时经验立即入账（升级不等）；先绕身，再飞向左上经验条填充末端，落点亮一下（同屏 ≤ 10，绕身也算）
 {
-  const x0 = await ev(s => { const g = s.player.growth; s.player.xpNext = 1e9; /* 截图时别弹升级三选一 */ window.__xpTot = 0; const orig = s.player.gainXp.bind(s.player); s.player.gainXp = a => { window.__xpTot += a; return orig(a); }; for (let i = 0; i < 40; i++) { const a = i / 40 * Math.PI * 2, r = 30 + (i % 4) * 12; s.spawnGem(s.player.x + Math.cos(a) * r, s.player.y + Math.sin(a) * r, 1); } return { launched: s.coinFly.tokensLaunched, coins: s.children.getByName('hud-coin-count')?.text }; });
+  const x0 = await ev(s => { const g = s.player.growth; s.player.xpNext = 1e9; /* 截图时别弹升级三选一 */ window.__xpTot = 0; const orig = s.player.gainXp.bind(s.player); s.player.gainXp = a => { window.__xpTot += a; return orig(a); }; for (let i = 0; i < 40; i++) { const a = i / 40 * Math.PI * 2, r = 30 + (i % 4) * 12; s.spawnGem(s.player.x + Math.cos(a) * r, s.player.y + Math.sin(a) * r, 1); } return { launched: s.tokenFly.tokensLaunched, coins: s.children.getByName('hud-coin-count')?.text }; });
   let maxFly = 0, sawXpBeforeLanding = false, shot = false; const xpWords = new Set();
   for (let i = 0; i < 16; i++) {
     const r = await ev(s => { const words = []; const walk = (l, vis) => { for (const o of l) { const v = vis && o.visible !== false && (o.alpha ?? 1) > .02; if (o.list) walk(o.list, v); else if (v && o.type === 'Text' && /(经验|军功|战功)\s*\+/.test(o.text ?? '')) words.push(o.text.slice(0, 40)); } }; walk(s.children.list, true);
-      return { fly: s.coinFly.tokensFlying, launched: s.coinFly.tokensLaunched, xp: window.__xpTot, left: s.gems.filter(g => g.active).length, words }; });
+      return { fly: s.tokenFly.tokensFlying, launched: s.tokenFly.tokensLaunched, xp: window.__xpTot, left: s.gems.filter(g => g.active).length, words }; });
     for (const w of r.words) xpWords.add(w);
     maxFly = Math.max(maxFly, r.fly); if (r.fly > 0 && r.xp > 0) sawXpBeforeLanding = true;
-    if (!shot && r.fly >= 3) { shot = true; await p.screenshot({ path: `${OUT}/battle-xp-to-bag.png` }); }
+    if (!shot && r.fly >= 3) { shot = true; await p.screenshot({ path: `${OUT}/battle-xp-to-bar.png` }); }
     await p.waitForTimeout(90);
   }
-  const x1 = await ev(s => ({ launched: s.coinFly.tokensLaunched, xp: window.__xpTot, left: s.gems.filter(g => g.active).length, coins: s.children.getByName('hud-coin-count')?.text }));
-  ck('吸取经验：信物从主将处飞向行囊、经验在碰到主将时就入账（信物还在飞时已加经验）、同屏 ≤ 10、不动钱币数', x1.launched > x0.launched && sawXpBeforeLanding && maxFly <= 10 && x1.xp > 0, { x0, x1, maxFly, sawXpBeforeLanding });
+  await p.waitForTimeout(1200);
+  const x1 = await ev(s => ({ launched: s.tokenFly.tokensLaunched, xp: window.__xpTot, left: s.gems.filter(g => g.active).length, coins: s.children.getByName('hud-coin-count')?.text, land: s.tokenFly.lastLand, orbits: s.tokenFly.orbitsSeen, glints: s.statusFrame?.stats.glints ?? 0, coinLand: s.coinFly.lastLand, bagFlashes: s.coinFly.flashes }));
+  ck('军功符：先绕身，再飞到左上经验条（落点在经验条 x 80–245、y 60–80，不是右上行囊），落点亮一下', x1.orbits > 0 && !!x1.land && x1.land.x >= 80 && x1.land.x <= 245 && x1.land.y >= 60 && x1.land.y <= 80 && x1.glints > 0, x1);
+  ck('军功符：经验在碰到主将时就入账（信物还在绕 / 飞时已加经验）、同屏 ≤ 10（钱币数会因主将自动打怪变化，不比）', x1.launched > x0.launched && sawXpBeforeLanding && maxFly <= 10 && x1.xp > 0, { x0, x1, maxFly, sawXpBeforeLanding });
   ck('吸取经验：画面上没有「经验 / 军功 / 战功 +N」之类的飘字 / 横幅（用户「关于拿到钱和军功」不需要字）', xpWords.size === 0, [...xpWords]);
 }
 // ⑤ 行囊面板里有钱币一行

@@ -10,6 +10,7 @@ import { MEDAL_SIZE, drawHeroMedal } from './HeroMedal';
  * 经验条：细的金色条，与血条分开；升级时闪一下。
  * 2026-11-20 用户「还有ui血条那里也不要用大框框住」：去掉整块漆底大框（同首领血条去框），只留头像金圈、名字 + 等级印、血条（细铜边）与经验条，浮在画面上；文字描边 + 投影、条下一道淡影保证可读。每帧由场景调用 update（不受 HUD 10 Hz 节流）。
  */
+const GLINT_MS = 260;
 export const STATUS_FRAME = { x: 14, y: 12, w: 238, h: 72, r: 27, barX: 74, hpY: 36, hpH: 15, xpY: 58, xpH: 5, trailHoldMs: 250, trailMs: 600, flashMs: 520, lowHp: .3 } as const;
 
 export class HeroStatusFrame {
@@ -19,9 +20,9 @@ export class HeroStatusFrame {
   private readonly seal: Phaser.GameObjects.Text;
   private readonly sealG: Phaser.GameObjects.Graphics;
   private portrait?: Phaser.GameObjects.Image;
-  private trail = 1; private lastRatio = 1; private lastNow = 0; private hitAt = -1e9; private lastLevel = -1; private flashAt = -1e9;
+  private trail = 1; private lastRatio = 1; private lastNow = 0; private hitAt = -1e9; private lastLevel = -1; private flashAt = -1e9; private glintAt = -1e9; private lastXr = 0;
   /** 测试用。 */
-  readonly stats = { trail: 1, ratio: 1, flashes: 0, low: false, portrait: false };
+  readonly stats = { trail: 1, ratio: 1, flashes: 0, glints: 0, low: false, portrait: false };
 
   constructor(private readonly scene: Phaser.Scene, private readonly hero: string, heroName: string, private readonly depth: number) {
     const F = STATUS_FRAME;
@@ -104,8 +105,20 @@ export class HeroStatusFrame {
     if (o.over) g.fillStyle(0xf0c870, 1).fillRect(x0 + w - 2, xy - 3, 2, xh + 6); // 越级小刻度
     const fk = (now - this.flashAt) / F.flashMs;
     if (fk >= 0 && fk < 1) g.fillStyle(0xfff6d8, .85 * (1 - fk)).fillRect(x0 - 2, xy - 2, w + 4, xh + 4);
+    // 军功符落到经验条：落点（填充末端）亮一下、上下鼓起一点（2026-11-21「军功捡起来会飞向经验条」）
+    const gk = (now - this.glintAt) / GLINT_MS; this.lastXr = xr;
+    if (gk >= 0 && gk < 1) {
+      const e = Math.sin(gk * Math.PI), cx = x0 + w * xr, b = 2.2 * e, l = Math.max(x0 - 1, cx - 9 - 5 * e), r = Math.min(x0 + w + 1, cx + 9 + 5 * e);
+      g.fillStyle(0xfff0b8, .5 * e).fillRect(l, xy - b, r - l, xh + b * 2);
+      const l2 = Math.max(x0, cx - 3), r2 = Math.min(x0 + w, cx + 3);
+      g.fillStyle(0xfffbe8, .9 * e).fillRect(l2, xy - b - .5, r2 - l2, xh + b * 2 + 1);
+    }
     this.stats.trail = this.trail; this.stats.ratio = ratio;
   }
+  /** 经验条填充末端（HUD 坐标）：军功符飞到这里。 */
+  xpPoint(): { x: number; y: number } { const F = STATUS_FRAME, x0 = F.x + F.barX, w = F.w - F.barX - 12; return { x: x0 + Math.max(4, w * this.lastXr), y: F.y + F.xpY + F.xpH / 2 }; }
+  /** 军功符到了：落点亮一下。 */
+  xpGlint(now = performance.now()): void { this.glintAt = now; this.stats.glints++; }
 
   destroy(): void { for (const o of [this.back, this.bars, this.name, this.seal, this.sealG, this.portrait]) o?.destroy(); }
 }

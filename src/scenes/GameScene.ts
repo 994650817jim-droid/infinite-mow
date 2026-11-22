@@ -3244,7 +3244,7 @@ export class GameScene extends Phaser.Scene {
         // 拾取军功宝石不再播放音效（用户要求；战场补给拾取仍有音效）
         const gained = this.player.gainXp(this.player.growth.scaleXp(gem.value, this.heroXpRate()));
         // 2026-11-21 用户「军功符也要飞进行囊」：经验照旧此刻入账；再从主将处飞一枚信物进右上行囊（纯表现，限流；手机布局 / 降级不画、不出声）
-        if (IS_DESKTOP && !gem.lite && this.coinToUi) this.coinFly?.token(this.coinToUi(px, py), img.texture.key, 0, gem.large ? 22 : 16);
+        if (IS_DESKTOP && !gem.lite && this.coinToUi) this.tokenFly?.token(this.coinToUi(px, py), img.texture.key, 0, gem.large ? 22 : 16);
         this.relics?.onGem(this.combatNow);
         if (gained > 0) this.onHeroLevelUp(gained); // 软上限（2026-11-20）：不封顶，越级后每级 ×1.45
         continue;
@@ -5433,6 +5433,8 @@ export class GameScene extends Phaser.Scene {
     this.coinFly?.destroy();
     const toUi = (x: number, y: number): { x: number; y: number } => { const m = this.cameras.main, k = m.zoom / (this.uiCam?.zoom ?? m.zoom); return { x: (x - m.worldView.x) * k, y: (y - m.worldView.y) * k }; };
     this.coinToUi = toUi;
+    // 2026-11-21 用户「捡起来的时候不会立刻飞过去，会在身边转一下才飞过去」：电脑布局下主将自己捡到的先绕身 0.35 秒（跟着主将走、转到身后画在主将之下）
+    const orbit = { toUi, anchor: () => { const p = this.player; if (!IS_DESKTOP || !p?.sprite?.active || this.over) return null; const m = this.cameras.main; return { x: p.x, y: p.y, depth: p.sprite.depth, k: m.zoom / (this.uiCam?.zoom ?? m.zoom) }; } };
     // 2026-11-21 用户「钱币就是飞进行囊里，行囊可以看到钱币数量」：铜钱飞向右上「行囊」图标（到达时切鼓起贴图 0.25 秒 + 放大 1.08 回弹），
     // 行囊左边写钱币数（铜钱图标 coin_flip 正面帧 + 数字，无底板，变化时跳一下）；左上部曲行不再写钱币（同一个数不显示两处）
     const bag = (): Phaser.GameObjects.Image | null => { const i = this.bagBundle?.icon; return i && i.visible && i.texture.key !== '__DEFAULT' ? i : null; };
@@ -5445,8 +5447,8 @@ export class GameScene extends Phaser.Scene {
     // 行囊还没开放（1-1 兵装未解锁时行囊图标不显示）：钱币数照样写在右上同一位置，铜钱飞向这个铜钱图标
     const target = (): Phaser.GameObjects.Image | null => bag() ?? (this.coinIcon?.visible ? this.coinIcon : null);
     this.coinFly = new CoinFly(this, { value: () => this.legion?.food ?? 0, armed: () => this.mode === 'none' && !this.over && this.elapsed > 1, purse: target, depth: DEPTH.hud + 8, sfx: () => this.sfx,
-      bump: .08, flashKey: COIN_ART.bundleFull,
-      from: () => { const f = this.legion?.foodFrom, p = f && performance.now() - f.t < 300 ? f : this.player; return p ? toUi(p.x, p.y) : null; },
+      bump: .08, flashKey: COIN_ART.bundleFull, orbit,
+      from: () => { const f = this.legion?.foodFrom, fresh = !!f && performance.now() - f.t < 300, p = fresh ? f : this.player; return p ? { ...toUi(p.x, p.y), orbit: !fresh } : null; },
       onFrame: shown => {
         const b = bag(), t = this.coinCount!, ic = this.coinIcon!, on = !!this.legionUI?.hud?.visible;
         t.setVisible(on); ic.setVisible(on && this.textures.exists(COIN_ART.flip)); if (!on) return;
@@ -5456,6 +5458,11 @@ export class GameScene extends Phaser.Scene {
         t.setPosition(ax, ay).setScale(s);
         if (ic.visible) { if (ic.texture.key !== COIN_ART.flip) ic.setTexture(COIN_ART.flip, 0).setDisplaySize(20, 20); ic.setPosition(t.x - t.width * s - 13, t.y); }
       } });
+    // 军功符（青玉符 / 金令牌）：经验在碰到主将那一刻已入账（升级不等），这里只是表现——绕身后飞向左上经验条填充末端，落点亮一下；不加新声音
+    this.tokenFly?.destroy();
+    const xpMark = (this.xpMark?.scene ? this.xpMark : (this.xpMark = this.add.image(0, 0, '__DEFAULT').setVisible(false).setScrollFactor(0).setName('hud-xp-target')));
+    this.tokenFly = new CoinFly(this, { value: () => 0, purse: () => { const sf = this.statusFrame; if (!sf || !this.hudTexts?.hp?.visible) return null; const q = sf.xpPoint(); return xpMark.setPosition(q.x, q.y); },
+      depth: DEPTH.hud + 8, bump: 0, landSound: false, orbit, onArrive: () => this.statusFrame?.xpGlint() });
     // 行营（休整 / 整军）：卖兵装、事件得钱 → 铜钱从屏幕中间飞到资源行的钱币图标
     this.campCoinFly?.destroy();
     this.campCoinFly = new CoinFly(this, { value: () => this.legion?.food ?? 0, armed: () => this.mode === 'rest' && !!this.campUI?.root.visible, purse: () => (this.campUI?.root.visible ? this.campUI.purse : null), depth: DEPTH.overlay + 40, sfx: () => this.sfx,
@@ -5470,6 +5477,8 @@ export class GameScene extends Phaser.Scene {
    */
   coinBurst(x: number, y: number, amount: number): void { const p = this.coinToUi?.(x, y); if (p) this.coinFly?.burst(p, amount); }
   private campCoinFly?: CoinFly;
+  /** 军功符飞向经验条（与钱币分开的一路，目标是经验条填充末端）。 */
+  private tokenFly?: CoinFly; private xpMark?: Phaser.GameObjects.Image;
   protected renderStarPanel(): void {
     this.attributePauseText?.setText(`星图 · ${this.player.growth.unallocated}`);
     if(this.starPanel&&!this.starPanel.root.scene)this.starPanel=undefined; // 场景重开后旧面板已随属性面板销毁

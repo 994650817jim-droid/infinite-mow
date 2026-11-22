@@ -1,6 +1,6 @@
 import { BOSS_CLEAR, pickWithdraw, withdrawXp } from '../data/bossClear';
 import { BOSS_STALL, GRANT_FULL, enrageMul, enrageStacks, killGrant, rageTint, stallFor, type KillGrant } from '../data/bossStall';
-import { FRONTLINE, frontlineBreather } from '../data/frontline';
+import { FRONTLINE, frontlineBreather, frontlineStage } from '../data/frontline';
 import { EnemyFormations } from '../systems/EnemyFormations';
 import {SIDE_STAGE_KEY,sideRoute,type SideRouteId} from '../data/sideRoutes';
 import { safeWorldPoint } from '../ui/SafeLabel';
@@ -1795,7 +1795,7 @@ export class GameScene extends Phaser.Scene {
   /**
    * 首领震怒（data/bossStall.ts）：首领可交战（不无敌、不在城头 / 过场）累计满本关起点秒数还没打倒，每 30 秒一层、最多 5 层；
    * 每层首领移速按比例加（def.speed，与狂怒等其他改速叠乘）、身体染红、辉光转朱红（BossPresence）；主将受到的伤害倍率取在场首领里最高的一层。
-   * 双首领用 bossClockMs（同一个钟）。战线推进关（1-1、1-2、2-1、2-2）的首领与追兵首领不震怒：那几关首领 90 秒没打倒就推进（data/frontline.ts）。
+   * 双首领用 bossClockMs（同一个钟）。战线推进关（FRONTLINE.stages：1-1、2-1、2-2）的首领与追兵首领不震怒：那几关首领 90 秒没打倒就推进（data/frontline.ts）；1-2 不推进，照常震怒。
    */
   protected updateBossRage(dt: number): void {
     const list: Enemy[] = [], duo = (this.dual?.alive ?? []).map(x => x.enemy).filter(e => e.active);
@@ -4212,8 +4212,11 @@ export class GameScene extends Phaser.Scene {
   /** 测试 / 调试：直接打开所有等待中的首领宝箱。 */
   collectBossChests():void{for(const c of [...this.bossChests])c.collectNow();}
   private battleStage():number{return this.chapter.stage??this.chapter.westStage??3;}
-  /** 战线推进关（1-1、1-2、2-1、2-2）：首领出场 90 秒没打倒就推进下一关（data/frontline.ts）；首领阶段额度 / 震怒不管这几关，免得两套计时打架（data/bossStall.ts）。 */
-  protected frontlineBoss():boolean{return this.battleStage()<3&&!this.runConfig.encounter;}
+  /**
+   * 战线推进关（data/frontline.ts FRONTLINE.stages，现为 1-1、2-1、2-2）：首领出场 90 秒没打倒就推进下一关；首领阶段额度 / 震怒不管这几关，免得两套计时打架（data/bossStall.ts）。
+   * 只认主线第 1、2 章（stageChapter：GameScene、无 encounter、非自定义关）；1-2 起 11-22 不推进，走额度 + 震怒。
+   */
+  protected frontlineBoss():boolean{const c=this.stageChapter();return c!==null&&c<=2&&!this.runConfig.encounter&&frontlineStage(c,this.battleStage());}
   private recordFrontlineVictory(stage:number):void{
     this.frontlineVictories.set(stage,{elapsed:Math.max(0,(this.combatNow-(this.frontlineStarts.get(stage)??0))/1000)});
     // Settle only a contiguous defeated prefix. The current stage remains owned by finish().
@@ -4227,7 +4230,7 @@ export class GameScene extends Phaser.Scene {
   frontlineBreaths=0;
   private clearChasingBosses():void{for(const t of this.chasingBosses){t.battle?.clear();t.huaxiong?.clear();t.xurong?.clear();t.label.destroy();}this.chasingBosses=[];}
   private advanceFrontline():void{
-    const boss=this.boss,stage=this.battleStage();if(!boss?.active||stage>=3||this.runConfig.encounter)return;
+    const boss=this.boss,stage=this.battleStage();if(!boss?.active||stage>=3||!this.frontlineBoss())return;
     const name=this.chapter.bossName,label=this.add.text(boss.x,boss.y-100,name+' · 追兵',{fontFamily:FONT,fontSize:'15px',color:'#f0c58b',stroke:'#21160e',strokeThickness:3,resolution:2}).setOrigin(.5).setDepth(100);
     this.chasingBosses.push({enemy:boss,life:boss.spawnId,stage,name,battle:this.yellow,huaxiong:this.huaxiong,xurong:this.xurong,label});
     const next=(stage+1) as 2|3,west=this.chapter.id==='hulao';

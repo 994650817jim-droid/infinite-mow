@@ -39,27 +39,33 @@ ck('铜钱到达：行囊切到鼓起贴图（bundle_full）一下再切回', fl
 ck('全部落袋：数字跳到新值、铜钱都没了', after.flying === 0 && after.count === String(after.food), after);
 ck('捡钱音效与落袋音效真的播放了（Sfx.stats played > 0）', (after.sfx.coin?.played ?? 0) > 0 && (after.sfx.purse?.played ?? 0) > 0, after.sfx);
 // ②′ 绕身（2026-11-21 用户「捡起来的时候不会立刻飞过去，会在身边转一下才飞过去」）：先贴着主将绕转（世界坐标、跟主将走），约 0.35 秒后才换成飞向行囊；钱在捡到那一刻已入账
+// 断言不看截图时机（机器忙时一帧可能 >100ms）：CoinFly.orbitDone 记录每枚的实测绕身时长与屏幕半径；截图只是尽量拍，不作断言
 {
-  await p.waitForTimeout(600);
-  const o0 = await ev(s => { const f0 = s.legion.food; s.coinBurst(s.player.x + 10, s.player.y, 12); s.legion.food += 12; return { f0, food: s.legion.food, t: performance.now() }; });
-  let orbitShot = false, flyShot = false, sawOrbit = null, sawFly = null;
-  for (let i = 0; i < 20 && !(orbitShot && flyShot); i++) {
-    const r = await ev(s => { const pl = s.player, o = s.children.list.filter(c => c.name === 'coin-orbit' && c.visible), hud = s.children.list.filter(c => c.name === 'coin-fly' && c.visible);
-      return { dt: performance.now() - 0, orbit: o.map(c => ({ d: Math.round(Math.hypot(c.x - pl.x, c.y - pl.y)), above: c.depth > pl.sprite.depth })), fly: hud.length, food: s.legion.food, count: s.children.getByName('hud-coin-count')?.text }; });
-    if (!orbitShot && r.orbit.length) { orbitShot = true; sawOrbit = r; await p.screenshot({ path: `${OUT}/battle-orbit.png` }); }
-    else if (orbitShot && !flyShot && r.fly && !r.orbit.length) { flyShot = true; sawFly = r; await p.screenshot({ path: `${OUT}/battle-fly.png` }); }
+  await p.waitForFunction(() => window.__game.scene.getScene('GameScene').coinFly.flying === 0, null, { timeout: 8000 }).catch(() => {});
+  const o0 = await ev(s => { s.coinFly.orbitDone.length = 0; const f0 = s.legion.food, lag0 = s.coinFly.displayLag(); s.coinBurst(s.player.x + 10, s.player.y, 12); s.legion.food += 12; return { f0, food: s.legion.food, lag: s.coinFly.displayLag() - lag0 }; });
+  let orbitShot = false, flyShot = false;
+  for (let i = 0; i < 30 && !(orbitShot && flyShot); i++) {
+    const r = await ev(s => ({ orbit: s.children.list.some(c => c.name === 'coin-orbit' && c.visible), fly: s.children.list.some(c => c.name === 'coin-fly' && c.visible) }));
+    if (!orbitShot && r.orbit) { orbitShot = true; await p.screenshot({ path: `${OUT}/battle-orbit.png` }); }
+    else if (orbitShot && !flyShot && r.fly && !r.orbit) { flyShot = true; await p.screenshot({ path: `${OUT}/battle-fly.png` }); }
     await p.waitForTimeout(40);
   }
-  const seen = await ev(s => s.coinFly.orbitsSeen);
-  ck('捡钱：先绕主将转（贴身：半径 26–34 屏幕像素 + 上浮，离主将 ≤ 45 世界像素），再换成飞向行囊；钱在捡到时就入账、数字落袋才跳', !!sawOrbit && !!sawFly && seen > 0 && sawOrbit.orbit.every(o => o.d >= 8 && o.d <= 45) && sawOrbit.food === o0.food && sawOrbit.count === String(o0.f0), { sawOrbit, sawFly, seen });
-  await p.waitForTimeout(1200);
+  await p.waitForFunction(() => window.__game.scene.getScene('GameScene').coinFly.orbitDone.length >= 3, null, { timeout: 8000 }).catch(() => {});
+  const od = await ev(s => s.coinFly.orbitDone.slice());
+  ck('捡钱：3 枚都先绕主将转 ≥ 0.3 秒（半径 26–34 屏幕像素）才飞向行囊；钱在捡到那一刻已入账，数字等落袋才跳', od.length >= 3 && od.every(o => o.ms >= 300 && o.rMin >= 25 && o.rMax <= 35) && o0.food === o0.f0 + 12 && o0.lag === 12, { o0, od, orbitShot, flyShot });
 }
-// ② 通用入口 coinBurst：从世界坐标飞 30，再把 30 加进数值 —— 只飞一次（5 枚），不会被「盯数值」再飞一遍
-await ev(s => { s.coinBurst(s.player.x - 160, s.player.y + 60, 30); s.legion.food += 30; });
-await p.waitForTimeout(160);
-const bur = await ev(s => s.coinFly.flying);
-ck('coinBurst（通用入口）：从任意世界坐标飞，和盯数值不重复（30 → 5 枚）', bur === 5, bur);
-await p.waitForTimeout(1000);
+// ② 通用入口 coinBurst：从世界坐标飞 30，再把 30 加进数值 —— 只飞一次（5 枚），不会被「盯数值」再飞一遍。
+// 主将一直在自动打怪，击杀加的钱会走「盯数值」另飞 1 枚（正常），所以按 CoinFly.log 分路径数，不数同屏总枚数
+{
+  await p.waitForFunction(() => window.__game.scene.getScene('GameScene').coinFly.flying === 0, null, { timeout: 8000 }).catch(() => {});
+  const n0 = await ev(s => s.coinFly.log.length);
+  await ev(s => { s.coinBurst(s.player.x - 160, s.player.y + 60, 30); s.legion.food += 30; });
+  await p.waitForTimeout(400);
+  const lg = await ev((s, n) => s.coinFly.log.slice(n), n0);
+  const burst = lg.filter(e => e.via === 'burst'), dup = lg.filter(e => e.via === 'watch' && e.amount >= 30);
+  ck('coinBurst（通用入口）：这一笔只飞 5 枚，「盯数值」没有把同一笔 30 再飞一遍（其他 watch 记录只是击杀的零钱）', burst.length === 1 && burst[0].amount === 30 && burst[0].n === 5 && dup.length === 0, lg);
+  await p.waitForTimeout(1000);
+}
 // ③ 同屏上限：一次来 40 笔，飞行的铜钱不超过 12
 await ev(s => { for (let i = 0; i < 20; i++) s.legion.food += 30; }); await p.waitForTimeout(30); await ev(s => { for (let i = 0; i < 20; i++) s.legion.food += 30; });
 await p.waitForTimeout(120);

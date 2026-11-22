@@ -61,7 +61,7 @@ interface Flyer {
   kind: 'coin' | 'token'; key: string; frame: number; size: number; flip: boolean;
   phase: 'orbit' | 'fly'; t0: number; a0: number; r: number;
   world: Phaser.GameObjects.Image | null; hud: Phaser.GameObjects.Image | null;
-  x0: number; y0: number; cx: number; cy: number; batch: Batch | null; orbited: boolean;
+  x0: number; y0: number; cx: number; cy: number; batch: Batch | null; orbited: boolean; rMin: number; rMax: number;
 }
 
 export class CoinFly {
@@ -90,12 +90,16 @@ export class CoinFly {
   get tokensFlying(): number { return this.flyers.filter(f => f.kind === 'token').length; }
   get orbiting(): number { return this.flyers.filter(f => f.phase === 'orbit').length; }
   tokensLaunched = 0; flashes = 0; arrivals = 0; orbitsSeen = 0; lastLand: { x: number; y: number } | null = null;
+  /** 测试用：最近 40 笔钱币从哪条路径起飞（burst 通用入口 / watch 盯数值）、多少钱、飞几枚。 */
+  readonly log: Array<{ via: 'burst' | 'watch'; amount: number; n: number; orbit: boolean }> = [];
+  /** 测试用：最近一枚的绕身实测（真实时间毫秒、屏幕半径范围），不靠截图时机。 */
+  orbitDone: Array<{ ms: number; rMin: number; rMax: number }> = [];
 
   /** 钱币通用入口：钱应当已经（或马上）加进数值里；这里只管表现。 */
   burst(from: { x: number; y: number }, amount: number, orbit = true): void {
     if (!(amount > 0)) return;
     this.claims.push({ amount, t: performance.now() });
-    this.coins(from, amount, performance.now(), orbit);
+    this.coins(from, amount, performance.now(), orbit, 'burst');
   }
   /** 军功符：从 from（HUD 坐标；有 orbit 时从主将身边起转）飞一枚信物到目标；超过限流就不画。返回是否起飞。 */
   token(from: { x: number; y: number }, key: string, frame: number, size: number): boolean {
@@ -114,7 +118,7 @@ export class CoinFly {
     else if (v > this.last) {
       let d = v - this.last; this.last = v;
       for (const c of this.claims) { const k = Math.min(c.amount, d); c.amount -= k; d -= k; if (!d) break; }
-      if (d > 0) { const fr = this.o.from?.() ?? { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2 }; this.coins(fr, d, now, !!fr.orbit); }
+      if (d > 0) { const fr = this.o.from?.() ?? { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2 }; this.coins(fr, d, now, !!fr.orbit, 'watch'); }
     }
     const purse = this.o.purse(), anchor = this.o.orbit?.anchor() ?? null;
     for (let i = this.flyers.length - 1; i >= 0; i--) {
@@ -127,9 +131,11 @@ export class CoinFly {
           const e = k < .5 ? 2 * k * k : 1 - 2 * (1 - k) * (1 - k), a = f.a0 + ORBIT_SWEEP * e, sy = Math.sin(a);
           f.world.setVisible(true).setPosition(anchor.x + Math.cos(a) * f.r, anchor.y - (ORBIT_LIFT + ORBIT_RISE * k) / anchor.k + sy * f.r * ORBIT_SQUASH).setDepth(anchor.depth + (sy < 0 ? -.01 : .01));
           if (f.flip) f.world.setFrame(Math.floor((now - f.t0) / 70) % 6);
+          const rr = f.r * anchor.k; f.rMin = Math.min(f.rMin, rr); f.rMax = Math.max(f.rMax, rr);
           continue;
         }
         // 绕转结束（或主将没了）：换成 HUD 上的飞行
+        if (f.world?.visible) { this.orbitDone.push({ ms: Math.round(now - f.t0), rMin: Math.round(f.rMin), rMax: Math.round(f.rMax) }); if (this.orbitDone.length > 20) this.orbitDone.shift(); }
         const p = f.world && this.o.orbit ? this.o.orbit.toUi(f.world.x, f.world.y) : { x: f.x0, y: f.y0 };
         f.world?.destroy(); f.world = null;
         this.toFly(f, p, now, purse);
@@ -155,10 +161,11 @@ export class CoinFly {
     }
   }
   /** 一笔钱：捡到的铜钱声 + 1 / 3 / 5 枚（同屏 ≤ 12）。 */
-  private coins(src: { x: number; y: number }, amount: number, now: number, orbit: boolean): void {
+  private coins(src: { x: number; y: number }, amount: number, now: number, orbit: boolean, via: 'burst' | 'watch'): void {
     this.o.sfx?.()?.coin();
     if (!this.o.purse()) return;
     const n = amount < 5 ? 1 : amount < 20 ? 3 : 5, room = Math.max(0, COIN_MAX - this.flying), fly = Math.min(n, room);
+    this.log.push({ via, amount, n: fly, orbit }); if (this.log.length > 40) this.log.shift();
     const batch: Batch = { amount, t0: now, left: Math.max(1, fly) };
     this.batches.push(batch);
     if (!fly) { batch.left = 0; this.bump(now); return; }
@@ -170,7 +177,7 @@ export class CoinFly {
     // 起始角度：每笔轮换一个基准，同一笔内平均错开，像一小串绕着转
     if (idx === 0) this.orbitSeed += 2.1;
     const k = anchor?.k ?? 1, a0 = this.orbitSeed - idx * (1.6 / Math.max(1, of)), r = (26 + Math.random() * 8) / k;
-    const f: Flyer = { kind, key, frame, size, flip, phase: anchor ? 'orbit' : 'fly', t0, a0, r, world: null, hud: null, x0: src.x, y0: src.y, cx: 0, cy: 0, batch, orbited: false };
+    const f: Flyer = { kind, key, frame, size, flip, phase: anchor ? 'orbit' : 'fly', t0, a0, r, world: null, hud: null, x0: src.x, y0: src.y, cx: 0, cy: 0, batch, orbited: false, rMin: 1e9, rMax: 0 };
     if (anchor && has) {
       // 世界坐标里的贴图（跟主将同一个镜头，才能前后遮挡）；尺寸按世界像素（镜头会放大）
       const img = kind === 'coin' && flip ? this.scene.add.sprite(anchor.x, anchor.y, key, frame) : this.scene.add.image(anchor.x, anchor.y, key, frame);

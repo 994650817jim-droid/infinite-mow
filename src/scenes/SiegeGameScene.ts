@@ -308,6 +308,7 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
       this.tweens.add({ targets: t, alpha: 0, y: y - 6, delay: first ? DEFENSE_V2.notice.firstMs : DEFENSE_V2.notice.shortMs, duration: 350, onComplete: () => t.destroy() });
     }
     protected spawnGem(x: number, y: number, value: number) { if (!this.noLoot) super.spawnGem(x, y, value); }
+    protected dropCoins(enemy: Enemy) { if (!this.noLoot) super.dropCoins(enemy); } // 不给战利品的敌人（noLoot）也不掉钱币（coin-drops.md 第 5 节）
     /** 测试用：中城控制器。 */
     get siegeMid() { return this.mid ?? null; }
     /** 中城：按段从固定方向刷兵（城门 / 两翼 / 巷口 / 回廊）。 */

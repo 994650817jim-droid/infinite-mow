@@ -63,7 +63,7 @@ const winSiege = async p => { await p.evaluate(G0 => { const s = eval(G0); s.spa
   ck('时代更替告急最多 1 城（守城重做：同时最多 1 座），集结 2 战，来犯者为大势力', r.adv?.alerts.length === 1 && r.adv.alerts.every(a => a.cause === 'era' && a.countdown === 2 && !['han', 'yellow', 'player'].includes(a.attacker)), r.adv?.alerts);
   ck('同一时代再开地图不再触发', r.again === null);
   ck('非告急城池不能守城', r.badDefense === '' || r.badDefense === 'none', r.badDefense);
-  ck('守城胜利：告急解除、城池仍在、发军粮；冷却 3 战、民心 3 战（守城重做）', r.defense.held && r.defense.alertGone && r.defense.owned && r.defense.grain > 0 && r.defense.gain === r.defense.grain && r.defense.cooldown === 3 && r.defense.morale === 3, r.defense);
+  ck('守城胜利：告急解除、城池仍在、发钱币；冷却 3 战、民心 3 战（守城重做）', r.defense.held && r.defense.alertGone && r.defense.owned && r.defense.grain > 0 && r.defense.gain === r.defense.grain && r.defense.cooldown === 3 && r.defense.morale === 3, r.defense);
   ck('攻城反扑：random 0 → 宛城告急，来犯者=相邻最强大势力', r.retaliation?.city === 'wancheng' && r.retaliation.cause === 'retaliation' && r.retaliation.attacker === r.attackerExpected, { got: r.retaliation, expected: r.attackerExpected });
   ck('告急集结：出征别处一场倒计时 2→1、再一场 →0（被围，这时才算会失守）', r.muster0 === 2 && r.muster1 === 1 && r.loss1.length === 0 && r.muster2 === 0 && r.loss2.includes('宛城'), { m0: r.muster0, m1: r.muster1, m2: r.muster2, l1: r.loss1, l2: r.loss2 });
   ck('被围时出征别处：宛城失守、告急清空、记录失守、进入冷却', !r.lost.owned && r.lost.alerts === 0 && r.lost.lastLost.includes('wancheng') && r.lost.cooldown === 3, r.lost);

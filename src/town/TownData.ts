@@ -80,7 +80,7 @@ export function levyCost(level: number): Cost { return LEVY_COST.base + LEVY_COS
 export const TOWN_BUILDINGS: Record<TownBuildingId, BuildingDef> = {
   hall: { name: '主帐', build: 0, blurb: '义军中枢，决定营寨规模；其它建筑的等级不能高于主帐。', effect: l => `规模：${CITY_TITLE[l]}${l < 3 ? `；可建 Lv${l} 建筑` : '；可建全部 Lv3 建筑'}` },
   barracks: { name: '军营', build: 0, maxLevel: BARRACKS_MAX, upgrade: BARRACKS_UPGRADE, noHallCap: true, blurb: '操练义军，招募后备兵；升级解锁新兵种。', effect: l => `可招 ${(Object.keys(TROOP_UNLOCK) as Array<keyof typeof TROOP_UNLOCK>).filter(k => TROOP_UNLOCK[k] <= l).length} 种兵${l > 1 ? `（本级解锁 ${troopsAtLevel(l).map(k => TROOPS[k].name).join('、')}）` : '（刀盾、长枪、弓箭）'}；出征开局增援 ${barracksReinforcements(l)} 人` },
-  farm: { name: '农田', build: 0, upgrade: [120, 320], blurb: '营外良田，每打完一仗收一次粮。', effect: l => `每场出征后产军粮 ${FARM_GRAIN[l]}；战场军粮收益 +${(l - 1) * 8}%` },
+  farm: { name: '农田', build: 0, upgrade: [120, 320], blurb: '营外良田，每打完一仗收一次粮。', effect: l => `每场出征后产钱币 ${FARM_GRAIN[l]}；战场钱币收益 +${(l - 1) * 8}%` },
   academy: { name: '讲武堂', build: 150, upgrade: [450, 1100], blurb: '研习兵法、改良军械：研究科技。', effect: l => `可研究第 ${l} 层科技（军需 / 兵略 / 武备）` },
   stable: { name: '马厩', build: 200, upgrade: [450, 900], minHall: 2, blurb: '养马换马之所：第一章通关后营中自动设立；只能在营中休整时换马。', effect: l => `可养马 ${STABLE_HORSES[l]} 匹；在此更换坐骑` },
   granary: { name: '粮仓', build: 120, upgrade: [260, 540], minHall: 2, blurb: '广积粮：后备兵吃得少，荒时可开仓募兵。', effect: l => `后备兵口粮 −${GRANARY_CUT[l] * 100}%；每季可开仓募兵 ${LEVY_SOLDIERS[l]} 人` },
@@ -127,7 +127,7 @@ export const FOCUS_INCOME: Record<CityTier, Record<CityFocus, { grain: number; t
   medium: { balanced: { grain: 28, troops: 0 }, farm: { grain: 40, troops: 0 }, military: { grain: 14, troops: 1 } },
   large: { balanced: { grain: 55, troops: 0 }, farm: { grain: 80, troops: 0 }, military: { grain: 28, troops: 2 } },
 };
-export function incomeText(i: { grain: number; troops: number }): string { return `军粮 +${i.grain}${i.troops ? ` · 后备兵 +${i.troops}` : ''}`; }
+export function incomeText(i: { grain: number; troops: number }): string { return `钱币 +${i.grain}${i.troops ? ` · 后备兵 +${i.troops}` : ''}`; }
 /** 改发展方向的花费（军粮）；从“均衡”首次选择免费。 */
 export const FOCUS_CHANGE_COST: Record<CityTier, number> = { small: 30, medium: 60, large: 120 };
 
@@ -212,7 +212,7 @@ export function levelOf(t: TownState, id: TownBuildingId): number { return t.lev
 export function legacyLevels(t: TownState): { barracks: number; farm: number; clinic: number } {
   return { barracks: Math.max(1, levelOf(t, 'barracks')), farm: Math.max(1, levelOf(t, 'farm')), clinic: 1 };
 }
-export function costText(c: Cost): string { return c ? `军粮 ${c}` : '免费'; }
+export function costText(c: Cost): string { return c ? `钱币 ${c}` : '免费'; }
 
 /**
  * 每场出征结算一次（胜利或坚持 60 秒以上）：农田产粮、城池产出、扣后备兵口粮，然后推进内部季度计数。

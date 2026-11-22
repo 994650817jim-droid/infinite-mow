@@ -34,7 +34,7 @@ await p.waitForTimeout(2600);
 const res = await p.evaluate(async () => { const s = window.__S, W = await import('/src/world/WorldStore.ts'), c = JSON.parse(localStorage.getItem('im_campaign_v1')).heroes.zhaoyun;
   return { panel: s.resultPanel.visible, slow: s.devTimeScale, btn: s.resultPanel.getByName('result-home')?.text, body: s.resultTexts.body.text.slice(-120), hp: c.player.hpFrac, troops: c.army.soldiers.length, prov: W.loadWorld().provisions, stages: W.arcStages('qunxiong'), playable: W.arcStagePlayable("qunxiong", 2), notes: s.defeatNotes, dbg: { wu: W.worldUnlocked(), prev: s.encounterPreview, rt: s.defeatRetreat, live: s.defeatLive(), has: typeof s.runDefeatFlow } }; });
 ck('结算面板晚出、慢动作恢复；按钮改「退守 义军营寨」（没有城就退营寨）', res.panel && res.slow === 1 && res.btn === '退守 义军营寨', res);
-ck('惩罚：存档点主将生命 ≤55%、部曲 10→7、营寨军粮 1000→920，结算正文写明', res.hp === .55 && res.troops === 7 && res.prov === before.prov - 80 && /战败惩罚/.test(res.body), { before, res });
+ck('惩罚：存档点主将生命 ≤55%、部曲 10→7、营寨钱币 1000→920，结算正文写明', res.hp === .55 && res.troops === 7 && res.prov === before.prov - 80 && /战败惩罚/.test(res.body), { before, res });
 ck('关卡没平定：群雄篇章进度不变，第 ' + before.stage + ' 关照样可以再出征', res.stages === 1 && before.playable && res.playable, { before: before.playable, after: res.playable, stages: res.stages });
 // 退守 → 真的进营寨（第六轮试玩：原来回天下地图、选中的是城，主按钮进城而不是接着打）→ 营寨弹败退提示 → 回地图选中这一仗
 await p.evaluate(() => window.__S.resultPanel.getByName('result-home').emit('pointerdown'));

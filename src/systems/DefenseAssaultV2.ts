@@ -210,7 +210,7 @@ export class DefenseAssaultV2 {
     this.queue = []; this.logs = this.logs.map(() => A.logs.charges); this.oil.charges = A.oil.charges; this.oil.cd = 0;
     const lost = this.waveLost.size, r = v2WaveReward(lost, this.gate.open ? 0 : this.gate.hp / this.gate.max); this.h.gainFood(r.food); this.stats.rewardFood += r.food;
     if (r.clean) this.h.allyBuff(R.cleanMul, el + W.restSec + W.attackSec);
-    this.h.banner(r.clean ? `四段无失 · 赏粮 ${r.food}` : `失守 ${lost} 段 · 赏粮 ${r.food}`, false, (r.clean ? `下一波部曲伤害 +${Math.round((R.cleanMul - 1) * 100)}% · ` : '') + '喘息：滚木、热油补满 · Space 跳过', r.clean ? `四段无失 · 赏粮 ${r.food}` : `失守 ${lost} 段 · 赏粮 ${r.food}`);
+    this.h.banner(r.clean ? `四段无失 · 钱币 +${r.food}` : `失守 ${lost} 段 · 钱币 +${r.food}`, false, (r.clean ? `下一波部曲伤害 +${Math.round((R.cleanMul - 1) * 100)}% · ` : '') + '喘息：滚木、热油补满 · Space 跳过', r.clean ? `四段无失 · 钱币 +${r.food}` : `失守 ${lost} 段 · 钱币 +${r.food}`);
     this.h.guide('rest'); this.h.restStart();
   }
 

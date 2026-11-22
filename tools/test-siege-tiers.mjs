@@ -82,7 +82,7 @@ const killBoss = async p => {
   }
   // 全取：三处要点都占 → 结算军粮 +20%，结算列表写「全取」
   const ft = await p.evaluate(() => { const m = window.__M; for (const q of m.points) q.state = 'secured'; return { full: m.fullTake, share: m.provisionsBonus().share, line: m.settleLines()[0] }; });
-  ck('小城：三处要点全占 → 「全取」结算军粮 +20%', ft.full && ft.share === .2 && /全取/.test(ft.line), ft);
+  ck('小城：三处要点全占 → 「全取」结算钱币 +20%', ft.full && ft.share === .2 && /全取/.test(ft.line), ft);
   const toHall = await waitPhase(p, 'hall');
   await step(p, 80);
   const h = await p.evaluate(() => { const s = window.__S, b = s.boss; return { phase: window.__M.phase, boss: !!b?.active, hp: b?.maxHp, name: s.chapter.bossName, goal: s.children.getByName('siege-goal')?.text, py: Math.round(s.player.y) }; });

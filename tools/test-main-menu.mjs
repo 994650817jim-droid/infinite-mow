@@ -45,7 +45,7 @@ try {
     const nav = p.waitForEvent('load', { timeout: 30000 }).catch(() => null);
     await p.keyboard.press('KeyM'); await nav; await ready(); await p.waitForTimeout(500);
     const after = await save(), sc = await active(p);
-    ck('再按 M：本关所得回滚（等级 / 军粮 / 行囊回到进关前，快照清掉）', after.lv === base.lv && after.xp === base.xp && after.prov === base.prov && after.bag === base.bag && !after.snap, { base, after });
+    ck('再按 M：本关所得回滚（等级 / 钱币 / 行囊回到进关前，快照清掉）', after.lv === base.lv && after.xp === base.xp && after.prov === base.prov && after.bag === base.bag && !after.snap, { base, after });
     ck('回到的是主页（不是天下地图、不播开场）', sc.includes('MenuScene') && !sc.includes('WorldMapScene') && !sc.includes('OpeningScene'), sc);
     // 撤退仍走原来的路（回滚后进主页 / 天下地图规则不变）
     await start11(); await gain();

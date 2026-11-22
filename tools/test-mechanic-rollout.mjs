@@ -49,7 +49,7 @@ const rest = (p, key) => p.evaluate(async key => {
   const sq = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'), u = s.legionUI; return { hud: u?.hud?.visible ?? null, status: u?.status?.text ?? null, orderVis: u?.order?.visible ?? null, order: s.legion.order }; });
   await p.screenshot({ path: OUT + '/hud-1-1.png' });
   // 11-21 用户试玩「1-1 看不到自己军粮」：资源数字从 1-1 起就显示，只藏没开放的按钮
-  ck('1-1：部曲没开放——左上只写「随军粮 N」（不写兵力），护阵 / 出击按钮不显示、按 E 无反应', sq.hud === true && /^随军粮 \d+$/.test(sq.status ?? '') && sq.orderVis === false && sq.order === 'guard', sq);
+  ck('1-1：部曲没开放——左上只写「随军钱币 N」（不写兵力），护阵 / 出击按钮不显示、按 E 无反应', sq.hud === true && /^钱币 \d+$/.test(sq.status ?? '') && sq.orderVis === false && sq.order === 'guard', sq);
   // 称谓规则：刘备始终是义军之主，玩家是出战主将——三兄弟之外的主将，章头不叫「桃园结义」；简雍称「主公」时由刘备作答
   const lord = await p.evaluate(async () => { const St = await import('/src/systems/Story.ts'), H = (await import('/src/data/story/huangjin.ts')).HUANGJIN_STORY, ctx = l => ({ lord: l, team: () => [l], recruited: () => false });
     const camp2 = H.camp.find(n => n.id === 'huangjin.camp2');
@@ -72,7 +72,7 @@ const rest = (p, key) => p.evaluate(async key => {
   const st = await states(p);
   ck('1-1 打完：军医、部曲、舆图开放；军需商人仍未开', st.medic && st.squad && st.atlas && st.gear && !st.merchant && !st.jinnang, st);
   const sq2 = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); for (let i = 0; i < 6 && s.mode !== 'none'; i++) { s.__DEV_ACTIONS?.closePopup?.(); if (s.mode !== 'none') s.setMode?.('none'); } s.updateHud?.(); const u = s.legionUI; return { hud: u?.hud?.visible ?? null, status: u?.status?.text ?? null, orderVis: u?.order?.visible ?? null }; });
-  ck('1-2（部曲开放）：护阵按钮出现，左上「随军粮 · 兵力」', sq2.hud === true && sq2.orderVis === true && /随军粮 \d+ · 兵力 \d+/.test(sq2.status ?? ''), sq2);
+  ck('1-2（部曲开放）：护阵按钮出现，左上「随军钱币 · 兵力」', sq2.hud === true && sq2.orderVis === true && /钱币 \d+ · 兵力 \d+/.test(sq2.status ?? ''), sq2);
   await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'); s.player.hp = Math.round(s.player.maxHp * .5); });
   const r = await rest(p, 'test-rest-12');
   await p.screenshot({ path: OUT + '/medic-intro.png' });

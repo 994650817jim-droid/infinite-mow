@@ -231,7 +231,10 @@ export class Legion {
   hurtArea(x: number, y: number, radius: number, damage: number, now: number, angle?: number, arc = Math.PI * 2): void {
     for (const u of this.grid.query(x, y, radius + 20, this.friends)) if (u.active && Math.hypot(u.x - x, u.y - y) <= radius + u.radius && (angle === undefined || Math.cos(Math.atan2(u.y - y, u.x - x) - angle) >= Math.cos(arc / 2))) this.hurtByBoss(u, damage, now);
   }
+  /** 最近一次「打怪得钱」的来源（世界坐标 + 时刻）：钱币飞入钱袋从这里飞起（ui/CoinFly）。 */
+  foodFrom: { x: number; y: number; t: number } | null = null;
   onKill(enemy: Enemy): void {
+    this.foodFrom = { x: enemy.sprite.x, y: enemy.sprite.y, t: performance.now() };
     if (this.ch1Trial) { const F = CH1V6.food; if (enemy.kind === 'boss') this.food += F.boss; else if (enemy.kind === 'elite') this.food += F.elite; else if (++this.trialKills >= F.perKills) { this.trialKills = 0; this.food += 1; } return; } // 第一章试验数值 ch1v6
     this.food += enemy.kind === 'boss' ? 20 : enemy.kind === 'elite' ? 5 : 1;
   }

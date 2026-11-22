@@ -186,7 +186,7 @@ export function sideLubuGameSceneClass(Base: typeof GameScene) {
       enemy.deactivate(); this.kills += 1;
       if (storyMode() !== 'off') castBark(this, at, cg.name, '今日有死而已！请出就戮，以明军法。', 'chengong');
       let cap = '吕布势孤';
-      if (surrenderLive() && markSurrender('honored', cg.id)) { gainProvisions(SURRENDER.persuadeProvisions); cap = '以礼厚葬 · 军粮 +' + SURRENDER.persuadeProvisions + ' · 仁名 +1'; }
+      if (surrenderLive() && markSurrender('honored', cg.id)) { gainProvisions(SURRENDER.persuadeProvisions); cap = '以礼厚葬 · 钱币 +' + SURRENDER.persuadeProvisions + ' · 仁名 +1'; }
       this.showWaveBanner('陈宫拒降就义', false, cap); this.sfx.play('gong');
     }
     update(time: number, delta: number) {
@@ -233,7 +233,7 @@ export function sideLubuGameSceneClass(Base: typeof GameScene) {
       const debug = this.test || this.debugModified || this.debugJumped || !!this.player.damageImmune;
       const out = settleSideStage('xiapi', stage, { victory, debug });
       this.resultTexts.subtitle.setText(victory ? this.chapter.victoryText : '吕布难当 · 整军再战');
-      this.resultTexts.body.setText(this.resultTexts.body.text + '\n讨伐令 · 军粮 +' + out.provisions + sideLine(out, route));
+      this.resultTexts.body.setText(this.resultTexts.body.text + '\n讨伐令 · 钱币 +' + out.provisions + sideLine(out, route));
       const home = this.resultPanel.getByName('result-home') as Phaser.GameObjects.Text;
       home?.setText('返回天下地图').removeAllListeners('pointerdown').on('pointerdown', () => { this.registry.set('mapFocusNode', 'side-xiapi'); this.scene.start('WorldMapScene'); });
       const restart = this.resultPanel.getByName('result-restart') as Phaser.GameObjects.Image;

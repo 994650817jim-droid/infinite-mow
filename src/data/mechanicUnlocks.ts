@@ -33,13 +33,13 @@ export interface MechDef {
 
 export const MECHANICS: Readonly<Record<MechId, MechDef>> = {
   squad: { chapter: 1, stage: 2, when: 'start', pre: 'hidden', name: '部曲',
-    lines: [{ who: '简雍', id: 'jianyong', text: '乡勇五百已编成部曲，听将军号令！' }], tip: '战斗支援：每次免费补一小队兵；大批招兵去行营（随军粮按人招）；E 部曲出击 / 护阵' },
+    lines: [{ who: '简雍', id: 'jianyong', text: '乡勇五百已编成部曲，听将军号令！' }], tip: '战斗支援：每次免费补一小队兵；大批招兵去行营（随军钱币按人招）；E 部曲出击 / 护阵' },
   atlas: { chapter: 1, stage: 2, when: 'start', pre: 'hidden', name: '舆图',
     lines: [{ who: '简雍', id: 'jianyong', text: '下曲阳地形复杂，看看舆图再走。' }], tip: '按 M 展开舆图（战斗暂停）' },
   jinnang: { chapter: 1, stage: 3, when: 'after', pre: 'hidden', name: '锦囊',
     lines: [{ who: '诸葛亮', id: 'zhuge', text: '另附锦囊三枚，危急时拆看。' }], tip: '三选一里出现锦囊；按 R 拆开锦囊' },
   medic: { chapter: 1, stage: 2, when: 'start', pre: 'hidden', name: '军医', at: 'camp',
-    lines: [{ who: '乡里郎中', text: '在下略通岐黄，愿随军效力。' }, { who: '简雍', id: 'jianyong', text: '将军，这一仗受的伤会带到下一仗——休整时请先生看看。' }], tip: '血量跨关继承，休整时找军医治伤；初诊不收粮' },
+    lines: [{ who: '乡里郎中', text: '在下略通岐黄，愿随军效力。' }, { who: '简雍', id: 'jianyong', text: '将军，这一仗受的伤会带到下一仗——休整时请先生看看。' }], tip: '血量跨关继承，休整时找军医治伤；初诊不收钱' },
   gear: { chapter: 1, stage: 1, when: 'start', pre: 'hidden', name: '行囊', at: 'event',
     lines: [{ who: '张飞', id: 'zhangfei', text: '大哥，缴来的甲胄先穿上！' }], tip: '按 B 打开行囊，点「一键穿戴」换上最好的；首领宝箱会掉兵装' },
   merchant: { chapter: 1, stage: 3, when: 'after', pre: 'hidden', name: '军需商人', at: 'camp',

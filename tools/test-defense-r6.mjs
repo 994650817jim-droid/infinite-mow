@@ -17,7 +17,7 @@ const G = src('src/scenes/GameScene.ts'), S = src('src/scenes/SiegeGameScene.ts'
 // ———— 1)
 ck('结局类型多一种 keep（府衙失守，主将还活着）', /export type RunEndReason = 'boss' \| 'death' \| 'timeout' \| 'keep';/.test(src('src/types.ts')));
 ck('守城府衙被破 → finish(false, \'keep\')（原来按阵亡）；结算「结局 府衙失守」', /lose: \(\) => \{ if \(!this\.over\) this\.finish\(false, 'keep'\); \}/.test(S) && /reason === 'keep' \? '府衙失守' : '阵亡'/.test(G));
-ck('主将 / 随行负伤、部曲折损只在主将阵亡（death）时给；营寨军粮照扣；守城自己的后果（城池被围）由 settleDefense 照旧', /if \(!victory\) this\.runDefeatFlow\(reason\);/.test(G) && /protected runDefeatFlow\(reason: RunEndReason = 'death'\): void \{/.test(G) && /camp = reason !== 'death' \? null : patchCampaignDefeat\(/.test(G) && /loseProvisionsPct\(DEFEAT\.grainPct, DEFEAT\.grainCap\)/.test(G) && /守城失利 · \$\{this\.city\.name\}已被围/.test(S));
+ck('主将 / 随行负伤、部曲折损只在主将阵亡（death）时给；营寨钱币照扣；守城自己的后果（城池被围）由 settleDefense 照旧', /if \(!victory\) this\.runDefeatFlow\(reason\);/.test(G) && /protected runDefeatFlow\(reason: RunEndReason = 'death'\): void \{/.test(G) && /camp = reason !== 'death' \? null : patchCampaignDefeat\(/.test(G) && /loseProvisionsPct\(DEFEAT\.grainPct, DEFEAT\.grainCap\)/.test(G) && /守城失利 · \$\{this\.city\.name\}已被围/.test(S));
 
 // ———— 2)
 ck('结算时收掉喘息布防面板：失守 / 守住时 DefenseBattle 自己收，主将阵亡时 SiegeGameScene.finish 收', /if \(this\.keep\.hp <= 0\) \{ this\.done = true; this\.closePrep\(\); this\.h\.lose\(\); return; \}/.test(DB) && /this\.done = true; this\.closePrep\(\); this\.h\.win\(\); return; \}/.test(DB) && /if \(this\.over\) return;\s*\n\s*this\.defend\?\.closePrep\(\);/.test(S) && /closePrep\(\): void \{ this\.ui\?\.destroy\(\); this\.ui = null; \}/.test(DB));

@@ -98,7 +98,7 @@ export class MerchantShop{
   const hover=this.scene.add.rectangle(x+4,y+4,w-8,h-64,0,.001).setOrigin(0).setScrollFactor(0).setInteractive().setName('camp-item-card-'+i);this.root.add(hover);
   const owner=this.o.owner();this.tip!.attach(hover,()=>item,()=>owner?loadout(owner)[itemSlot(item)]:undefined);
   const bw=Math.min(w-20,180),poor=purse<price;
-  const {hit,cap}=this.button(x+(w-bw)/2,y+h-52,sold?'已售罄':poor?(this.o.wallet.name+'不足 · ')+price+'粮':'购入 · '+price+'粮',()=>{
+  const {hit,cap}=this.button(x+(w-bw)/2,y+h-52,sold?'已售罄':poor?(this.o.wallet.name+'不足 · ')+price+' 钱币':'购入 · '+price+' 钱币',()=>{
    const cur=this.o.stock();if(cur.sold[i]||!this.o.wallet.spend(price))return;cur.sold[i]=true;saveMerchantStock(cur);
    this.o.onBuyItem(item);this.o.sound?.('shop_buy');this.o.notice('已购入 '+itemName(item)+' · 已收入行囊，可点「行囊」穿戴');this.o.changed();
   },bw,!sold&&!poor);
@@ -112,8 +112,8 @@ export class MerchantShop{
  private tacticCard(s:MerchantStock,t:CampOffer,x:number,y:number,w:number,h:number){
   // 第 4 期「流派心法」与战法卷轴共用这张卡：v 是卡面要写的东西
   const next=t.level+1,tac=this.o.tactics,able=!!tac&&tac.canBuy(t),poor=this.o.wallet.get()<t.price;
-  const v=t.kind==='manual'?(()=>{const m=manualText(t.school,tac?.shi?.(t.school));return{name:m.title,lv:'+1 势',badge:'心法',badgeStyle:'gold' as const,school:SCHOOLS[t.school].name+' · 流派心法',schoolColor:'#4a2a0f',icon:'build_icon_school_'+t.school,effect:m.effect,cooldown:'每派只能研读一次' as string|null,full:m.full,tipTitle:m.title+'（+1 势）',tipSub:SCHOOLS[t.school].name+' · 流派心法 · '+t.price+'粮',verb:'研读',doneVerb:'已研读'};})()
-   :(()=>{const d=TACTICS[t.id],{effect,cooldown,full}=tacticCardText(t.id,next),school=d.tag?TAG_NAMES[d.tag]:'基础成长';return{name:d.name,lv:t.level?'Lv.'+t.level+'→'+next:'Lv.1',badge:t.level?'精进':'新学',badgeStyle:(t.level?'gold':'cinnabar') as 'gold'|'cinnabar',school:school+(d.tag?' · 战法':''),schoolColor:d.tag?'#4a2a0f':'#4d3a20',icon:'build_icon_'+t.id,effect,cooldown,full,tipTitle:d.name+' '+(t.level?'Lv.'+t.level+' → Lv.'+next:'Lv.1（新学）'),tipSub:school+(d.tag?' · 战法 · ':' · ')+t.price+'粮',verb:t.level?'精进':'研习',doneVerb:'已研习'};})();
+  const v=t.kind==='manual'?(()=>{const m=manualText(t.school,tac?.shi?.(t.school));return{name:m.title,lv:'+1 势',badge:'心法',badgeStyle:'gold' as const,school:SCHOOLS[t.school].name+' · 流派心法',schoolColor:'#4a2a0f',icon:'build_icon_school_'+t.school,effect:m.effect,cooldown:'每派只能研读一次' as string|null,full:m.full,tipTitle:m.title+'（+1 势）',tipSub:SCHOOLS[t.school].name+' · 流派心法 · '+t.price+' 钱币',verb:'研读',doneVerb:'已研读'};})()
+   :(()=>{const d=TACTICS[t.id],{effect,cooldown,full}=tacticCardText(t.id,next),school=d.tag?TAG_NAMES[d.tag]:'基础成长';return{name:d.name,lv:t.level?'Lv.'+t.level+'→'+next:'Lv.1',badge:t.level?'精进':'新学',badgeStyle:(t.level?'gold':'cinnabar') as 'gold'|'cinnabar',school:school+(d.tag?' · 战法':''),schoolColor:d.tag?'#4a2a0f':'#4d3a20',icon:'build_icon_'+t.id,effect,cooldown,full,tipTitle:d.name+' '+(t.level?'Lv.'+t.level+' → Lv.'+next:'Lv.1（新学）'),tipSub:school+(d.tag?' · 战法 · ':' · ')+t.price+' 钱币',verb:t.level?'精进':'研习',doneVerb:'已研习'};})();
   const {effect,cooldown,full}=v;
   this.plate(x,y,w,h).setName('camp-tactic-card');
   const px=x+7,pw=w-14,py=y+14,ph=h-76,g=this.scene.add.graphics().setScrollFactor(0);
@@ -138,7 +138,7 @@ export class MerchantShop{
   desc.setData('limit',limit).setData('full',full);
   const hover=this.scene.add.rectangle(px,py,pw,ph,0,.001).setOrigin(0).setScrollFactor(0).setInteractive().setName('camp-tactic-hover');this.root.add(hover);
   this.tip!.attachInfo(hover,()=>({title:v.tipTitle,sub:v.tipSub,body:full,icon:v.icon}));
-  const label=t.sold?v.doneVerb:!tac?'出征后可'+v.verb:!able?(tac.lockedText??'已无法'+v.verb):poor?(this.o.wallet.name+'不足 · ')+t.price+'粮':v.verb+' · '+t.price+'粮',bw=Math.min(w-20,180);
+  const label=t.sold?v.doneVerb:!tac?'出征后可'+v.verb:!able?(tac.lockedText??'已无法'+v.verb):poor?(this.o.wallet.name+'不足 · ')+t.price+' 钱币':v.verb+' · '+t.price+' 钱币',bw=Math.min(w-20,180);
   this.button(x+(w-bw)/2,y+h-52,label,()=>{
    const cur=this.o.stock().tactic;if(!cur||cur.sold||!tac||!tac.canBuy(cur)||this.o.wallet.get()<cur.price)return;
    const lv=cur.level;if(!tac.learn(cur))return;this.o.wallet.spend(cur.price);cur.sold=true;saveMerchantStock(this.o.stock());tac.afterBuy?.();

@@ -99,7 +99,7 @@ export class Parley {
       else { const r = captureBoss({ id: d.id, name: d.name, template: d.template ?? 'blade' }); if (r?.evicted.length) where += ` · ${r.evicted.join('、')}久候不至，已离去`; }
       if (first) gainProvisions(SURRENDER.persuadeProvisions);
     } else where = '试炼不入册';
-    this.h.banner(`${d.name}归降`, false, where + (live ? ` · 军粮 +${SURRENDER.persuadeProvisions}` : ''));
+    this.h.banner(`${d.name}归降`, false, where + (live ? ` · 钱币 +${SURRENDER.persuadeProvisions}` : ''));
     this.h.sfx('parleyYes'); this.h.sfx('kneel');
     this.kneel(b);
   }
@@ -165,11 +165,11 @@ export class Parley {
     root.add(t(W / 2, y0 + 148, never ? `宁死不降 · ${d.reason ?? `${d.name}不肯归降`}` : blocked ? `劝降条件：${blocked}（尚未满足）· ${d.reason ?? ''}` : '是劝其归降，还是阵前斩杀？', never || blocked ? 15 : 16, never ? '#f0a090' : '#eadcbd').setName('parley-reason'));
     const oddsText = o.sure ? '劝降把握：必成' : never ? '劝降把握：——' : blocked ? '劝降把握：条件未满足' : `劝降把握：${o.pct}%`;
     root.add(t(W / 2, y0 + 180, oddsText, 22, o.sure ? '#9fe0a0' : never || blocked ? '#c07060' : '#ffe08a', true).setName('parley-odds'));
-    if (never) root.add(t(W / 2, y0 + 208, `斩杀后以礼厚葬：军粮 +${SURRENDER.persuadeProvisions} · 仁名 +1（本存档首次）`, 13, '#d8c08a').setName('parley-honor'));
+    if (never) root.add(t(W / 2, y0 + 208, `斩杀后以礼厚葬：钱币 +${SURRENDER.persuadeProvisions} · 仁名 +1（本存档首次）`, 13, '#d8c08a').setName('parley-honor'));
     else if (!o.sure && !blocked) root.add(t(W / 2, y0 + 208, o.parts.map((p, i) => (i ? `${p.label} ${p.add >= 0 ? '+' : ''}${p.add}` : `${p.label} ${p.add}`)).join(' · '), 13, '#b9a57a').setName('parley-parts'));
     const relic = (this.h as unknown as { relicName?: () => string | null }).relicName?.() ?? null;
-    if (never) root.add(t(W / 2, y0 + 232, `斩杀：首领宝箱${relic ? `（遗珍：${relic}）` : ''} · 军粮 +${SURRENDER.executeProvisions}`, 13, '#b9a57a'));
-    else root.add(t(W / 2, y0 + 232, `劝降：${d.hero ? '以武将身份加入麾下' : '入降将栏（四季内六折招降）'} · 军粮 +${SURRENDER.persuadeProvisions}　|　斩杀：首领宝箱${relic ? `（遗珍：${relic}）` : ''} · 军粮 +${SURRENDER.executeProvisions}`, 13, '#b9a57a'));
+    if (never) root.add(t(W / 2, y0 + 232, `斩杀：首领宝箱${relic ? `（遗珍：${relic}）` : ''} · 钱币 +${SURRENDER.executeProvisions}`, 13, '#b9a57a'));
+    else root.add(t(W / 2, y0 + 232, `劝降：${d.hero ? '以武将身份加入麾下' : '入降将栏（四季内六折招降）'} · 钱币 +${SURRENDER.persuadeProvisions}　|　斩杀：首领宝箱${relic ? `（遗珍：${relic}）` : ''} · 钱币 +${SURRENDER.executeProvisions}`, 13, '#b9a57a'));
     // 按钮：劝降（水墨主按钮）/ 斩杀 / 再压一压（漆底描金）
     const by = y0 + ph - 62, three = !second && !this.pressed && !never && !blocked && d.tier !== 'sure', canPersuade = !never && !blocked;
     const xs = three ? [W / 2 - 190, W / 2, W / 2 + 190] : [W / 2 - 110, W / 2 + 110];

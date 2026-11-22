@@ -55,14 +55,14 @@ export class CityRecruitScene extends Phaser.Scene{
  }
  private render(){
   this.content?.destroy(true);this.content=this.add.container(0,0);const s=loadWorld(),D=W>600,total=Object.values(s.reserve).reduce((a,b)=>a+b,0);
-  this.status.setText(`军粮 ${s.provisions} · 后备 ${total} 人 · 每次出征最多带 2 名后备 + 军营增援`);
+  this.status.setText(`钱币 ${s.provisions} · 后备 ${total} 人 · 每次出征最多带 2 名后备 + 军营增援`);
   this.notice.setText(this.message||"新招兵种优先出征，超出编制的士兵继续留守；存活归营，中途放弃不返还。").setColor(this.message?'#f3d48a':'#d5c5a2');
   if(D){this.renderDesktop(s);return;}
   // 手机：两列翻页（布局沿用原版，形象改用 v2）
-  this.status.setText(`军粮 ${s.provisions} · 后备 ${total}人\n最多携带2名后备 + 军营增援，存活归营；中途放弃不返还`);
+  this.status.setText(`钱币 ${s.provisions} · 后备 ${total}人\n最多携带2名后备 + 军营增援，存活归营；中途放弃不返还`);
   TROOP_KINDS.slice(this.page*4,this.page*4+4).forEach((kind,i)=>{const width=(W-54)/2,height=230,x=20+(i%2)*(width+10),y=175+Math.floor(i/2)*248;
    const frame=panel(this,x+width/2,y+height/2,width,height),def=TROOPS[kind],locked0=barracksLevel(s)<troopUnlockLevel(kind),icon=troopBadge(this,kind,x+44,y+86,34,{walkKey:v2Key(kind),walkFrame:'stand',dim:locked0});
-   const title=worldText(this,x+14,y+14,def.name,17),detail=worldText(this,x+78,y+48,`后备 ${s.reserve[kind]??0}\n${recruitCost(kind,s)}军粮/人`,12,'#bfd0b8').setWordWrapWidth(width-86);
+   const title=worldText(this,x+14,y+14,def.name,17),detail=worldText(this,x+78,y+48,`后备 ${s.reserve[kind]??0}\n${recruitCost(kind,s)}钱币/人`,12,'#bfd0b8').setWordWrapWidth(width-86);
    const need=troopUnlockLevel(kind),locked=barracksLevel(s)<need;
    const btn=worldButton(this,x+width/2,y+height-35,locked?`军营 Lv.${need} 解锁`:'招募1人',()=>{if(!locked)this.buy(kind);},width-24);btn.image.setName(`reserve-buy-${kind}`);
    if(locked){btn.image.disableInteractive().setAlpha(.5);frame.setTint(0x6a6a6a);}this.content!.add([frame,icon,title,detail,btn.image,btn.text]);});
@@ -84,7 +84,7 @@ export class CityRecruitScene extends Phaser.Scene{
    const role=worldText(this,tx,y+42,tag,13,ROLE_COLOR[kind]).setName(`reserve-role-${kind}`);
    const sub=worldText(this,tx,y+62,note,12,'#bfcab6').setWordWrapWidth(tw);
    const stock=worldText(this,tx,y+90,`后备 ${have} 人`,13,have?'#e9dcc0':'#9da592').setName(`reserve-have-${kind}`);
-   const price=worldText(this,tx,y+110,`${cost} 军粮 / 人`,13,s.provisions>=cost?'#e8cf8f':'#d4887a').setName(`reserve-cost-${kind}`);
+   const price=worldText(this,tx,y+110,`${cost} 钱币 / 人`,13,s.provisions>=cost?'#e8cf8f':'#d4887a').setName(`reserve-cost-${kind}`);
    // 2026-11-20 夜间 UI 审查：一屏只留一个水墨按钮（底部「返回」）——卡上「招募 1 人」改漆金小按钮；未解锁不画按钮、只写一行暗字（原来灰色水墨底把字盖住看不清）
    const bx=tx+tw/2-4,by=y+ch-28,bw=tw-24,bh=32,parts:Phaser.GameObjects.GameObject[]=[];
    if(locked){

@@ -16,7 +16,7 @@ export interface IntelReward {merits: number; provisions: number; money: number;
 export const INTEL_INFO: Record<IntelKind, {name: string; glyph: string; color: number; css: string; seasons: number; brief: string}> = {
   bounty: {name: '名将悬赏', glyph: '赏', color: 0xb8442c, css: '#ff9a72', seasons: 2, brief: '敌将率游骑出没，击败必得紫色以上兵装'},
   bandit: {name: '流寇袭扰', glyph: '寇', color: 0xc9a032, css: '#f2cf6a', seasons: 1, brief: '流寇侵扰我方城池；本季不平定，该城本季产出减半'},
-  escort: {name: '商队护送', glyph: '商', color: 0x3f8f6a, css: '#8fe0b4', seasons: 1, brief: '护送商车抵达城池得军粮；车毁则商队被劫'},
+  escort: {name: '商队护送', glyph: '商', color: 0x3f8f6a, css: '#8fe0b4', seasons: 1, brief: '护送商车抵达城池得钱币；车毁则商队被劫'},
 };
 
 /** 悬赏名将：按势力（史事人物；与可玩武将、章节首领不重复）。 */

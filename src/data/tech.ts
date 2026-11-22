@@ -39,7 +39,7 @@ export const TECHS: Record<TechId, TechDef> = {
   potion: {name: '回血药', branch: 'supply', tier: 1, cost: 150, desc: '出征开局药囊里带 2 份回血药，每份回复 30% 生命（Q 键 / 用药按钮）', effect: {potions: {count: 2, ratio: .3}}},
   potion2: {name: '良药', branch: 'supply', tier: 2, cost: 400, needs: 'potion', desc: '回血药改为 3 份，每份回复 40% 生命', effect: {potions: {count: 3, ratio: .4}}},
   medicine: {name: '医术', branch: 'supply', tier: 2, cost: 400, desc: '军医治疗量 +12%', effect: {heal: .12}},
-  tuntian: {name: '屯田', branch: 'supply', tier: 3, cost: 800, desc: '每场出征的军粮收益 +15%', effect: {grain: .15}},
+  tuntian: {name: '屯田', branch: 'supply', tier: 3, cost: 800, desc: '每场出征的钱币收益 +15%', effect: {grain: .15}},
   levy: {name: '募兵有方', branch: 'supply', tier: 3, cost: 800, desc: '招募后备兵花费 −10%', effect: {recruitDiscount: .1}},
 
   drill_melee: {name: '刀枪操练', branch: 'troops', tier: 1, cost: 150, desc: '刀盾兵、长枪兵出征开局即为 Lv2', effect: {troopLevel: {kinds: ['swordsman', 'spearman'], level: 2}}},

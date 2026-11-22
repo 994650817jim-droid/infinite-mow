@@ -21,7 +21,7 @@ for (const layout of ['mobile', 'desktop']) {
   const d0 = await p.evaluate(G0 => { const s = eval(G0); s.spawnTimer = s.eliteTimer = 1e9; const d = s.depots; return { total: d.total, intact: d.intact, mul: +d.moraleMultiplier.toFixed(2), frames: d.depots.map(x => x.point.frame) }; }, G);
   ck(layout + ' 4-1 两处袁军粮垛，军心×2（受伤 ×0.76）', d0.total === 2 && d0.intact === 2 && d0.mul === .76 && d0.frames.every(f => f === 16), d0);
   const burn = await p.evaluate(G0 => { const s = eval(G0), d = s.depots, food = s.legion.food, e = d.depots[0].enemy; s.player.sprite.setPosition(e.x + 60, e.y + 30); s.hitEnemy(e, 1e4, s.combatNow, 'melee'); return { food: s.legion.food - food, burned: d.burned, intact: d.intact, mul: +d.moraleMultiplier.toFixed(2), label: d.depots[0].label.text, fire: d.depots[0].fire.length }; }, G);
-  ck(layout + ' 焚一处粮垛：+12 军粮，军心×1（×0.88），起火', burn.food === 12 && burn.burned === 1 && burn.intact === 1 && burn.mul === .88 && burn.label.startsWith('粮草已焚') && burn.fire === 3, burn);
+  ck(layout + ' 焚一处粮垛：+12 钱币，军心×1（×0.88），起火', burn.food === 12 && burn.burned === 1 && burn.intact === 1 && burn.mul === .88 && burn.label.startsWith('粮草已焚') && burn.fire === 3, burn);
   await p.waitForTimeout(300); await p.screenshot({ path: `${out}/${layout}-41-burn.png` });
   const boss1 = await p.evaluate(G0 => {
     const s = eval(G0); s.spawnBoss(); const c = s.controller, b = s.boss; let now = s.combatNow;

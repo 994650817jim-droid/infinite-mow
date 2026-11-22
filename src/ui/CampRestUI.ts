@@ -66,7 +66,8 @@ export class CampRestUI {
   const source=background.texture.getSourceImage();const cover=Math.max(W/source.width,H/source.height);background.setScale(cover);this.root.add(background);
   this.root.add(scene.add.rectangle(0,0,W,H,0x110e0a,.38).setOrigin(0).setInteractive());
   this.header=this.text(D?40:28,D?18:30,'行营休整',D?27:30).setFontFamily(HEADING_FONT).setColor('#f3e3bf');
-  this.resources=this.text(D?40:28,D?57:78,'',D?17:19).setColor('#e6c894');
+  this.resources=this.text(D?40:28,D?57:78,'',D?17:19).setColor('#e6c894').setPadding(26,0,0,0);
+  if(scene.textures.exists('yellow_props')){this.purse=scene.add.image(0,0,'yellow_props',17).setScrollFactor(0).setName('camp-coin-purse');this.purse.setScale(26/128);this.root.add(this.purse);}
   this.next=this.text(D?W-40:28,D?30:110,'',D?16:17).setColor('#d2c3a6');if(D)this.next.setOrigin(1,0);
   this.root.add([this.header,this.resources,this.next]);
   // 2026-11-18 用户：「这里 ui 水墨特效太多了」→ 整页只留底部「率军出征」一处水墨笔刷，其余换漆底描金（LacquerKit）
@@ -170,13 +171,23 @@ export class CampRestUI {
    if(!open){if(this.tab===i)this.tab=0;return;}const x=D?40+v*180:24+v*this.tabW;t.setX(x);this.tabFrames[k]?.setX(x+(this.tabW-6)/2);this.tabIcons[k]?.setX(x+21);v++;});}
  /** 引子那次休整：人物气泡只说引子第一句。 */
  private introLine(id:MechId):string|undefined{return this.intro?.id===id?MECHANICS[id].lines[0]?.text:undefined;}
+ /** 资源行的钱袋图标（美术钱袋图到位前用营地道具图集的钱袋帧）与「还在飞」的钱（GameScene 的行营 CoinFly 给）。 */
+ purse:Phaser.GameObjects.Image|null=null;
+ coinLag:()=>number=()=>0;
+ /** 资源行：随军钱币（显示值）· 兵力 · 未加的点；钱袋贴在数字前。 */
+ paintCoins(food:number):void{
+  const ph=this.pointsHint?.(),tail=ph?(starMapOn()?' · '+pointsLeftText(ph.n)+' ⓘ':' · 属性点 '+ph.n+' 未加 ⓘ'):'';
+  const txt='随军钱币 '+food+' · 兵力 '+this.army.count+tail;if(txt!==this.resources.text)this.resources.setText(txt);
+  this.resTip.setText(ph?(starMapOn()?'点星：':'加点：')+ph.where:''); /* 2026-11-21：资源行太长、快顶到「下一关」——说明放悬停 */
+  this.purse?.setPosition(this.resources.x+13,this.resources.y+this.resources.height/2);
+ }
  private render(){
   this.body.removeAll(true);this.layoutTabs();this.tabs.forEach((t,k)=>{if(!t.visible)return;const on=t.getData('tab')===this.tab;const lk=CAMP_TAB_MECH[t.getData('tab') as number],locked=!!lk&&!mechOpen(lk);t.setColor(on?'#ffe7b0':'#bcae93').setAlpha(on?1:locked?.38:.78);this.tabIcons[k]?.setAlpha(locked?.38:1);const w=t.width;this.tabFrames[k].setTexture(warPanelTexture(this.scene,w,46,on)).setDisplaySize(w+16,46+16).setVisible(true).setAlpha(on?1:.62);this.tabIcons[k]?.setAlpha(on?1:.6);
    if(on){const to={x:t.x+18,w:w-36};if(!this.lineTo){this.tabLine.setX(to.x);this.tabLine.width=to.w;}this.lineTo=to;}});
   // 兵装（总制作人第一章试玩：20 件兵装一件没穿、全程没提示）：有更好的没穿 → 「行囊」小红点；第一次还在下方提示一句
   {const ups=this.gearUpgrades?.()??0;this.bagDot?.setVisible(ups>0);if(ups>0&&!this.notice&&!gearGuideSeen())this.notice='缴获的兵装还没穿上（'+ups+' 件更好）：点右上「行囊」，再点「一键穿戴」';}
-  {const ph=this.pointsHint?.();this.resources.setText('随军粮 '+this.army.food+' · 兵力 '+this.army.count+(ph?' · 属性点 '+ph.n+' 未加 ⓘ':''));this.resTip.setText(ph?'加点：'+ph.where:'');if(ph&&starMapOn()){this.resources.setText('随军粮 '+this.army.food+' · 兵力 '+this.army.count+' · '+pointsLeftText(ph.n)+' ⓘ');this.resTip.setText('点星：'+ph.where);} /* 星图开着：「N 星未点」 */ /* 2026-11-21：资源行太长、快顶到「下一关」——说明放悬停 */}this.next.setText(this.preBattle?'出征 · '+this.preBattle:'下一关 · '+this.destination);this.header.setText(this.preBattle?'出征整军':'行营休整');this.detail.setText(this.notice);
-  {const side=D&&(this.tab===2||this.tab===4),l=CampRestUI.STATION_LEFT;this.detail.setX(side?l+(W-40-l)/2:D?W/2:28).setWordWrapWidth(side?W-40-l-16:W-(D?120:56),true);}
+  this.paintCoins(Math.max(0,Math.round(this.army.food-this.coinLag())));this.next.setText(this.preBattle?'出征 · '+this.preBattle:'下一关 · '+this.destination);this.header.setText(this.preBattle?'出征整军':'行营休整');this.detail.setText(this.notice);
+  {const side=D&&(this.tab===2||this.tab===4),l=CampRestUI.STATION_LEFT;this.detail.setX(side?l+(W-40-l)/2:D?600:28).setWordWrapWidth(side?W-40-l-16:D?330:W-56,true);} /* 电脑：顶栏空位（资源行右、「下一关 / 行囊」左），全宽居中会压在资源行上（第六轮的放法） */
   if(this.tab===0)this.renderRecruit();if(this.tab===2)this.renderMarket();if(this.tab===3)this.renderBuild(D?154:229);if(this.tab===4)this.renderMedic();if(this.tab===5)this.renderFormation();
   this.onChanged?.();
  }
@@ -233,9 +244,9 @@ export class CampRestUI {
    this.body.add(this.text(x0+16,y+6,title,D?16:17).setFontFamily(HEADING_FONT).setColor('#ecd6a8'));
    this.body.add(this.text(x0+16,y+(D?27:31),desc,D?13:14).setColor('#bba886'));
    const price=st.price[kind],hale=kind==='army'?st.hurtUnits+st.hurtFollowers===0:st.hale;
-   const label=hale?(kind==='army'?'全军无恙':'将军无恙'):this.army.food<price?'随军粮不足 · '+price+'粮':price===0?'治疗 · 初诊免费':'治疗 · '+price+'粮';
+   const label=hale?(kind==='army'?'全军无恙':'将军无恙'):this.army.food<price?'随军钱币不足 · '+price+' 钱币':price===0?'治疗 · 初诊免费':'治疗 · '+price+' 钱币';
    const bw2=D?176:150;this.body.add(this.button(x0+w0-bw2-10,y+(h-44)/2,label,()=>this.heal(kind),bw2,st.can[kind]).setName('camp-medic-'+kind));});
-  if(!this.notice)this.detail.setText('前一关所受的伤会带到下一关；军医用随军粮施治，价格随章节递增（第 '+st.chapter+' 章）。');
+  if(!this.notice)this.detail.setText('前一关所受的伤会带到下一关；军医用随军钱币施治，价格随章节递增（第 '+st.chapter+' 章）。');
  }
  private medicFxLoading=false;
  private loadMedicFx(){const s=this.scene;if(this.medicFxLoading||s.textures.exists('medic_herb_fx'))return;this.medicFxLoading=true;const L=s.load;
@@ -259,8 +270,8 @@ export class CampRestUI {
    const badge=this.text(x+w-16,y+(D?16:20),'在编 '+count,D?14:15).setOrigin(1,0).setColor('#e4c588').setBackgroundColor('rgba(14,10,6,0.7)').setPadding(8,3);this.body.add(badge);
    const role=this.text(D?x+w/2:x+112,y+(D?160:56),roles[i],D?14:15).setColor('#c9b38a');if(D)role.setOrigin(.5,0);this.body.add(role);
    const cost=this.army.recruitCost(kind),poor=this.army.food<cost,bw=D?w-36:w-130;
-   const buy=this.button(D?x+18:x+112,y+h-(D?60:58),poor?'随军粮不足 · '+cost+'粮':'招募 · '+cost+'粮',()=>{const ok=this.army.recruit(kind,1);if(ok)this.sound('recruit');this.notice=ok?TROOPS[kind].name+'入队 · 下一名招募价 '+this.army.recruitCost(kind)+'粮':'无法招募';this.render();},bw,!poor).setName('camp-recruit-'+kind);this.body.add(buy);
-  });if(!this.notice)this.detail.setText('行营招兵是主要兵源：随军粮按人招，在编越多越贵（每名在编士兵使招募价 +20%，当前在编 '+this.army.count+' 人）。战斗中的「战斗支援」只免费补一小队。');
+   const buy=this.button(D?x+18:x+112,y+h-(D?60:58),poor?'随军钱币不足 · '+cost+' 钱币':'招募 · '+cost+' 钱币',()=>{const ok=this.army.recruit(kind,1);if(ok)this.sound('recruit');this.notice=ok?TROOPS[kind].name+'入队 · 下一名招募价 '+this.army.recruitCost(kind)+' 钱币':'无法招募';this.render();},bw,!poor).setName('camp-recruit-'+kind);this.body.add(buy);
+  });if(!this.notice)this.detail.setText('行营招兵是主要兵源：随军钱币按人招，在编越多越贵（每名在编士兵使招募价 +20%，当前在编 '+this.army.count+' 人）。战斗中的「战斗支援」只免费补一小队。');
  }
  /** 军需商人（ui/MerchantShop，与营寨旅商共用）：电脑版左侧立绘，4 件兵装 + 偶尔 1 卷战法；用随军粮，战法学进本局构筑当场生效。 */
  private renderMarket(){
@@ -268,7 +279,7 @@ export class CampRestUI {
   this.itemTip??=new ItemTooltip(this.scene,DEPTH.overlay+40);
   this.shop??=new MerchantShop(this.scene,{tooltip:this.itemTip,
    stock:()=>this.stock!,
-   wallet:{name:'随军粮',get:()=>this.army.food,spend:n=>{if(this.army.food<n)return false;this.army.food-=n;return true;},gain:n=>{this.army.food+=Math.max(0,Math.floor(n));}},chapter:()=>this.chapterNo,
+   wallet:{name:'随军钱币',get:()=>this.army.food,spend:n=>{if(this.army.food<n)return false;this.army.food-=n;return true;},gain:n=>{this.army.food+=Math.max(0,Math.floor(n));}},chapter:()=>this.chapterNo,
    tactics:{shi:sc=>this.player.growth.build.tags()[sc],canBuy:o=>!!campOption(o,this.player),learn:o=>{const op=campOption(o,this.player);if(!op)return false;op.apply(this.player,this.player.weapons,this.player.growth);return true;},afterBuy:()=>this.onLearnTactic?.(),doneText:'本局立即生效，可在「将帅帐」查看'},
    onBuyItem:item=>this.onBuyItem?.(item),owner:()=>this.player.growth.character,
    notice:t=>{this.notice=t;},changed:()=>this.render(),sound:k=>this.sound(k),tooltipDepth:DEPTH.overlay+40});
@@ -302,7 +313,7 @@ export class CampRestUI {
  /** 构筑总览里的重整入口（行营休整）：价格按当前可退回的次数算；有没选完的重选时改成「继续重选」。 */
  private respecEntry():{label:string;onClick:()=>void;active:boolean}{
   const g=this.player.growth,pending=g.respecPending>0;
-  return{label:pending?'继续重选 · 剩 '+g.respecPending:'重整构筑 · '+respecPrice(this.player,this.chapterNo)+' 军粮',active:pending,onClick:()=>{this.sound('uiClick');if(this.player.growth.respecPending>0)this.respecDraft();else this.respecConfirm();}};
+  return{label:pending?'继续重选 · 剩 '+g.respecPending:'重整构筑 · '+respecPrice(this.player,this.chapterNo)+' 钱币',active:pending,onClick:()=>{this.sound('uiClick');if(this.player.growth.respecPending>0)this.respecDraft();else this.respecConfirm();}};
  }
  /** 漆底描金对话框（无水墨按钮）：返回内容容器与关闭函数。 */
  private lqModal(name:string,w:number,h:number):{m:Phaser.GameObjects.Container;x:number;y:number;close:()=>void}{
@@ -320,19 +331,19 @@ export class CampRestUI {
   const body='退回初始：'+(parts.length?parts.join('、'):'（暂无三选一选来的强化）')+'，共 '+c.picks+' 次强化。\n'+
    '保留：武将等级与属性点、兵装信物、随从、军需商人买的战法与心法。\n'+
    '退回的 '+c.picks+' 次强化马上在这里一张张重选（三选一，只出永久构筑卡）；选不完的下一关开打时补上，关掉游戏也不会丢。\n\n'+
-   '花费：随军粮 '+cost+'（现有 '+food+'）　·　本章还可重整 '+left+' 次';
+   '花费：随军钱币 '+cost+'（现有 '+food+'）　·　本章还可重整 '+left+' 次';
   const t=this.text(x+28,y+72,body,D?15:16).setLineSpacing(6).setWordWrapWidth(w-56,true).setColor('#e6d3ad').setName('camp-respec-body');m.add(t);
-  const why=c.picks<=0?'没有可退回的强化':left<=0?'本章重整次数已用完':food<cost?'随军粮不足':'';
+  const why=c.picks<=0?'没有可退回的强化':left<=0?'本章重整次数已用完':food<cost?'随军钱币不足':'';
   const bw=D?200:150;
   m.add(this.button(x+w/2-bw-14,y+h-62,'取消',close,bw,true,38,m).setName('camp-respec-cancel'));
-  const ok=this.button(x+w/2+14,y+h-62,why||'确认重整 · '+cost+'粮',()=>{close();this.respecDo();},bw,!why,38,m).setName('camp-respec-confirm');m.add(ok);if(!why)(ok.getData('paint') as (s:string)=>void)('selected');
+  const ok=this.button(x+w/2+14,y+h-62,why||'确认重整 · '+cost+' 钱币',()=>{close();this.respecDo();},bw,!why,38,m).setName('camp-respec-confirm');m.add(ok);if(!why)(ok.getData('paint') as (s:string)=>void)('selected');
  }
  /** 扣粮、退回初始、记次数、写存档点，然后进重选。 */
  respecDo():boolean{
   const ch=this.chapterNo,c=countRespecPicks(this.player),cost=respecPrice(this.player,ch);
   if(c.picks<=0||respecLeft(this.player,ch)<=0||this.army.food<cost)return false;
   this.army.food-=cost;const n=resetBuild(this.player,ch);this.onRespecSave?.();this.sound('purchase');
-  this.notice='重整构筑 · 花费随军粮 '+cost+'，退回 '+n+' 次强化，请重选';this.render();this.respecDraft();return true;
+  this.notice='重整构筑 · 花费随军钱币 '+cost+'，退回 '+n+' 次强化，请重选';this.render();this.respecDraft();return true;
  }
  /** 重选面板：三张永久构筑卡，选一张生效、存档，接着下一张；「稍后再选」留到下一关开打时补。 */
  respecDraft(){

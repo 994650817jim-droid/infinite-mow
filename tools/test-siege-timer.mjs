@@ -56,7 +56,7 @@ ck('援军阶段每 25 秒再来一批（中城共 2 批）', s3.squads === 2 &&
 const s4 = await at(s0.limit + s0.reinforceSeconds + .5, 1200);
 const r1 = await result(), w1 = await world();
 ck('援军阶段结束未破城：撤军收场，判失败，结算写「久攻不下 · 撤军」', s4.over && s4.victory === false && r1.sub === '久攻不下 · 撤军' && r1.body.includes('撤军收场') && r1.notes.includes('撤军收场'), { s4: { over: s4.over, victory: s4.victory }, r1 });
-ck('撤军不扣存档：城池 / 首占 / 建筑 / 后备兵不变，军粮不减（只收本季军粮），本场已结算', JSON.stringify([w1.owned, w1.ever, w1.buildings, w1.reserve]) === JSON.stringify([w0.owned, w0.ever, w0.buildings, w0.reserve]) && w1.provisions >= w0.provisions && w1.active === 'settled', { w0, w1 });
+ck('撤军不扣存档：城池 / 首占 / 建筑 / 后备兵不变，钱币不减（只收本季钱币），本场已结算', JSON.stringify([w1.owned, w1.ever, w1.buildings, w1.reserve]) === JSON.stringify([w0.owned, w0.ever, w0.buildings, w0.reserve]) && w1.provisions >= w0.provisions && w1.active === 'settled', { w0, w1 });
 await p.screenshot({ path: `${out}/withdraw-result-1280x720.png` });
 
 // ② 再战陈留：速攻破城（剩余过半）→ 攻城奖励加成
@@ -67,7 +67,7 @@ const reward = await p.evaluate(async () => (await import('/src/data/siege.ts'))
 await p.evaluate(G0 => { const s = eval(G0); s.captured = true; s.bossKilled = true; s.finish(true, 'boss'); }, G); await p.waitForTimeout(900);
 const r2 = await result(), w2 = await world();
 ck('剩余过半破城：速攻奖励，结算写「速攻破城 · 攻城奖励 +30%」', r2.speed && r2.sub.startsWith('陈留归入义军版图') && r2.body.includes('速攻破城 · 攻城奖励 +30%') && r2.notes.includes('速攻破城'), r2);
-ck('速攻奖励写进存档：陈留归我方，军粮增加不少于（军粮 + 战功折粮）×1.3', w2.owned.includes('chenliu') && w2.provisions - w1.provisions >= Math.round(reward.provisions * 1.3), { gain: w2.provisions - w1.provisions, reward });
+ck('速攻奖励写进存档：陈留归我方，钱币增加不少于（钱币 + 战功折粮）×1.3', w2.owned.includes('chenliu') && w2.provisions - w1.provisions >= Math.round(reward.provisions * 1.3), { gain: w2.provisions - w1.provisions, reward });
 await p.screenshot({ path: `${out}/speed-result-1280x720.png` });
 
 // ③ 许昌（中城）：援军阶段里仍可破城，但不算速攻

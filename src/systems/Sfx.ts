@@ -17,6 +17,8 @@ interface SfxConfig {
   group?: SfxGroup;
 }
 
+/** 连续捡钱时的音高阶梯（Sfx.coin 写、coin 配方读）。 */
+const COIN_STEP = { v: 1 };
 const CONFIG: Record<string, SfxConfig> = {
   propBreak:{freq:170,dur:.12,type:'triangle',gain:.04,throttleMs:70,max:2,priority:0,slideTo:65},
   hitLight: { freq: 220, dur: 0.05, type: 'triangle', gain: 0.035, throttleMs: 60, max: 3, priority: 0, pitchVar: 0.08 },
@@ -30,6 +32,9 @@ const CONFIG: Record<string, SfxConfig> = {
   bossBreak: { freq: 0, dur: .5, type: 'sine', gain: 0, throttleMs: 400, max: 1, priority: 2 },
   enemyDie: { freq: 180, dur: 0.12, type: 'square', gain: 0.03, throttleMs: 100, max: 2, priority: 0, pitchVar: 0.05 },
   pickup: { freq: 880, dur: 0.05, type: 'sine', gain: 0.03, throttleMs: 120, max: 1, priority: 0, pitchVar: 0.04 },
+  // 钱币（2026-11-21 军粮改钱币）：捡到时清脆的铜钱声（连捡逐枚音高微升，见 Sfx.coin）；铜钱飞进钱袋时更轻的「落袋」声
+  coin: { freq: 0, dur: .2, type: 'sine', gain: 0, throttleMs: 55, max: 3, priority: 1, pitchVar: .05 },
+  coinPurse: { freq: 0, dur: .14, type: 'sine', gain: 0, throttleMs: 70, max: 2, priority: 0, pitchVar: .06 },
   orbit: { freq: 420, dur: 0.05, type: 'square', gain: 0.025, throttleMs: 80, max: 3, priority: 1, pitchVar: 0.04 },
   crossbow: { freq: 660, dur: 0.05, type: 'triangle', gain: 0.03, throttleMs: 80, max: 3, priority: 1, pitchVar: 0.04 },
   flame: { freq: 90, dur: 0.18, type: 'sawtooth', gain: 0.04, throttleMs: 120, max: 2, priority: 1, pitchVar: 0.06 },
@@ -136,6 +141,10 @@ const RECIPES: Record<string, (v: Voice, t: number, p: number) => number> = {
   bossBreak: (v, t) => { v.drum(t, 120, 42, .3, .45); v.metal(t + .02, 330, .05, .4); v.noise(t, .25, 'bandpass', 1200, .09, 400, 1.2); return .5; },
   enemyDie: (v, t, p) => { v.noise(t, .12, 'lowpass', 900 * p, .06, 200); v.tone(t, .14, 'sine', 170 * p, .05, 60); return .15; },
   pickup: (v, t, p) => { v.metal(t, 1320 * p, .018, .18); v.tone(t + .04, .14, 'sine', 1760 * p, .02); return .2; },
+  /** 铜钱：高频金属「叮」+ 一点点撞击沙声，约 0.2 秒；音高 × 连捡阶梯 COIN_STEP */
+  coin: (v, t, p) => { const k = p * COIN_STEP.v; v.noise(t, .018, 'highpass', 5200, .035); v.metal(t, 2350 * k, .026, .17); v.tone(t + .025, .12, 'sine', 3520 * k, .012); return .2; },
+  /** 落袋：布袋闷「噗」+ 很轻的钱响 */
+  coinPurse: (v, t, p) => { v.noise(t, .06, 'lowpass', 700 * p, .045, 260); v.metal(t + .015, 1650 * p, .007, .1); return .14; },
   propBreak: (v, t, p) => { v.noise(t, .1, 'bandpass', 900 * p, .08, 400, 1.5); v.tone(t, .12, 'triangle', 170 * p, .04, 65); v.noise(t + .05, .07, 'highpass', 2200, .03); return .14; },
   crossbow: (v, t, p) => { v.tone(t, .07, 'triangle', 520 * p, .04, 360); v.noise(t, .02, 'highpass', 4000, .04); return .08; },
   allyArrow: (v, t, p) => { v.tone(t, .06, 'triangle', 640 * p, .035, 430); v.noise(t, .02, 'highpass', 4200, .03); return .07; },
@@ -256,6 +265,9 @@ export class Sfx {
   }
 
   /** 主将弩矢出手（连弩，黄月英本命）。 */
+  private coinAt = 0; private coinStreak = 0;
+  /** 捡到钱币：0.6 秒内连捡每枚音高升 3.5%（最多 8 级），停一会儿复位。 */
+  coin(): void { const now = performance.now(); this.coinStreak = now - this.coinAt < 600 ? Math.min(8, this.coinStreak + 1) : 0; this.coinAt = now; COIN_STEP.v = 1 + this.coinStreak * .035; this.play('coin'); }
   attack(): void { this.play('atk_crossbow'); }
   hit(): void { this.play('hitLight'); }
   level(): void {

@@ -54,7 +54,7 @@ export const GAMBLES: Record<GambleId, { name: string; desc: string; icon: strin
 export type BountyId = 'lieutenant' | 'elites';
 export const BOUNTIES: Record<BountyId, { name: string; desc: string; icon: string }> = {
   lieutenant: { name: '悬赏 · 斩将', desc: '副将出阵 30 秒内斩之\n赏：再来一次三选一', icon: 'growth_icon_tiger_tally' },
-  elites: { name: '悬赏 · 破锐', desc: '再击杀 8 名精锐\n赏：随军粮 +60、信物一件', icon: 'growth_icon_critical' },
+  elites: { name: '悬赏 · 破锐', desc: '再击杀 8 名精锐\n赏：随军钱币 +60、信物一件', icon: 'growth_icon_critical' },
 };
 
 export interface CardHost {
@@ -100,7 +100,7 @@ export function make(kind: NewCardKind, h: CardHost, rnd: () => number): Upgrade
     const names = ERA_GENERALS[Math.max(0, Math.min(11, h.chapter - 1))], name = pickOf(names, rnd), G = NEW_CARDS.general, n = G.n(h.chapter);
     return card('new_general', '名将来投 · ' + name, `${name}率 ${n} 名部众来投\n随你冲阵 ${G.ms / 1000} 秒`, '名将来投', 'growth_icon_wanrendi', 'once', () => h.general(name, n, G.ms));
   }
-  if (kind === 'supply') { const g = NEW_CARDS.supply.grain(h.chapter); return card('new_supply', '军资', `随军粮 +${g}\n立即回复 ${Math.round(NEW_CARDS.supply.heal * 100)}% 生命`, '军资', 'growth_icon_pickup', 'once', () => { h.addGrain(g); h.healFrac(NEW_CARDS.supply.heal); }); }
+  if (kind === 'supply') { const g = NEW_CARDS.supply.grain(h.chapter); return card('new_supply', '军资', `随军钱币 +${g}\n立即回复 ${Math.round(NEW_CARDS.supply.heal * 100)}% 生命`, '军资', 'growth_icon_pickup', 'once', () => { h.addGrain(g); h.healFrac(NEW_CARDS.supply.heal); }); }
   if (kind === 'gamble') {
     const ids = (Object.keys(GAMBLES) as GambleId[]).filter(id => !h.gambleTaken(id)); if (!ids.length) return null;
     const id = pickOf(ids, rnd), g = GAMBLES[id];

@@ -643,14 +643,14 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
       if (reward.captured) this.registry.set('mapCaptured', this.city.id);
       this.resultTexts.subtitle.setText(victory ? `${this.city.name}归入义军版图${reward.first ? ' · 首次攻占' : ''}` : (reason === 'timeout' ? '久攻不下 · 撤军' : '攻城失利 · 整军再战'));
       const caught = victory && this.bossKilled && !this.capturesBlocked() ? tryCapture('siege', factionGeneral(this.owner) ?? '', this.owner) : null;
-      this.resultTexts.body.setText(this.resultTexts.body.text + '\n永久奖励 · 军粮 +' + reward.provisions + cityIncomeLine(reward) + captureLine(caught) + (reward.captured && this.speedBonus ? `\n速攻破城 · 攻城奖励 +${Math.round(SIEGE_TIMER.speed.rewardBonus * 100)}%` : '') + (this.mid?.settleLines().length ? '\n' + this.mid.settleLines().join('\n') : '') + (reason === 'timeout' && !victory ? '\n撤军收场 · 存档不受损失，只收本季军粮' : '') + (reward.alert ? `\n${FACTIONS[reward.alert.attacker].name}不甘失地，${this.city.name}告急！` : ''));
+      this.resultTexts.body.setText(this.resultTexts.body.text + '\n永久奖励 · 钱币 +' + reward.provisions + cityIncomeLine(reward) + captureLine(caught) + (reward.captured && this.speedBonus ? `\n速攻破城 · 攻城奖励 +${Math.round(SIEGE_TIMER.speed.rewardBonus * 100)}%` : '') + (this.mid?.settleLines().length ? '\n' + this.mid.settleLines().join('\n') : '') + (reason === 'timeout' && !victory ? '\n撤军收场 · 存档不受损失，只收本季钱币' : '') + (reward.alert ? `\n${FACTIONS[reward.alert.attacker].name}不甘失地，${this.city.name}告急！` : ''));
       this.mapButtons(victory);
     }
     private finishDefense(victory: boolean, base: {merits: number; provisions: number}) {
       const reward = settleDefense(this.receipt, {victory, intercept: this.intercept, bossKilled: this.bossKilled, debug: this.test || this.debugModified || this.debugJumped || this.player.damageImmune, elapsed: this.elapsed, reward: base, returned: this.allies.filter(u => u.active && u.reserveSoldier).map(u => u.kind)});
       this.controller?.clear();
       this.resultTexts.subtitle.setText(this.intercept ? (victory ? `迎击告捷 · ${this.city.name}告急解除` : `迎击失利 · ${this.city.name}围城提前一战`) : victory ? `${this.city.name}守住了 · 告急解除` : `守城失利 · ${this.city.name}已被围`);
-      this.resultTexts.body.setText(this.resultTexts.body.text + '\n永久奖励 · 军粮 +' + reward.provisions + cityIncomeLine(reward) + captureLine(victory && this.bossKilled && !this.capturesBlocked() ? tryCapture('defense', factionGeneral(this.owner) ?? '', this.owner) : null) + (victory ? (this.intercept ? '' : `\n民心安定 · ${this.city.name}接下来 ${DEFENSE_RULES.moraleBattles} 战产粮 +${Math.round(DEFENSE_RULES.moraleMul * 100)}%`) : '\n城池尚在；若改去别处出征，此城将失守'));
+      this.resultTexts.body.setText(this.resultTexts.body.text + '\n永久奖励 · 钱币 +' + reward.provisions + cityIncomeLine(reward) + captureLine(victory && this.bossKilled && !this.capturesBlocked() ? tryCapture('defense', factionGeneral(this.owner) ?? '', this.owner) : null) + (victory ? (this.intercept ? '' : `\n民心安定 · ${this.city.name}接下来 ${DEFENSE_RULES.moraleBattles} 战钱币产出 +${Math.round(DEFENSE_RULES.moraleMul * 100)}%`) : '\n城池尚在；若改去别处出征，此城将失守'));
       this.mapButtons(victory);
     }
     /** 单场收益上限：守城 / 攻城各一档（data/battleLootCap.ts）。 */

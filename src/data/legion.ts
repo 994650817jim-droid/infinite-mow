@@ -19,7 +19,7 @@ export const ORDERS: Record<Order, string> = { guard: '护阵', sortie: '出击'
  * 随军粮从 1-1 起就写（打怪、拆营帐会掉）；部曲开放（squad，1-2）后才加「兵力 / 阵亡」。
  */
 export function legionStatusText(food: number, count: number, dead: number, squad: boolean): string {
-  return squad ? `随军粮 ${food} · 兵力 ${count}${dead ? ` · 阵亡 ${dead}` : ''}` : `随军粮 ${food}`;
+  return squad ? `钱币 ${food} · 兵力 ${count}${dead ? ` · 阵亡 ${dead}` : ''}` : `钱币 ${food}`; // 战斗 HUD 直接写「钱币 N」（2026-11-21 军粮改钱币）
 }
 export const LEGION = { startingFood: 0, waveFood: 0, trainCost: [0, 40, 80], squadSize: 12, nearStep: .1, farStep: .5 } as const;
 

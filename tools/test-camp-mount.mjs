@@ -39,7 +39,7 @@ const guide = p => p.evaluate(C0 => { const g = eval(C0).mountGuide; return g ? 
   const p = await page(save(true, { mountTutorialDone: true })); await toCity(p);
   const w = await world(p), has = await p.evaluate(C0 => eval(C0).hits.some(h => h.name === 'bld-stable'), C);
   const toast = await p.evaluate(C0 => eval(C0).toastText?.text ?? '', C);
-  ck('第一章通关后进营寨：自动建成 1 级马厩（不花军粮）、营寨画面上有马厩、提示「营中已设马厩」', w.town.levels.stable === 1 && has && w.provisions === 120 && /营中已设马厩/.test(toast), { stable: w.town.levels.stable, has, toast, grain: w.provisions });
+  ck('第一章通关后进营寨：自动建成 1 级马厩（不花钱币）、营寨画面上有马厩、提示「营中已设马厩」', w.town.levels.stable === 1 && has && w.provisions === 120 && /营中已设马厩/.test(toast), { stable: w.town.levels.stable, has, toast, grain: w.provisions });
   await p.screenshot({ path: `${OUT}/stable-built.png` });
   const card = await p.evaluate(C0 => { const c = eval(C0); c.focusOn('stable'); return true; }, C); void card; await p.waitForTimeout(300);
   await clickHit(p, 'bld-stable'); await p.waitForTimeout(400);

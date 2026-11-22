@@ -49,7 +49,7 @@ export function prepCost(base: number, chapter: number, wave: number, bought: nu
 }
 /** 第一次守城、第一次喘息时的引导（只一次）。 */
 export const DEFENSE_PREP_GUIDE_KEY = 'im_defense_prep_guide_v1';
-export function defensePrepGuide(gatePct: number): string { return '喘息只有 15 秒：城门还剩 ' + gatePct + '%——站到城门内读条免费修一点，或花随军粮「修城门」；滚木 / 热油、城头弓手也在这时补。不修城门，撑不过第三波。'; }
+export function defensePrepGuide(gatePct: number): string { return '喘息只有 15 秒：城门还剩 ' + gatePct + '%——站到城门内读条免费修一点，或花随军钱币「修城门」；滚木 / 热油、城头弓手也在这时补。不修城门，撑不过第三波。'; }
 
 /** 第 i 波（0 起）开始的关内秒数；末波开始 = 首领出场。 */
 export function defenseWaveStarts(n: number): number[] { const D = DEFENSE, out: number[] = []; for (let i = 0; i < n; i++) out.push(i * (D.attackSec + D.restSec)); return out; }

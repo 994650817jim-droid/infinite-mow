@@ -144,7 +144,7 @@ export class TownScene extends Phaser.Scene {
   this.header.setText(`${TIER_NAME[c.tier]} · ${c.region} · 府衙 Lv${lv.office}`);
   this.folk?.setCount(folkCount(c.tier, lv.office)); this.folk?.setAmbient(lv);
   this.income.setText(`每战产出：${incomeText(cityIncome(c.tier, lv))}${sp ? `　特产「${sp.title}」${sp.text}` : ''}`);
-  this.grain.setText(`军粮 ${s.provisions}`);
+  this.grain.setText(`钱币 ${s.provisions}`);
   if (D) { const g = this.plates; g.clear(); const lw = Math.max(this.header.x + this.header.width, this.income.x + this.income.width) + 16 - 8, gw = this.grain.width + 32;
    lqPanel(g, 8, 6, lw, 58, {alpha: .9}); lqPanel(g, W - gw - 10, 8, gw, 36, {alpha: .9});
    for (const n of ['town-plate-hit-l', 'town-plate-hit-r']) this.children.getByName(n)?.destroy();
@@ -219,7 +219,7 @@ export class TownScene extends Phaser.Scene {
    const tag = this.label(dx, dy - 4, '军医', 'built', 'tag-hq-medic'), sh = shop.displayHeight;
    const hit = this.add.rectangle(dx, dy - sh / 2, Math.max(md.w * k * .9, 60), Math.max(sh, 46), 0xffffff, .001).setName('bld-hq-medic').setInteractive({useHandCursor: true});
    hit.on('pointerdown', () => { this.pressed = 'hq-medic'; });
-   hit.on('pointerup', () => { const own = this.pressed === 'hq-medic'; this.pressed = null; if (!own || this.drag?.moved) return; uiSfx().play('uiClick'); openMedicPanel(this, {wallet: {name: '军粮', get: () => loadWorld().provisions, spend: spendProvisions}, depth: 600, onClose: () => { if (this.sys.settings.status === Phaser.Scenes.RUNNING) this.refresh(); }}); });
+   hit.on('pointerup', () => { const own = this.pressed === 'hq-medic'; this.pressed = null; if (!own || this.drag?.moved) return; uiSfx().play('uiClick'); openMedicPanel(this, {wallet: {name: '钱币', get: () => loadWorld().provisions, spend: spendProvisions}, depth: 600, onClose: () => { if (this.sys.settings.status === Phaser.Scenes.RUNNING) this.refresh(); }}); });
    const base = {x: shop.scaleX, y: shop.scaleY};
    hit.on('pointerover', () => { tag.setColor('#ffe08a').setScale(1.18 / this.z); shop.setScale(base.x * 1.04, base.y * 1.04); }).on('pointerout', () => { tag.setColor('#f6e3b4').setScale(1 / this.z); shop.setScale(base.x, base.y); });
    this.pano.add(hit); this.hits.push(hit);
@@ -242,7 +242,7 @@ export class TownScene extends Phaser.Scene {
  private openMerchant() {
   uiSfx().play('uiClick');
   const s = loadWorld(), lootCh = chaptersOpen(), tier = lootBand(lootCh); /* 掉落品质随章节（data/items.ts lootBand） */ let hero = 'zhaoyun'; try { hero = localStorage.getItem('im_last_hero') || hero; } catch { /* 存储不可用 */ }
-  const open = () => { if (!this.sys.isActive()) return; openMerchantShop(this, {wallet: {name: '军粮', get: () => loadWorld().provisions, spend: spendProvisions, gain: gainProvisions}, tier, chapter: lootCh, hero: (CHARACTERS.some(c => c.id === hero) ? hero : 'zhaoyun') as CharacterId, depth: 600, onClose: () => { if (this.sys.settings.status === Phaser.Scenes.RUNNING) this.refresh(); }, sound: k => uiSfx().play(k as 'uiClick')}); };
+  const open = () => { if (!this.sys.isActive()) return; openMerchantShop(this, {wallet: {name: '钱币', get: () => loadWorld().provisions, spend: spendProvisions, gain: gainProvisions}, tier, chapter: lootCh, hero: (CHARACTERS.some(c => c.id === hero) ? hero : 'zhaoyun') as CharacterId, depth: 600, onClose: () => { if (this.sys.settings.status === Phaser.Scenes.RUNNING) this.refresh(); }, sound: k => uiSfx().play(k as 'uiClick')}); };
   if (this.textures.exists('item_icons')) open(); else { this.load.atlas('item_icons', 'assets/items/item-icons.webp', 'assets/items/item-icons.json'); this.load.once('complete', open); this.load.start(); }
  }
  /** 统一名牌（功能建筑 / 分署 / 旅商）：漆底描金字、同字号、底边中点对齐建筑底边。state：built 已建 / open 可建 / blocked 未满足条件。 */
@@ -271,7 +271,7 @@ export class TownScene extends Phaser.Scene {
   const line = (v: string, size = 14, color = '#e9dcc0', name?: string) => { const o = txt(this, tx, y, v, size, color).setWordWrapWidth(tw, true); if (name) o.setName(name); root.add(o); y += o.height + 8; return o; };
   line(def.blurb, 13, '#c9bf99');
   line(l ? '现在：' + def.effect(l, t) : '尚未建造', 14, '#efe2c4');
-  if (cost !== null) { line((l ? '下一级：' : '建成后：') + def.effect(l + 1, t), 14, '#cfe0c8'); line(`花费：军粮 ${cost}`, 14, s.provisions >= cost ? '#d9c58f' : '#d4887a', 'town-build-cost'); }
+  if (cost !== null) { line((l ? '下一级：' : '建成后：') + def.effect(l + 1, t), 14, '#cfe0c8'); line(`花费：钱币 ${cost}`, 14, s.provisions >= cost ? '#d9c58f' : '#d4887a', 'town-build-cost'); }
   else line(def.max[t] <= 0 ? `${TIER_NAME[t]}不能建造` : '已达最高等级', 14, '#b9a98a');
   if (block.length && cost !== null) line('需要：' + block.join('、'), 14, '#e59a83', 'town-build-block');
   line(`${TIER_NAME[t]}最高 Lv${def.max[t]}`, 12, '#9fa991');
@@ -279,7 +279,7 @@ export class TownScene extends Phaser.Scene {
   const bw = Math.min(200, (w - 80) / 2), by = y0 + h - (D ? 80 : 90);
   const up = homeCommand(this, W / 2 + bw / 2 + 8, by, bw, 42, cost !== null ? (l ? `升级到 Lv${l + 1}` : '建造') : '已满级', true, ok, 16);
   up.hit.setName('town-build-upgrade').setData('padDefault', true).on('pointerdown', () => {
-   if (!ok) { msg.setText(cost !== null ? (block.length ? '需要 ' + block.join('、') : '军粮不足：需要 ' + cost) : '已达最高等级'); return; }
+   if (!ok) { msg.setText(cost !== null ? (block.length ? '需要 ' + block.join('、') : '钱币不足：需要 ' + cost) : '已达最高等级'); return; }
    const res = cityBuild(this.cityId, id); if (!res.ok) { msg.setText(res.message); return; }
    uiSfx().play('uiClick'); root.destroy(); this.refresh(); this.toast(res.message);
   });

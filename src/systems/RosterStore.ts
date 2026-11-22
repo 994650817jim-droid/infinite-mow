@@ -276,8 +276,8 @@ export function manualRefresh(): RosterResult {
   if (!worldUnlocked()) return { ok: false, message: '天下开放后才有招贤馆' };
   const s = loadRoster(), cost = refreshCost(s);
   if (hallLevel(s) <= 0) return NO_HALL;
-  if (!spendWorld({ provisions: cost })) return { ok: false, message: `军粮不足：刷新需要 ${cost}` };
-  s.manual++; rollOffers(s); write(s); return { ok: true, message: `花 ${cost} 军粮，换了一批人才` };
+  if (!spendWorld({ provisions: cost })) return { ok: false, message: `钱币不足：刷新需要 ${cost}` };
+  s.manual++; rollOffers(s); write(s); return { ok: true, message: `花 ${cost} 钱币，换了一批人才` };
 }
 export function recruit(index: number, captive = false): RosterResult {
   if (!worldUnlocked()) return { ok: false, message: '天下开放后才有招贤馆' };
@@ -288,13 +288,13 @@ export function recruit(index: number, captive = false): RosterResult {
   if (o.kind === 'hero' && s.owned.some(r => r.hero === o.hero)) { list.splice(index, 1); write(s); return { ok: false, message: '已在麾下' }; }
   const joinCap = followerLevelCap(), joinLevel = Math.max(1, joinCap - FOLLOWER_LEVEL.joinBelowCap);
   const cost = captive ? Math.ceil(o.cost * RECRUIT.captiveDiscount) : o.cost;
-  if (!spendWorld({ provisions: cost })) return { ok: false, message: `军粮不足：招募需要 ${cost}` };
+  if (!spendWorld({ provisions: cost })) return { ok: false, message: `钱币不足：招募需要 ${cost}` };
   const r: Recruit = o.kind === 'hero' ? heroRecruit(o.hero!) : { id: 'r_' + (++s.seq), kind: o.kind, name: o.name, template: o.template, quality: o.quality, rank: 1, picks: [], faction: o.faction, boss: o.boss };
   s.owned.push(r); list.splice(index, 1);
   // 新入队的随行定在「随行上限 − 2」级（可玩名将若早有更高的记录，保留但不超过上限）
   { const key = (r.hero ?? r.id) as HeroKey, keep = r.hero && hasHeroRecord(key) ? Math.min(heroLevel(key), joinCap) : 0; clampHeroLevel(key, joinCap, Math.max(joinLevel, keep)); }
   const cap = followerCap(s); if (s.followers.length < cap) s.followers.push(r.id);
-  write(s); return { ok: true, message: `${r.name}${captive ? '归降' : '应募'}，花 ${cost} 军粮` };
+  write(s); return { ok: true, message: `${r.name}${captive ? '归降' : '应募'}，花 ${cost} 钱币` };
 }
 /** 遣散（主公不能遣散）；身上的兵装由行囊在读档时自然失效（loadouts 只认在册的人）。 */
 export function dismiss(id: string): RosterResult {
@@ -402,11 +402,11 @@ export function hireHero(hero: CharacterId): RosterResult {
   if (!heroUnlocked(hero)) return { ok: false, message: name + ' · ' + UNJOINED_HINT };
   const s = loadRoster(); if (heroHired(hero, s)) return { ok: false, message: name + '已在麾下' };
   if (s.owned.length >= RECRUIT.maxOwned) return { ok: false, message: '麾下已满 ' + RECRUIT.maxOwned + ' 人（遣散一些后再招）' };
-  const cost = heroHireCost(hero); if (cost > 0 && !spendWorld({ provisions: cost })) return { ok: false, message: '军粮不足：招募' + name + '需要 ' + cost };
+  const cost = heroHireCost(hero); if (cost > 0 && !spendWorld({ provisions: cost })) return { ok: false, message: '钱币不足：招募' + name + '需要 ' + cost };
   const s2 = loadRoster(), r = heroRecruit(hero); s2.owned.push(r); if (s2.followers.length < followerCap(s2)) s2.followers.push(r.id);
   // 同 recruit()：新入队定在「随行上限 − 2」级（早有更高的武将等级记录就保留，但不超过上限）
   { const joinCap = followerLevelCap(), joinLevel = Math.max(1, joinCap - FOLLOWER_LEVEL.joinBelowCap), key = hero as HeroKey, keep = hasHeroRecord(key) ? Math.min(heroLevel(key), joinCap) : 0; clampHeroLevel(key, joinCap, Math.max(joinLevel, keep)); }
-  write(s2); return { ok: true, message: name + '应募入麾下' + (s2.followers.includes(r.id) ? ' · 已随行' : ' · 可在「麾下」设为随行') + (cost ? ' · 花费 ' + cost + ' 军粮' : '') };
+  write(s2); return { ok: true, message: name + '应募入麾下' + (s2.followers.includes(r.id) ? ' · 已随行' : ' · 可在「麾下」设为随行') + (cost ? ' · 花费 ' + cost + ' 钱币' : '') };
 }
 export function grantHero(hero: CharacterId): boolean {
   if (!worldUnlocked()) return false;
@@ -427,7 +427,7 @@ export function upgradeHall(): RosterResult {
   if (hallInTown()) { if (hallLevel() >= 3) return { ok: false, message: '招贤馆已满级' }; return townUpgrade('talent' as string as TownBuildingId); }
   const s = loadRoster(); if (s.hall >= 3) return { ok: false, message: '招贤馆已满级' };
   const c = RECRUIT.hallUpgrade[s.hall - 1];
-  if (!spendWorld({ provisions: c.provisions })) return { ok: false, message: `军粮不足：升级需要 ${c.provisions}` };
+  if (!spendWorld({ provisions: c.provisions })) return { ok: false, message: `钱币不足：升级需要 ${c.provisions}` };
   s.hall++; write(s); return { ok: true, message: `招贤馆升到 Lv.${s.hall}：席位 ${RECRUIT.seats[s.hall - 1]}，随行 ${RECRUIT.followerCap[s.hall - 1]} 人` };
 }
 export function rankCap(s: RosterSave = loadRoster()): number { return RANK.capByHall[hallIdx(s)]; }
@@ -436,7 +436,7 @@ export function rankUp(id: string, line: RankLine): RosterResult {
   if (isLordRecruit(s, r)) return { ok: false, message: LORD_LEVEL_HINT }; // 主公不能在随行系统里升级
   if (r.rank >= rankCap(s)) return { ok: false, message: r.rank >= RANK.max ? '将阶已满' : '将阶已到招贤馆上限，升级招贤馆后可继续' };
   const c = RANK.cost(r.rank + 1);
-  if (!spendWorld(c)) return { ok: false, message: `军粮不足：升阶需要 ${c.provisions}` };
+  if (!spendWorld(c)) return { ok: false, message: `钱币不足：升阶需要 ${c.provisions}` };
   r.rank++; r.picks.push(line); write(s); return { ok: true, message: `${r.name}升到将阶 ${r.rank}（${line === 'weapon' ? '兵器' : '被动'}）` };
 }
 /** 将阶带来的加成：兵器线伤害、被动线生命与攻速；当主将时的开局加成。 */

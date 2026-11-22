@@ -158,7 +158,7 @@ export function nanzhengGameSceneClass(Base: typeof GameScene) {
       if (this.nzStage === 3 && surrenderLive() && !bossInRoster('menghuo', '孟获')) {
         const r = joinByPersuasion('孟获', undefined, { boss: 'menghuo', template: 'blade', quality: 'orange' });
         if (markSurrender('surrendered', 'menghuo')) gainProvisions(SURRENDER.mengProvisions);
-        this.showWaveBanner('孟获心服', false, `孟获：${surrenderDef('nanzheng-3:menghuo')?.yes ?? ''} · ${r.ok ? '已入麾下' : r.message} · 军粮 +${SURRENDER.mengProvisions}`);
+        this.showWaveBanner('孟获心服', false, `孟获：${surrenderDef('nanzheng-3:menghuo')?.yes ?? ''} · ${r.ok ? '已入麾下' : r.message} · 钱币 +${SURRENDER.mengProvisions}`);
         this.sfx.play('gong'); this.time.delayedCall(900, done); return;
       }
       super.spawnBossChest(x, y, done);

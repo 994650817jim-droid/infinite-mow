@@ -29,7 +29,7 @@ await p.waitForTimeout(5000);
 const notes = await p.evaluate(() => { const s = window.__game.scene.getScene('SiegeGameScene'), n = s.resultPanel.getByName('result-notes'); return { text: n?.text, title: s.resultTexts.title.text, sub: s.resultTexts.subtitle.text, body: s.resultTexts.body.text.slice(-300) }; });
 await p.screenshot({ path: OUT + '/siege-result-test-run.png' });
 // 测试战斗不发永久奖励、要事为空：把制作人截图里那几行塞进结算正文，重放结算展示，看分行
-await p.evaluate(() => { const s = window.__game.scene.getScene('SiegeGameScene'), NL = String.fromCharCode(10); s.resultTexts.body.setText(s.resultTexts.body.text + NL + ['缴获兵装  2 件 · 已入行囊', '随行 刘备 Lv.11 · 各得经验 +55', '速攻破城 · 攻城奖励 +30%', '城内要点 3/4：粮仓、武库、兵营 已占（市集未占） · 军粮 +30% · 敌援补兵 −75%、援兵少 3 批'].join(NL)); for (const o of [...s.resultPanel.list]) if (o.type === 'Container' && o !== s.resultPanel) o.destroy(); s.presentResult(true); });
+await p.evaluate(() => { const s = window.__game.scene.getScene('SiegeGameScene'), NL = String.fromCharCode(10); s.resultTexts.body.setText(s.resultTexts.body.text + NL + ['缴获兵装  2 件 · 已入行囊', '随行 刘备 Lv.11 · 各得经验 +55', '速攻破城 · 攻城奖励 +30%', '城内要点 3/4：粮仓、武库、兵营 已占（市集未占） · 钱币 +30% · 敌援补兵 −75%、援兵少 3 批'].join(NL)); for (const o of [...s.resultPanel.list]) if (o.type === 'Container' && o !== s.resultPanel) o.destroy(); s.presentResult(true); });
 await p.waitForTimeout(3500);
 const notes2 = await p.evaluate(() => window.__game.scene.getScene('SiegeGameScene').resultPanel.getByName('result-notes')?.text ?? '');
 console.log('  notes rows:', JSON.stringify(notes2.split(String.fromCharCode(10))));

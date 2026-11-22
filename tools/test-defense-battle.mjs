@@ -63,7 +63,7 @@ const calm = async (p, ms = 400) => { for (let i = 0; i < Math.ceil(ms / 200); i
   await p.evaluate(() => { const s = window.__S, ui = s.children.getByName('defense-prep'); ui.getByName('defense-prep-repair').emit('pointerup'); });
   const r1 = await p.evaluate(() => ({ gate: window.__D.gate.hp, food: window.__S.legion.food }));
   const n0 = await p.evaluate(() => window.__S.enemies.filter(e => e.active && !e.isSupplySlot).length); await p.waitForTimeout(1500); const n1 = await p.evaluate(() => window.__S.enemies.filter(e => e.active && !e.isSupplySlot).length);
-  ck('喘息：出布防面板、不刷兵；「修城门」花 30 随军粮 +25%', r0.phase === 'rest' && r0.resting && r0.ui && r1.gate - r0.gate > 200 && r1.food < 200 && n1 <= n0, { r0, r1, n0, n1 });
+  ck('喘息：出布防面板、不刷兵；「修城门」花 30 随军钱币 +25%', r0.phase === 'rest' && r0.resting && r0.ui && r1.gate - r0.gate > 200 && r1.food < 200 && n1 <= n0, { r0, r1, n0, n1 });
   await p.keyboard.press('Space'); await p.waitForTimeout(500);
   ck('Space 跳过喘息 → 第 2 波攻城', await p.evaluate(() => window.__D.phase === 'attack' && window.__D.wave === 1 && !window.__S.children.getByName('defense-prep')), await snap(p));
   // 城门破：不算输，门洞可过

@@ -72,7 +72,7 @@ await defend();
 await p.evaluate(G0 => { const s = eval(G0); s.bossKilled = true; s.finish(true, 'boss'); }, G); await p.waitForTimeout(1500);
 const win = await p.evaluate(G0 => { const s = eval(G0); return { sub: s.resultTexts.subtitle.text, home: s.resultPanel?.getByName('result-home')?.text }; }, G);
 const w2 = await world();
-ck('守城胜利：「陈留守住了 · 告急解除」；告急没了、城还在、军粮增加；按钮回天下地图', /守住了/.test(win.sub) && !w2.alerts.includes('chenliu') && w2.owned.includes('chenliu') && w2.provisions > before.provisions && /天下地图/.test(win.home ?? ''), { win, before, w2 });
+ck('守城胜利：「陈留守住了 · 告急解除」；告急没了、城还在、钱币增加；按钮回天下地图', /守住了/.test(win.sub) && !w2.alerts.includes('chenliu') && w2.owned.includes('chenliu') && w2.provisions > before.provisions && /天下地图/.test(win.home ?? ''), { win, before, w2 });
 
 ck('无页面 / 控制台报错（含 ink_cast_siege 加载失败）', errors.length === 0, errors.slice(0, 5));
 console.log(`\n${pass} passed, ${fail} failed`);

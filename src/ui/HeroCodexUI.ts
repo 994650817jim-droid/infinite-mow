@@ -78,7 +78,7 @@ export class HeroCodexUI {
     const x0 = D ? 18 : 10, y0 = D ? 12 : 14, pw = W - x0 * 2, ph = H - y0 * 2;
     lqPanel(this.add(this.scene.add.graphics()), x0, y0, pw, ph);
     this.text(x0 + 28, y0 + (D ? 18 : 22), '武将谱', D ? 26 : 30, '#f2ddae', true);
-    this.text(x0 + (D ? 130 : 140), y0 + (D ? 28 : 34), `武学残卷 ${scrolls()} · 军粮 ${grain()}`, 13, '#e8d6a4').setName('codex-resources');
+    this.text(x0 + (D ? 130 : 140), y0 + (D ? 28 : 34), `武学残卷 ${scrolls()} · 钱币 ${grain()}`, 13, '#e8d6a4').setName('codex-resources');
     this.button(x0 + pw - (D ? 52 : 56), y0 + (D ? 32 : 40), '返回', 'codex-close', () => this.close(), { size: D ? 15 : 17 });
 
     // 左：武将列表
@@ -171,7 +171,7 @@ export class HeroCodexUI {
     lqSheet(this.add(this.scene.add.graphics()), x0, y0, pw, ph);
     // 顶栏：标题 · 资源 · 返回
     this.text(x0 + 28, y0 + 16, '武将谱', 26, '#f2ddae', true);
-    this.text(x0 + 128, y0 + 27, `武学残卷 ${scrolls()} · 军粮 ${grain()}`, 13, '#e8d6a4').setName('codex-resources');
+    this.text(x0 + 128, y0 + 27, `武学残卷 ${scrolls()} · 钱币 ${grain()}`, 13, '#e8d6a4').setName('codex-resources');
     this.button(x0 + pw - 52, y0 + 32, '返回', 'codex-close', () => this.close(), { size: 15 });
     { const g = this.add(this.scene.add.graphics()); g.lineStyle(1, LQ.gold, .45).lineBetween(x0 + 22, y0 + 56, x0 + pw - 22, y0 + 56); }
 
@@ -318,7 +318,7 @@ export class HeroCodexUI {
       this.button(x + w - 28, ry + h / 2, '+', 'codex-add-' + id, () => this.act(allocateHeroAttr(this.hero, id) ? { ok: true, message: `${ATTRIBUTE_INFO[id].name} +1` } : { ok: false, message: '没有可分配的点，或这一项已满' }), { disabled: free <= 0 || a[id] >= cap, size: 18 });
     });
     const by = y + 24 + ids.length * cardH + 18;
-    this.button(x + 96, by, cost ? `洗点 · 军粮 ${cost}` : '洗点 · 本章首次免费', 'codex-respec', () => this.act(respec(this.hero)), { disabled: spent === 0, size: 14, ink: true });
+    this.button(x + 96, by, cost ? `洗点 · 钱币 ${cost}` : '洗点 · 本章首次免费', 'codex-respec', () => this.act(respec(this.hero)), { disabled: spent === 0, size: 14, ink: true });
     this.text(x + 200, by, '洗点：已加的属性点全部退回，等级不变。', 12, '#9c8c6c').setOrigin(0, .5);
   }
 
@@ -337,11 +337,11 @@ export class HeroCodexUI {
       const px = x + 8 + i * (cw + 10), got = i < lv, next = i === lv;
       g.fillStyle(got ? 0x7a2a1c : 0x18120c, .95).fillRoundedRect(px, yy, cw, 46, 5).lineStyle(got || next ? 1.5 : 1, got ? 0xf3d48a : next ? 0xc9a35e : 0x5e4a2c, 1).strokeRoundedRect(px + .5, yy + .5, cw - 1, 45, 5);
       this.text(px + cw / 2, yy + 14, `Lv.${i + 1}`, 13, got ? '#fff3d0' : next ? '#ecd49a' : '#8d7d60', true).setOrigin(.5);
-      this.text(px + cw / 2, yy + 33, `+${Math.round((i + 1) * TEMPER.step * 100)}% · ${TEMPER.cost[i]} 粮`, 11, got ? '#ffe2a0' : '#9c8c6c').setOrigin(.5);
+      this.text(px + cw / 2, yy + 33, `+${Math.round((i + 1) * TEMPER.step * 100)}% · ${TEMPER.cost[i]} 钱币`, 11, got ? '#ffe2a0' : '#9c8c6c').setOrigin(.5);
     }
     yy += 78;
-    this.button(x + 100, yy, cost === null ? '已满级' : `淬炼 · 军粮 ${cost}`, 'codex-temper-up', () => this.act(temperUp(c)), { disabled: cost === null, size: 15, ink: true });
-    this.text(x + 210, yy, `现有军粮 ${grain()}`, 12.5, '#c8b88f').setOrigin(0, .5);
+    this.button(x + 100, yy, cost === null ? '已满级' : `淬炼 · 钱币 ${cost}`, 'codex-temper-up', () => this.act(temperUp(c)), { disabled: cost === null, size: 15, ink: true });
+    this.text(x + 210, yy, `现有钱币 ${grain()}`, 12.5, '#c8b88f').setOrigin(0, .5);
     this.text(x + 8, yy + 34, '淬炼满 5 级后，局内本命武器将开放第 6 级「突破」（第三批上线）。', 12, '#9c8c6c').setWordWrapWidth(w - 16);
   }
 
@@ -441,7 +441,7 @@ export class HeroCodexUI {
     this.starUI = new StarMapUI(this.scene, { depth: this.root.depth + 5,
       state: () => ({ hero, heroName: owner?.name ?? hero, level: heroInfo(hero).level, gate: heroStarGate(hero), lit: heroStars(hero), free: heroFreeStars(hero) }),
       onLight: id => lightHeroStar(hero, id),
-      respec: { label: () => { const cost = respecCost(hero); return cost ? `洗点 · 军粮 ${cost}` : '洗点 · 本章首次免费'; }, act: () => respec(hero).message },
+      respec: { label: () => { const cost = respecCost(hero); return cost ? `洗点 · 钱币 ${cost}` : '洗点 · 本章首次免费'; }, act: () => respec(hero).message },
       close: { label: () => '返回', act: () => { this.starUI?.destroy(); this.starUI = undefined; if (this.root.active) this.render(); } } });
     this.root.once('destroy', () => this.starUI?.destroy());
   }
@@ -466,7 +466,7 @@ export class HeroCodexUI {
       this.button(x + w - 50, ry + 12, '+', 'codex-add-' + id, () => this.act(allocateHeroAttr(this.hero, id) ? { ok: true, message: `${ATTRIBUTE_INFO[id].name} +1` } : { ok: false, message: '没有可分配的点，或这一项已满' }), { disabled: free <= 0 || a[id] >= attributeCap(heroInfo(this.hero).level), size: 18 });
     });
     const by = y + 40 + Object.keys(ATTRIBUTE_INFO).length * 44 + 10;
-    this.button(x + 110, by, cost ? `洗点 · 军粮 ${cost}` : '洗点 · 本章首次免费', 'codex-respec', () => this.act(respec(this.hero)), { disabled: spent === 0, size: 14 });
+    this.button(x + 110, by, cost ? `洗点 · 钱币 ${cost}` : '洗点 · 本章首次免费', 'codex-respec', () => this.act(respec(this.hero)), { disabled: spent === 0, size: 14 });
     this.text(x + 230, by - 8, '洗点：已加的属性点全部退回，等级不变。', 12, '#9c8c6c');
   }
 
@@ -478,7 +478,7 @@ export class HeroCodexUI {
     this.text(x, y + 34, `淬炼 ${lv} / ${TEMPER.max}　· 本命伤害 +${Math.round(lv * TEMPER.step * 100)}%（每级 +${Math.round(TEMPER.step * 100)}%）`, 15, '#e8d6a4').setName('codex-temper');
     const g = this.add(this.scene.add.graphics());
     for (let i = 0; i < TEMPER.max; i++) g.fillStyle(i < lv ? 0xe2bd6a : 0x2a3328, 1).fillRect(x + i * 34, y + 66, 28, 12).lineStyle(1, 0x8a7550, .9).strokeRect(x + i * 34 + .5, y + 66.5, 27, 11);
-    this.button(x + 100, y + 112, cost === null ? '已满级' : `淬炼 · 军粮 ${cost}`, 'codex-temper-up', () => this.act(temperUp(c)), { disabled: cost === null, size: 15 });
+    this.button(x + 100, y + 112, cost === null ? '已满级' : `淬炼 · 钱币 ${cost}`, 'codex-temper-up', () => this.act(temperUp(c)), { disabled: cost === null, size: 15 });
     this.text(x, y + 150, '淬炼满 5 级后，局内本命武器将开放第 6 级「突破」（第三批上线）。', 12, '#9c8c6c').setWordWrapWidth(w);
   }
 

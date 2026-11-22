@@ -46,7 +46,7 @@ export function lubuGameSceneClass(Base: typeof GameScene) {
       let loot = '';
       if (r.first && !debug) { const horse = horseForReward('lubu'); if (horse && grantHorse(horse.id)) loot = `\n获得坐骑  ${horse.name} · 已入马厩（休整时可换马）`; }
       this.resultTexts.subtitle.setText(victory ? (r.first ? '三英战吕布 · 首胜得赤兔' : this.chapter.victoryText) : '吕布难当 · 整军再战');
-      this.resultTexts.body.setText(this.resultTexts.body.text + '\n挑战 · 军粮 +' + r.provisions + loot + cityIncomeLine(r) + (debug ? '\n' + r.message : ''));
+      this.resultTexts.body.setText(this.resultTexts.body.text + '\n挑战 · 钱币 +' + r.provisions + loot + cityIncomeLine(r) + (debug ? '\n' + r.message : ''));
       const home = this.resultPanel.getByName('result-home') as Phaser.GameObjects.Text;
       home?.setText('返回天下地图').removeAllListeners('pointerdown').on('pointerdown', () => { this.registry.set('mapFocusNode', 'lubu'); this.scene.start('WorldMapScene'); });
       const restart = this.resultPanel.getByName('result-restart') as Phaser.GameObjects.Image;

@@ -31,7 +31,7 @@ export const FORTUNE = {
 
 export interface FortuneEventDef { name: string; hint: string; reward: string; done: string; icon: string }
 export const FORTUNE_EVENT: Record<FortuneEventKind, FortuneEventDef> = {
-  cart: { name: '敌军粮车', hint: '站进圈里 3 秒夺下粮车', reward: '随军粮 + 回春丹', done: '夺下粮车', icon: 'growth_icon_pickup' },
+  cart: { name: '敌军粮车', hint: '站进圈里 3 秒夺下粮车', reward: '随军钱币 + 回春丹', done: '夺下粮车', icon: 'growth_icon_pickup' },
   armory: { name: '敌军军械库', hint: '击退守军，站进圈里 4 秒', reward: '兵装一件', done: '夺下军械', icon: 'growth_icon_heart_mirror' },
   courier: { name: '敌军传令兵', hint: '追上他截下军情（15 秒）', reward: '多一次军略三选一', done: '截获军情', icon: 'growth_icon_wind_boots' },
   rescue: { name: '义军被围', hint: '击退围困的敌兵', reward: '义军随冲 + 部曲补员', done: '义军脱困', icon: 'growth_icon_gujun' },

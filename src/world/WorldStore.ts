@@ -102,7 +102,7 @@ export function spendProvisions(cost:number):boolean{const s=loadWorld(),n=Math.
 export function worldChapterCleared(chapter:ChapterId):boolean{return loadWorld().cleared[chapter];}
 export const BUILDINGS:Record<BuildingId,{name:string;description:(level:number)=>string}>= {
  barracks:{name:'军营',description:l=>`不限制兵力 · 开局增援 ${l-1} 人`},
- farm:{name:'农田',description:l=>`战后军粮收益 +${(l-1)*8}%`},
+ farm:{name:'农田',description:l=>`战后钱币收益 +${(l-1)*8}%`},
  clinic:{name:'医馆',description:()=>'已并入讲武堂科技「医术」'},
 };
 /** 旧接口（phase11 测试）：军营 / 农田升级的军粮价。 */
@@ -128,13 +128,13 @@ function townCommit(s:WorldSave,message:string):TownResult{s.buildings=legacyLev
 export function townUpgrade(id:TownBuildingId):TownResult{const s=loadWorld(),t=s.town,def=TOWN_BUILDINGS[id];if(!def)return{ok:false,message:'未知建筑'};
  const cost=nextCost(t,id);if(cost===null)return{ok:false,message:'已达最高等级'};
  const block=buildBlockers(t,id,townProgress(s));if(block.length)return{ok:false,message:'需要 '+block.join('、')};
- if(s.provisions<cost)return{ok:false,message:'军粮不足：需要 '+cost};
+ if(s.provisions<cost)return{ok:false,message:'钱币不足：需要 '+cost};
  s.provisions-=cost;const lv=++t.levels[id];
  return townCommit(s,id==='hall'?`主帐扩建，营寨升为${CITY_TITLE[lv]}`:lv===1?def.name+'建成':`${def.name}升至 Lv${lv}`);}
 /** 讲武堂研究科技。 */
 export function researchTech(id:TechId):TownResult{const s=loadWorld(),t=s.town,def=TECHS[id];if(!def)return{ok:false,message:'未知科技'};
  const block=techBlockers(id,t.tech,levelOf(t,'academy'));if(block.length)return{ok:false,message:block[0]==='已研究'?'已研究':'需要 '+block.join('、')};
- if(s.provisions<def.cost)return{ok:false,message:'军粮不足：需要 '+def.cost};
+ if(s.provisions<def.cost)return{ok:false,message:'钱币不足：需要 '+def.cost};
  s.provisions-=def.cost;t.tech=[...t.tech,id];return townCommit(s,`研究完成：${def.name}`);}
 /** 已研究科技的合计效果。 */
 export function techEffects(){return techTotals(loadWorld().town.tech);}
@@ -144,7 +144,7 @@ export function talentLevel():number{return Math.max(1,Math.min(3,levelOf(loadWo
 /** 军营「练兵」：当前等级、上限（随已开放章节）、下一级价格（满了为 null）。 */
 export function drillInfo(s:WorldSave=loadWorld()):{level:number;cap:number;cost:number|null;multiplier:number;next:number}{const level=s.town.drill??0,cap=drillCap(openChapterCount(s));return{level,cap,cost:level<cap?drillCost(level+1):null,multiplier:drillMultiplier(level),next:drillMultiplier(level+1)};}
 /** 练兵升一级：花军粮，受章节上限限制。 */
-export function trainTroops():TownResult{const s=loadWorld(),d=drillInfo(s);if(d.cost===null)return{ok:false,message:d.level>=DRILL_MAX?'练兵已满级':`练兵上限 ${d.cap} 级，开放新章节后提高`};if(s.provisions<d.cost)return{ok:false,message:'军粮不足：需要 '+d.cost};s.provisions-=d.cost;s.town.drill=d.level+1;return townCommit(s,`练兵升至 ${d.level+1} 级：部曲生命、伤害 ×${drillMultiplier(d.level+1).toFixed(2)}`);}
+export function trainTroops():TownResult{const s=loadWorld(),d=drillInfo(s);if(d.cost===null)return{ok:false,message:d.level>=DRILL_MAX?'练兵已满级':`练兵上限 ${d.cap} 级，开放新章节后提高`};if(s.provisions<d.cost)return{ok:false,message:'钱币不足：需要 '+d.cost};s.provisions-=d.cost;s.town.drill=d.level+1;return townCommit(s,`练兵升至 ${d.level+1} 级：部曲生命、伤害 ×${drillMultiplier(d.level+1).toFixed(2)}`);}
 export function stableLevel():number{return levelOf(loadWorld().town,'stable');}
 export function stableCapacity():number{return STABLE_HORSES[stableLevel()]??0;}
 /** 城池建筑等级（未占领过的城为默认：府衙 1 级）。 */
@@ -152,10 +152,10 @@ export function cityLevels(cityId:string,s:WorldSave=loadWorld()):CityLevels{ret
 /** 城池建造 / 升级：须为我方城池；检查档次上限、府衙前提与军粮。 */
 export function cityBuild(cityId:string,id:CityBuildingId):TownResult{const s=loadWorld(),c=cityById(cityId);if(!c||!s.ownedCities.includes(cityId))return{ok:false,message:'不是我方城池'};const def=CITY_BUILDINGS[id];if(!def)return{ok:false,message:'未知建筑'};
  const lv={...cityLevels(cityId,s)},block=cityBuildBlockers(id,c.tier,lv);if(block.length)return{ok:false,message:block[0]==='已达最高等级'||block[0]==='此档城池不能建'?block[0]:'需要 '+block.join('、')};
- const cost=cityBuildCost(id,c.tier,lv[id])!;if(s.provisions<cost)return{ok:false,message:'军粮不足：需要 '+cost};s.provisions-=cost;lv[id]++;s.cities[cityId]=lv;return townCommit(s,`${c.name}${def.name}${lv[id]===1&&id!=='office'?'建成':`升至 Lv${lv[id]}`}`);}
+ const cost=cityBuildCost(id,c.tier,lv[id])!;if(s.provisions<cost)return{ok:false,message:'钱币不足：需要 '+cost};s.provisions-=cost;lv[id]++;s.cities[cityId]=lv;return townCommit(s,`${c.name}${def.name}${lv[id]===1&&id!=='office'?'建成':`升至 Lv${lv[id]}`}`);}
 /** 粮仓「开仓募兵」：每季一次，军粮换后备刀盾 / 长枪兵。 */
 export function granaryLevy():TownResult{const s=loadWorld(),t=s.town,lv=levelOf(t,'granary');if(!lv)return{ok:false,message:'需要先建粮仓'};const key=t.year+'-'+t.season;if(t.levied===key)return{ok:false,message:'本轮已开仓募兵，打完下一仗再来'};
- const cost=levyCost(lv);if(s.provisions<cost)return{ok:false,message:'军粮不足：需要 '+cost};s.provisions-=cost;const n=LEVY_SOLDIERS[lv];for(let i=0;i<n;i++){const k=i%2?'spearman':'swordsman';s.reserve[k]=Math.min(999,(s.reserve[k]??0)+1);}t.levied=key;
+ const cost=levyCost(lv);if(s.provisions<cost)return{ok:false,message:'钱币不足：需要 '+cost};s.provisions-=cost;const n=LEVY_SOLDIERS[lv];for(let i=0;i<n;i++){const k=i%2?'spearman':'swordsman';s.reserve[k]=Math.min(999,(s.reserve[k]??0)+1);}t.levied=key;
  return townCommit(s,`开仓募兵：后备兵 +${n}（${costText(cost)}）`);}
 export type {TownState,TownBuildingId,CityFocus,SeasonReport};
 /** 营寨建筑、讲武堂科技 + W3 大城特产的出征开局效果。 */
@@ -187,7 +187,7 @@ function applyIncome(s:WorldSave,eligible:boolean,merits:number,provisions:numbe
  for(let i=0;i<r.cityTroops;i++){const k=i%2?'spearman':'swordsman';s.reserve[k]=Math.min(999,(s.reserve[k]??0)+1);}
  return{merits:0,provisions:battle+r.grain+r.cityGrain-r.upkeep,cityMerits:0,cityProvisions:r.cityGrain,season:r};}
 /** 结算面板上的营寨收成一行（无结算时为空）。 */
-export function cityIncomeLine(r:{cityProvisions?:number;season?:SeasonReport|null}):string{const q=r.season;if(!q)return r.cityProvisions?`\n城池产出 · 军粮 +${r.cityProvisions}`:'';
+export function cityIncomeLine(r:{cityProvisions?:number;season?:SeasonReport|null}):string{const q=r.season;if(!q)return r.cityProvisions?`\n城池产出 · 钱币 +${r.cityProvisions}`:'';
  return `\n营寨 · 农田 +${q.grain}${q.cityGrain?` · 城池 +${q.cityGrain}`:''}${q.cityTroops?` · 后备兵 +${q.cityTroops}`:''} · 口粮 −${q.upkeep}${q.shortage?`（缺 ${q.shortage}）`:''}${q.farms?.length?`\n屯田供粮：${q.farms.map(f=>`${f.city} +${f.grain}`).join('、')}`:''}${q.raided?.length?`\n流寇未平 · ${q.raided.join('、')}本次产出减半`:''}`;}
 let expeditionSequence=0;
 /** LAN HTTP may omit randomUUID. IDs are local receipt keys, not authentication tokens. */
@@ -304,7 +304,7 @@ export function recruitCost(kind:TroopKind,s:WorldSave=loadWorld()):number{retur
 export function barracksLevel(s:WorldSave=loadWorld()):number{return Math.max(1,levelOf(s.town,'barracks'));}
 export function unlockedTroopKinds(s:WorldSave=loadWorld()):TroopKind[]{const lv=barracksLevel(s);return TROOP_KINDS.filter(k=>troopUnlocked(k,lv));}
 export function troopUnlockLevel(kind:TroopKind):number{return TROOP_UNLOCK[kind]??1;}
-export function recruitReserve(kind:TroopKind):{ok:boolean;message:string}{const s=loadWorld();if(TROOPS[kind]&&!troopUnlocked(kind,barracksLevel(s)))return{ok:false,message:`军营 Lv.${TROOP_UNLOCK[kind]} 解锁`};if(s.yellowStages<3)return{ok:false,message:'击败张角后开放营寨招募'};if(!TROOPS[kind])return{ok:false,message:'无效兵种'};const cost=recruitCost(kind,s);if(s.provisions<cost)return{ok:false,message:"军粮不足：需要 "+cost};if((s.reserve[kind]??0)>=999)return{ok:false,message:'该兵种后备已满'};s.provisions-=cost;s.reserve[kind]=(s.reserve[kind]??0)+1;s.armyPlan.priority=kind;commit(s);return{ok:true,message:'已编入后备；下次出征最多带2名后备兵'};}
+export function recruitReserve(kind:TroopKind):{ok:boolean;message:string}{const s=loadWorld();if(TROOPS[kind]&&!troopUnlocked(kind,barracksLevel(s)))return{ok:false,message:`军营 Lv.${TROOP_UNLOCK[kind]} 解锁`};if(s.yellowStages<3)return{ok:false,message:'击败张角后开放营寨招募'};if(!TROOPS[kind])return{ok:false,message:'无效兵种'};const cost=recruitCost(kind,s);if(s.provisions<cost)return{ok:false,message:"钱币不足：需要 "+cost};if((s.reserve[kind]??0)>=999)return{ok:false,message:'该兵种后备已满'};s.provisions-=cost;s.reserve[kind]=(s.reserve[kind]??0)+1;s.armyPlan.priority=kind;commit(s);return{ok:true,message:'已编入后备；下次出征最多带2名后备兵'};}
 export function takeExpeditionReserve(slots=2):TroopKind[]{const s=loadWorld(),out:TroopKind[]=[];if(!Number.isSafeInteger(slots)||slots<=0)return out;if(s.yellowStages<3||!s.active||s.active.state!=='active'||s.active.deployed?.length)return out;for(const kind of [...new Set([...(s.armyPlan.priority?[s.armyPlan.priority]:[]),...TROOP_KINDS])])while((s.reserve[kind]??0)>0&&out.length<Math.min(5,slots)){s.reserve[kind]--;out.push(kind);}if(out.length){if(s.active)s.active.deployed=[...out];commit(s);}return out;}
 
 export function yellowStageUnlocked(stage:number):boolean{return Number.isInteger(stage)&&stage>=1&&stage<=3&&stage<=loadWorld().yellowStages+1;}

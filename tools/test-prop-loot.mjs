@@ -31,7 +31,7 @@ const t = await p.evaluate(async () => {
   };
 });
 const K = t.kinds;
-ck('掉落表：兵器架 / 弓架 → 攻击类；盾牌堆 → 护具；木箱 → 宝石；钱袋 → 钱；粮袋 / 粮车 → 随军粮；酒罐 → 回血', K.rack === 'weapons' && K.bow === 'weapons' && K.shield === 'armor' && K.crate === 'crate' && K.coins === 'coins' && K.sack === 'grain' && K.cart === 'grain' && K.heal === 'heal', K);
+ck('掉落表：兵器架 / 弓架 → 攻击类；盾牌堆 → 护具；木箱 → 宝石；钱袋 → 钱；粮袋 / 粮车 → 随军钱币；酒罐 → 回血', K.rack === 'weapons' && K.bow === 'weapons' && K.shield === 'armor' && K.crate === 'crate' && K.coins === 'coins' && K.sack === 'grain' && K.cart === 'grain' && K.heal === 'heal', K);
 ck('掉落表：营帐 / 军旗 / 栅栏 / 残骸 / 石碑 / 环境军旗 / 汜水关物件 / 没登记的新图 → 什么也不掉', ['tent', 'banner', 'fence', 'wreck', 'stele', 'envBanner', 'sishui', 'unknown'].every(k => K[k] === 'none'), K);
 ck('兵器架只出攻击类兵装（主词条伤害 / 攻速 / 暴击）；甲胄架只出甲 / 盔 / 靴', t.weaponsAttack && t.armorSlots, { w: t.weaponsAttack, a: t.armorSlots });
 ck('障碍物兵装封顶蓝色（紫 / 金只从首领、精锐来）', t.maxQ <= t.blue && t.capPurple === 'blue' && t.capOrange === 'blue' && t.noneItem, t);
@@ -64,7 +64,7 @@ ck('每关障碍物最多掉 2 件兵装（再打兵器架只给宝石 / 斗志�
 const r3 = await p.evaluate(async () => { const s = window.__S, I = await import('/src/data/items.ts'), L = await import('/src/data/propLoot.ts'); s.propItems = 0; s.player.propGuardUntil = 0; const a = window.__break(23); const slot = id => I.BASE_ITEMS.find(b => b.id === id)?.slot; return { ...a, armor: a.items.every(i => L.ARMOR_SLOTS.includes(slot(i.base))), guard: s.player.propGuardUntil > s.combatNow, mul: s.player.propGuardMul }; });
 ck('打碎盾牌堆（甲胄架过渡图）：掉一件护具，偶得短时减伤', r3.items.length === 1 && r3.armor && r3.guard && r3.mul < 1, r3);
 const r4 = await p.evaluate(() => window.__break(16));
-ck('打碎粮袋：随军粮增加、不掉兵装', r4.food === 6 && r4.items.length === 0 && r4.chests === 0, r4);
+ck('打碎粮袋：随军钱币增加、不掉兵装', r4.food === 6 && r4.items.length === 0 && r4.chests === 0, r4);
 // 军旗 / 营帐：环境互动物件，砍倒 / 打塌都不掉兵装和宝箱（随机源全给 0 也一样）
 const r5 = await p.evaluate(() => {
   const s = window.__S, env = s.env; if (!env) return { env: false };

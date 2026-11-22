@@ -150,7 +150,7 @@ try {
     const r = await ev(s => ({ chests: s.bossChests.length, killed: s.bossKilled })), g1 = await p.evaluate(async () => (await import('/src/world/WorldStore.ts')).loadWorld().provisions), f = await flags();
     const notice = await ev(s => s.children.list.filter(o => o.name === 'combat-notice').flatMap(o => o.list.filter(c => c.type === 'Text').map(c => c.text)));
     ck('双降：横幅「河北双雄 · 同归麾下」、不掉宝箱、算击败首领', (tx.some(t => t.includes('同归麾下')) || notice.some(t => t.includes('同归麾下'))) && r.chests === 0 && r.killed, { r, tx: tx.filter(t => t.includes('麾下')) });
-    ck('双降：军粮 +100（另加各自首次劝降 +60）', g1 - g0 === 100 + 60 + 60, { g0, g1 });
+    ck('双降：钱币 +100（另加各自首次劝降 +60）', g1 - g0 === 100 + 60 + 60, { g0, g1 });
     ck('剧情旗标 hebei_outcome = 双降（pp）', f.hebei_outcome === 'pp', f.hebei_outcome);
   }
   if (want('bothkill')) {

@@ -71,7 +71,7 @@ export function temperBonus(id: HeroKey): number { return temperLevel(id) * TEMP
 export function temperCost(id: HeroKey): number | null { const lv = temperLevel(id); return lv >= TEMPER.max ? null : TEMPER.cost[lv]; }
 export function temperUp(id: HeroKey): Result {
   const cost = temperCost(id); if (cost === null) return { ok: false, message: '本命已淬炼至满级' };
-  if (!spendWorld({ provisions: cost })) return { ok: false, message: `军粮不足（需要 ${cost}）` };
+  if (!spendWorld({ provisions: cost })) return { ok: false, message: `钱币不足（需要 ${cost}）` };
   const s = read(); s.temper[id] = temperLevel(id) + 1; commit();
   return { ok: true, message: `本命淬炼至 Lv.${s.temper[id]} · 本命伤害 +${Math.round(s.temper[id] * TEMPER.step * 100)}%` };
 }
@@ -81,10 +81,10 @@ export function temperUp(id: HeroKey): Result {
 export function respecCost(id: HeroKey): number { return read().respecFree[id] === chaptersOpen() ? RESPEC_GRAIN_PER_LEVEL * heroLevel(id) : 0; }
 export function respec(id: HeroKey): Result {
   const cost = respecCost(id);
-  if (cost > 0 && !spendWorld({ provisions: cost })) return { ok: false, message: `军粮不足（需要 ${cost}）` };
+  if (cost > 0 && !spendWorld({ provisions: cost })) return { ok: false, message: `钱币不足（需要 ${cost}）` };
   const s = read(); if (cost === 0) { s.respecFree[id] = chaptersOpen(); commit(); }
   resetHeroAttrs(id);
-  return { ok: true, message: cost ? `已洗点 · 花费军粮 ${cost}` : '已洗点（本章首次免费）' };
+  return { ok: true, message: cost ? `已洗点 · 花费钱币 ${cost}` : '已洗点（本章首次免费）' };
 }
 
 // —— 战法心得 ——

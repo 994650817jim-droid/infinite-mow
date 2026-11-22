@@ -113,7 +113,7 @@ for (const key of Object.keys(TABLE)) {
   ck('开关打开：四维点数 = 小星汇总，可用点 = 没点的星，旧式加点被拒', same(HP.heroAttrs('guanyu'), { strength: 2, agility: 0, intellect: 0, command: 0 }) && HP.heroFreePoints('guanyu') === 1 && HP.allocateHeroAttr('guanyu', 'agility') === false && same(HP.enlistHero('guanyu').attributes, { strength: 2, agility: 0, intellect: 0, command: 0 }));
   const r = MS.respec('guanyu');
   ck('洗点（MasteryStore.respec，开关打开）：星全部退回，等级与旧属性点不动，本章首次免费', r.ok && same(HP.heroStars('guanyu'), []) && HP.heroFreeStars('guanyu') === 3 && HP.heroLevel('guanyu') === 4 && JSON.parse(store.get(HP.HEROES_KEY)).heroes.guanyu.attributes.strength === 1 && !('stars' in JSON.parse(store.get(HP.HEROES_KEY)).heroes.guanyu), r.message);
-  ck('洗点第二次按等级收军粮（沿用旧规则：100 × 等级）', MS.respecCost('guanyu') === 400);
+  ck('洗点第二次按等级收钱币（沿用旧规则：100 × 等级）', MS.respecCost('guanyu') === 400);
   SM.setStarMap(false);
   ck('开关关着：洗点仍是清旧属性点', (HP.resetHeroAttrs('guanyu'), JSON.parse(store.get(HP.HEROES_KEY)).heroes.guanyu.attributes.strength === 0));
   const set = HP.setHeroStars('liubei', SM.presetStars('liubei', 25), 26);

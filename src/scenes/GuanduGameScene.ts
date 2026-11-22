@@ -146,7 +146,7 @@ export function guanduGameSceneClass(Base: typeof GameScene) {
       const reward = settleArcExpedition('guandu', this.receipt, {victory, bossKilled: this.bossKilled, kills: this.kills, elapsed: this.elapsed, debug: this.test || this.debugModified || this.debugJumped || this.player.damageImmune, returned: !victory || lastLeg ? this.allies.filter(u => u.active && u.reserveSoldier).map(u => u.kind) : []});
       this.controller?.clear();
       this.resultTexts.subtitle.setText(victory ? this.chapter.victoryText : '率部退守，整军再战');
-      this.resultTexts.body.setText(this.resultTexts.body.text + '\n永久奖励 · 军粮 +' + reward.provisions + cityIncomeLine(reward));
+      this.resultTexts.body.setText(this.resultTexts.body.text + '\n永久奖励 · 钱币 +' + reward.provisions + cityIncomeLine(reward));
       const home = this.resultPanel.getByName('result-home') as Phaser.GameObjects.Text;
       home?.setText(victory ? '返回天下地图' : '返回主菜单').removeAllListeners('pointerdown').on('pointerdown', () => { this.registry.remove('campaignTransfer'); this.registry.remove('guanduTransfer'); this.scene.start(victory ? 'WorldMapScene' : 'MenuScene'); });
       const restart = this.resultPanel.getByName('result-restart') as Phaser.GameObjects.Image;

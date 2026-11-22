@@ -24,6 +24,7 @@ import {GROWTH_ICON_IDS} from '../ui/GrowthIcons';
 import {stableUnlocked} from '../systems/ItemStore';
 import {CHARACTERS,type CharacterId} from '../data/characters';
 import {uiSfx} from '../systems/Sfx';
+import {CoinFly} from '../ui/CoinFly';
 import {startCityAmbient} from '../systems/ContentSfx';
 import {checkWorld} from '../systems/Achievements';
 import {gainProvisions,spendProvisions,loadWorld,saveWorld,worldUnlocked,ensureStableBuilt,storageUnavailable,incompatibleSave,townUpgrade,granaryLevy,researchTech,townProgress,stableCapacity,drillInfo,trainTroops,cityLevels} from '../world/WorldStore';
@@ -109,6 +110,10 @@ export class CityScene extends Phaser.Scene {
   worldShell(this,'义军营寨');
   // 2026-11-17 用户：「只留下天下地图，其他按钮不需要，玩家想要什么就去点击建筑物」——招贤馆、招募后备、讲武堂、出征备战都改为点建筑 / 从天下地图出征
   this.top=txt(this,D?W-24:24,D?28:72,'',D?15:14,'#efe0b4',HEADING_FONT).setOrigin(D?1:0,.5).setName('city-grain');
+  // 钱币：数字前一个钱袋；这次来营寨期间钱币一涨，铜钱从屏幕中间飞进钱袋（ui/CoinFly；2026-11-21 军粮改钱币）
+  if(this.textures.exists('yellow_props')){this.purse=this.add.image(0,0,'yellow_props',17).setScrollFactor(0).setDepth(this.top.depth).setName('city-coin-purse');this.purse.setScale(24/128);}
+  this.coinProv=loadWorld().provisions;
+  this.coinFly=new CoinFly(this,{value:()=>this.coinProv,purse:()=>this.purse??null,depth:900,sfx:()=>uiSfx(),onFrame:shown=>{const t='钱币 '+shown;if(this.top.text!==t)this.top.setText(t);this.purse?.setPosition(D?this.top.x-this.top.width-14:this.top.x+this.top.width+14,this.top.y);}});
   // 规模牌（全景左上角）与下一步提示（全景底边）
   this.sizeText=txt(this,this.vr.x+12,this.vr.y+(D?CAMP_BARS.top+8:10),'',D?15:14,'#f6e2ae',HEADING_FONT).setDepth(5).setShadow(0,1,'#000',4,true,true).setBackgroundColor('#1a120bcc').setPadding(8,4,8,4);
   this.hint=txt(this,D?190:24,D?28:94,'',D?13:12,'#b9d2a8').setOrigin(0,.5).setName('city-hint');
@@ -174,10 +179,11 @@ export class CityScene extends Phaser.Scene {
   if(up)return up.ok(townProgress(s))?`主帐可扩建为${CITY_TITLE[size+1]}（${costText(up.cost)}）`:`${up.needs}后，营寨可扩建为${CITY_TITLE[size+1]}`;
   return levelOf(t,'pavilion')?'':'州府已成：可建奇观麒麟阁';
  }
+ private coinProv=0;private coinFly?:CoinFly;private purse?:Phaser.GameObjects.Image;
  private refresh(){
   const s=loadWorld(),t=s.town,size=citySize(t);
   checkWorld(s);
-  this.top.setText(`军粮 ${s.provisions}`);
+  this.coinProv=s.provisions;this.top.setText(`钱币 ${Math.max(0,s.provisions-(this.coinFly?.displayLag()??0))}`);
   // 2026-11-18：攻下的城在营寨也看得到——城池数与每战城池产出（各城建筑合计）
   {const inc={grain:0,troops:0};for(const id of s.ownedCities){const c=cityById(id);if(!c)continue;const r=cityIncome(c.tier,cityLevels(id,s));inc.grain+=r.grain;inc.troops+=r.troops;}
    this.domainText?.destroy();this.domainText=s.ownedCities.length?txt(this,D?this.top.x-this.top.width-18:24,D?28:92,`城池 ${s.ownedCities.length} · 每战 ${incomeText(inc)}`,12,'#bff0c8').setOrigin(D?1:0,.5).setName('city-domain'):undefined;}
@@ -278,7 +284,7 @@ export class CityScene extends Phaser.Scene {
   const tag=txt(this,x,y+2,'军医',D?12:13,'#fff1cf').setOrigin(.5,1).setBackgroundColor('#20150dcc').setPadding(8,2,8,2).setName('tag-medic');c.add(tag);
   const w=sp.w*k*1.5,h=Math.max(sp.w*.8*k,60),hit=this.add.rectangle(x,y-h/2,w,h,0xffffff,.001).setName('bld-medic').setInteractive({useHandCursor:true});
   hit.on('pointerdown',()=>{this.pressedSlot='medic';});
-  hit.on('pointerup',()=>{const own=this.pressedSlot==='medic';this.pressedSlot=null;if(!own||this.drag?.moved)return;uiSfx().play('uiClick');openMedicPanel(this,{wallet:{name:'军粮',get:()=>loadWorld().provisions,spend:spendProvisions},depth:600,onClose:()=>{if(this.sys.settings.status===Phaser.Scenes.RUNNING)this.refresh();}});});
+  hit.on('pointerup',()=>{const own=this.pressedSlot==='medic';this.pressedSlot=null;if(!own||this.drag?.moved)return;uiSfx().play('uiClick');openMedicPanel(this,{wallet:{name:'钱币',get:()=>loadWorld().provisions,spend:spendProvisions},depth:600,onClose:()=>{if(this.sys.settings.status===Phaser.Scenes.RUNNING)this.refresh();}});});
   const base=tent?{x:tent.scaleX,y:tent.scaleY}:null;
   hit.on('pointerover',()=>{tag.setColor('#ffe08a').setScale(1.18/this.z);glow.setFillStyle(0xffe39a,.45);if(tent&&base)tent.setScale(base.x*1.04,base.y*1.04);})
    .on('pointerout',()=>{tag.setColor('#fff1cf').setScale(1/this.z);glow.setFillStyle(0xffe39a,0);if(tent&&base)tent.setScale(base.x,base.y);});
@@ -297,7 +303,7 @@ export class CityScene extends Phaser.Scene {
  private openMerchant(){
   uiSfx().play('uiClick');
   const s=loadWorld(),lootCh=chaptersOpen(),tier=lootBand(lootCh); /* 掉落品质随章节（data/items.ts lootBand）：按已开放章节 */let hero='zhaoyun';try{hero=localStorage.getItem('im_last_hero')||hero;}catch{/* 存储不可用 */}
-  const open=()=>{if(!this.sys.isActive())return;openMerchantShop(this,{wallet:{name:'军粮',get:()=>loadWorld().provisions,spend:spendProvisions,gain:gainProvisions},tier,chapter:lootCh,hero:(CHARACTERS.some(c=>c.id===hero)?hero:'zhaoyun') as CharacterId,depth:600,onClose:()=>{if(this.sys.settings.status===Phaser.Scenes.RUNNING)this.refresh();},sound:k=>uiSfx().play(k as 'uiClick')});};
+  const open=()=>{if(!this.sys.isActive())return;openMerchantShop(this,{wallet:{name:'钱币',get:()=>loadWorld().provisions,spend:spendProvisions,gain:gainProvisions},tier,chapter:lootCh,hero:(CHARACTERS.some(c=>c.id===hero)?hero:'zhaoyun') as CharacterId,depth:600,onClose:()=>{if(this.sys.settings.status===Phaser.Scenes.RUNNING)this.refresh();},sound:k=>uiSfx().play(k as 'uiClick')});};
   if(this.textures.exists('item_icons'))open();else{this.load.atlas('item_icons','assets/items/item-icons.webp','assets/items/item-icons.json');this.load.once('complete',open);this.load.start();}
  }
  private panKeys?:Record<string,Phaser.Input.Keyboard.Key>;
@@ -381,7 +387,7 @@ export class CityScene extends Phaser.Scene {
   if(id==='stable'&&lv)line('只能在营中休整时换马。',12,'#b9c9b2');
   // 军营「练兵」：全体部曲生命、伤害每级 +15%，上限随已开放章节
   if(id==='barracks'){const d=drillInfo(s);line(`练兵 Lv.${d.level} / ${d.cap}：全体部曲生命、伤害 ×${d.multiplier.toFixed(2)}${d.cost!==null?`；下一级 ×${d.next.toFixed(2)}`:d.level<12?'；开放新章节后可继续练':''}`,13,'#cfe0c8','town-card-drill');
-   const db=homeCommand(this,tx+Math.min(220,tw)/2,y+20,Math.min(220,tw),38,d.cost!==null?`练兵 · 军粮 ${d.cost}`:'练兵已达上限',false,d.cost!==null&&s.provisions>=d.cost,14);db.hit.setName('town-drill').on('pointerdown',()=>{const res=trainTroops();if(!res.ok){(m.root.getByName('town-card-msg') as Phaser.GameObjects.Text|null)?.setText(res.message);return;}uiSfx().play('uiClick');this.toast(res.message);this.openCard('barracks');this.refresh();});m.root.add([db.g,db.hit,db.caption]);y+=50;}
+   const db=homeCommand(this,tx+Math.min(220,tw)/2,y+20,Math.min(220,tw),38,d.cost!==null?`练兵 · 钱币 ${d.cost}`:'练兵已达上限',false,d.cost!==null&&s.provisions>=d.cost,14);db.hit.setName('town-drill').on('pointerdown',()=>{const res=trainTroops();if(!res.ok){(m.root.getByName('town-card-msg') as Phaser.GameObjects.Text|null)?.setText(res.message);return;}uiSfx().play('uiClick');this.toast(res.message);this.openCard('barracks');this.refresh();});m.root.add([db.g,db.hit,db.caption]);y+=50;}
   if(block.length&&cost!==null&&!campLock)line('需要：'+block.join('、'),14,'#e59a83','town-card-block');
   const msg=txt(this,W/2,m.y+h-(D?118:132),'',13,'#e8c98a').setOrigin(.5).setName('town-card-msg');m.root.add(msg);
   type Fn=[string,()=>void];
@@ -396,7 +402,7 @@ export class CityScene extends Phaser.Scene {
   },fns=lv>0?funcs[id]??[]:[],n=fns.length+1,bgap=12,bw=Math.min(n>1?200:240,(m.w-60-bgap*(n-1))/n),bx=(i:number)=>W/2-((n-1)*(bw+bgap))/2+i*(bw+bgap),by=m.y+h-(D?84:94);
   fns.forEach(([label,fn],i)=>{const f=homeCommand(this,bx(i),by,bw,42,label,false,true,15);f.hit.setName(i?'town-card-func'+(i+1):'town-card-func').on('pointerdown',fn);m.root.add([f.g,f.hit,f.caption]);});
   const up=homeCommand(this,bx(n-1),by,bw,42,campLock?'需占领城镇':cost!==null?(lv?(id==='hall'?'扩建':`升级到 Lv${lv+1}`):'建造'):'已满级',true,ok,16);
-  up.hit.setName('town-upgrade').setData('padDefault',true).on('pointerdown',()=>{if(!ok){msg.setText(cost!==null?(block.length?'需要 '+block.join('、'):'军粮不足：需要 '+cost):'已达最高等级');return;}
+  up.hit.setName('town-upgrade').setData('padDefault',true).on('pointerdown',()=>{if(!ok){msg.setText(cost!==null?(block.length?'需要 '+block.join('、'):'钱币不足：需要 '+cost):'已达最高等级');return;}
    const res=townUpgrade(id);if(!res.ok){msg.setText(res.message);return;}
    m.root.destroy();if(id==='hall'){this.scene.restart();return;}this.popId=id;this.focusOn(id);this.refresh();this.toast(res.message);});
   m.root.add([up.g,up.hit,up.caption]);
@@ -447,8 +453,8 @@ export class CityScene extends Phaser.Scene {
   line(qy+104,notice||(max?`现有战功最多可换 ${max} 张`:'战功不足：去战场击杀精英、首领获得战功'),13,notice?'#9fd38a':'#b9a98a','merit-msg');
  }
  private openTech(){
-  const s=loadWorld(),t=s.town,acad=levelOf(t,'academy'),h=D?Math.min(H-24,520):Math.min(H-40,780),m=this.modal('town-tech',acad?`讲武堂 Lv${acad} · 军粮 ${s.provisions}`:'讲武堂（未建）',h,600,true); // 2026-11-18：讲武堂弹窗按钮全用漆金（一屏最多一个水墨按钮，这里一个都不留）
-  if(!acad)m.root.add(txt(this,W/2,m.y+66,'先在营中建讲武堂（军粮 '+TOWN_BUILDINGS.academy.build+'），即可研究科技。',13,'#e59a83').setOrigin(.5).setWordWrapWidth(m.w-60,true).setAlign('center').setName('town-tech-need'));
+  const s=loadWorld(),t=s.town,acad=levelOf(t,'academy'),h=D?Math.min(H-24,520):Math.min(H-40,780),m=this.modal('town-tech',acad?`讲武堂 Lv${acad} · 钱币 ${s.provisions}`:'讲武堂（未建）',h,600,true); // 2026-11-18：讲武堂弹窗按钮全用漆金（一屏最多一个水墨按钮，这里一个都不留）
+  if(!acad)m.root.add(txt(this,W/2,m.y+66,'先在营中建讲武堂（钱币 '+TOWN_BUILDINGS.academy.build+'），即可研究科技。',13,'#e59a83').setOrigin(.5).setWordWrapWidth(m.w-60,true).setAlign('center').setName('town-tech-need'));
   const tabW=Math.min(140,(m.w-60)/4),tabY=m.y+(acad||this.techTab==='drill'?70:100);
   BRANCH_ORDER.forEach((b,i)=>{const on=this.techTab===b,done=TECH_IDS.filter(id=>TECHS[id].branch===b&&t.tech.includes(id)).length,all=TECH_IDS.filter(id=>TECHS[id].branch===b).length;
    const btn=lqCommand(this,W/2+(i-1.5)*(tabW+8),tabY,tabW,38,`${BRANCH_NAME[b]} ${done}/${all}`,on,true,D?15:13);btn.hit.setName('tech-tab-'+b).on('pointerdown',()=>{this.techTab=b;this.openTech();});m.root.add([btn.g,btn.hit,btn.caption]);});
@@ -463,7 +469,7 @@ export class CityScene extends Phaser.Scene {
    const head=txt(this,x+14,y+8,`${def.name}　·　第${def.tier}层`,16,done?'#c9f0b0':ready?'#f4d99f':'#9d927c',HEADING_FONT);m.root.add(head);
    const desc=txt(this,x+14,y+(D?32:34),def.desc,12,done?'#b9d2a8':'#d9ccae').setWordWrapWidth(w-(D?170:150),true);m.root.add(desc);
    // 2026-11-17 UI 审查：「需要…」原在说明下方，行高不够时压出行框；电脑版挪到标题同一行右侧
-   if(!done&&block.length)m.root.add(txt(this,D?head.x+head.width+18:x+14,D?y+11:desc.y+desc.height+4,`需要：${block.join('、')} · 军粮 ${def.cost}`,12,'#c99a7a').setName('tech-need-'+id));
+   if(!done&&block.length)m.root.add(txt(this,D?head.x+head.width+18:x+14,D?y+11:desc.y+desc.height+4,`需要：${block.join('、')} · 钱币 ${def.cost}`,12,'#c99a7a').setName('tech-need-'+id));
    const bw=D?140:120,label=done?'已研究':block.length?'未解锁':`研究 ${def.cost}`;
    const btn=lqCommand(this,x+w-bw/2-10,y+(rowH-8)/2,bw,34,label,ready&&afford,ready&&afford,13);btn.hit.setName('tech-'+id).on('pointerdown',()=>{if(done)return;const res=researchTech(id);this.message=res.message;this.openTech();if(res.ok){uiSfx().play('uiClick');this.toast(res.message);}});
    if(ready&&afford&&!padSet){padSet=true;btn.hit.setData('padDefault',true);}
@@ -482,7 +488,7 @@ export class CityScene extends Phaser.Scene {
   const all:Recruit[]=rosterFollowers(s).sort((a,b)=>/* 2026-11-18 用户「主公不应该在这里」：随从操练不列主公 */(s.followers.includes(b.id)?1:0)-(s.followers.includes(a.id)?1:0));
   const top=m.y+100,rowH=D?82:96,per=Math.max(1,Math.floor((h-top+m.y-120)/rowH)),pages=Math.max(1,Math.ceil(all.length/per));
   this.drillPage=Math.min(this.drillPage,pages-1);
-  m.root.add(txt(this,W/2,top-4,`将阶上限 ${cap}（招贤馆 Lv${hallLevel(s)}）· 军粮 ${grain} · 花费只收军粮`,12,'#b9ceb8').setOrigin(.5,0).setName('drill-head'));
+  m.root.add(txt(this,W/2,top-4,`将阶上限 ${cap}（招贤馆 Lv${hallLevel(s)}）· 钱币 ${grain} · 花费只收钱币`,12,'#b9ceb8').setOrigin(.5,0).setName('drill-head'));
   if(!all.length)m.root.add(txt(this,W/2,top+60,'麾下无人：先去招贤馆招募',15,'#cdbf9f').setOrigin(.5).setName('drill-empty'));
   const x=m.x+20,w=m.w-40,bw=D?150:132;
   all.slice(this.drillPage*per,this.drillPage*per+per).forEach((r,i)=>{
@@ -495,7 +501,7 @@ export class CityScene extends Phaser.Scene {
    (['weapon','passive'] as const).forEach((line,k)=>{
     const pv=rankPreview(r,line,s),ly=y+(D?30:34)+k*(D?24:28),ok=!lord&&!pv.full&&pv.afford;
     if(!lord)m.root.add(txt(this,x+12,ly,`${line==='weapon'?'兵器':'被动'}　${pv.full?tight(pv.before):`${tight(pv.before)} → ${tight(pv.after)}`}`,D?12:11,pv.full?'#9d927c':pv.afford?'#d9ccae':'#e59a83').setWordWrapWidth(w-bw-40,true).setName(`drill-preview-${line}-${r.id}`));
-    const label=lord?'主将':pv.full?(pv.capByHall?'招贤馆升级后':'已满'):`升·${line==='weapon'?'兵器':'被动'} ${pv.cost}粮`;
+    const label=lord?'主将':pv.full?(pv.capByHall?'招贤馆升级后':'已满'):`升·${line==='weapon'?'兵器':'被动'} ${pv.cost} 钱币`;
     const btn=lqCommand(this,x+w-bw/2-10,ly+9,bw,D?24:26,label,false,ok,D?13:12);
     if(!lord&&!pv.full&&!pv.afford)btn.caption.setColor('#c4523f'); // 买不起：花费标红
     btn.hit.setName(`drill-${line}-${r.id}`).on('pointerdown',()=>{const res=rankUp(r.id,line);this.message=res.message;if(res.ok){uiSfx().play('uiClick');this.toast(res.message);}this.openTech();});
@@ -517,7 +523,7 @@ export class CityScene extends Phaser.Scene {
   const m=this.modal('town-intro','义军营寨',D?230:450);
   // 2026-11-17 UI 审查 K：介绍压成两条（原四条长句）
   const lines=[
-   '◆ 打仗只得军粮：建造、研究、招募都花军粮；每打完一仗农田收一次粮。',
+   '◆ 打仗只得钱币：建造、研究、招募都花钱币；每打完一仗农田收一次粮。',
    '◆ 点建筑或空地建造、升级；拖动画面看全营。',
   ];
   m.root.add(txt(this,m.x+34,m.y+68,lines.join('\n'),D?14:15,'#e9dcc0').setLineSpacing(10).setWordWrapWidth(m.w-68,true));

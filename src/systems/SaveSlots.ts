@@ -76,7 +76,7 @@ export function summarize(i: number): SlotSummary {
   const parts: string[] = [];
   if (w.ownedCities?.length) parts.push(`城池 ${w.ownedCities.length}`);
   // v9 只剩军粮（旧存档在读入时折算，这里只显示存档里的数）
-  if (w.provisions !== undefined) parts.push(`军粮 ${w.provisions}`);
+  if (w.provisions !== undefined) parts.push(`钱币 ${w.provisions}`);
   let hero: string | undefined;
   try { hero = d!.im_last_hero ? getCharacter(d!.im_last_hero as never).name : undefined; } catch { hero = undefined; }
   const at = Number(d![SLOT_TOUCH_KEY]);

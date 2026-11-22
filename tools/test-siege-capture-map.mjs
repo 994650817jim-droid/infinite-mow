@@ -38,7 +38,7 @@ await p.evaluate(M0 => { const s = eval(M0); s.setZoom(s.minZoom * 1.75, s.area.
 const m0 = await map();
 ck('攻城前：我方只有官渡，疆域图按领地生成，有图例与「下一步」引导，界面只留一处水墨笔刷', m0.owned.join() === 'guandu' && /^world_realm_\d_guandu$/.test(m0.realm) && m0.key && !!m0.guide && m0.guideVis && m0.inks <= 1, m0);
 const xc = await city('xuchang');
-ck('许昌可攻：朱红描边 +「可攻」牌；悬停写城名、档次、守军、推荐等级、奖励', xc.status === 'attack' && xc.tag && xc.ring && /许昌 · 中城 · 豫州 · 可攻/.test(xc.tip) && /守军：\S+ · /.test(xc.tip) && /推荐等级 ★★☆/.test(xc.tip) && /奖励：军粮 \+\d+（首次 \+50%）/.test(xc.tip) && xc.action === '亲征 · 攻城', xc);
+ck('许昌可攻：朱红描边 +「可攻」牌；悬停写城名、档次、守军、推荐等级、奖励', xc.status === 'attack' && xc.tag && xc.ring && /许昌 · 中城 · 豫州 · 可攻/.test(xc.tip) && /守军：\S+ · /.test(xc.tip) && /推荐等级 ★★☆/.test(xc.tip) && /奖励：钱币 \+\d+（首次 \+50%）/.test(xc.tip) && xc.action === '亲征 · 攻城', xc);
 const wc = await city('wuchao');
 ck('乌巢（与官渡相邻、属第肆章）不可攻：调暗，原因「通关第肆章「官渡之战」后开放攻城」', wc.status === 'gate' && !wc.tag && wc.iconAlpha < .7 && /不可攻/.test(wc.tip) && wc.tip.includes('通关第肆章「官渡之战」后开放攻城') && wc.detail.includes('通关第肆章') && wc.action.endsWith('后开放攻城'), wc);
 const ly = await city('luoyang');
@@ -75,7 +75,7 @@ const f1 = await fogInfo();
 const opened = Object.keys(f0.v).filter(k => (f0.v[k] === 'hidden' && f1.v[k] !== 'hidden') || (f0.v[k] === 'dim' && f1.v[k] === 'clear'));
 ck('演出结束：迷雾纹理换成新局面缓存（含陈留），周边迷雾散开（临淄变清楚，北海、东莱由迷雾变半透明）', /^wfog_v_\d+_guandu\.chenliu_$/.test(f1.tex) && opened.length > 0 && f1.v.linzi === 'clear' && f1.v.beihai === 'dim' && f1.v.donglai === 'dim', { tex: f1.tex, opened });
 const m1 = await map(), x1 = await city('chenliu');
-ck('地图上陈留归我方：义旗、详情「你的城池」、按钮「进入城池」', m1.owned.includes('chenliu') && x1.status === 'own' && x1.banner === '义' && x1.detail.includes('你的城池') && x1.action === '进入城池' && /我方城池 · 每战 军粮 \+\d+/.test(x1.tip), x1);
+ck('地图上陈留归我方：义旗、详情「你的城池」、按钮「进入城池」', m1.owned.includes('chenliu') && x1.status === 'own' && x1.banner === '义' && x1.detail.includes('你的城池') && x1.action === '进入城池' && /我方城池 · 每战 钱币 \+\d+/.test(x1.tip), x1);
 ck('疆域图重算并把陈留划进来（纹理键含 chenliu），演出结束后旧疆域图已撤掉', /^world_realm_\d_guandu\.chenliu$/.test(m1.realm) && await p.evaluate(M0 => !eval(M0).layer.list.find(o => o.name === 'world-realm-prev') && !eval(M0).textures.exists('realm_prev_fx'), M), m1);
 const lz = await city('linzi'), bh = await city('beihai');
 ck('攻下陈留后：临淄现出城名与守军（属第肆章，原因写清），北海仍是半透明、不可攻', lz.status === 'gate' && lz.tip.includes('临淄') && bh.status !== 'fog' && bh.status !== 'attack' && !bh.tag, { lz: lz.tip, bh: bh.status });
@@ -91,7 +91,7 @@ ck('迷雾按局面缓存：重进地图直接复用纹理，不重画', f2.tex 
 // ④ 营寨：城池数与每战城池产出
 await p.evaluate(() => { window.__game.scene.getScene('WorldMapScene').scene.start('CityScene'); }); await p.waitForFunction(() => window.__game.scene.isActive('CityScene')); await p.waitForTimeout(900);
 const camp = await p.evaluate(async () => { const s = window.__game.scene.getScene('CityScene'), w = await import('/src/world/WorldStore.ts'), d = await import('/src/data/cityBuildings.ts'), c = await import('/src/world/WorldCities.ts'); const ws = w.loadWorld(); const grain = ws.ownedCities.reduce((n, id) => n + d.cityIncome(c.cityById(id).tier, w.cityLevels(id, ws)).grain, 0); return { text: s.children.getByName('city-domain')?.text, grain }; });
-ck('营寨顶栏看得到城池：「城池 2 · 每战 军粮 +N」与各城产出合计一致', camp.text === `城池 2 · 每战 军粮 +${camp.grain}`, camp);
+ck('营寨顶栏看得到城池：「城池 2 · 每战 钱币 +N」与各城产出合计一致', camp.text === `城池 2 · 每战 钱币 +${camp.grain}`, camp);
 await p.screenshot({ path: `${out}/camp-domain-1280x720.png` });
 await b.close();
 ck('无控制台 / 页面错误', errors.length === 0, errors.slice(0, 4));

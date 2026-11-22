@@ -183,7 +183,7 @@ const camp = await p.evaluate(async G0 => {
   return out;
 }, G);
 ck('行营军需商人只卖兵装：4 件，甲胄 / 头盔 / 战靴 / 信物各一，第一章绿 / 蓝；不再有战法和宝物', !camp.none && JSON.stringify(camp.slots) === '["armor","helm","boots","token"]' && camp.qualities.every(q => q === 'green' || q === 'blue') && !camp.tactics, camp);
-ck('花随军粮买下一件，记入本局缴获，按钮变「已售罄」', camp.bought === 1 && (camp.cost === 60 || camp.cost === 120) && /购入 · [0-9]+粮/.test(camp.label ?? '') && /已售罄/.test(camp.sold ?? ''), camp);
+ck('花随军钱币买下一件，记入本局缴获，按钮变「已售罄」', camp.bought === 1 && (camp.cost === 60 || camp.cost === 120) && /购入 · [0-9]+粮/.test(camp.label ?? '') && /已售罄/.test(camp.sold ?? ''), camp);
 ck('行营商店的兵装：悬停弹出属性提示框，移开隐藏', camp.tip && camp.tipHidden, camp);
 await p.screenshot({ path: `${out}/mobile-camp-shelf.png` });
 await p.evaluate(G0 => eval(G0).campUI.setVisible(false), G);

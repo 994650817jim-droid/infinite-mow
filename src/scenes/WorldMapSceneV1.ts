@@ -109,7 +109,7 @@ export class WorldMapSceneV1 extends Phaser.Scene {
   this.siegeModal=undefined;this.guideMark=undefined;this.guidePin=undefined;this.territory=undefined;this.notice=undefined;this.pins=[];this.route=undefined;this.routeChapter=undefined;this.marchPts=[];this.marchFlag=undefined;this.marchProxy={t:0};this.fogImg=undefined;this.fogStamp=undefined;this.fogKey='';this.fogVis=new Map();this.status=new Map();this.guide=undefined;this.guideLabel=undefined;this.guideEdge=undefined;this.guideTarget=undefined;this.registry.remove('hardChapter');const advance=isChapterTestRun()?null:advanceEra(),lost=isChapterTestRun()?[]:takeLostNotice();if(!isChapterTestRun())ensureIntel();const s=loadWorld();this.intel=intelEvents();this.intelMarkers=[];this.owned=s.ownedCities;this.alerts=s.alerts;this.capturedEver=s.capturedEver;this.era=!s.cleared.hulao?0:eraIndexFor({hulaoCleared:s.cleared.hulao,warlordStages:s.warlordStages,guanduStages:s.guanduStages});
   const desktop=W>600;
   // 顶部资源栏（军粮 / 城池），漆底描金
-  const res=resourceBar(this,desktop?shellTitle.x+shellTitle.width+12:24,desktop?25:88,[{glyph:"粮",label:"军粮",value:s.provisions,tint:0x7a5a22},{glyph:'城',label:'城池',value:this.owned.length,tint:0x2f6b45}],desktop);
+  const res=resourceBar(this,desktop?shellTitle.x+shellTitle.width+12:24,desktop?25:88,[{glyph:"钱",label:"钱币",value:s.provisions,tint:0x7a5a22},{glyph:'城',label:'城池',value:this.owned.length,tint:0x2f6b45}],desktop);
   {const back=worldButton(this,desktop?W-74:W-105,desktop?25:43,"返回营寨",()=>this.scene.start("CityScene"),desktop?132:150);if(desktop){back.image.setDisplaySize(132,40);back.text.setFontSize(15);back.image.setName('world-back');}} // 2026-11-18 用户嫌水墨特效多：本界面只留出征主按钮一处笔刷，返回用漆底描金
   addMainMenuButton(this,desktop?W-194:W-105,desktop?25:91); // 「主菜单」：返回营寨左边（手机在其下方），直接回主页，快捷键 M
   // 2026-11-16 用户反馈「大地图画面大点，下面的说明可以透明」：地图一直铺到屏幕底边，
@@ -313,7 +313,7 @@ export class WorldMapSceneV1 extends Phaser.Scene {
   if(st.kind==='own')return `${head}\n我方城池 · 每战 ${incomeText(inc)}\n点选后「进入城池」建设`;
   if(st.kind==='alert'){const a=this.alertFor(c.id)!;return a.countdown>0?`${head} · 集结\n${FACTIONS[a.attacker].name}集结：还剩 ${a.countdown} 战围城（可先迎击）`:`${head} · 被围\n${FACTIONS[a.attacker].name}围城：守城或弃城；出征别处则失守`;}
   const T=SIEGE[c.tier],first=!this.capturedEver.includes(c.id),k=first?1+FIRST_CAPTURE_BONUS:1;
-  const base=`守军：${FACTIONS[owner].name} · 推荐等级 ${TIER_STARS[c.tier]}\n奖励：军粮 +${rewardGrain(T.reward.merits*k,T.reward.provisions*k)}${first?'（首次 +50%）':''} · 占领后每战 ${incomeText(inc)}`;
+  const base=`守军：${FACTIONS[owner].name} · 推荐等级 ${TIER_STARS[c.tier]}\n奖励：钱币 +${rewardGrain(T.reward.merits*k,T.reward.provisions*k)}${first?'（首次 +50%）':''} · 占领后每战 ${incomeText(inc)}`;
   return st.kind==='attack'?`${head} · 可攻\n${base}`:`${head} · 不可攻\n${st.reason.replace(/^未解锁：|^尚不相邻：/,'')}\n${base}`;}
  /** 「下一步」引导：告急城 > 当前主线章节 > 最易攻的可攻城（小城优先、离营寨近）；从最近的我方据点画一条淡金虚线箭头。 */
  private buildGuide(){const s=loadWorld();let to:{x:number;y:number}|null=null,text='',id='';
@@ -606,7 +606,7 @@ export class WorldMapSceneV1 extends Phaser.Scene {
   if(n.challenge){this.challengeDetail(n,st);return;}
   if(n.kind==='home'||!info){const next=currentChapter(save),cleared=CHAPTER_TIMELINE.filter(c=>chapterStagesDone(c.id,save)>=3).length;this.setDetail(n.name,FACTIONS.player.color,n.kind==='home'?'营':'锁',`${n.region} · ${n.kind==='home'?'玩家领地':'地区开发中'}\n从义军营寨出发，建设后再次出征。\n章节进度 ${cleared}/${CHAPTER_TIMELINE.length} · ${cleared>=CHAPTER_TIMELINE.length?'诸章皆已平定':`下一章：第${next.numeral}章「${next.title}」`}`);}
   else{const hard=hardChapterCleared(info.id),status=locked?`未解锁：${info.hint}`:st==='cleared'?`已平定（3/3 关）${hard?` · 乱世已平 · 称号「${HARD_TITLES[info.id]}」`:REPLAY_CLEARED?' · 可重温，或挑战乱世难度':' · 史事已定，不再出征'}`:done?`进行中：已过 ${done}/3 关`:'已开放：可出征';
-   this.setDetail(`第${info.numeral}章 · ${n.name}`,st==='cleared'?0x5f8f4e:locked?0x4a4f46:0x8e2a1e,st==='cleared'?'捷':locked?'锁':'战',locked?`公元${info.year}年（${info.era}） · ${n.region}\n${status}\n按史事时序逐章解锁。`:`${status}\n${this.musterLine()}\n公元${info.year}年（${info.era}） · ${n.region}\n${this.lossWarning()||'战斗中的随军粮只在本局有效，战后另结算营寨军粮。'}`);}
+   this.setDetail(`第${info.numeral}章 · ${n.name}`,st==='cleared'?0x5f8f4e:locked?0x4a4f46:0x8e2a1e,st==='cleared'?'捷':locked?'锁':'战',locked?`公元${info.year}年（${info.era}） · ${n.region}\n${status}\n按史事时序逐章解锁。`:`${status}\n${this.musterLine()}\n公元${info.year}年（${info.era}） · ${n.region}\n${this.lossWarning()||'战斗中的随军钱币只在本局有效，战后另结算营寨钱币。'}`);}
   // 打过的章不能再打（data/replayRules.ts）：已平定的章节按钮写「已平定」并置灰，不给乱世难度
   const sealed=st==='cleared'&&!REPLAY_CLEARED&&n.kind!=='home'&&!isChapterTestRun(),noGo=locked||sealed;
   this.action.text.setText(locked?'尚未解锁':n.kind==='home'?"进入营寨":st==='cleared'?(sealed?'已平定':'重温 · 出征'):'出征');this.action.image.setAlpha(noGo?.45:1);if(noGo)this.action.image.disableInteractive();else this.action.image.setInteractive({useHandCursor:true});
@@ -630,7 +630,7 @@ export class WorldMapSceneV1 extends Phaser.Scene {
  private challengeDetail(n:WorldNode,st:'home'|ChapterState){const locked=st==='locked',wins=lubuClears(),r=LUBU_CHALLENGE.reward,rr=LUBU_CHALLENGE.repeatReward;
   this.setDetail(`挑战 · ${n.region} · ${n.name}`,locked?0x4a4f46:0x8c2a2a,locked?'锁':'布',`${locked?`未解锁：${LUBU_CHALLENGE.unlockHint}`:wins?(REPLAY_CLEARED?`已胜 ${wins} 场 · 可反复挑战`:'已平定 · 吕布败走，不再出战'):'可选挑战 · 不影响讨董进度 · 只能打一次'}
 吕布横扫与蓄力冲锋 · 三波后吕布出阵
-奖励：${wins?(REPLAY_CLEARED?`军粮 +${rewardGrain(rr.merits,rr.provisions)}`:'已得名马「赤兔」'):`首胜得名马「赤兔」（入马厩）· 军粮 +${rewardGrain(r.merits,r.provisions)}`}${this.lossWarning()?'\n'+this.lossWarning():''}`);
+奖励：${wins?(REPLAY_CLEARED?`钱币 +${rewardGrain(rr.merits,rr.provisions)}`:'已得名马「赤兔」'):`首胜得名马「赤兔」（入马厩）· 钱币 +${rewardGrain(r.merits,r.provisions)}`}${this.lossWarning()?'\n'+this.lossWarning():''}`);
   const noGo=locked||(!!wins&&!REPLAY_CLEARED&&!isChapterTestRun());
   this.action.text.setText(locked?'尚未解锁':noGo?'已平定':'挑战吕布');this.action.image.setAlpha(noGo?.45:1);if(noGo)this.action.image.disableInteractive();else this.action.image.setInteractive({useHandCursor:true});this.layoutActions(false);}
  private launchChallenge(){let hero:CharacterId=defaultHero(null);try{hero=defaultHero(localStorage.getItem('im_last_hero'));}catch{/* storage unavailable */} // 挑战关也只用主公出战（用户规则 2026-11-16）
@@ -653,10 +653,10 @@ export class WorldMapSceneV1 extends Phaser.Scene {
   const how=city.tier==='small'?'拔掉帅旗，再占领府衙（限 2 分 30 秒）':city.tier==='medium'?'摧毁两座箭楼（会放箭），再占领府衙（限 3 分 30 秒）':'破城门、毁两座箭楼、击败大将，再占领府衙（限 5 分 30 秒）';
   const R=DEFENSE_RULES,muster=(alert?.countdown??0)>0;
   const body=alert?`${muster?`敌军集结：还剩 ${alert.countdown} 战围城（被围后出征别处则失守）`:'已被围：出征别处则此城失守'}
-守城：击败敌将 ${defenseBossName(city,owner)}，军粮 +${rewardGrain(T.reward.merits*R.rewardMul,T.reward.provisions*R.rewardMul)}，守住后 ${R.moraleBattles} 战产粮 +${Math.round(R.moraleMul*100)}%
-${muster?`迎击：出城野战（较短），赢了直接解除告急，军粮 +${rewardGrain(T.reward.merits*R.interceptMul,T.reward.provisions*R.interceptMul)}；输了围城提前一战\n`:''}弃城：城归${FACTIONS[owner].name}，建筑等级保留，日后可再打回来`:`胜利条件：${how}
+守城：击败敌将 ${defenseBossName(city,owner)}，钱币 +${rewardGrain(T.reward.merits*R.rewardMul,T.reward.provisions*R.rewardMul)}，守住后 ${R.moraleBattles} 战产粮 +${Math.round(R.moraleMul*100)}%
+${muster?`迎击：出城野战（较短），赢了直接解除告急，钱币 +${rewardGrain(T.reward.merits*R.interceptMul,T.reward.provisions*R.interceptMul)}；输了围城提前一战\n`:''}弃城：城归${FACTIONS[owner].name}，建筑等级保留，日后可再打回来`:`胜利条件：${how}
 ${city.tier==='large'?'守城大将：'+siegeBossName(city,owner):'占领府衙即破城'}
-占领奖励：军粮 +${rewardGrain(T.reward.merits*k,T.reward.provisions*k)}${first?'（首次攻占 +50%）':''}
+占领奖励：钱币 +${rewardGrain(T.reward.merits*k,T.reward.provisions*k)}${first?'（首次攻占 +50%）':''}
 失败不损失城池与资源，可再次攻打。`;
   const info=t(px+24,py+86,body,14,'#d6cdb4').setLineSpacing(6).setWordWrapWidth(pw-48);
   if(warn)t(px+24,info.y+info.height+4,warn,13,'#ff8a70').setWordWrapWidth(pw-48).setName('siege-warning');
@@ -846,7 +846,7 @@ ${city.tier==='large'?'守城大将：'+siegeBossName(city,owner):'占领府衙�
  /** 军情匾：依次选中下一件军情并居中。 */
  private nextIntel(){if(!this.intel.length)return;const i=this.selected.kind==='intel'?this.intel.findIndex(e=>e.id===(this.selected as {event:IntelEvent}).event.id):-1,event=this.intel[(i+1)%this.intel.length];this.selected={kind:'intel',event};const c=cityById(event.city);if(c)this.centerOnCity(c);this.refresh();}
  private centerOnCity(c:CityDef){this.layer.setPosition(this.area.x+this.area.w/2-c.x*this.zoom,(this.area.y+this.viewBottom)/2-c.y*this.zoom);this.clampMap();}
- private intelRewardText(event:IntelEvent){const r=intelReward(event),parts=[`军粮 +${rewardGrain(r.merits,r.provisions,r.money)}`];return parts.join(' · ')+(r.item?` · ${QUALITIES[r.item.quality].label}·${QUALITIES[r.item.quality].name}兵装 1 件（${Math.round(r.item.orangeChance*100)}% 为${QUALITIES.orange.label}·${QUALITIES.orange.name}）`:'');}
+ private intelRewardText(event:IntelEvent){const r=intelReward(event),parts=[`钱币 +${rewardGrain(r.merits,r.provisions,r.money)}`];return parts.join(' · ')+(r.item?` · ${QUALITIES[r.item.quality].label}·${QUALITIES[r.item.quality].name}兵装 1 件（${Math.round(r.item.orangeChance*100)}% 为${QUALITIES.orange.label}·${QUALITIES.orange.name}）`:'');}
  private intelLeft(event:IntelEvent){const left=event.expires-seasonIndex(loadWorld().town)+1;return left>1?`剩余 ${left} 季（含本季）`:'仅限本季';}
  private intelDetail(event:IntelEvent){const info=INTEL_INFO[event.kind],c=cityById(event.city),f=FACTIONS[event.faction]?.name??'';
   this.setDetail(`${info.name} · ${intelTitle(event).split(' · ')[1]}`,info.color,info.glyph,`${this.intelLeft(event)}${c?` · ${c.name}（${c.region}）`:''}

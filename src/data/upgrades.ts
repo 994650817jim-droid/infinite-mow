@@ -248,7 +248,7 @@ export function foundationOptions():UpgradeOption[]{
 /** 越级兜底「军资」（2026-11-20 等级软上限，level-curve-redesign.md）：随军粮 +(30 + 8 × 章)，一次性。 */
 export function supplyOption(chapter: number): UpgradeOption {
   const n = 30 + 8 * Math.max(1, Math.floor(chapter));
-  return { id: 'supply_grain', name: '军资 · 粮秣', desc: '随军粮 +' + n + '\n越级时补给：卡池抽空也有得选', kind: 'foundation', categoryLabel: '军资', scope: 'once', icon: 'growth_icon_pickup',
+  return { id: 'supply_grain', name: '军资 · 粮秣', desc: '随军钱币 +' + n + '\n越级时补给：卡池抽空也有得选', kind: 'foundation', categoryLabel: '军资', scope: 'once', icon: 'growth_icon_pickup',
     apply: p => { const sc = p.scene as unknown as { legion?: { food: number } }; if (sc.legion) sc.legion.food += n; } };
 }
 /**

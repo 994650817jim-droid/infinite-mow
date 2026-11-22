@@ -33,7 +33,7 @@ const run = (fromSec, toSec, quotaSec, opts = {}) => {
   return out;
 };
 const Q = cfg(5, 2).quotaSec, inQ = run(0, Q, Q), over = run(Q, Q + 600, Q); // 正常打 75 秒内 vs 之后只拖不打 10 分钟
-ck(`随军粮：额度内照常（${inQ.kills} 杀 → +${inQ.food}），之后拖 10 分钟（${over.kills} 杀）一粒不给`, inQ.food > 150 && over.food === 0, { inQ: inQ.food, over: over.food });
+ck(`随军钱币：额度内照常（${inQ.kills} 杀 → +${inQ.food}），之后拖 10 分钟（${over.kills} 杀）一粒不给`, inQ.food > 150 && over.food === 0, { inQ: inQ.food, over: over.food });
 ck('押粮卒被截的粮也算：额度内 +16、额度外 0', run(0, .1, Q, { kind: 'courier' }).food === 16 && run(Q, Q + .1, Q, { kind: 'courier' }).food === 0);
 ck('掉落（兵装 / 残卷）：额度内每杀掷一次，之后不掷', inQ.drops === inQ.kills && over.drops === 0, { inQ: inQ.drops, over: over.drops });
 ck('战功：额度内精锐照记，之后的精锐不记', inQ.merit > 0 && over.merit === 0, { inQ: inQ.merit, over: over.merit });

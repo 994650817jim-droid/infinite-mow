@@ -80,7 +80,7 @@ await p.waitForTimeout(300);
 const reply = await scroll();
 await readAll(); const p33 = await played();
 const after33 = await p.evaluate(async () => { const W = await import('/src/world/WorldStore.ts'); return { flag: JSON.parse(localStorage.getItem('im_story_v1')).flags.jade_seal, grain: W.loadWorld().provisions - window.__grain0, finished: window.__finished() }; });
-ck('选「暂且收下」：旗标 jade_seal=kept、军粮 +300、主公回一句「先由我保管」', after33.flag === 'kept' && after33.grain === 300 && reply?.texts.join().includes('先由我保管'), { after33, reply: reply?.texts });
+ck('选「暂且收下」：旗标 jade_seal=kept、钱币 +300、主公回一句「先由我保管」', after33.flag === 'kept' && after33.grain === 300 && reply?.texts.join().includes('先由我保管'), { after33, reply: reply?.texts });
 ck('之后接章末「白门楼」和过场「煮酒论英雄」，播完才结算', p33.slice(-3).join() === 'qunxiong-3.jade,qunxiong.close,qunxiong.zhujiu' && after33.finished, { p33 });
 const rolled = await p.evaluate(async () => { const Bs = await import('/src/systems/BattleSnapshot.ts'); const ok = Bs.rollbackBattle(); return { ok, flags: JSON.parse(localStorage.getItem('im_story_v1') ?? 'null')?.flags ?? null }; });
 ck('中途退出回滚：玉玺旗标随快照回滚', rolled.ok && !rolled.flags?.jade_seal, rolled);

@@ -26,7 +26,7 @@ await p.goto(base + '?layout=desktop'); await home();
 ck('主页底部有「存档」，网页版没有「退出」', await p.evaluate(M0 => { const m = eval(M0); return !!m.children.getByName('home-saves') && !m.children.getByName('home-quit'); }, M));
 ck('打开存档面板', await open());
 const t0 = await texts();
-ck('旧存档自动成为存档一（当前）：显示武将、章节进度、城池军粮', /存档一/.test(t0) && /当前/.test(t0) && /赵云 · 第二章 · 讨伐董卓 2\/3/.test(t0) && /城池 1 · 军粮 \d+/.test(t0) /* 2026-11-17 军功并入军粮 */ && (t0.match(/空存档位/g) ?? []).length === 2, t0);
+ck('旧存档自动成为存档一（当前）：显示武将、章节进度、城池钱币', /存档一/.test(t0) && /当前/.test(t0) && /赵云 · 第二章 · 讨伐董卓 2\/3/.test(t0) && /城池 1 · 钱币 \d+/.test(t0) /* 2026-11-17 军功并入军粮 */ && (t0.match(/空存档位/g) ?? []).length === 2, t0);
 await p.screenshot({ path: `${out}/deck-slots.png` });
 // 新建：切到存档二（空）
 await click('save-slot-1-load'); await reloaded();

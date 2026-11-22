@@ -61,7 +61,7 @@ try {
   ck('路一：先进整军（行营），右上「出征 · 本关」，兵 5、粮同出征时', pre1?.mode === 'rest' && pre1?.preCamp && pre1?.stage === 2 && /^出征 · /.test(pre1?.next ?? '') && pre1?.count === 5 && pre1?.food === hired.food, pre1);
   await wait(2500); await p.screenshot({ path: OUT + '/path1-precamp.png' });
   const more = await p.evaluate(G0 => { const s = eval(G0); const ok = s.legion.recruit('archer', 1); s.campUI.render(); return { ok, count: s.legion.count, food: s.legion.food }; }, G);
-  ck('整军里再招 1 个（花随军粮）', more.ok && more.count === 6, more);
+  ck('整军里再招 1 个（花随军钱币）', more.ok && more.count === 6, more);
   await clickIn('camp-depart'); await wait(1200);
   const go1 = await state(); const t0 = await p.evaluate(G0 => eval(G0).combatNow, G); await wait(1500); const t1 = await p.evaluate(G0 => eval(G0).combatNow, G);
   ck('率军出征 → 本关开战（不跳关、计时在走）', !go1.preCamp && !go1.resting && go1.stage === 2 && (go1.mode === 'none' || go1.mode === 'story') && (t1 > t0 || go1.mode === 'story'), { go1, t0, t1 });

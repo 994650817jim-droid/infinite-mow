@@ -18,7 +18,7 @@ export function openBranchPanel(scene: Phaser.Scene, o: BranchPanelOpts): Phaser
   root.add(scene.add.rectangle(W / 2, H / 2, W, H, 0, .001).setInteractive()); // 挡住下面的点击
   const t = (x: number, y: number, v: string, size: number, color: string, heading = false, wrap = 0) => scene.add.text(x, y, v, { fontFamily: heading ? HEADING_FONT : FONT, fontSize: size + 'px', color, resolution: 2, align: 'center', lineSpacing: 3, ...(wrap ? { wordWrap: { width: wrap, useAdvancedWrap: true } } : {}) }).setOrigin(.5, 0);
   root.add(t(W / 2, y0 + 18, '兵器专职 · 二选一', 28, '#f6dc9a', true).setName('branch-title'));
-  root.add(t(W / 2, y0 + 56, `${o.heroName} · ${o.weaponName} 已练至 Lv.5　选定即锁定 · 需行营「重整构筑」才能更换（花军粮）`, 13, '#c9b88f'));
+  root.add(t(W / 2, y0 + 56, `${o.heroName} · ${o.weaponName} 已练至 Lv.5　选定即锁定 · 需行营「重整构筑」才能更换（花钱币）`, 13, '#c9b88f'));
   // 中间武将立绘（水墨对白立绘，没载过就现载）
   const pk = 'ink_hero_' + o.hero, px = W / 2, py = y0 + 250;
   const place = () => { if (!root.active || !scene.textures.exists(pk)) return; const img = scene.add.image(px, py, pk).setScrollFactor(0).setAlpha(.95); const k = 230 / img.height; img.setScale(k).setName('branch-portrait'); root.addAt(img, 2); };

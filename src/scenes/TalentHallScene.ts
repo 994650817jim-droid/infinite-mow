@@ -96,7 +96,7 @@ export class TalentHallScene extends Phaser.Scene {
   private render() {
     this.content?.destroy(true); this.content = this.add.container(0, 0);
     const s = loadRoster(), w = loadWorld(), D = W > 600, cap = followerCap(s), hall = hallLevel(s);
-    this.status.setText(`军粮 ${w.provisions}${D ? ' · ' : '\n'}${hall > 0 ? `招贤馆 Lv.${hall} · 席位 ${RECRUIT.seats[hall - 1]}` : '营寨尚未建造招贤馆 · 暂不能招募'} · 随行 ${s.followers.length}/${cap} · 将阶上限 ${rankCap(s)}`);
+    this.status.setText(`钱币 ${w.provisions}${D ? ' · ' : '\n'}${hall > 0 ? `招贤馆 Lv.${hall} · 席位 ${RECRUIT.seats[hall - 1]}` : '营寨尚未建造招贤馆 · 暂不能招募'} · 随行 ${s.followers.length}/${cap} · 将阶上限 ${rankCap(s)}`);
     // 页签
     const tabY = D ? 112 : 124;
     this.small(D ? MX + 70 : 90, tabY, 140, `人才（${s.offers.length + s.captives.length}）`, () => { this.tab = 'offers'; this.page = 0; this.render(); }, 'talent-tab-offers', true, this.tab === 'offers');
@@ -106,8 +106,8 @@ export class TalentHallScene extends Phaser.Scene {
     const heroList = CHARACTERS.filter(c => c.id !== s.lord), hirable = heroList.filter(c => heroUnlocked(c.id) && !heroHired(c.id, s)).length;
     this.small(D ? MX + 70 + 300 : 390, tabY, 140, `名将（可招 ${hirable}）`, () => { this.tab = 'heroes'; this.page = 0; this.render(); }, 'talent-tab-heroes', true, this.tab === 'heroes');
     if (hall < 3) {
-      const c = RECRUIT.hallUpgrade[Math.max(1, hall) - 1], ws = loadWorld(), block = hallInTown() ? buildBlockers(ws.town, 'talent', townProgress(ws)) : [], poor = ws.provisions < c.provisions, why = block[0] ?? (poor ? `军粮不足，还差 ${c.provisions - ws.provisions}` : '');
-      this.small(W - (D ? MX + 110 : 110), tabY, D ? 220 : 180, `升级招贤馆（${c.provisions} 军粮）`, () => { this.message = upgradeHall().message; this.render(); }, 'talent-hall-up', !why);
+      const c = RECRUIT.hallUpgrade[Math.max(1, hall) - 1], ws = loadWorld(), block = hallInTown() ? buildBlockers(ws.town, 'talent', townProgress(ws)) : [], poor = ws.provisions < c.provisions, why = block[0] ?? (poor ? `钱币不足，还差 ${c.provisions - ws.provisions}` : '');
+      this.small(W - (D ? MX + 110 : 110), tabY, D ? 220 : 180, `升级招贤馆（${c.provisions} 钱币）`, () => { this.message = upgradeHall().message; this.render(); }, 'talent-hall-up', !why);
       if (why) this.content.add(worldText(this, W - (D ? MX + 230 : 200), tabY, why, 12, '#d8a890').setOrigin(1, .5).setName('talent-hall-why')); // 2026-11-21：营寨 Lv1 时点了没反应也没提示
     }
     const top = tabY + (D ? 26 : 34), bottom = H - (D ? 64 : 104) - 30, rowH = D ? 74 : this.tab === 'roster' ? 118 : 104;
@@ -123,7 +123,7 @@ export class TalentHallScene extends Phaser.Scene {
       // 名将出现率（用户 2026-11-17：Lv1 基本不出名将，升级招贤馆后提高）
       const cost = refreshCost(s), odds = hallOdds(s), pct = (v: number) => `${+(v * 100).toFixed(1)}%`;
       this.content.add(worldText(this, D ? MX + 4 : 24, bottom + 6, `史事名将出现率：每席 ${pct(odds.seat)} · 升级招贤馆后提高 · 可玩武将在「名将」页直接招募`, 12, '#b9ceb8').setName('talent-odds'));
-      this.small(W - (D ? MX + 95 : 100), bottom + 14, D ? 190 : 170, `刷新（${cost} 军粮）`, () => { this.message = manualRefresh().message; this.page = 0; this.render(); }, 'talent-refresh', w.provisions >= cost, true);
+      this.small(W - (D ? MX + 95 : 100), bottom + 14, D ? 190 : 170, `刷新（${cost} 钱币）`, () => { this.message = manualRefresh().message; this.page = 0; this.render(); }, 'talent-refresh', w.provisions >= cost, true);
     } else if (this.tab === 'heroes') {
       // 已解锁未招的排前面，其次已在麾下，最后未归附
       const rank = (id: CharacterId) => !heroUnlocked(id) ? 2 : heroHired(id, s) ? 1 : 0;
@@ -154,7 +154,7 @@ export class TalentHallScene extends Phaser.Scene {
     if (o.boss) { const sx = nameT.x + nameT.width + 22, sy = nameT.y + nameT.height / 2; if (this.textures.exists('seal_boss')) this.content!.add(this.add.image(sx, sy, 'seal_boss').setDisplaySize(32, 32).setAngle(-6).setName('talent-boss-seal')); else { const sg = this.add.graphics().lineStyle(1.5, 0xd0503a, .95).strokeRoundedRect(sx - 18, sy - 11, 36, 22, 4); this.content!.add([sg, worldText(this, sx, sy, '首领', 12, '#e0604a').setOrigin(.5).setName('talent-boss-seal')]); } }
     this.content!.add(worldText(this, tx, y - h / 2 + (D ? 32 : 36), `${q.label} · ${kind}${captive && o.expires !== undefined ? ` · 剩 ${captiveSeasonsLeft(o)} 季` : ''}\n${surrenderMoveLine(o.boss) ? TEMPLATES[o.template].name + ' · ' + surrenderMoveLine(o.boss) : TEMPLATES[o.template].name + '：' + TEMPLATES[o.template].desc}`, 12, '#cdbf9f').setWordWrapWidth(w - size - 150).setName('talent-offer-desc'));
     const cost = captive ? Math.ceil(o.cost * RECRUIT.captiveDiscount) : o.cost;
-    this.small(W - x0 - 70, y, 120, `${captive ? '招降' : '招募'} ${cost}粮`, () => { const r = recruit(i, captive); this.message = r.message; if (r.ok) uiSfx().play('recruit'); this.render(); }, `talent-${captive ? 'captive' : 'offer'}-${i}`, true, o.kind !== 'common');
+    this.small(W - x0 - 70, y, 120, `${captive ? '招降' : '招募'} ${cost} 钱币`, () => { const r = recruit(i, captive); this.message = r.message; if (r.ok) uiSfx().play('recruit'); this.render(); }, `talent-${captive ? 'captive' : 'offer'}-${i}`, true, o.kind !== 'common');
   }
   /** 「名将」页一行：头像、名字与状态；未归附 → 剪影 + 「尚未归附 · 需劝降招募」；已归附未招 → 「招募 · N 军粮」；已在麾下 → 灰按钮。 */
   private heroRow(id: CharacterId, y: number, h: number, following: number, cap: number, grain: number, cx0?: number, cw?: number) {
@@ -163,9 +163,9 @@ export class TalentHallScene extends Phaser.Scene {
     const size = h - 16; if (!this.inkFace(id, x0 + 12 + size / 2, y, size, unlocked)) { this.seal(x0 + 12 + size / 2, y, size, 'orange', c.name.slice(0, 1), unlocked ? c.portrait : undefined); if (!unlocked) { const sh = this.content!.list[this.content!.list.length - 1] as Phaser.GameObjects.Text; sh?.setColor?.('#5a4a36'); } }
     const tx = x0 + 24 + size;
     this.content!.add(worldText(this, tx, y - h / 2 + 8, unlocked ? c.name : '？？？', D ? 17 : 18, unlocked ? '#f2a24e' : '#8a7a62').setName('talent-hero-name-' + id));
-    const status = !unlocked ? UNJOINED_HINT : hired ? '已在麾下 · 去「麾下」页设随行' : grain < cost ? `已归附 · 招募还差 ${cost - grain} 军粮` : '已归附 · 招募后随行出战';
+    const status = !unlocked ? UNJOINED_HINT : hired ? '已在麾下 · 去「麾下」页设随行' : grain < cost ? `已归附 · 招募还差 ${cost - grain} 钱币` : '已归附 · 招募后随行出战';
     this.content!.add(worldText(this, tx, y - h / 2 + (D ? 32 : 36), status, 12, unlocked && !hired && grain < cost ? '#d8a890' : unlocked ? '#cdbf9f' : '#8a7a62').setName('talent-hero-status-' + id).setWordWrapWidth(w - (tx - x0) - 180, true)); // 不再被右边按钮截断
-    const label = !unlocked ? '未归附' : hired ? '已在麾下' : `招募 · ${cost} 军粮`, can = unlocked && !hired && grain >= cost;
+    const label = !unlocked ? '未归附' : hired ? '已在麾下' : `招募 · ${cost} 钱币`, can = unlocked && !hired && grain >= cost;
     this.small(x0 + w - 90, y, 160, label, () => { const r = hireHero(id); this.message = r.message; this.render(); }, 'talent-hire-' + id, can, unlocked && !hired);
     void following; void cap;
   }

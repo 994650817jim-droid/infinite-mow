@@ -41,7 +41,7 @@ let pn = await panel('CityScene');
 ok(pn && pn.small === pr.small && pn.army === pr.army && pn.on.every(Boolean) && pn.hp === '生命 40%', '营寨军医面板：价格与行营同章同价（小治 ' + pr.small + '、全军 ' + pr.army + '），主将 40%，三档都可点', pn);
 await p.screenshot({ path: `${out}/camp-panel.png` });
 const g0 = (await save()).grain; await press('CityScene', 'small'); await p.waitForTimeout(300); let sv = await save();
-ok(sv.grain === g0 - pr.small && Math.abs(sv.c.player.hpFrac - .65) < 1e-6, '营寨小治：扣营寨军粮 ' + pr.small + '、存档点主将 40% → 65%', { g0, sv: sv.grain, hp: sv.c.player.hpFrac });
+ok(sv.grain === g0 - pr.small && Math.abs(sv.c.player.hpFrac - .65) < 1e-6, '营寨小治：扣营寨钱币 ' + pr.small + '、存档点主将 40% → 65%', { g0, sv: sv.grain, hp: sv.c.player.hpFrac });
 await p.keyboard.press('Escape'); await p.waitForTimeout(300);
 // 3) 城池军医（许昌）
 await p.evaluate(() => window.__game.scene.getScene('CityScene').scene.start('TownScene', { city: 'xuchang' }));
@@ -56,7 +56,7 @@ pn = await panel('TownScene');
 ok(pn && pn.small === pr.small && pn.army === pr.army && pn.hp === '生命 65%', '城池军医面板：同章同价，读到营寨治过的 65%', pn);
 await p.screenshot({ path: `${out}/city-panel.png` });
 const g1 = (await save()).grain; await press('TownScene', 'army'); await p.waitForTimeout(300); sv = await save();
-ok(sv.grain === g1 - pr.army && sv.c.player.followerHp.r1 === 1 && sv.c.army.soldiers.every(s => s.hp === s.max), '城池为全军疗伤：扣军粮 ' + pr.army + '，随从与部曲存档点回满', { g1, g: sv.grain, f: sv.c.player.followerHp, s: sv.c.army.soldiers });
+ok(sv.grain === g1 - pr.army && sv.c.player.followerHp.r1 === 1 && sv.c.army.soldiers.every(s => s.hp === s.max), '城池为全军疗伤：扣钱币 ' + pr.army + '，随从与部曲存档点回满', { g1, g: sv.grain, f: sv.c.player.followerHp, s: sv.c.army.soldiers });
 pn = await panel('TownScene'); ok(!pn.on[2], '全军已无恙：「为全军疗伤」不可再点');
 ok(errors.length === 0, '无页面报错 ' + JSON.stringify(errors.slice(0, 3)));
 console.log(`\n${pass}/${pass + fail} passed`);

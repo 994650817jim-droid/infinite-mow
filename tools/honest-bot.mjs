@@ -147,12 +147,12 @@ export function honestRetry(p, key) {
 /** 按章生成共享笔记 honest-journey.md（按章列表 + 卡关点 + 经济曲线）。 */
 export function honestReport(stagesLog, issues, errors) {
   const L = ['# 不作弊全流程自动试玩（honest-journey）', '', `> 生成：${new Date().toISOString()} · 关数 ${stagesLog.length} · 问题 ${issues.length} · 控制台报错 ${errors.length}`, '', '## 每关', '',
-    '| 关 | 结果 | 尝试 | 用时(s) | 击杀 | 最低血% | 敌峰值 | 等级 | 随军粮 | 军粮 | 战功 | 兵装 | 首领战(s) | 战线推进 | 震怒 | 卡墙 |', '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|'];
+    '| 关 | 结果 | 尝试 | 用时(s) | 击杀 | 最低血% | 敌峰值 | 等级 | 随军钱币 | 钱币 | 战功 | 兵装 | 首领战(s) | 战线推进 | 震怒 | 卡墙 |', '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|'];
   for (const r of stagesLog) L.push(`| ${r.name ?? r.tag} | ${r.result} | ${r.attempt ?? 1} | ${r.elapsed ?? ''} | ${r.kills ?? ''} | ${r.minHp ?? ''} | ${r.peak ?? ''} | ${r.level ?? ''} | ${r.food ?? ''} | ${r.grain ?? ''} | ${r.merits ?? ''} | ${r.items ?? ''} | ${r.bossSec ?? ''} | ${r.frontline ? r.frontline.join('→') : ''} | ${r.rage ? '是' : ''} | ${r.blocked || ''} |`);
   L.push('', '## 卡关点', '');
   const stuck = stagesLog.filter(r => r.result !== 'win' && r.result !== 'rest');
   if (!stuck.length) L.push('- 无'); else for (const r of stuck) L.push(`- ${r.name ?? r.tag}：${r.result}（第 ${r.attempt ?? 1} 次，主将 ${r.hero ?? ''}）`);
-  L.push('', '## 经济曲线（每关结束时军粮）', '', '```', stagesLog.map(r => `${(r.name ?? r.tag).padEnd(10)} ${String(r.grain ?? '').padStart(6)} ${'█'.repeat(Math.max(0, Math.round((r.grain ?? 0) / 300)))}`).join('\n'), '```');
+  L.push('', '## 经济曲线（每关结束时钱币）', '', '```', stagesLog.map(r => `${(r.name ?? r.tag).padEnd(10)} ${String(r.grain ?? '').padStart(6)} ${'█'.repeat(Math.max(0, Math.round((r.grain ?? 0) / 300)))}`).join('\n'), '```');
   L.push('', '## 问题', ''); if (!issues.length) L.push('- 无'); else for (const i of issues) L.push(`- [${i.sev}] ${i.where}：${i.what}`);
   L.push('', '## 对照项（派单要求）', '', '- 首领倒下后主将仍被打死（玩法组在修）：看「结果」列里通关关的最低血% 和问题表里的「首领倒下后阵亡」。',
     '- 1-1 密度（平衡组方案 B）：看 1-1 的敌峰值、最低血%。', '- 阵亡重进后构筑清空：看问题表「重进后构筑」一项（每次重进对比开局兵器等级）。');

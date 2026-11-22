@@ -71,7 +71,7 @@ await stageCase('3-2 宛城夜袭（ThirdGameScene）', { key: 'ThirdGameScene',
   await p.evaluate(() => { const s = window.__S, L = s.fortunes.live[0]; s.player.sprite.setPosition(L.x, L.y); });
   for (let i = 0; i < 30 && await p.evaluate(() => !window.__S.fortunes.stats.done.includes('cart')); i++) { await p.evaluate(() => { const s = window.__S; if (s.mode === 'levelup') s.chooseUpgrade(0); const L = s.fortunes.live.find(x => !x.done); if (L) s.player.sprite.setPosition(L.x, L.y); }); await p.waitForTimeout(250); }
   const cart = await p.evaluate(f0 => { const s = window.__S; return { done: s.fortunes.stats.done, food: s.legion.food - f0.food, pouch: (s.supplies?.pouch.length ?? 0) - f0.pouch, reward: s.fortunes.stats.rewards[0], arrowGone: !s.fortunes.live.some(L => !L.done && L.arrow.visible) }; }, food0);
-  ck('P2 夺下粮车：随军粮 +（40 + 10 × 章）× 距离倍率、药囊 +1 回春丹；标记与箭头收起', cart.done.includes('cart') && cart.food >= 60 && (cart.pouch === 1 || /药囊已满/.test(cart.reward ?? '')) && cart.arrowGone, cart);
+  ck('P2 夺下粮车：随军钱币 +（40 + 10 × 章）× 距离倍率、药囊 +1 回春丹；标记与箭头收起', cart.done.includes('cart') && cart.food >= 60 && (cart.pouch === 1 || /药囊已满/.test(cart.reward ?? '')) && cart.arrowGone, cart);
   const f0 = await p.evaluate(async () => { const s = window.__S, up = await import('/src/data/upgrades.ts'), ce = await import('/src/systems/CharmEffects.ts'); const hp0 = s.player.maxHp, packed0 = ce.statsWithoutCharms(s.player).maxHpBonus; up.foundationOptions()[0].apply(s.player); return { up: s.player.maxHp - hp0, packedDelta: ce.statsWithoutCharms(s.player).maxHpBonus - packed0, label: up.foundationOptions()[0].scope === 'stage' ? '本关有效' : '' }; });
   ck('P0 固本培元改为本关有效：当场生命上限 +12，征程构筑存档不带走（不再无限叠加）', f0.up === 12 && f0.packedDelta === 0 && /本关/.test(f0.label), f0);
   // 军械库：守军 + 站 4 秒 → 兵装
@@ -153,7 +153,7 @@ await stageCase('3-2 宛城夜袭（ThirdGameScene）', { key: 'ThirdGameScene',
   ck('P4b 赌命：孤注一掷生命上限 −15%、伤害 +25%（征程构筑不带走）；背嵬生效', gm.hpDrop > 0 && gm.packedSame && gm.desperate > 0, gm);
   // 悬赏破锐：接下后击杀 8 名精锐 → 随军粮 +60
   const bt = await p.evaluate(() => { const s = window.__S, food0 = s.legion.food; s.bounties.elites = { elites: 0 }; for (let i = 0; i < 8; i++) { const e = s.spawnEnemy('elite', s.player.x + 200, s.player.y, 1, true); if (e) { e.hp = 0; s.killEnemy(e); } } return { food: s.legion.food - food0, banner: window.__banners.slice(-2).join(' / ') }; });
-  ck('P4b 悬赏 · 破锐：击杀 8 名精锐 → 随军粮 +60（另含精锐自身掉粮）、信物一件', bt.food >= 60 && /破锐 达成/.test(bt.banner), bt);
+  ck('P4b 悬赏 · 破锐：击杀 8 名精锐 → 随军钱币 +60（另含精锐自身掉粮）、信物一件', bt.food >= 60 && /破锐 达成/.test(bt.banner), bt);
   // 名将来投
   const gj = await p.evaluate(() => { const s = window.__S; s.generalJoins('孙坚', 7, 45000); const tag = s.children.getByName('general-tag'); return { tag: tag?.text, banner: window.__banners.slice(-1)[0] }; });
   ck('P4b 名将来投：一队义军 + 「来投 · 孙坚」名牌', /孙坚/.test(gj.tag ?? '') && /名将来投 · 孙坚/.test(gj.banner ?? ''), gj);

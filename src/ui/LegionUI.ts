@@ -65,7 +65,7 @@ export class LegionUI {
     const text = (x: number, y: number, s: string, size = 16) => scene.add.text(x, y, s, { fontFamily: FONT, fontSize: `${size}px`, color: '#eee2c1', resolution: 2, stroke: '#0c0805', strokeThickness: 4, /* 浮动字描边加粗（2026-11-21） */ shadow: { offsetX: 0, offsetY: 2, color: '#080d09', blur: 3, fill: true } }).setScrollFactor(0);
     const button = (s: string, fn: () => void) => text(0, 0, s, 15).setPadding(10, 10).setBackgroundColor('rgba(57,83,62,0.96)').setInteractive({ useHandCursor: true }).on('pointerover', function(this: Phaser.GameObjects.Text) { this.setTint(0xffe4a1); }).on('pointerout', function(this: Phaser.GameObjects.Text) { this.clearTint(); }).on('pointerdown', fn);
     this.hud = scene.add.container(0, 0).setScrollFactor(0).setDepth(DEPTH.hud + 3);
-    this.status = text(28, 115, '', 15).setStroke('#171a13', 2);
+    this.status = text(28, 115, '', 15).setStroke('#171a13', 2).setPadding(24, 0, 0, 0);
     this.orderPlate = scene.add.graphics().setScrollFactor(0);
     this.order = (D ? text(this.orderCx - 32, this.orderCy - 32, '', 13).setPadding(0, 68, 0, 0).setFixedSize(64, 88).setAlign('center').setStroke('#17140d', 3) : text(this.orderX, this.orderY, '', 16).setPadding(32, 9, 0, 0).setFixedSize(this.orderW, this.orderH))
       .setInteractive({ useHandCursor: true }).setAlpha(D ? 1 : .9)
@@ -244,7 +244,7 @@ export class LegionUI {
     this.flourish.clear();
     if (wave) { const fy = waveTop - (D ? 56 : 74), fx = W / 2; this.flourish.lineStyle(1, WAR.gold, .7).lineBetween(fx - 130, fy, fx - 10, fy).lineBetween(fx + 10, fy, fx + 130, fy).fillStyle(0xf3d48a, 1).fillTriangle(fx - 5, fy, fx, fy - 5, fx + 5, fy).fillTriangle(fx - 5, fy, fx, fy + 5, fx + 5, fy); }
     this.heading.setText(wave ? '战斗支援'  : '黄巾已破 · 战后休整').setFontFamily(wave && D ? HEADING_FONT : FONT).setStroke(wave && D ? '#120904' : '#101910', wave && D ? 4 : 1);
-    this.summary.setText(wave ? (D ? `免费 ×${army.freeRecruitCount} · 兵力 ${army.count}` : `免费招募 ${army.freeRecruitCount} 人 · 点选兵种卡入队　当前兵力 ${army.count}`) : `随军粮 ${army.food}　当前兵力：${army.count}　阵亡 ${army.dead}\n仅开放刀盾、长枪、弓箭兵 · 使用本局军粮`).setAlign('center');
+    this.summary.setText(wave ? (D ? `免费 ×${army.freeRecruitCount} · 兵力 ${army.count}` : `免费招募 ${army.freeRecruitCount} 人 · 点选兵种卡入队　当前兵力 ${army.count}`) : `随军钱币 ${army.food}　当前兵力：${army.count}　阵亡 ${army.dead}\n仅开放刀盾、长枪、弓箭兵 · 使用本局钱币`).setAlign('center');
     this.close.setText(wave ? (D ? '跳过 · 继续战斗' : '跳过本次 · 继续战斗') : '率军出征 · 虎牢关').setFontFamily(wave && D ? HEADING_FONT : FONT);
     this.closeInk?.setVisible(false); this.closeFrame.clear();
     // 电脑版「跳过」：一行文字 + 细金线框（不用泼墨）
@@ -259,8 +259,8 @@ export class LegionUI {
         const count=army.units.filter(u=>u.active&&u.kind===row.kind).length;
         row.title.setText(`${TROOPS[row.kind].name} · Lv${army.levels[row.kind]}`).setPosition(D?width/2:118,18).setOrigin(D?.5:0,0).setFontSize(19).setColor('#eee2c1');row.detail.setFontSize(13).setColor('#b9cdbb');row.buy.setFontSize(15).setColor('#eee4ca');
         row.icon.setScale(94/Math.max(row.icon.frame.width,row.icon.frame.height)).setPosition(D?width/2:55,D?98:76);
-        row.detail.setText(`${ROLES[row.kind]}\n已编入 ${count} 人 · ${army.recruitCost(row.kind)}随军粮/人`).setPosition(D?width/2:118,D?153:53).setOrigin(D?.5:0,0).setAlign(D?'center':'left').setWordWrapWidth(D?width-24:width-128);
-        row.buy.setText(`招募 1 人 · ${army.recruitCost(row.kind)}随军粮`).setPosition(D?14:118,D?207:105).setFixedSize(D?width-28:width-136,0).setAlign('center');
+        row.detail.setText(`${ROLES[row.kind]}\n已编入 ${count} 人 · ${army.recruitCost(row.kind)}随军钱币/人`).setPosition(D?width/2:118,D?153:53).setOrigin(D?.5:0,0).setAlign(D?'center':'left').setWordWrapWidth(D?width-24:width-128);
+        row.buy.setText(`招募 1 人 · ${army.recruitCost(row.kind)}随军钱币`).setPosition(D?14:118,D?207:105).setFixedSize(D?width-28:width-136,0).setAlign('center');
         const canBuy=army.food>=army.recruitCost(row.kind);row.buy.setAlpha(canBuy?1:.45);if(canBuy)row.buy.setInteractive({useHandCursor:true});else row.buy.disableInteractive();row.train.setVisible(false);
       }
       return;
@@ -283,15 +283,15 @@ export class LegionUI {
       row.icon.setScale(iconSize / Math.max(frame.width, frame.height)).setPosition(wave ? D ? width / 2 : 66 : D ? 44 : 52, wave ? D ? 98 : height / 2 - 4 : D ? 60 : 80);
       const [roleTag, roleNote] = ROLES[row.kind].split(' · ');
       if (wave) { row.tag.setText(roleTag).setFontSize(D ? 13 : 15); row.tag.setPosition(D ? width / 2 : 134 + row.tag.width / 2 + 9, D ? 172 : 66); }
-      row.detail.setText(wave ? `${roleNote}　·　已编入 ${count} 人` : D ? `${count}人 · ${army.recruitCost(row.kind)}粮/人` : `已编入 ${count}人\n${TROOPS[row.kind].perk}`)
+      row.detail.setText(wave ? `${roleNote}　·　已编入 ${count} 人` : D ? `${count}人 · ${army.recruitCost(row.kind)} 钱币/人` : `已编入 ${count}人\n${TROOPS[row.kind].perk}`)
         .setPosition(wave ? D ? width / 2 : 134 : D ? 85 : 98, wave ? D ? 190 : 84 : D ? 47 : 59)
         .setOrigin(wave && D ? .5 : 0, 0).setAlign(wave && D ? 'center' : 'left').setLineSpacing(5)
         .setWordWrapWidth(wave ? D ? width - 24 : width - 148 : width - (D ? 92 : 110)).setFontSize(wave ? D ? 14 : 16 : 13).setColor(wave ? '#d9c79f' : '#b9cdbb');
       // 手机 4 张卡时卡片变矮：省掉说明行，招募按钮下移，避免压字
       const compact = wave && !D && cards === 4; row.detail.setVisible(!compact);
-      row.buy.setText(wave ? '＋ 招募入队' : `招募 1 人 · ${army.recruitCost(row.kind)}粮`).setFontSize(wave ? D ? 16 : 18 : 15).setPosition(wave && !D ? 134 : 14, wave ? D ? 212 : height - (compact ? 54 : 62) : D ? 84 : 140).setFixedSize(wave && !D ? width - 152 : width - 28, 0).setAlign('center');
+      row.buy.setText(wave ? '＋ 招募入队' : `招募 1 人 · ${army.recruitCost(row.kind)} 钱币`).setFontSize(wave ? D ? 16 : 18 : 15).setPosition(wave && !D ? 134 : 14, wave ? D ? 212 : height - (compact ? 54 : 62) : D ? 84 : 140).setFixedSize(wave && !D ? width - 152 : width - 28, 0).setAlign('center');
       row.w = width; row.h = height;
-      row.train.setVisible(!wave).setText(level === 3 ? '训练已满级' : `训练至Lv${level + 1}　${LEGION.trainCost[level]}粮`).setPosition(10, D ? 124 : 193).setFixedSize(width - 20, 0).setAlign('center');
+      row.train.setVisible(!wave).setText(level === 3 ? '训练已满级' : `训练至Lv${level + 1}　${LEGION.trainCost[level]} 钱币`).setPosition(10, D ? 124 : 193).setFixedSize(width - 20, 0).setAlign('center');
       const canBuy = (wave || army.food >= army.recruitCost(row.kind)), canTrain = !wave && level < 3 && army.food >= LEGION.trainCost[level];
       row.buy.setAlpha(canBuy ? 1 : .45).setColor(canBuy ? '#eee4ca' : '#98a393'); if (canBuy) row.buy.setInteractive({ useHandCursor: true }); else row.buy.disableInteractive();
       row.train.setAlpha(canTrain ? 1 : .45).setColor(canTrain ? '#d9c28a' : '#98a393'); if (canTrain) row.train.setInteractive({ useHandCursor: true }); else row.train.disableInteractive();
@@ -317,9 +317,15 @@ export class LegionUI {
    * squad：部曲开放没有（mechanic-rollout #5，1-2）。原则（11-21 用户试玩「1-1 看不到自己军粮」）：资源和状态数字尽量显示，没开放的操作按钮才隐藏——
    * 随军粮从 1-1 起就显示（打怪、拆营帐会掉）；「兵力 / 阵亡」和护阵 / 出击按钮等部曲开放再出现。
    */
+  /** HUD 钱袋图标（钱币数字前）。美术的钱袋图标到位前用营地道具图集 yellow_props 的钱袋帧（17）。 */
+  purse: Phaser.GameObjects.Image | null = null;
+  /** 还在飞向钱袋、没落袋的钱（ui/CoinFly 给）；数字显示 真值 − 这个数，铜钱落袋时跳到新值。 */
+  coinLag: () => number = () => 0;
   update(army: Legion, visible: boolean, squad = true): void {
     this.hud.setVisible(visible); if (!visible) return;
-    this.status.setText(legionStatusText(army.food, army.count, army.dead, squad));
+    this.status.setText(legionStatusText(Math.max(0, Math.round(army.food - this.coinLag())), army.count, army.dead, squad));
+    if (!this.purse && this.status.scene.textures.exists('yellow_props')) { this.purse = this.status.scene.add.image(0, 0, 'yellow_props', 17).setScrollFactor(0).setName('hud-coin-purse'); this.purse.setScale(24 / 128); this.hud.add(this.purse); }
+    this.purse?.setPosition(this.status.x + 11, this.status.y + this.status.height / 2 - 1);
     if (squad !== this.orderShown) { this.orderShown = squad; for (const o of [this.orderPlate, this.orderIcon, this.order, this.keyHint]) o?.setVisible(squad); if (squad) this.order.setInteractive({ useHandCursor: true }); else this.order.disableInteractive(); }
     if (squad) this.paintOrder(army);
   }

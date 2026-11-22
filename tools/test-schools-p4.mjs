@@ -49,7 +49,7 @@ ck('心法存进构筑快照，读档还原（换关带着）', learn.snap.manua
 await p.evaluate(async () => {
   const s = window.__game.scene.getScene('GameScene'), ms = await window.__mod('systems/MerchantStock.ts'), shop = await window.__mod('ui/MerchantShop.ts');
   s.setMode?.('pause'); const st = ms.currentMerchantStock(1); st.tactic = { id: 'manual', kind: 'manual', school: 'warrior', level: 0, price: 320, sold: false }; ms.saveMerchantStock(st);
-  let food = 900; window.__closeShop = shop.openMerchantShop(s, { wallet: { name: '军粮', get: () => food, spend: n => (food -= n, true) }, tier: 1, hero: 'zhaoyun' });
+  let food = 900; window.__closeShop = shop.openMerchantShop(s, { wallet: { name: '钱币', get: () => food, spend: n => (food -= n, true) }, tier: 1, hero: 'zhaoyun' });
 });
 await p.waitForTimeout(900);
 const card = await p.evaluate(() => { const s = window.__game.scene.getScene('GameScene'), out = {}; const walk = l => { for (const o of l) { if (o.name?.startsWith('camp-tactic')) out[o.name] = o.text ?? ''; if (o.list) walk(o.list); } }; walk(s.children.list); return out; });

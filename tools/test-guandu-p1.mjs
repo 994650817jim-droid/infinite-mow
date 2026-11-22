@@ -58,7 +58,7 @@ for (const layout of ['mobile', 'desktop']) {
   for (let i = 0; i < 60; i++) { await p.waitForTimeout(150); const m = await p.evaluate(() => { const s = window.__game.scene.getScene('GuanduGameScene'); for (let k = 0; k < 40 && (s.mode === 'levelup' || s.mode === 'bossloot'); k++) s.chooseUpgrade(0); s.collectBossChests?.(); /* 2026-11-17：升级三选一、首领宝箱 */ return s.over; }); if (m) break; }
   await p.waitForTimeout(300);
   const end = await p.evaluate(async () => { const s = window.__game.scene.getScene('GuanduGameScene'), w = await import('/src/world/WorldStore.ts'), v = w.loadWorld(); return { over: s.over, victory: s.victory, mode: s.mode, sub: s.resultTexts.subtitle.text, home: s.resultPanel.getByName('result-home')?.text, guandu: v.guanduStages, merits: v.merits, provisions: v.provisions, state: v.active?.state, stage2: w.arcStageUnlocked('guandu', 2) }; });
-  ck(layout + ' 胜利结算：guanduStages=1，首通军粮入库，进入军帐休整（下一关 4-2）', end.over && end.victory && end.guandu === 1 && end.provisions > mig.provisions && end.state === 'settled' && end.mode === 'rest' && end.stage2, end);
+  ck(layout + ' 胜利结算：guanduStages=1，首通钱币入库，进入军帐休整（下一关 4-2）', end.over && end.victory && end.guandu === 1 && end.provisions > mig.provisions && end.state === 'settled' && end.mode === 'rest' && end.stage2, end);
   ck(layout + ' 结算文案', end.sub.includes('进入军营休整'), end);
   await p.screenshot({ path: `${out}/${layout}-result.png` });
   // 战役回顾第四章页签

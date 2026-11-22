@@ -54,7 +54,7 @@ const mig2 = await p.evaluate(async () => {
 });
 ck('读档：只有 v1 时自动迁移写入 im_items_v2，v1 原样保留', mig2.bag === 1 && mig2.v2 === 2 && mig2.v1kept === 2, mig2);
 ck('读档迁移的提示只给一次', !!mig2.notice && mig2.again === null, mig2);
-ck('旧物由玩家决定分解：迁移时不加军粮，分解时按双倍价（蓝 12×2 钱，折军粮 ×1.5 = 36）', mig2.noMoney === 0 && mig2.legacy === 1 && mig2.value === 24 && mig2.got === 24 && mig2.moneyDelta === 36 && mig2.after === 0, mig2);
+ck('旧物由玩家决定分解：迁移时不加钱币，分解时按双倍价（蓝 12×2 钱，折钱币 ×1.5 = 36）', mig2.noMoney === 0 && mig2.legacy === 1 && mig2.value === 24 && mig2.got === 24 && mig2.moneyDelta === 36 && mig2.after === 0, mig2);
 
 // 2) 背包容量、自动分解白色
 const cap = await p.evaluate(async () => {

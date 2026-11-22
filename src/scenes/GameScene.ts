@@ -128,6 +128,7 @@ import { PassiveShout } from '../ui/PassiveShout';
 import { EnemyMovement } from '../systems/EnemyMovement';
 import { Legion } from '../systems/Legion';
 import { LegionUI } from '../ui/LegionUI';
+import { CoinFly } from '../ui/CoinFly';
 import { Reinforcements } from '../systems/Reinforcements';
 import { MartialFields } from '../systems/MartialFields';
 import { RunGrowth, ATTRIBUTE_INFO, attributeCap, attributeIcon, type AttributeId } from '../systems/RunGrowth';
@@ -377,7 +378,7 @@ export class GameScene extends Phaser.Scene {
       trail:(()=>{const last=new Map<number,number>();return (id:number,ratio:number)=>{const rn=performance.now(),dt=Math.min(.25,(rn-(last.get(id)??rn))/1000);last.set(id,rn);this.bossStagger.track(id,ratio);return this.bossStagger.trailRatio(ratio,rn,dt);};})(),
       live:()=>surrenderLive(),setFlag:(k,v)=>setStoryFlag(k,v),
       hurt:(e,dmg)=>{this.hitEnemy(e,dmg,this.combatNow,'melee',true,false);},
-      doubleSurrender:g=>{if(surrenderLive())gainProvisions(DUAL.doubleProvisions);this.showWaveBanner(g+' · 同归麾下',false,'双双归降 · 军粮 +'+DUAL.doubleProvisions);this.sfx.play('gong');},
+      doubleSurrender:g=>{if(surrenderLive())gainProvisions(DUAL.doubleProvisions);this.showWaveBanner(g+' · 同归麾下',false,'双双归降 · 钱币 +'+DUAL.doubleProvisions);this.sfx.play('gong');},
       spawn:(k,x,y)=>this.spawnEnemy(k,x,y,1,true)},plan,now);
     const mk=(e:Enemy,key:string|null)=>{const ref:{x?:ReturnType<DualBoss['entryOf']>}={};const p=this.makeParley(()=>ref.x&&!ref.x.done&&e.active?e:null,surrenderDef(key),{partner:()=>ref.x?d.partnerOdds(ref.x):undefined});return {p,ref};};
     {const {p,ref}=mk(first.enemy,first.key);ref.x=d.add({id:first.id,name:first.name,enemy:first.enemy,ctrl:first.ctrl,parley:p,mount:first.mount??null,ownKit:first.ownKit},now);}
@@ -407,10 +408,10 @@ export class GameScene extends Phaser.Scene {
   protected parleyExecuteRewards(out:ChestLoot[]):void{
     const p=this.parley;if(!p||p.persuadedOk||!surrenderLive())return;
     gainProvisions(SURRENDER.executeProvisions);const first=markSurrender('executed',p.def.id);
-    if(first){const q=capLootQuality('purple',this.itemTier()),item=rollItem(q,Math.random,undefined,this.lootChapter());addItems([item]);out.push({name:`${QUALITIES[q].label}色兵装一件 · 军粮 +${SURRENDER.executeProvisions}`,desc:'首次斩杀此将所得 · 已入行囊',tag:'斩杀'});}
-    else out.push({name:`军粮 +${SURRENDER.executeProvisions}`,desc:'斩将所得',tag:'斩杀'});
+    if(first){const q=capLootQuality('purple',this.itemTier()),item=rollItem(q,Math.random,undefined,this.lootChapter());addItems([item]);out.push({name:`${QUALITIES[q].label}色兵装一件 · 钱币 +${SURRENDER.executeProvisions}`,desc:'首次斩杀此将所得 · 已入行囊',tag:'斩杀'});}
+    else out.push({name:`钱币 +${SURRENDER.executeProvisions}`,desc:'斩将所得',tag:'斩杀'});
     // 宁死不降之将不能白打（surrender-rules.md）：本存档首次斩杀后以礼厚葬，军粮 +60、仁名 +1（仁名算进以后的劝降把握）
-    if(p.def.tier==='never'&&markSurrender('honored',p.def.id)){gainProvisions(SURRENDER.persuadeProvisions);out.push({name:`厚葬${p.def.name} · 军粮 +${SURRENDER.persuadeProvisions} · 仁名 +1`,desc:p.def.reason??'忠烈之士，以礼厚葬',tag:'厚葬'});}
+    if(p.def.tier==='never'&&markSurrender('honored',p.def.id)){gainProvisions(SURRENDER.persuadeProvisions);out.push({name:`厚葬${p.def.name} · 钱币 +${SURRENDER.persuadeProvisions} · 仁名 +1`,desc:p.def.reason??'忠烈之士，以礼厚葬',tag:'厚葬'});}
   }
   /** 正在播的过场动画（systems/Cutscene.ts）。 */
   cutscene:Cutscene|null=null;
@@ -1114,6 +1115,7 @@ export class GameScene extends Phaser.Scene {
       else if (this.mode === 'recruit') { this.recruitedWaves.add(this.waveIndex); this.freeRecruit = false; this.resumePendingChoices(); }
     }, () => this.takeRecruitPotion(), () => canOfferRejuvenation(this.player));
     this.campUI=new CampRestUI(this,this.player,this.legion,()=>this.departRest());
+    this.setupCoinFly();
     // 行营休整在本关结算之后：买下的兵装直接收入行囊（2026-11-18 用户报「休整买的装备背包没显示」——原先推进已结算的 runLoot，背包看不到、下一关重建时还会丢）。测试 / 调试战斗同结算规则不入行囊。
     this.campUI.onBuyItem=item=>{const debug=this.lootBlocked();if((this.over||this.preCamp)&&!debug)addItems([item]); /* 整军页（还没开打）买的也直接入行囊，不算本局缴获（败退会丢一半） */else this.itemDrops?.runLoot.push(item);};
     // 军医（2026-11-18）：按章定价；治疗后把存档里的征程构筑血量也改掉（存档点是打赢那一刻存的，治疗在之后；重打旧关不存档也不改）
@@ -3448,7 +3450,7 @@ export class GameScene extends Phaser.Scene {
     if(this.relicFreeRerolls>0)this.relicFreeRerolls--;else if(free)this.freeReroll=false;else{this.legion.food-=cost;this.rerolls++;}this.upgradeOptions=options;this.renderCards();
   }
   protected renderCards(): void {
-    if(this.rerollButton){const free=!!this.phasePlan&&this.freeReroll&&this.relicFreeRerolls<=0,cost=this.relicFreeRerolls>0||free?0:10+this.rerolls*10;this.rerollButton.setText(this.relicFreeRerolls>0?'换一批 · 免费（相国印）':free?'换一批 · 本关免费一次':'换一批 · '+cost+'粮').setAlpha(this.legion.food>=cost?1:.5);if(this.legion.food>=cost)this.rerollButton.setInteractive({useHandCursor:true});else this.rerollButton.disableInteractive();}
+    if(this.rerollButton){const free=!!this.phasePlan&&this.freeReroll&&this.relicFreeRerolls<=0,cost=this.relicFreeRerolls>0||free?0:10+this.rerolls*10;this.rerollButton.setText(this.relicFreeRerolls>0?'换一批 · 免费（相国印）':free?'换一批 · 本关免费一次':'换一批 · '+cost+' 钱币').setAlpha(this.legion.food>=cost?1:.5);if(this.legion.food>=cost)this.rerollButton.setInteractive({useHandCursor:true});else this.rerollButton.disableInteractive();}
 
     for (let i = 0; i < this.cardViews.length; i += 1) {
       const view = this.cardViews[i];
@@ -3773,7 +3775,7 @@ export class GameScene extends Phaser.Scene {
   protected propLoot(kind: PropLootKind, x: number, y: number): void {
     const L = PROP_LOOT, rng = this.propRng, now = this.combatNow;
     this.battleHeal?.onPropBroken(kind, x, y, rng); // 粮袋 / 木箱：概率掉干粮 / 酒肉（data/battleHeal）
-    if (kind === 'grain') { this.legion.food += L.grain.food; this.showGrowthNotice('缴获粮草 · 随军粮 +' + L.grain.food); return; }
+    if (kind === 'grain') { this.legion.food += L.grain.food; this.showGrowthNotice('缴获粮草 · 随军钱币 +' + L.grain.food); return; }
     if (kind !== 'weapons' && kind !== 'armor' && kind !== 'crate' && kind !== 'coins') return;
     const c = L[kind];
     for (let i = 0; i < c.gems; i++) { const a = i / Math.max(1, c.gems) * Math.PI * 2; this.spawnGem(x + Math.cos(a) * 22, y + 8 + Math.sin(a) * 10, 1); }
@@ -4468,7 +4470,7 @@ export class GameScene extends Phaser.Scene {
     const m = this.momentum, M = NEW_CARDS.momentum;
     if (m.on && m.stacks < M.max && ++m.kills % M.per === 0) { m.stacks++; applyStageBuff(this.player, s => { s.damageMul *= 1 + M.step; }); }
     const b = this.bounties.elites;
-    if (b && b.elites !== undefined && enemy.kind === 'elite' && ++b.elites >= 8) { b.elites = undefined; this.legion.food += 60; this.grantCharm(); this.showWaveBanner('悬赏 · 破锐 达成', false, '随军粮 +60 · 信物一件'); }
+    if (b && b.elites !== undefined && enemy.kind === 'elite' && ++b.elites >= 8) { b.elites = undefined; this.legion.food += 60; this.grantCharm(); this.showWaveBanner('悬赏 · 破锐 达成', false, '随军钱币 +60 · 信物一件'); }
   }
   /** 每帧：草船借箭到期放箭雨；悬赏斩将计时。 */
   private tickStageCards(): void {
@@ -4588,7 +4590,7 @@ export class GameScene extends Phaser.Scene {
     if (this.defeatLive()) {
       const fids = (this.followers?.members ?? []).map(m => m.recruit.id), camp = reason !== 'death' ? null : patchCampaignDefeat(this.runConfig.character, { hpFrac: DEFEAT.hpFrac, followerFrac: DEFEAT.followerFrac, troopLoss: DEFEAT.troopLoss, followerIds: fids });
       if (camp) { notes.push('主将负伤 · 下次出征生命 ' + Math.round(DEFEAT.hpFrac * 100) + '%（军医可治）'); if (fids.length) notes.push('随行负伤 · 生命 ' + Math.round(DEFEAT.followerFrac * 100) + '%'); if (camp.troops) notes.push('部曲折损 ' + camp.troops + ' 人'); }
-      const g = loseProvisionsPct(DEFEAT.grainPct, DEFEAT.grainCap); if (g) notes.push('营寨军粮 −' + g);
+      const g = loseProvisionsPct(DEFEAT.grainPct, DEFEAT.grainCap); if (g) notes.push('营寨钱币 −' + g);
     }
     this.defeatNotes = notes;
     if (!worldUnlocked()) { const tip = defeatTip(stage, id => mechOpen(id)); this.resultTexts.body.setText(this.resultTexts.body.text + '\n小贴士  ' + tip); } // 第一章：不扣东西，给一条小贴士（只说已开放的玩法、本关见得到的东西）
@@ -4624,8 +4626,8 @@ export class GameScene extends Phaser.Scene {
     const P = this.player, ch = this.phasePlan?.chapter ?? 2;
     if (kind === 'cart') {
       const g = Math.round(FORTUNE.cartGrain(ch) * mult); this.legion.food += g;
-      if (this.supplies && this.supplies.pouch.length < POUCH_MAX) { this.supplies.pouch.push({ amount: Math.round(P.maxHp * .3), texture: this.textures.exists('heal_props') ? 'heal_props' : 'healing_potion', frame: this.textures.exists('heal_props') ? 1 : undefined, name: '回春丹' }); return '随军粮 +' + g + ' · 回春丹已入药囊（Q）'; }
-      P.heal(Math.round(P.maxHp * .2)); return '随军粮 +' + g + ' · 药囊已满，回复 20% 生命';
+      if (this.supplies && this.supplies.pouch.length < POUCH_MAX) { this.supplies.pouch.push({ amount: Math.round(P.maxHp * .3), texture: this.textures.exists('heal_props') ? 'heal_props' : 'healing_potion', frame: this.textures.exists('heal_props') ? 1 : undefined, name: '回春丹' }); return '随军钱币 +' + g + ' · 回春丹已入药囊（Q）'; }
+      P.heal(Math.round(P.maxHp * .2)); return '随军钱币 +' + g + ' · 药囊已满，回复 20% 生命';
     }
     if (kind === 'armory') {
       const q = capLootQuality(ch <= 4 ? 'blue' : ch <= 8 ? 'purple' : 'orange', this.itemTier()), item = rollItem(q, Math.random, undefined, this.lootChapter());
@@ -4740,7 +4742,7 @@ export class GameScene extends Phaser.Scene {
         row('等级', `Lv.${stats.level}`),
         row('造成伤害', String(Math.round(stats.damageDealt))),
         ...(ch1TrialOn(this.hardKey()) ? [row('试验数值', CH1_TRIAL_ID)] : []), // 第一章试验数值开关（data/ch1Trial）
-        row('随军粮', String(this.legion.food)), // 11-21 用户试玩：资源数字从 1-1 起就要看得到
+        row('随军钱币', String(this.legion.food)), // 11-21 用户试玩：资源数字从 1-1 起就要看得到
         ...(mechOpen('squad') ? [row('部曲战损', `${this.legion.count}存活 / ${this.legion.dead}阵亡`)] : []),
         row(this.chapter.bossName, stats.bossKilled ? '已击败' : '未击败'),
         row('结局', victory ? this.victoryLabel() : reason === 'timeout' ? '超时' : reason === 'keep' ? '府衙失守' : '阵亡'),
@@ -4754,7 +4756,7 @@ export class GameScene extends Phaser.Scene {
     // 结算：行囊里有比身上好的兵装没穿 → 写一行（行营「行囊」按钮另有小红点）
     if(victory&&mechShown('gear')&&!(isChapterTestRun()||this.debugModified||this.debugJumped||this.player.damageImmune)){const n=gearUpgrades(this.runConfig.character).length;if(n)this.resultTexts.body.setText(this.resultTexts.body.text+'\n兵装  行囊里有 '+n+' 件更好的兵装没穿 · 点「行囊」→「一键穿戴」');}
     if(this.worldCampaign){const reward=settleExpedition(this.expeditionId,{...stats,kills:Math.max(0,stats.kills-this.settledFrontlineKills),chapter:this.chapter.id,returned:this.allies.filter(a=>a.active&&a.reserveSoldier).map(a=>a.kind),debug:isChapterTestRun()||this.debugModified||this.debugJumped||this.player.damageImmune});
-      this.resultTexts.body.setFontSize(IS_DESKTOP?14:16).setLineSpacing(IS_DESKTOP?5:8).setText(this.resultTexts.body.text+`\n永久奖励  军粮 +${reward.provisions}`+cityIncomeLine(reward));
+      this.resultTexts.body.setFontSize(IS_DESKTOP?14:16).setLineSpacing(IS_DESKTOP?5:8).setText(this.resultTexts.body.text+`\n永久奖励  钱币 +${reward.provisions}`+cityIncomeLine(reward));
       // 败走副标题说人话（2026-11-21 总制作人：第一次失败就写「未超过本章失败最佳成绩，无新增奖励」看不懂）
       const defeatSub=/^未超过/.test(reward.message)?'乱军之中，力战而退':reward.message==='已自动入库'?'所得战功已入库':reward.message;
       this.resultTexts.subtitle.setText(victory&&this.chapter.id==='huangjin'&&this.chapter.stage===3&&worldUnlocked()?'黄巾平定 · 三国天下开启':victory?this.chapter.victoryText:defeatSub);
@@ -4771,7 +4773,7 @@ export class GameScene extends Phaser.Scene {
       // 战斗中升的级已随时写入；这里写入当前经验，再加首次通关经验（可能再升级）
       setHeroProgress(id,this.player.level,this.player.xp);const r=creditHeroXp(id,this.heroXpBonus,undefined,ch1TrialOn(this.hardKey())&&CH1V6.postXpSoftByStage?this.stageSuggestedLevel():undefined); /* ch1v6：战后经验按本关建议等级算软上限 */
       const grain=addProvisions(r.grain+Math.floor(this.player.overflowXp/OVERFLOW_XP_PER_GRAIN));
-      this.resultTexts.body.setText(this.resultTexts.body.text+'\n武将等级  '+name+(r.to>this.heroStartLevel?' Lv.'+this.heroStartLevel+' → Lv.'+r.to:' Lv.'+r.to)+' · 经验 +'+Math.round(this.lordHeroXp())+(r.capped?' · 已到本章上限 Lv.'+r.cap:'')+(grain>0?'\n经验已满  折军粮 +'+grain:''));
+      this.resultTexts.body.setText(this.resultTexts.body.text+'\n武将等级  '+name+(r.to>this.heroStartLevel?' Lv.'+this.heroStartLevel+' → Lv.'+r.to:' Lv.'+r.to)+' · 经验 +'+Math.round(this.lordHeroXp())+(r.capped?' · 已到本章上限 Lv.'+r.cap:'')+(grain>0?'\n经验已满  折钱币 +'+grain:''));
       // 随行武将：每人拿主公折算后经验的一半（hero-level-proposal 方案 A，用户批准）
       const half=this.lordHeroXp()/2,lines:string[]=[];for(const f of this.followers?.members??[]){const fr=creditHeroXp((f.recruit.hero??f.recruit.id) as HeroKey,half,followerLevelCap()) /* 随行经验到随行上限为止 */,fn=f.recruit.name.replace(/（.*）/,'');lines.push(fr.to>fr.from?fn+' Lv.'+fr.from+' → Lv.'+fr.to:fn+' Lv.'+fr.to);}
       if(lines.length)this.resultTexts.body.setText(this.resultTexts.body.text+'\n随行  '+lines.join(' · ')+' · 各得经验 +'+Math.floor(half));}}
@@ -4815,7 +4817,7 @@ export class GameScene extends Phaser.Scene {
     try{checkWorld(loadWorldState());}catch{/* 存档不可用 */}
     // 乱世难度首通（该章第三关击败首领）：一次性军粮与称号
     if(victory&&this.hardMode&&this.bossKilled&&this.hardStage()===3&&!isChapterTestRun()&&!this.debugModified&&!this.debugJumped&&!this.player.damageImmune){const key=this.hardKey() as TimelineChapterId;if(recordHardClear(key,HARD_MODE.reward))this.resultTexts.body.setText(this.resultTexts.body.text+`
-乱世首通 · 称号「${HARD_TITLES[key]}」 · 军粮 +${rewardGrain(HARD_MODE.reward.merits,HARD_MODE.reward.provisions)}`);}
+乱世首通 · 称号「${HARD_TITLES[key]}」 · 钱币 +${rewardGrain(HARD_MODE.reward.merits,HARD_MODE.reward.provisions)}`);}
     if (victory && !this.runConfig.encounter && !this.ch1MapEnd && (this.chapter.id==='huangjin'||(this.chapter.westStage??3)<3)) {
       this.showRestSummary();
       this.cameras.main.flashEffect.reset(); this.cameras.main.shakeEffect.reset();
@@ -5144,7 +5146,7 @@ export class GameScene extends Phaser.Scene {
     if (d) { sub.setVisible(false); subRule.setVisible(false); } // 电脑版去掉「三择其一 · 点击卡片获得强化」（少字）
     this.levelPanel.add([sub,subRule]);
     // 2026-11-19 用户「关于技能3选一描述需要检查优化一下」：本次征程的成长选定后不可更改（行营休整可花军粮重整）
-    this.levelPanel.add(this.add.text(GAME_WIDTH/2,d?510:292+Math.max(0,Math.round((GAME_HEIGHT-960)/2))+2*192+120,'选定后本次征程不可更改（可在行营休整花费军粮重整）',{fontFamily:FONT,fontSize:'14px',color:d?'#c9b48a':'#bfae8a',resolution:2}).setOrigin(.5).setStroke(STROKE,d?3:0).setScrollFactor(0).setName('upgrade-lock-note'));
+    this.levelPanel.add(this.add.text(GAME_WIDTH/2,d?510:292+Math.max(0,Math.round((GAME_HEIGHT-960)/2))+2*192+120,'选定后本次征程不可更改（可在行营休整花费钱币重整）',{fontFamily:FONT,fontSize:'14px',color:d?'#c9b48a':'#bfae8a',resolution:2}).setOrigin(.5).setStroke(STROKE,d?3:0).setScrollFactor(0).setName('upgrade-lock-note'));
     // 三选一卡片：每张卡是一个容器（入场滑入、悬停上浮），卡面按类别着色。电脑横排、手机竖排。
     const pad=d?0:Math.max(0,Math.round((GAME_HEIGHT-960)/2));
     for(let i=0;i<3;i++){
@@ -5418,6 +5420,21 @@ export class GameScene extends Phaser.Scene {
   }
   /** 星图正式界面（ui/StarMapUI）：开关 starMapOn() 打开时顶替属性面板（C 键 / 暂停菜单进，游戏暂停）。战斗内不提供洗点。 */
   private starPanel?: StarMapUI;
+  /** 钱币飞入钱袋（ui/CoinFly）：随军钱币一涨，铜钱从得钱处（打怪的位置，否则主将身边）飞到左上钱袋，落袋时数字跳到新值。 */
+  private coinFly?: CoinFly;
+  private setupCoinFly(): void {
+    this.coinFly?.destroy();
+    const toUi = (x: number, y: number): { x: number; y: number } => { const m = this.cameras.main, k = m.zoom / (this.uiCam?.zoom ?? m.zoom); return { x: (x - m.worldView.x) * k, y: (y - m.worldView.y) * k }; };
+    this.coinFly = new CoinFly(this, { value: () => this.legion?.food ?? 0, armed: () => this.mode === 'none' && !this.over && this.elapsed > 1, purse: () => (this.legionUI?.purse?.visible && this.legionUI.purse.parentContainer?.visible ? this.legionUI.purse : null), depth: DEPTH.hud + 8, sfx: () => this.sfx,
+      from: () => { const f = this.legion?.foodFrom, p = f && performance.now() - f.t < 300 ? f : this.player; return p ? toUi(p.x, p.y) : null; } });
+    this.legionUI.coinLag = () => this.coinFly?.displayLag() ?? 0;
+    // 行营（休整 / 整军）：卖兵装、事件得钱 → 铜钱从屏幕中间飞到资源行的钱袋
+    this.campCoinFly?.destroy();
+    this.campCoinFly = new CoinFly(this, { value: () => this.legion?.food ?? 0, armed: () => this.mode === 'rest' && !!this.campUI?.root.visible, purse: () => (this.campUI?.root.visible ? this.campUI.purse : null), depth: DEPTH.overlay + 40, sfx: () => this.sfx,
+      onFrame: shown => { if (this.campUI?.root.visible) this.campUI.paintCoins(shown); } });
+    if (this.campUI) this.campUI.coinLag = () => this.campCoinFly?.displayLag() ?? 0;
+  }
+  private campCoinFly?: CoinFly;
   protected renderStarPanel(): void {
     this.attributePauseText?.setText(`星图 · ${this.player.growth.unallocated}`);
     if(this.starPanel&&!this.starPanel.root.scene)this.starPanel=undefined; // 场景重开后旧面板已随属性面板销毁

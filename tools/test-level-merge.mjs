@@ -27,7 +27,7 @@ const table = await p.evaluate(async () => {
   return { cum: [5, 10, 15, 20, 25, 30].map(cum), same: rg.xpToNext(12) === h.heroXpToNext(12), rate: h.HERO_XP_RATE, guar: h.PICK_GUARANTEE, per: h.OVERFLOW_XP_PER_GRAIN };
 });
 ck('新经验表：累计 Lv5 100 / Lv10 1280 / Lv15 7280 / Lv20 16030 / Lv25 27280 / Lv30 40780', JSON.stringify(table.cum) === '[100,1280,7280,16030,27280,40780]' && table.same, table);
-ck('倍率主线 1.0 / 其余 0.5；保底主线 4、其余 3；满级 50 经验折 1 军粮', table.rate.main === 1 && table.rate.side === .5 && table.guar.main === 4 && table.guar.side === 3 && table.per === 50, table);
+ck('倍率主线 1.0 / 其余 0.5；保底主线 4、其余 3；满级 50 经验折 1 钱币', table.rate.main === 1 && table.rate.side === .5 && table.guar.main === 4 && table.guar.side === 3 && table.per === 50, table);
 
 // 2) 战斗中：等级即武将等级，升级弹三选一并给属性点；HUD 不再有「战功 Lv」
 const live = await p.evaluate(async () => {
@@ -106,7 +106,7 @@ const prod = await p.evaluate(async () => {
   return out;
 });
 ck('正式模式：战斗中升到上限 Lv10 立刻写入存档，属性点同步可加', !prod.debug && prod.level === 10 && prod.saved === 10 && prod.free === 9 && prod.heroFree === 9, prod);
-ck('结算写「武将等级 Lv.1 → Lv.10」，满级多出的经验按 50 : 1 折军粮', /Lv\.1 → Lv\.10/.test(prod.line ?? '') && /折军粮 \+\d+/.test(prod.grainLine ?? '') && prod.grain > 0 && prod.final.level === 10 && prod.final.xp <= prod.final.next, prod);
+ck('结算写「武将等级 Lv.1 → Lv.10」，满级多出的经验按 50 : 1 折钱币', /Lv\.1 → Lv\.10/.test(prod.line ?? '') && /折钱币 \+\d+/.test(prod.grainLine ?? '') && prod.grain > 0 && prod.final.level === 10 && prod.final.xp <= prod.final.next, prod);
 await p.screenshot({ path: 'assets/review/level-merge-result-1280x720.png' });
 
 // 8) 三选一节奏（PICK_PACE，2026-11-17 用户：「中期好像3选一触发的太频繁了」）：第二章起同关两次面板至少隔 minGapSec 秒，

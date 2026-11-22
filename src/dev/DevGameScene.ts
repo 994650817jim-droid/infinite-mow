@@ -296,7 +296,7 @@ export class DevGameScene extends GameScene {
       ] },
       { title: '蜀军', items: [
         ...kinds.map(k => ({ key: 'ally_' + k, label: TROOPS[k].name })),
-        { key: 'legionEight', label: '各3人' }, { key: 'allyLevel3', label: '全体Lv3' }, { key: 'legionFood', label: '+100粮' }, { key: 'legionFood1000', label: '+1000粮' }, { key: 'clearAllies', label: '清空' },
+        { key: 'legionEight', label: '各3人' }, { key: 'allyLevel3', label: '全体Lv3' }, { key: 'legionFood', label: '+100钱币' }, { key: 'legionFood1000', label: '+1000钱币' }, { key: 'clearAllies', label: '清空' },
       ] },
       { title: '主将 / 敌人', items: [
         { key: 'heal', label: '回满血' }, { key: 'god', label: '无敌', active: () => scene.player.damageImmune }, { key: 'oneHit', label: '秒杀', active: () => scene.devOneHit, hint: '主将与蜀军伤害×10000' },
@@ -318,7 +318,7 @@ export class DevGameScene extends GameScene {
         `FPS ${Math.round(scene.game.loop.actualFps)} · ${scene.chapter.name}${save ? ' · 测试存档' : ''}`,
         `${getCharacter(p.growth.character).name} Lv${p.level} · 武器Lv${w?.level ?? 0} · HP ${Math.ceil(p.hp)}/${p.maxHp}`,
         `${scene.elapsed.toFixed(1)}s · 第${waveNo}/${waves.length}波 · Boss ${chapterBossTime(scene.chapter)}s · ${scene.devTimeScale}×`,
-        `敌 ${scene.activeEnemyCount()} · 蜀军 ${scene.legion.count} · 军粮 ${scene.legion.food}`,
+        `敌 ${scene.activeEnemyCount()} · 蜀军 ${scene.legion.count} · 钱币 ${scene.legion.food}`,
         `构筑 ${tagText}`,
         `${p.damageImmune ? '无敌 ' : ''}${scene.devOneHit ? '秒杀 ' : ''}${scene.debugModified ? '已修改(不计正式进度)' : '未修改'}`,
       ].join('\n');

@@ -31,10 +31,10 @@ const OLD = { small: { balanced: [10, 0], farm: [16, 0], military: [5, 1] }, med
   const incomes = await p.evaluate(async ([ids, tiers]) => { const w = await import('/src/world/WorldStore.ts'), c = await import('/src/data/cityBuildings.ts'); return Object.fromEntries(ids.map(id => [id, c.cityIncome(tiers[id], w.cityLevels(id))])); }, [OWNED, tiers]);
   ck('迁移：重农城 → 屯田 1 级，重军城 → 募兵所 1 级，其余府衙 1 级', r.cities.xuchang.tuntian === 1 && r.cities.chenliu.tuntian === 1 && r.cities.runan.muster === 1 && r.cities.luoyang.muster === 1 && r.cities.guandu.office === 1 && r.cities.guandu.tuntian === 0 && OWNED.every(id => r.cities[id].office === 1), r.cities);
   const refund = 60 + 60 + 120 + 60; // 许昌 / 汝南 / 陈留（中城 60）、洛阳（大城 120），各退一次改方向的军粮
-  ck('迁移：改方向花的军粮按档次退还一次；城池发展清空；再读不重复退', r.grain === 1000 + refund && Object.keys(r.focus).length === 0 && r.again === r.grain, { grain: r.grain, expect: 1000 + refund, again: r.again });
+  ck('迁移：改方向花的钱币按档次退还一次；城池发展清空；再读不重复退', r.grain === 1000 + refund && Object.keys(r.focus).length === 0 && r.again === r.grain, { grain: r.grain, expect: 1000 + refund, again: r.again });
   ck('迁移：写盘为 v10，旧档留在备份', r.ver === 10 && r.bak === 9, r);
   const rows = OWNED.map(id => { const f = save9.town.focus[id] ?? 'balanced', [g, t] = OLD[tiers[id]][f]; return { id, tier: tiers[id], focus: f, old: [g, t], now: [incomes[id].grain, incomes[id].troops] }; });
-  ck('迁移：每座城每战产出（军粮、后备兵）都不低于原来', rows.every(x => x.now[0] >= x.old[0] && x.now[1] >= x.old[1]), rows);
+  ck('迁移：每座城每战产出（钱币、后备兵）都不低于原来', rows.every(x => x.now[0] >= x.old[0] && x.now[1] >= x.old[1]), rows);
   console.log('  对照：' + rows.map(x => `${x.id}(${x.tier},${x.focus}) 原 ${x.old[0]}粮+${x.old[1]}兵 → 现 ${x.now[0]}粮+${x.now[1]}兵`).join('；'));
   await p.close();
 }
@@ -56,7 +56,7 @@ const OLD = { small: { balanced: [10, 0], farm: [16, 0], military: [5, 1] }, med
   ck('小城：屯田 1 级 80；2 级要府衙 Lv2；募兵所小城最高 1 级', r.t1.ok && !r.t2.ok && r.t2.message.includes('府衙 Lv2') && r.m1.ok && !r.m2.ok, r);
   ck('小城：府衙升 2 级后屯田可升 2 级；府衙小城最高 2 级；不是我方城池不能建', r.o2.ok && !r.o3.ok && r.t2b.ok && r.lv.office === 2 && r.lv.tuntian === 2 && r.lv.muster === 1 && !r.notMine.ok, r);
   ck('价格按档次放大：中城屯田 1 级 120，大城府衙 2 级 400', r.mediumCost === 120 && r.largeCost === 400, r);
-  ck('结算：各城军粮与募兵所后备兵按建筑计入（只有官渡募兵所 1 级 → 1 人）', r.cityGrain > 0 && r.cityTroops === 1 && r.reserveGain === 1, r);
+  ck('结算：各城钱币与募兵所后备兵按建筑计入（只有官渡募兵所 1 级 → 1 人）', r.cityGrain > 0 && r.cityTroops === 1 && r.reserveGain === 1, r);
   ck('屯田按场结算、自动入账：结算明细「屯田供粮：官渡 +20」（小城 2 级 × 10）', JSON.stringify(r.farms) === JSON.stringify([{ city: '官渡', grain: 20 }]) && r.line.includes('屯田供粮：官渡 +20'), { farms: r.farms, line: r.line });
   ck('失守 / 未占领的城建筑等级保留在存档里', r.lost?.office === 2 && r.lost?.tuntian === 1, r.lost);
   await p.close();
@@ -73,7 +73,7 @@ const OLD = { small: { balanced: [10, 0], farm: [16, 0], military: [5, 1] }, med
   await p.evaluate(() => window.__game.scene.getScene('WorldMapScene').action.image.emit('pointerup'));
   await p.waitForFunction(() => window.__game.scene.isActive('TownScene'), null, { timeout: 30000 }); await p.waitForTimeout(1500);
   const ui = await p.evaluate(() => { const t = window.__game.scene.getScene('TownScene'); return { blds: t.hits.map(h => h.name).filter(n => !/^bld-hq-/.test(n)).sort(), hq: t.hits.map(h => h.name).filter(n => /^bld-hq-/.test(n)).sort(), header: t.children.getByName('town-header')?.text, income: t.children.getByName('town-income')?.text, grain: t.children.getByName('town-grain')?.text }; });
-  ck('进入洛阳：全景里只有府衙、屯田、募兵所（城墙箭楼不做），顶栏写档次与产出', ui.blds.join() === 'bld-muster,bld-office,bld-tuntian' && ui.header.includes('大城') && ui.income.includes('每战产出') && ui.grain === '军粮 800', ui);
+  ck('进入洛阳：全景里只有府衙、屯田、募兵所（城墙箭楼不做），顶栏写档次与产出', ui.blds.join() === 'bld-muster,bld-office,bld-tuntian' && ui.header.includes('大城') && ui.income.includes('每战产出') && ui.grain === '钱币 800', ui);
   await p.screenshot({ path: `${out}/town-large-desktop.png` });
   // 营寨功能建筑分署（11-19「城市也应该有义军营寨那些功能建筑」）：招贤馆 / 讲武堂 / 军营（马厩此档已开放也画）+ 旅商；点讲武堂进营寨同一面板，关掉回城
   ck('城里画出营寨功能建筑分署与旅商（统一大本营）', ['bld-hq-academy', 'bld-hq-barracks', 'bld-hq-merchant', 'bld-hq-talent'].every(n => ui.hq.includes(n)), ui.hq);
@@ -106,7 +106,7 @@ const OLD = { small: { balanced: [10, 0], farm: [16, 0], military: [5, 1] }, med
   await p.evaluate(() => window.__game.scene.getScene('TownScene').children.getByName('town-build-card').getByName('town-build-upgrade').emit('pointerdown'));
   await p.waitForTimeout(500);
   const after = await store(p, w => ({ lv: w.cityLevels('luoyang'), grain: w.loadWorld().provisions }));
-  ck('点屯田 → 面板（未建，军粮 160）→ 建造：屯田 1 级、扣 160', card.title === '屯田 · 未建' && card.cost === '花费：军粮 160' && after.lv.tuntian === 1 && after.grain === 640, { card, after });
+  ck('点屯田 → 面板（未建，钱币 160）→ 建造：屯田 1 级、扣 160', card.title === '屯田 · 未建' && card.cost === '花费：钱币 160' && after.lv.tuntian === 1 && after.grain === 640, { card, after });
   await p.screenshot({ path: `${out}/town-after-build-desktop.png` });
   const before = await p.evaluate(() => { const t = window.__game.scene.getScene('TownScene'); return { h: t.pano.list.filter(o => /^house-/.test(o.name ?? '')).length, f: t.folk.count }; });
   await store(p, w => { const s = w.loadWorld(); s.provisions += 2000; localStorage.setItem('im_world_v1', JSON.stringify(s)); localStorage.removeItem('im_world_backup_v1'); });

@@ -84,7 +84,7 @@ export function buildRewardView(scene: Phaser.Scene, o: RewardViewOptions): Rewa
   const relics = o.relic ? 1 : 0;
   const tiles: Array<{ key: string; glyph: string; label: string; n: number; prefix?: string; suffix?: string }> = [
     { key: '本场战功', glyph: '功', label: '战功', n: num(/^本场战功\s+\+(\d+)/), prefix: '+' },
-    { key: '永久奖励', glyph: '粮', label: '军粮', n: num(/^(?:永久奖励|挑战|军情)\s*(?:·\s*)?军粮 \+(\d+)/) + num(/^经验已满\s+折军粮 \+(\d+)/), prefix: '+' },
+    { key: '永久奖励', glyph: '钱', label: '钱币', n: num(/^(?:永久奖励|挑战|军情)\s*(?:·\s*)?(?:钱币|军粮) \+(\d+)/) + num(/^经验已满\s+折(?:钱币|军粮) \+(\d+)/), prefix: '+' }, // 2026-11-21 军粮改钱币：结算行写「钱币 +N」
     { key: '营寨', glyph: '田', label: '屯田', n: num(/^营寨 · 农田 \+(\d+)/), prefix: '+' },
     { key: '武学残卷', glyph: '卷', label: '武学残卷', n: num(/^武学残卷\s+\+(\d+)/), prefix: '+' },
     { key: '缴获兵装', glyph: '甲', label: '兵装', n: Math.max(0, num(/^缴获兵装\s+(\d+) 件/) - relics), suffix: ' 件' },

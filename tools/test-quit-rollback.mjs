@@ -26,7 +26,7 @@ try {
   ck('进关时记下快照', (await save()).snap, await save());
   await gain();
   const mid = await save();
-  ck('本场里升级 / 得军粮 / 得兵装已写进存档', mid.lv === base.lv + 4 && mid.prov === base.prov + 77, { base, mid });
+  ck('本场里升级 / 得钱币 / 得兵装已写进存档', mid.lv === base.lv + 4 && mid.prov === base.prov + 77, { base, mid });
   await p.evaluate(S0 => { const s = eval(S0); s.player.damageImmune = true; s.togglePause(); }, S);
   await p.waitForTimeout(300);
   const confirm = await p.evaluate(S0 => { const s = eval(S0), e = s.pausePanel.getByName('pause-exit'); e.emit('pointerdown'); return e.text; }, S);
@@ -35,7 +35,7 @@ try {
   await p.evaluate(S0 => { const s = eval(S0); s.pausePanel.getByName('pause-exit').emit('pointerdown'); }, S);
   await nav; await ready();
   const after1 = await save();
-  ck('中途退出 → 重载后等级、军粮、行囊回到进关前，快照清掉', after1.lv === base.lv && after1.xp === base.xp && after1.prov === base.prov && after1.bag === base.bag && !after1.snap, { base, after1 });
+  ck('中途退出 → 重载后等级、钱币、行囊回到进关前，快照清掉', after1.lv === base.lv && after1.xp === base.xp && after1.prov === base.prov && after1.bag === base.bag && !after1.snap, { base, after1 });
   // ② 打到一半刷新页面
   await start11(); await gain();
   ck('刷新前：本场所得已写进存档', (await save()).prov === base.prov + 77, await save());

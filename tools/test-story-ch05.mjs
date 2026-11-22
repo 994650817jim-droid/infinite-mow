@@ -105,7 +105,7 @@ await p.waitForTimeout(300);
 const after53 = await readAll(); const f53 = await flags(), pEnd = await played(), fin = await p.evaluate(() => window.__fin53);
 const grain1 = await p.evaluate(async () => (await import('/src/world/WorldStore.ts')).loadWorld().provisions);
 const ill = await p.evaluate(async () => { const St = await import('/src/systems/Story.ts'), D = await import('/src/data/story/index.ts'); return St.nodeIllustration(D.STORY_CHAPTERS.chibi.close); });
-ck('5-3 江陵抉择：两个按钮，选「趁虚入城」→ nanjun = seized、军粮 +300', ch?.name === 'story-chibi-3-nanjun' && btns.includes('story-chibi-3-nanjun-choice-0') && btns.includes('story-chibi-3-nanjun-choice-1') && f53.nanjun === 'seized' && grain1 - grain0 === 300, { ch: ch?.name, btns, f53, grain: grain1 - grain0 });
+ck('5-3 江陵抉择：两个按钮，选「趁虚入城」→ nanjun = seized、钱币 +300', ch?.name === 'story-chibi-3-nanjun' && btns.includes('story-chibi-3-nanjun-choice-0') && btns.includes('story-chibi-3-nanjun-choice-1') && f53.nanjun === 'seized' && grain1 - grain0 === 300, { ch: ch?.name, btns, f53, grain: grain1 - grain0 });
 ck('5-3 章末（seized）：赵云「已取城了」、周瑜金疮迸裂；插画换 story_jiangling_seized；播完才结算', after53.some(t => t.includes('已取城了')) && after53.some(t => t.includes('金疮迸裂')) && ill === 'story_jiangling_seized' && pEnd.includes('chibi.close') && fin === true, { ill, pEnd, fin, after53 });
 const ceded = await L('close', 'zhaoyun', [], { nanjun: 'ceded' }), none = await L('close', 'zhaoyun', []), ssx = await L('close', 'sunshangxiang', [], { nanjun: 'ceded' });
 ck('章末（ceded / 没做抉择）：周瑜领南郡、鲁肃「荆州日后还须商议」；孙尚香主公多一句讨荆州的伏笔', ceded.some(t => t.includes('鲁肃') || t.endsWith('@lusu')) && none.join() === ceded.join() && ssx.some(t => t.includes('借给皇叔')), { ceded: ceded.length, ssx: ssx.length });

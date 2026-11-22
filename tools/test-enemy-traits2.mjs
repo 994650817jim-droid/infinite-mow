@@ -60,7 +60,7 @@ ck('陷阵营：一队 5～7 人，正面减伤 60%、绕到背后不减', r.xia
 ck('丹阳兵：保持距离掷标枪', r.danyang.javelins >= 1, r.danyang);
 ck('大戟士：扇形预警后横扫，扫到主将', r.daji.sweeps >= 1 && r.daji.hurt > 0, r.daji);
 ck('先登死士：举盾时正面减伤、放盾连射', r.xiandeng.volleys >= 3 && r.xiandeng.upMul < .5, r.xiandeng);
-ck('押粮卒：没截住 → 粮到来援兵；截住 → 加军粮', r.yaliang.delivered === 1 && r.yaliang.reinforcements >= 3 && r.yaliang.food > 0, r.yaliang);
+ck('押粮卒：没截住 → 粮到来援兵；截住 → 加钱币', r.yaliang.delivered === 1 && r.yaliang.reinforcements >= 3 && r.yaliang.food > 0, r.yaliang);
 ck('荆州水卒：成群从江面刷出（江在场地外时上岸）', r.shuizu.group >= 3 && r.shuizu.inWater, r.shuizu);
 ck('火船：从江面出，冲到主将身边爆燃（没专属图时用着火的辎重车）', r.huochuan.fromWater && r.huochuan.look >= 1 && r.huochuan.booms >= 1 && r.huochuan.hurt > 0, r.huochuan);
 ck('曹军枪阵兵：直线预警后长枪贯穿', r.qiangzhen.thrusts >= 1 && r.qiangzhen.hurt > 0, r.qiangzhen);

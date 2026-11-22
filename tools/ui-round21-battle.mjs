@@ -39,7 +39,7 @@ await p.evaluate(S0 => eval(S0).pausePanel.getByName('pause-exit').emit('pointer
 await nav;
 await p.waitForFunction(() => window.__game?.scene.getScene('WorldMapScene')?.sys.isActive() || window.__game?.scene.getScene('MenuScene')?.sys.isActive(), null, { timeout: 120000 }); await p.waitForTimeout(1500);
 const back = await p.evaluate(() => ({ scenes: window.__game.scene.getScenes(true).map(s => s.scene.key), prov: JSON.parse(localStorage.getItem('im_world_v1')).provisions, snap: !!localStorage.getItem('im_battle_snapshot') }));
-ck('确认撤退 → 回滚本场所得（军粮回到进关前）→ 重载后直接在天下地图', back.scenes.includes('WorldMapScene') && back.prov === before, { ...back, before });
+ck('确认撤退 → 回滚本场所得（钱币回到进关前）→ 重载后直接在天下地图', back.scenes.includes('WorldMapScene') && back.prov === before, { ...back, before });
 await p.screenshot({ path: `${out}/retreat-worldmap-1280x720.png` });
 await b.close();
 ck('无控制台 / 页面错误', errors.length === 0, errors.slice(0, 4));

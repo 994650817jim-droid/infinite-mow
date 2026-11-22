@@ -40,14 +40,14 @@ await p.evaluate(({ x, y }) => { const c = window.__game.scene.getScene('CitySce
 await p.screenshot({ path: `${out}/merchant-stall.png` });
 await openStall(); await p.waitForFunction(() => window.__game.scene.getScene('CityScene').children.getByName('merchant-shop'), null, { timeout: 15000 }); await p.waitForTimeout(500);
 let pn = await panel(), st = await stock();
-ok(pn && pn.names.length === 4 && pn.art && /军粮 800/.test(pn.purse), '点货摊打开军需商人（共用面板）：≥4 张货 + 立绘 ' + JSON.stringify(pn?.names));
+ok(pn && pn.names.length === 4 && pn.art && /钱币 800/.test(pn.purse), '点货摊打开军需商人（共用面板）：≥4 张货 + 立绘 ' + JSON.stringify(pn?.names));
 ok(st && st.key === 'camp' && st.items.length === 4, '共用货架：还没进过行营时营寨摆一份（键 camp）');
 await p.screenshot({ path: `${out}/merchant-panel.png` });
 // 2) 买第 1 件：扣营寨军粮、进行囊、按钮变「已售罄」
 const f0 = await food(), price = { green: 60, blue: 120, purple: 260 }[st.items[0].quality];
 await buy(0); await p.waitForTimeout(300);
 const f1 = await food(), bag1 = await bagUids(); st = await stock(); pn = await panel();
-ok(f1 === f0 - price, `扣营寨军粮 ${f0} → ${f1}（价 ${price}）`);
+ok(f1 === f0 - price, `扣营寨钱币 ${f0} → ${f1}（价 ${price}）`);
 ok(bag1.includes(st.items[0].uid), '买下的兵装进了行囊');
 ok(st.sold[0] && !pn.buy[0], '第 1 件标为售罄、按钮不可点');
 await buy(0); await p.waitForTimeout(200); ok(await food() === f1 && (await bagUids()).length === bag1.length, '再点售罄的不扣粮、不重复进包');
@@ -62,8 +62,8 @@ await enterCamp(); await openStall(); await p.waitForTimeout(600); st2 = await s
 ok(JSON.stringify(st2.items.map(o => o.uid)) === JSON.stringify(uids) && st2.sold[0], '刷新页面再进：仍是同一批货');
 // 4) 军粮不够：按钮禁用、点了不扣
 await world({ set: { provisions: 30 } }); await enterCamp(); await openStall(); await p.waitForTimeout(600); pn = await panel();
-ok(pn.buy.every(x => !x), '军粮 30：所有兵装购入按钮禁用');
-await buy(1); await p.waitForTimeout(200); ok(await food() === 30 && !(await stock()).sold[1], '军粮不足时点击不扣粮、不售出');
+ok(pn.buy.every(x => !x), '钱币 30：所有兵装购入按钮禁用');
+await buy(1); await p.waitForTimeout(200); ok(await food() === 30 && !(await stock()).sold[1], '钱币不足时点击不扣粮、不售出');
 await p.screenshot({ path: `${out}/merchant-poor.png` });
 // 5) 打完一仗回营寨（世界存档多一条结算）营寨也不换货；打赢新一关进行营休整（新休整键）才换，回营寨看到的是新货
 await world({ set: { provisions: 800 }, receipt: 'exp-test-1', hulao: true }); await enterCamp(); await openStall(); await p.waitForTimeout(600);

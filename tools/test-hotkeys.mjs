@@ -78,7 +78,7 @@ s1 = await key('Digit1', 300); const rc2 = await p.evaluate(G0 => { const s = ev
 // 免费招募选完会自己关；再开一次检查 Esc 关闭
 if (s1.mode !== 'recruit') { await p.evaluate(G0 => { const s = eval(G0); s.renderRecruit(); s.setMode('recruit'); }, G); await p.waitForTimeout(400); }
 const rc3 = (await st()).mode; s2 = await key('Escape', 300);
-ck('战地招募：1 选第一张卡（花军粮 / 多了兵或药），Esc 关闭回到战斗', rc.mode === 'recruit' && s1.last.action === 'pick1' && s1.last.handled && (rc2.food < rc.food || rc2.n > rc.n) && rc3 === 'recruit' && s2.mode === 'none' && s2.last.action === 'back' && s2.last.handled, { rc, rc2, s1: s1.last, rc3, s2: s2.last, m2: s2.mode });
+ck('战地招募：1 选第一张卡（花钱币 / 多了兵或药），Esc 关闭回到战斗', rc.mode === 'recruit' && s1.last.action === 'pick1' && s1.last.handled && (rc2.food < rc.food || rc2.n > rc.n) && rc3 === 'recruit' && s2.mode === 'none' && s2.last.action === 'back' && s2.last.handled, { rc, rc2, s1: s1.last, rc3, s2: s2.last, m2: s2.mode });
 
 // 6. 行营休整：1–4 页签、B 行囊、Enter 率军出征；手柄合成的 Enter 不出征
 await p.evaluate(G0 => { const s = eval(G0); window.__depart = 0; s.continueCampaign = () => { window.__depart++; }; s.resting = true; s.renderRecruit(); s.setMode('rest'); }, G);

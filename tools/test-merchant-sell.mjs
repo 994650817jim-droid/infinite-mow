@@ -60,7 +60,7 @@ const sell = await p.evaluate(async ([u]) => {
   return out;
 }, [seed.uids]);
 ck('出售页只列未穿戴、非首领遗珍的（穿着的蓝、遗珍不在单子上）', sell.listed.white && sell.listed.green && sell.listed.blue && sell.listed.purple && sell.listed.orange && !sell.listed.worn && !sell.listed.relic, sell.listed);
-ck('「选白绿」一键选中 → 出售：随军粮按卖价增加（第 2 章），白 / 绿从行囊拿走', sell.low.gained === sell.low.want && sell.low.whiteGone && sell.low.greenGone && /卖出 2 件/.test(sell.low.notice ?? ''), sell.low);
+ck('「选白绿」一键选中 → 出售：随军钱币按卖价增加（第 2 章），白 / 绿从行囊拿走', sell.low.gained === sell.low.want && sell.low.whiteGone && sell.low.greenGone && /卖出 2 件/.test(sell.low.notice ?? ''), sell.low);
 ck('紫装出售先弹确认（写明件名与卖价）；取消就不卖', /紫 \/ 橙/.test(sell.confirmText ?? '') && sell.afterCancel.purpleStill && sell.afterCancel.confirmGone, { t: sell.confirmText, ...sell.afterCancel });
 if (shots) await p.evaluate(async u => { const ui = window.__game.scene.getScene('GameScene').campUI; window.__find(ui.root, 'merchant-sell-go').emit('pointerdown'); await new Promise(r => setTimeout(r, 120)); }, seed.uids);
 if (shots) await p.screenshot({ path: shots + '/merchant-sell-confirm.png' });
@@ -70,14 +70,14 @@ const conf = await p.evaluate(async ([u]) => {
   const food0 = s.legion.food; window.__find(ui.root, 'merchant-sell-confirm').emit('pointerdown'); await new Promise(r => setTimeout(r, 80));
   return { gained: s.legion.food - food0, want: I.sellPrice({ quality: 'purple' }, 2), gone: !S.loadItems().bag.some(i => i.uid === u.purple), wornKept: S.loadItems().bag.some(i => i.uid === u.worn) };
 }, [seed.uids]);
-ck('确认后紫装卖出、随军粮 + 卖价；穿着的蓝装始终没被动', conf.gone && conf.gained === conf.want && conf.wornKept, conf);
+ck('确认后紫装卖出、随军钱币 + 卖价；穿着的蓝装始终没被动', conf.gone && conf.gained === conf.want && conf.wornKept, conf);
 if (shots) { await p.waitForTimeout(150); await p.screenshot({ path: shots + '/merchant-sell.png' }); }
 
 // 5 营寨旅商：军粮钱包（gain）也能卖
 const camp = await p.evaluate(async ([u]) => {
   const s = window.__game.scene.getScene('GameScene'), MS = await window.__mod('ui/MerchantShop.ts'), I = await window.__mod('data/items.ts'), S = await window.__mod('systems/ItemStore.ts');
   s.campUI.setVisible(false); let grain = 500;
-  const close = MS.openMerchantShop(s, { wallet: { name: '军粮', get: () => grain, spend: n => grain >= n ? (grain -= n, true) : false, gain: n => { grain += n; } }, tier: 0, chapter: 3 });
+  const close = MS.openMerchantShop(s, { wallet: { name: '钱币', get: () => grain, spend: n => grain >= n ? (grain -= n, true) : false, gain: n => { grain += n; } }, tier: 0, chapter: 3 });
   await new Promise(r => setTimeout(r, 200)); const root = s.children.getByName('merchant-shop');
   window.__find(root, 'merchant-mode-sell').emit('pointerdown'); await new Promise(r => setTimeout(r, 100));
   const r2 = s.children.getByName('merchant-shop'); window.__find(r2, 'merchant-sell-item-' + u.blue).emit('pointerdown'); await new Promise(r => setTimeout(r, 60));
@@ -85,7 +85,7 @@ const camp = await p.evaluate(async ([u]) => {
   const out = { grain, want: 500 + I.sellPrice({ quality: 'blue' }, 3), gone: !S.loadItems().bag.some(i => i.uid === u.blue), purse: window.__find(s.children.getByName('merchant-shop'), 'merchant-purse')?.text };
   close(); return out;
 }, [seed.uids]);
-ck('营寨旅商（军粮）也能出售：蓝装卖出、军粮 + 第 3 章卖价、钱袋显示更新', camp.grain === camp.want && camp.gone && camp.purse === '军粮 ' + camp.want, camp);
+ck('营寨旅商（钱币）也能出售：蓝装卖出、钱币 + 第 3 章卖价、钱袋显示更新', camp.grain === camp.want && camp.gone && camp.purse === '钱币 ' + camp.want, camp);
 ck('控制台无报错', errors.length === 0, errors.slice(0, 5));
 console.log(`\n${pass} passed, ${fail} failed`);
 await b.close();

@@ -70,7 +70,7 @@ export const SIDE_ROUTES: readonly SideRouteDef[] = [
         boss: B('zhouyu', '周瑜', '江东都督', 'side_zhouyu', 'chibi/caimao', 'lvmeng', true),
         partner: B('taishici', '太史慈', '东莱信义之将', 'side_taishici', 'chibi/caochun', 'zhuran', true) },
     ],
-    annex: [], specialty: { title: '江东水军', text: '战后粮草收益 +10%', provisions: .1 }, lord: 'zhouyu' },
+    annex: [], specialty: { title: '江东水军', text: '战后钱币收益 +10%', provisions: .1 }, lord: 'zhouyu' },
   { id: 'caowei', name: '中原 · 曹魏', faction: '曹魏', region: '兖州 · 豫州', x: .585, y: .43, props: 3,
     open: { arc: 'hanzhong', stages: 3, hint: '第八章「汉中之战」平定后开放' }, base: 'hanzhong',
     stages: [
@@ -111,7 +111,7 @@ export const SIDE_ROUTES: readonly SideRouteDef[] = [
         boss: B('yuanshao', '袁绍', '四世三公', 'side_yuanshao', 'phase23/yuanshu', 'liuzhang'),
         partner: B('shenpei', '审配', '河北忠臣', 'side_shenpei', 'phase23/lijue', 'hanxuan') },
     ],
-    annex: ['jinyang', 'shangdang', 'linzi', 'beihai', 'donglai', 'pingyuan'], specialty: { title: '河北钱粮', text: '战后粮草收益 +15%', provisions: .15 }, lord: 'yuanshao' },
+    annex: ['jinyang', 'shangdang', 'linzi', 'beihai', 'donglai', 'pingyuan'], specialty: { title: '河北钱粮', text: '战后钱币收益 +15%', provisions: .15 }, lord: 'yuanshao' },
   { id: 'jiangxia', name: '荆州 · 江夏', faction: '江夏', region: '荆州 · 江夏', x: .665, y: .81, props: 3,
     open: { arc: 'guandu', stages: 3, hint: '第四章「官渡之战」平定后开放' }, base: 'guandu', look: 'jingnan',
     stages: [
@@ -157,7 +157,7 @@ export const SIDE_ROUTES: readonly SideRouteDef[] = [
         boss: B('sunquan', '孙权', '吴侯', 'side_sunquan', 'chibi/caimao', 'lvmeng', true),
         partner: B('zhoutai', '周泰', '江东猛将', 'side_zhoutai', 'chibi/caochun', 'zhuran') },
     ],
-    annex: ['wujun'], specialty: { title: '吴郡富庶', text: '战后粮草收益 +10%', provisions: .1 }, lord: 'sunquan' },
+    annex: ['wujun'], specialty: { title: '吴郡富庶', text: '战后钱币收益 +10%', provisions: .1 }, lord: 'sunquan' },
   { id: 'nanzhong', name: '南中 · 银坑', faction: '南中', region: '南中 · 银坑洞', x: .13, y: .9, props: 6,
     open: { arc: 'nanzheng', stages: 3, hint: '第十一章「南征」平定后开放' }, base: 'nanzheng',
     stages: [

@@ -34,7 +34,7 @@ const farmNet = w => (w.report?.grain ?? 0) - (w.report?.upkeep ?? 0);
   const p = await open(mk(['xuchang', 'guandu']));
   const card = await p.evaluate(M0 => { const s = eval(M0); s.cityMarkers.find(m => m.city.id === 'xuchang').hit.emit('pointerup', { getDistance: () => 0 }); const own = s.detail.text; s.cityMarkers.find(m => m.city.id === 'luoyang').hit.emit('pointerup', { getDistance: () => 0 }); return { own, luo: s.detail.text }; }, M);
   // 2026-11-17 旧季度经济（军功 / 城池发展），已由 test-city-build 覆盖：ck('信息卡：我方许昌“产出：每次出征 军功 +5 · 粮草 +20”', card.own.includes('产出（均衡，主城「城池发展」可改）：每季 军功 5 · 粮草 20'), card.own);
-  ck('信息卡：洛阳“占领后产出 … 特产「天子旧都」本命武器伤害 +3%”', card.luo.includes('占领后产出：每战 军粮 +55') && card.luo.includes('特产「天子旧都」本命武器伤害 +3%'), card.luo);
+  ck('信息卡：洛阳“占领后产出 … 特产「天子旧都」本命武器伤害 +3%”', card.luo.includes('占领后产出：每战 钱币 +55') && card.luo.includes('特产「天子旧都」本命武器伤害 +3%'), card.luo);
   const land = await p.evaluate(M0 => { const s = eval(M0); const chip = s.children.getByName('world-territory').text; s.children.getByName('world-territory').emit('pointerup'); const panel = s.children.getByName('territory-panel'); return { chip, text: panel?.list.find(o => o.type === 'Text')?.text }; }, M);
   // 2026-11-17 旧季度经济（军功 / 城池发展），已由 test-city-build 覆盖：ck('领地面板：2 座城、每次出征 军功 +5 · 粮草 +30、城池列表', land.chip.startsWith('领地 2') && land.text.includes('我方城池 2 座 · 大城 0 / 中城 1 / 小城 1') && land.text.includes('每季产出（按各城发展方向）：军功 5 · 粮草 30') && land.text.includes('许昌、官渡'), land);
   await p.screenshot({ path: `${out}/mobile-territory.png` });

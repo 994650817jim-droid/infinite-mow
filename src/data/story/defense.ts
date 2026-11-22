@@ -11,7 +11,7 @@ export function defenseBrief(o: DefenseBriefInput): { who?: string; text: string
     { who: '斥候', text: `报！${o.general.startsWith(o.faction) ? o.general : o.faction + o.general}引兵来犯，已到${o.city}城下！` }, // 主将名牌常写成「曹操先锋」，别叠成「曹操曹操先锋」
     { who: '守将', text: keep },
     { who: o.lord, text: '传令——弓手上城，部曲守门！' },
-    { text: '城门有耐久，破了敌军会涌进瓮城；府衙被破才算失守。每波之间可以喘息：花随军粮修门、补设施、补弓手。' },
+    { text: '城门有耐久，破了敌军会涌进瓮城；府衙被破才算失守。每波之间可以喘息：花随军钱币修门、补设施、补弓手。' },
   ];
   if (o.first) lines.push({ text: '站上城头的「滚木」「热油」位会自动放。冲车先拆；云梯打掉，才不会再有人爬上城头。' });
   return lines;

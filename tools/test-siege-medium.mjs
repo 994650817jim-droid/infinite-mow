@@ -124,7 +124,7 @@ const mid3 = await p.evaluate(P => { const s = window.__S, m = s.siegeMid; windo
 await rec(160, 4, async () => p.evaluate(() => window.__clear()));
 const s3 = await goals();
 const eff = await p.evaluate(() => { const m = window.__S.siegeMid; return { food: window.__S.legion.food, mul: m.outgoingMul(), taken: { ...m.taken } }; });
-ck('要点作用：市集守住立刻随军粮 +60；武库守住我军伤害 ×1.08；占过的要点记账（第三步结算用）', eff.food - food0 >= 60 && eff.mul === 1.08 && eff.taken.market === 1 && eff.taken.armory === 1 && eff.taken.granary === 1, { food0, ...eff });
+ck('要点作用：市集守住立刻随军钱币 +60；武库守住我军伤害 ×1.08；占过的要点记账（第三步结算用）', eff.food - food0 >= 60 && eff.mul === 1.08 && eff.taken.market === 1 && eff.taken.armory === 1 && eff.taken.granary === 1, { food0, ...eff });
 ck('占够 3 处要点（兵营没占）→ 府衙门开 → 推进转场进府衙', s3.mid.phase === 'hall' && s3.mid.stats.transitions === 2 && s3.mid.points.filter(q => q.state === 'secured').length === 3, { mid3, phase: s3.mid.phase, points: s3.mid.points });
 ck('巷战段 GIF', gif('2-street'));
 
@@ -151,7 +151,7 @@ for (let i = 0; i < 20; i++) { const o = await p.evaluate(() => { window.__step(
 await step(20); await shot();
 const end = await p.evaluate(async G0 => { const s = eval(G0), w = await import('/src/world/WorldStore.ts'); return { over: s.over, victory: s.victory, phase: s.siegeMid?.phase, owned: w.loadWorld().ownedCities.includes(s.city.id), home: s.resultPanel.getByName('result-home')?.text, body: s.resultTexts.body.text, link: { refill: +s.siegeMid.refillMul().toFixed(2), squads: s.siegeMid.squadCut(), bonus: s.siegeMid.provisionsBonus(), full: s.siegeMid.fullTake }, folk: { ...s.siegeMid.folk?.stats } }; }, G);
 await p.screenshot({ path: OUT + '/result.png' });
-ck('联动 · 限时：占了 3 处（含粮仓）→ 敌援补兵 ×0.25（每处 −15%、粮仓再 −30%）、城外援兵少 3 批；结算军粮 +30%（粮仓）+ 市集一笔 40，没全取', end.link.refill === .25 && end.link.squads === 3 && end.link.bonus.share === .3 && end.link.bonus.flat === 40 && !end.link.full, end.link);
+ck('联动 · 限时：占了 3 处（含粮仓）→ 敌援补兵 ×0.25（每处 −15%、粮仓再 −30%）、城外援兵少 3 批；结算钱币 +30%（粮仓）+ 市集一笔 40，没全取', end.link.refill === .25 && end.link.squads === 3 && end.link.bonus.share === .3 && end.link.bonus.flat === 40 && !end.link.full, end.link);
 ck('结算列表：「城内要点 3/4」，占了的写作用、没占的兵营写「未占」', /城内要点 3\/4/.test(end.body) && /✓ 粮仓/.test(end.body) && /✓ 市集.*百姓归附/.test(end.body) && /· 兵营　未占/.test(end.body), end.body.split('\n').filter(l => /要点|✓|·/.test(l)));
 ck('百姓（电脑版）：入城时四散跑回民居；占下要点后从附近民居出来；市集归附时一齐作揖', end.folk.fled > 0 && end.folk.came >= 13 && end.folk.bowed === 1, end.folk);
 ck('击败守将 → 宝箱 → 插旗占领 → 攻占成功、城归我方、结算按钮「建设城池」', end.over && end.victory && end.owned && end.phase === 'done' && end.home === '建设城池', end);

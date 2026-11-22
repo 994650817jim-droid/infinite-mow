@@ -38,5 +38,5 @@ ck('接线：冲车在走（move）时每帧判断主将在不在护送范围；
 // ———— 8) 行营 / 整军买的兵装、第三章起的缴获
 ck('兵装入库的「测试战斗」只算测试 / 调试 / 网址预览（不再把篇章式战斗 runConfig.encounter 当测试；合并后统一走 lootBlocked）', /protected lootBlocked\(\): boolean \{ return this\.debugRun\(\) \|\| this\.encounterPreview; \}/.test(G) && (G.match(/this\.lootBlocked\(\)/g) ?? []).length >= 3 && !/debug=isChapterTestRun\(\)\|\|this\.debugModified\|\|this\.debugJumped\|\|!!this\.player\.damageImmune\|\|!!this\.runConfig\.encounter,dep=depositRunLoot/.test(G));
 ck('行营（已结算）与整军页（还没开打）买的兵装都直接入行囊，不算本局缴获', /this\.campUI\.onBuyItem=item=>\{const debug=this\.(lootBlocked|lootDebug)\(\);if\(\(this\.over\|\|this\.preCamp\)&&!debug\)addItems\(\[item\]\);/.test(G));
-ck('行营花的随军粮随存档点写回（256f24b5），重进不再回到打赢那一刻', /this\.campUI\.onChanged=\(\)=>this\.saveRestPoint\(\);/.test(G));
+ck('行营花的随军钱币随存档点写回（256f24b5），重进不再回到打赢那一刻', /this\.campUI\.onChanged=\(\)=>this\.saveRestPoint\(\);/.test(G));
 console.log(fail ? `\n${fail} 项失败` : '\n全部通过'); process.exit(fail ? 1 : 0);

@@ -42,7 +42,7 @@ const store = await p.evaluate(async () => {
   return out;
 });
 ck('残卷存档 im_mastery_v1；老档按已通关章节补发（第一章通关 = 15 张），只补一次；起始每个流派解锁 1 个战法', store.slot && store.migrated === 15 && store.again === 15 && store.starters === 6, store); // 2026-11-19 流派重做：六派
-ck('本命淬炼：花军粮 200 → 400，每级本命伤害 +4%；军粮不够时失败', store.temper.lv === 2 && store.temper.g0 - store.temper.g1 === 600 && JSON.stringify(store.temper.ok) === '[true,true,false]' && Math.abs(store.temper.bonus - .08) < 1e-9, store.temper);
+ck('本命淬炼：花钱币 200 → 400，每级本命伤害 +4%；钱币不够时失败', store.temper.lv === 2 && store.temper.g0 - store.temper.g1 === 600 && JSON.stringify(store.temper.ok) === '[true,true,false]' && Math.abs(store.temper.bonus - .08) < 1e-9, store.temper);
 ck('洗点：已加的点全部退回、等级不变；本章第一次免费，第二次花 100 × 等级', store.respec.before === 2 && store.respec.after === 0 && store.respec.free === 0 && store.respec.r1 && store.respec.cost === 100 * store.respec.level, store.respec);
 ck('战法心得：未解锁的不能选；花 6 残卷解锁后可选；最多 2 个', !store.xinde.lockedPick && store.xinde.unlock && store.xinde.spent === 6 && store.xinde.a && store.xinde.b && !store.xinde.c && store.xinde.list.length === 2, store.xinde);
 
@@ -77,8 +77,8 @@ const ui = await p.evaluate(async () => {
   window.__find(root, 'codex-tab-xinde').emit('pointerdown'); await new Promise(r => setTimeout(r, 80)); out.xinde = window.__find(root, 'codex-xinde')?.text; out.tactics = root.list.flatMap(o => [o, ...(o.list ?? [])]).filter(o => /^codex-tactic-/.test(o.name ?? '')).length;
   return out;
 });
-ck('武将谱界面：顶部显示残卷和军粮，总览有名字和等级', /武学残卷 \d+ · 军粮 \d+/.test(ui.res ?? '') && ui.name === '赵云' && /Lv\.\d+/.test(ui.level ?? ''), ui);
-ck('属性页有未分配点数和洗点按钮；本命页显示淬炼 2/5 和下一级花费；心得页列出全部战法（≥24）', /未分配属性点/.test(ui.free ?? '') && /洗点/.test(ui.respec ?? '') && /淬炼 2 \/ 5/.test(ui.temper ?? '') && /军粮 700/.test(ui.temperBtn ?? '') && /心得 2 \/ 2/.test(ui.xinde ?? '') && ui.tactics >= 24, ui);
+ck('武将谱界面：顶部显示残卷和钱币，总览有名字和等级', /武学残卷 \d+ · 钱币 \d+/.test(ui.res ?? '') && ui.name === '赵云' && /Lv\.\d+/.test(ui.level ?? ''), ui);
+ck('属性页有未分配点数和洗点按钮；本命页显示淬炼 2/5 和下一级花费；心得页列出全部战法（≥24）', /未分配属性点/.test(ui.free ?? '') && /洗点/.test(ui.respec ?? '') && /淬炼 2 \/ 5/.test(ui.temper ?? '') && /钱币 700/.test(ui.temperBtn ?? '') && /心得 2 \/ 2/.test(ui.xinde ?? '') && ui.tactics >= 24, ui);
 // 2026-11-19 武将谱改版：名字两侧 ‹ › 切换上一位 / 下一位武将（循环），页签保持不变；电脑版只有一个水墨主按钮
 const nav = await p.evaluate(async () => {
   const r = window.__game.scene.getScene('GameScene').children.getByName('hero-codex'), f = n => window.__find(r, n), w = () => new Promise(z => setTimeout(z, 80)), o = {};

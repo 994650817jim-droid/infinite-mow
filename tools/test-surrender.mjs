@@ -144,7 +144,7 @@ try {
     ck('斩杀袁术：倒地掉宝箱', !k.boss && k.chests >= 1, k);
     const hon = await ev(s => { const out = []; s.parleyExecuteRewards(out); return { names: out.map(o => o.name), flags: JSON.parse(localStorage.getItem('im_story_v1') ?? '{}').flags ?? {} }; });
     const food1 = await p.evaluate(async () => (await import('/src/world/WorldStore.ts')).loadWorld().provisions ?? 0);
-    ck('宁死不降的替代奖励：本存档首次厚葬袁术 · 军粮 +60 · 仁名 +1（记入 honored）', hon.names.some(n => /^厚葬袁术 · 军粮 \+60 · 仁名 \+1/.test(n)) && String(hon.flags.honored).includes('yuanshu') && food1 - food0 >= 60, { hon, food0, food1 });
+    ck('宁死不降的替代奖励：本存档首次厚葬袁术 · 钱币 +60 · 仁名 +1（记入 honored）', hon.names.some(n => /^厚葬袁术 · 军粮 \+60 · 仁名 \+1/.test(n)) && String(hon.flags.honored).includes('yuanshu') && food1 - food0 >= 60, { hon, food0, food1 });
     ev = await open('ThirdGameScene', { thirdStage: 3 }, { thirdStage: 3 });
     const r = await ev(s => ({ state: s.parley?.state }));
     await hurtTo(ev, .1); await p.waitForTimeout(300);
@@ -184,7 +184,7 @@ try {
     });
     ck('降将栏 8 格：首领降将挤掉最早的普通俘虏（3 名普通俘虏先被挤）', r.mid.length === 8 && !r.mid.some(n => n.startsWith('俘虏')) === false && r.end.length === 8 && !r.end.some(n => n.startsWith('俘虏')), r);
     ck('全是首领降将时挤掉最早的首领降将，并提示被挤走的名字', r.evicted[1]?.length === 1 && !r.end.includes('测首领1'), r);
-    ck('首领降将：橙色、招降价 300 军粮、剩 4 季', r.quality === 'orange' && r.price === 300 && r.left === 4, r);
+    ck('首领降将：橙色、招降价 300 钱币、剩 4 季', r.quality === 'orange' && r.price === 300 && r.left === 4, r);
   }
   // ⑧ 特例：文丑换台词、吕布对刘备的拒绝台词；于禁 9-2 胜利后进降将栏；孟获心服直接入麾下、不掉宝箱
   if (want('special')) {
@@ -210,10 +210,10 @@ try {
     const persuadeOnce = async () => { await drop(); const ev = await open('ThirdGameScene', { thirdStage: 2 }, { thirdStage: 2 }); const pl = await ev(s => ({ has: !!s.parley, key: s.surrenderKey?.(), state: s.parley?.state, boss: !!s.boss?.active })); if (!pl.has) return { pl }; await ev(s => { s.parley.constructor.random = () => .01; }); const f0 = await food(); await hurtTo(ev, .12); await waitPanel(ev); await ev(s => s.choose('persuade')); await p.waitForTimeout(1500); return { f0, f1: await food(), again: await p.evaluate(() => (JSON.parse(localStorage.getItem('im_roster_v1') ?? '{}').captives ?? []).some(o => o.boss === 'zhangxiu')), first: await p.evaluate(() => String((JSON.parse(localStorage.getItem('im_story_v1') ?? '{}').flags ?? {}).surrendered ?? '').includes('zhangxiu')) }; };
     const was = await p.evaluate(() => String((JSON.parse(localStorage.getItem('im_story_v1') ?? '{}').flags ?? {}).surrendered ?? '').includes('zhangxiu'));
     const one = was ? null : await persuadeOnce(), two = await persuadeOnce();
-    ck('劝降奖励：本存档首次劝降张绣 +60 军粮；再劝（已劝降过）照样进降将栏，但不再给', (was || (one.f1 === one.f0 + 60)) && two.again && two.f1 === two.f0, { was, one, two });
+    ck('劝降奖励：本存档首次劝降张绣 +60 钱币；再劝（已劝降过）照样进降将栏，但不再给', (was || (one.f1 === one.f0 + 60)) && two.again && two.f1 === two.f0, { was, one, two });
     const ev = await open('ThirdGameScene', { thirdStage: 2 }, { thirdStage: 2 });
     const ex = await ev(s => { const out1 = [], out2 = []; s.parley = { def: { id: 'test_exec_boss' }, persuadedOk: false }; s.parleyExecuteRewards(out1); s.parleyExecuteRewards(out2); s.parley = null; return { first: out1.map(o => o.name), second: out2.map(o => o.name) }; });
-    ck('斩杀奖励：首次斩杀此人紫色兵装 + 军粮 25，再斩只有军粮', ex.first[0]?.startsWith('紫色兵装') && ex.second[0] === '军粮 +25', ex);
+    ck('斩杀奖励：首次斩杀此人紫色兵装 + 钱币 25，再斩只有钱币', ex.first[0]?.startsWith('紫色兵装') && ex.second[0] === '钱币 +25', ex);
   }
   // ⑩ 「斩颜良」横幅 / 旗标只在斩杀时出现（关羽在队）
   if (want('yanliang')) {

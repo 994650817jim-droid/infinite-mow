@@ -126,13 +126,13 @@ const R = (p, fn, arg) => p.evaluate(async ([src, a]) => { const r = await impor
     o.zhId = zh.id;
     r.setRosterRandom(); return o;
   });
-  ck('手动刷新：第一次 30 军粮，之后 60', r.c1 === 30 && r.c2 === 60 && r.spent === 30, r);
+  ck('手动刷新：第一次 30 钱币，之后 60', r.c1 === 30 && r.c2 === 60 && r.spent === 30, r);
   ck('招贤馆 Lv1：连刷 12 次不出名将，没有保底（不攒次数），每席名将率 0.3%', r.hallLv === 1 && !r.lv1Named && r.dry === 0 && Math.abs(r.odds1.seat - .003) < 1e-9 && r.odds1.pity === 0, { hallLv: r.hallLv, lv1Named: r.lv1Named, dry: r.dry, odds1: r.odds1 });
   ck('招贤馆 Lv1 真随机连刷 200 次：名将 ≤ 8 个（期望约 1.8）', r.named200 <= 8 && r.named200 + r.common200 === 600, { named200: r.named200, common200: r.common200 });
   ck('招贤馆 Lv2：每席名将率 5%，有保底，第 11 次刷新内必出可玩名将', Math.abs(r.odds2.seat - .05) < 1e-9 && r.odds2.pity === 10 && r.pityAt <= 11 && r.dry2 === 0, { odds2: r.odds2, pityAt: r.pityAt, dry2: r.dry2 });
-  ck('招募可玩名将扣 900 军粮，只能随行、不能当主将出战（主公规则）', r.rec.ok && !r.heroOwned && r.cost === 900 && r.followers.length === 1, r);
+  ck('招募可玩名将扣 900 钱币，只能随行、不能当主将出战（主公规则）', r.rec.ok && !r.heroOwned && r.cost === 900 && r.followers.length === 1, r);
   ck('击败敌将俘获进降将栏，不重复', r.cap === '张郃' && r.capAgain === null, r);
-  ck('招降六折（300 军粮）', r.capRec.ok && r.capCost === 300, r);
+  ck('招降六折（300 钱币）', r.capRec.ok && r.capCost === 300, r);
   ck('随行上限 1；升级招贤馆后可带 2 人', !r.full.ok && r.hall.ok && r.add.ok && r.cap2 === 2, r);
   // 随行装备：招来的 r_ 武将可以穿戴，存档校验接受 r_ 键、丢掉非法键；行囊只列麾下；遣散时卸回行囊
   const g = await p.evaluate(async id => {
@@ -159,7 +159,7 @@ const R = (p, fn, arg) => p.evaluate(async ([src, a]) => { const r = await impor
     o.up = R.upgradeHall(); o.cost = p0 - W.loadWorld().provisions; o.lv2 = R.hallLevel(); o.tl2 = W.talentLevel(); o.cap = R.followerCap(); o.rank = R.rankCap();
     o.max = R.upgradeHall(); return o;
   });
-  if (h.inTown) ck('招贤馆是营寨建筑：等级与营寨一致，升 3 级扣 1800 军粮，随行 3 人，满级不能再升', h.lv === 2 && h.tl === 2 && h.up.ok && h.cost === 1800 && h.lv2 === 3 && h.tl2 === 3 && h.cap === 3 && h.rank === 10 && !h.max.ok, h);
+  if (h.inTown) ck('招贤馆是营寨建筑：等级与营寨一致，升 3 级扣 1800 钱币，随行 3 人，满级不能再升', h.lv === 2 && h.tl === 2 && h.up.ok && h.cost === 1800 && h.lv2 === 3 && h.tl2 === 3 && h.cap === 3 && h.rank === 10 && !h.max.ok, h);
   else ck('招贤馆尚未进营寨：沿用招募存档里的等级', !h.inTown, h);
   ck('将阶：兵器线 +6% 伤害；主公不能遣散', r.rank.ok && Math.abs(r.bonus.damage - .06) < 1e-9 && !r.lordDismiss.ok, r);
   await p.close();

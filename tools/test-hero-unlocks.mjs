@@ -130,8 +130,8 @@ const hire = await p.evaluate(async () => {
 });
 ck('新存档：开局刘关张赵默认已招，主公之外的三人随行（名额内）', hire.starters && hire.starterFollow >= 1, hire);
 ck('解锁诸葛亮只代表可选为主将：没招之前不在麾下（不能当随从）', hire.zhugeUnlocked && !hire.zhugeHired0, hire);
-ck('招贤馆「名将」：未归附的招不了（尚未归附）、军粮不够招不了', !hire.locked.ok && /尚未归附/.test(hire.locked.message) && !hire.poor.ok && /军粮不足/.test(hire.poor.message), hire);
-ck('付军粮招募后入麾下、能随行；扣粮 = 档次价（诸葛亮 ' + hire.cost + '），不能重复招', hire.ok.ok && hire.zhugeHired1 && hire.grain === 3000 - hire.cost && !hire.again.ok, hire);
+ck('招贤馆「名将」：未归附的招不了（尚未归附）、钱币不够招不了', !hire.locked.ok && /尚未归附/.test(hire.locked.message) && !hire.poor.ok && /钱币不足/.test(hire.poor.message), hire);
+ck('付钱币招募后入麾下、能随行；扣粮 = 档次价（诸葛亮 ' + hire.cost + '），不能重复招', hire.ok.ok && hire.zhugeHired1 && hire.grain === 3000 - hire.cost && !hire.again.ok, hire);
 ck('劝降可玩武将（黄忠）只解锁可玩，提示往招贤馆招募，不直接入麾下', /招贤馆/.test(hire.persuade.message) && !hire.hzOwned, hire);
 ck('招贤馆席位不再随机出可玩武将（改在「名将」页招募）', hire.heroOffers === 0, hire);
 // 截图：招贤馆「名将」页

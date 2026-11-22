@@ -69,7 +69,7 @@ const WALL = { segStep: 196, gateHalfVis: 124, gateOverlap: 14, beyond: 520, sha
 /** 城门图上多大比例（从顶往下）画成前景层：到门洞拱顶以上、含屋顶 / 阁楼 / 垛口。 */
 const GATE_FRONT_CUT = .46;
 /** 军令面板里每种要点的一句话作用。 */
-const POINT_BRIEF: Record<CityPointKind, string> = { granary: '结算军粮 +30%', armory: '我军伤害 +8% · 断弓手', barracks: '城内守军 −25%', tower: '停城头箭雨', market: '军粮 +60 · 百姓归附' };
+const POINT_BRIEF: Record<CityPointKind, string> = { granary: '结算钱币 +30%', armory: '我军伤害 +8% · 断弓手', barracks: '城内守军 −25%', tower: '停城头箭雨', market: '钱币 +60 · 百姓归附' };
 const ART = { walls: 'siege_mid_walls', gateFx: 'siege_mid_gatefx', ram: 'siege_mid_ram', street: 'siege_mid_street', hall: 'siege_mid_hall', barb: 'siege_mid_barb', city: 'siege_mid_city' } as const;
 /** v2 图集帧（4×2）：城防 0 城墙段 1 城门 2 城门破 3 箭楼 4 箭楼毁 5 墩台 6 残墙 7 辕门；冲车 0–3 撞门 4 打坏 5 残骸 6 我方大旗 7 我方营帐；
  *  巷战 0 民房 1 两层民房 2 店铺 3 粮仓 4 兵营 5 路障 6 屋脊 7 水井；府衙 0 大堂 1 台阶 2 回廊 3 石狮 4 内城门 5 帅旗 6 香炉 7 照壁 */
@@ -813,11 +813,11 @@ export class SiegeMidCity {
   private pointEffect(pt: Point): string {
     const F = CITY_FX;
     switch (pt.kind) {
-      case 'granary': return `结算军粮 +${Math.round(F.granaryProvisions * 100)}% · 敌援补兵 −${Math.round(F.granaryRefill * 100)}%`;
+      case 'granary': return `结算钱币 +${Math.round(F.granaryProvisions * 100)}% · 敌援补兵 −${Math.round(F.granaryRefill * 100)}%`;
       case 'armory': return `守军不再出弓手 · 我军伤害 +${Math.round((F.armoryDamage - 1) * 100)}%`;
       case 'barracks': return `城内守军少来 ${Math.round(F.barracksSkip * 100)}%`;
       case 'tower': return this.points.some(q => q.kind === 'tower' && q.state !== 'secured') ? '角楼箭雨减弱' : '城头箭雨已停';
-      case 'market': this.h.gainFood?.(F.marketFood); return `百姓归附 · 随军粮 +${F.marketFood}`;
+      case 'market': this.h.gainFood?.(F.marketFood); return `百姓归附 · 随军钱币 +${F.marketFood}`;
     }
   }
   /** 已占要点的累计（第三步结算用）。 */
@@ -837,15 +837,15 @@ export class SiegeMidCity {
     if (!this.points.length) return [];
     const F = CITY_FX, pct = (v: number) => Math.round(v * 100);
     const gain: Record<CityPointKind, string> = {
-      granary: `军粮 +${pct(F.granaryProvisions)}% · 敌援补兵 −${pct(F.granaryRefill)}% · 守军 −${pct(F.garrisonCut)}%`,
+      granary: `钱币 +${pct(F.granaryProvisions)}% · 敌援补兵 −${pct(F.granaryRefill)}% · 守军 −${pct(F.garrisonCut)}%`,
       armory: `我军伤害 +${pct(F.armoryDamage - 1)}% · 断弓手`, barracks: `城内守军 −${pct(F.barracksSkip)}% · 守军 −${pct(F.garrisonCut)}%`,
-      tower: '城头箭雨减弱', market: `随军粮 +${F.marketFood} · 军粮 +${F.marketProvisions} · 百姓归附`,
+      tower: '城头箭雨减弱', market: `随军钱币 +${F.marketFood} · 钱币 +${F.marketProvisions} · 百姓归附`,
     };
     const lines = this.points.map(p => `　${p.state === 'secured' ? '✓' : '·'} ${p.name}　${p.state === 'secured' ? gain[p.kind] : '未占'}`);
     const n = this.securedTotal;
     const got = this.points.filter(p => p.state === 'secured').map(p => p.name), miss = this.points.filter(p => p.state !== 'secured').map(p => p.name), b = this.provisionsBonus();
     // 第一行是结算面板「要事」里显示的那一行（GameScene 按「城内要点」开头挑出来）；下面逐条是作用明细
-    const head = `城内要点 ${n}/${this.points.length}：${got.length ? got.join('、') + ' 已占' : '一处未占'}${miss.length && got.length ? '（' + miss.join('、') + '未占）' : ''}${this.fullTake ? ' · 全取' : ''}${b.share || b.flat ? ` · 军粮${b.share ? ' +' + pct(b.share) + '%' : ''}${b.flat ? ' +' + b.flat : ''}` : ''}${n ? ` · 敌援补兵 −${pct(1 - this.refillMul())}%、援兵少 ${this.squadCut()} 批` : ''}`;
+    const head = `城内要点 ${n}/${this.points.length}：${got.length ? got.join('、') + ' 已占' : '一处未占'}${miss.length && got.length ? '（' + miss.join('、') + '未占）' : ''}${this.fullTake ? ' · 全取' : ''}${b.share || b.flat ? ` · 钱币${b.share ? ' +' + pct(b.share) + '%' : ''}${b.flat ? ' +' + b.flat : ''}` : ''}${n ? ` · 敌援补兵 −${pct(1 - this.refillMul())}%、援兵少 ${this.squadCut()} 批` : ''}`;
     return [head, ...lines];
   }
   /** 我军（主将 + 随行 + 部曲）对敌伤害倍率：武库占下 +8%。 */

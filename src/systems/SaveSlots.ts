@@ -7,9 +7,7 @@
 import { CHAPTER_CLEAR_KEY } from './ChapterProgress';
 import { BACKUP_KEY, WORLD_KEY, type WorldSave } from '../world/WorldStore';
 import { getCharacter } from '../data/characters';
-import { YELLOW_STAGES, DONGZHUO_STAGES } from '../data/chapters';
-import { THIRD_STAGES } from '../data/thirdChapter';
-import { GUANDU_STAGES } from '../data/guanduChapter';
+import { CHAPTER_TIMELINE, chapterStagesDone, chapterStages, type TimelineProgress } from '../world/ChapterTimeline';
 
 export const SLOT_COUNT = 3;
 /** 最近一次写入进度的时间（毫秒），随存档位一起移动。 */
@@ -17,7 +15,7 @@ export const SLOT_TOUCH_KEY = 'im_slot_touched';
 const META_KEY = 'im_save_slots';
 const slotKey = (i: number): string => `im_slot_${i}`;
 /** 属于“一个存档”的键；其余 im_ 键（音量、布局等）是全局设置。 */
-export const PROGRESS_KEYS = [WORLD_KEY, BACKUP_KEY, CHAPTER_CLEAR_KEY, 'im_last_hero', SLOT_TOUCH_KEY, 'im_items_v1', 'im_items_v2', 'im_roster_v1', 'im_heroes_v1', 'im_mastery_v1', 'im_campaign_v1', 'im_story_v1', 'im_story_seen_v1', 'im_side_routes_v1'];
+export const PROGRESS_KEYS = [WORLD_KEY, BACKUP_KEY, CHAPTER_CLEAR_KEY, 'im_last_hero', SLOT_TOUCH_KEY, 'im_items_v1', 'im_items_v2', 'im_roster_v1', 'im_heroes_v1', 'im_mastery_v1', 'im_campaign_v1', 'im_story_v1', 'im_story_seen_v1', 'im_side_routes_v1', 'im_merchant_v1'];
 
 export interface SlotSummary {
   index: number;
@@ -62,12 +60,14 @@ export function summarize(i: number): SlotSummary {
   if (isEmpty(d)) return { index: i, active, empty: true };
   let w: Partial<WorldSave> = {};
   try { w = JSON.parse(d![WORLD_KEY] ?? '{}') as Partial<WorldSave>; } catch { /* 损坏时只显示武将 */ }
-  const chapters: [string, string, number, number][] = [
-    ['第一章', '黄巾之乱', w.yellowStages ?? (d![CHAPTER_CLEAR_KEY] === 'true' ? YELLOW_STAGES.length : 0), YELLOW_STAGES.length],
-    ['第二章', '讨伐董卓', w.dongzhuoStages ?? 0, DONGZHUO_STAGES.length],
-    ['第三章', '群雄割据', w.warlordStages ?? 0, THIRD_STAGES.length],
-    ['第四章', '官渡之战', w.guanduStages ?? 0, GUANDU_STAGES.length],
-  ];
+  const progress: TimelineProgress = {
+    ...w, yellowStages: w.yellowStages ?? (d![CHAPTER_CLEAR_KEY] === 'true' ? 3 : 0),
+    dongzhuoStages: w.dongzhuoStages ?? 0, warlordStages: w.warlordStages ?? 0, guanduStages: w.guanduStages ?? 0,
+    chibiStages: w.chibiStages ?? 0, cleared: { huangjin: false, hulao: false, ...w.cleared }, legacyHulaoAccess: !!w.legacyHulaoAccess,
+  };
+  const numerals = ['一','二','三','四','五','六','七','八','九','十','十一','十二'];
+  const chapters: [string, string, number, number][] = CHAPTER_TIMELINE.map((c, index) =>
+    ['第' + (numerals[index] ?? String(index + 1)) + '章', c.title, chapterStagesDone(c.id, progress), chapterStages(c.id).length]);
   // 当前所在章：第一个没打完的；全部打完显示最后一章
   let cur = chapters.findIndex(([, , done, total]) => done < total);
   if (cur < 0) cur = chapters.length - 1;

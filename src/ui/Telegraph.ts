@@ -119,3 +119,16 @@ export function windupFlash(target: { flash(now: number): void; flashUntil?: num
   if (target.sprite && target.flashUntil !== undefined) { target.sprite.setTint(0xffb27a); target.flashUntil = now + 70; }
   else target.flash(now);
 }
+
+/** Hollow warning: the safe center stays visually empty in every hint mode. */
+export function warnRing(g: Phaser.GameObjects.Graphics, x: number, y: number, outer: number, inner: number, progress: number, impact = false): void {
+  const p = Math.max(0, Math.min(1, progress)), color = impact ? 0xf5c78b : 0xcb7852;
+  g.lineStyle(2, color, .4 + p * .5).strokeCircle(x, y, outer);
+  g.lineStyle(2, 0xc6cba7, .7).strokeCircle(x, y, inner);
+  for (let i = 0; i < 20; i++) {
+    const a = i * Math.PI / 10, c = Math.cos(a), n = Math.sin(a);
+    const start = inner + 5, end = inner + (outer - inner - 4) * (.45 + p * .5);
+    g.lineStyle(impact ? 3 : 1, color, impact ? .85 : .3 + p * .4).lineBetween(x + c * start, y + n * start, x + c * end, y + n * end);
+    if (impact) g.fillStyle(0xc9a77b, .7).fillRect(x + c * end - 2, y + n * end - 2, 4, 4);
+  }
+}

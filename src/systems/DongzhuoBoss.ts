@@ -1,3 +1,4 @@
+import { fixedBossDamage } from '../data/survivorBossBalance';
 import Phaser from 'phaser';
 import { DEPTH } from '../config';
 import type {Enemy} from '../entities/Enemy';
@@ -94,8 +95,8 @@ export class DongzhuoBoss {
       }
       if (now >= f.tickAt) {
         f.tickAt = now + D.fireTickMs;
-        if (Math.hypot((p.x - f.x) / 1, (p.y - f.y) / .6) <= D.fireRadius) p.takeDamage(D.fireDamage, now);
-        this.h.army.hurtArea(f.x, f.y, D.fireRadius, D.fireDamage, now);
+        if (Math.hypot((p.x - f.x) / 1, (p.y - f.y) / .6) <= D.fireRadius) p.takeDamage(fixedBossDamage(this.boss.def, D.fireDamage), now);
+        this.h.army.hurtArea(f.x, f.y, D.fireRadius, fixedBossDamage(this.boss.def, D.fireDamage), now);
       }
     }
   }

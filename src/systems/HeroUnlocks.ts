@@ -96,8 +96,8 @@ function backfill(): UnlockSave {
 const load = (): UnlockSave => read() ?? backfill();
 
 /** 这位武将可玩了没（开局四人、账号已解锁、开发全解锁）。 */
-export function heroUnlocked(id: CharacterId | string): boolean {
-  if ((STARTER_HEROES as readonly string[]).includes(id) || unlockDev() || forcedAll()) return true;
+export function heroUnlocked(id: CharacterId | string, includeDev = true): boolean {
+  if ((STARTER_HEROES as readonly string[]).includes(id) || (includeDev && (unlockDev() || forcedAll()))) return true;
   return isHero(id) && load().unlocked.includes(id);
 }
 export function lockedHeroes(): CharacterId[] { return CHARACTERS.map(c => c.id).filter(id => !heroUnlocked(id)); }

@@ -17,6 +17,7 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 5173,
+    proxy: { '/coop-socket': { target: 'ws://127.0.0.1:' + (process.env.COOP_PORT ?? '8787'), ws: true } },
     // OneDrive 目录下 fs.watch 会因原子写临时目录报 EBUSY，改用轮询监听。
     watch: {
       usePolling: true,
@@ -27,5 +28,6 @@ export default defineConfig({
   build: {
     target: 'es2020',
     chunkSizeWarningLimit: 2000,
+    rollupOptions: { output: { manualChunks: id => /node_modules[\\/]phaser[\\/]/.test(id) ? 'phaser' : undefined } },
   },
 });

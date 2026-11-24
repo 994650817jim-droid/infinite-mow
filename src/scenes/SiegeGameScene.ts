@@ -1,3 +1,4 @@
+import { DefenseObjectiveUI, type DefenseBrief } from '../ui/DefenseObjectiveUI';
 import { getCharacter } from '../data/characters';
 import { storyScroll } from '../ui/StoryScroll';
 import { showBarkCard } from '../ui/StoryBarkCard';
@@ -46,7 +47,7 @@ import {DEFENSE_V2, defenseV2On, onWalk, v2ArenaDef, v2WaveStarts} from '../data
 import {Ally} from '../entities/Ally';
 import {isRangedSpawn} from '../data/gateSpawn';
 import {propFootprint} from '../systems/PropFootprint';
-import {hotkeyCodes} from '../data/hotkeys';
+import {hotkeyCodes, hotkeyLabel} from '../data/hotkeys';
 import {playSheet} from '../systems/SkillFxSheets';
 import {arenaTerrain} from '../data/stageMaps';
 import {DefenseAssaultV2, preloadDefenseV2Assault} from '../systems/DefenseAssaultV2';
@@ -63,6 +64,7 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
     protected inheritsCampaign() { return true; }
     protected padTargets() { return this.enemyCamps?.padTargets() ?? []; }
     protected padClearTargets() { this.enemyCamps?.cancel(); }
+    private defenseObjective?: DefenseObjectiveUI;
     private city!: CityDef; private owner: FactionId = 'han'; private defense = false; private intercept = false;
     /** 守城战（守城重做 · systems/DefenseBattle）：城墙在北、城门有耐久、府衙最后防线；迎击不用。 */
     private defend: DefenseBattle | null = null;
@@ -136,6 +138,12 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
       if (!this.defense) this.setupGoals();
       this.defV2?.clear(); this.defV2 = null;
       if (this.defense && !this.intercept) { if (v2) this.setupDefenseV2(); else this.setupDefense(); }
+      this.defenseObjective?.destroy(); this.defenseObjective = undefined;
+      if (this.defend || this.assault) this.defenseObjective = new DefenseObjectiveUI({scene: this,
+        read: () => this.defenseBriefing(), available: () => !this.over && this.mode === 'none' && this.sys.isActive(),
+        pause: () => { const was = this.mode; this.v2Held.clear(); this.input.keyboard?.resetKeys(); this.setMode('story');
+          return () => { if (this.sys.isActive() && !this.over) { if (this.mode === 'story') this.setMode(was); } }; }
+      });
       this.events.once('shutdown', () => { this.events.off('postupdate', this.v2Clamp, this); this.legion.hurtMul = undefined; this.legion.busy = undefined; this.legion.hitMul = undefined; Ally.leanBelow = null; if (this.v2Buff) { this.legion.damageMul /= this.v2Buff.mul; this.v2Buff = null; } this.assault?.clear(); this.assault = null; if (this.v2Rampart) { this.player.passive.rampartMul = 1; this.v2Rampart = false; } this.defV2?.clear(); this.defV2 = null; this.legion.postOf = undefined; this.legion.postRangeMul = undefined; this.mid?.clear(); this.mid = undefined; this.enemyCamps?.clear(); this.enemyCamps = undefined; this.controller?.clear(); this.controller = undefined; this.gateLabel?.destroy(); this.gateLabel = undefined; this.gate = null; });
     }
     /** 攻城目标布置：小城帅旗，中大城两座可摧毁箭楼（会放箭）。 */
@@ -403,7 +411,8 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
         fx: (key, x, y, size, depth) => { playSheet(this, key, x, y, {size, ms: 700, depth}); },
         skipPressed: () => !!this.v2Space && Phaser.Input.Keyboard.JustDown(this.v2Space),
         bigBanner: (t, c) => { this.v2Big = true; try { this.showWaveBanner(t, true, c); } finally { this.v2Big = false; } },
-        gateArt: broken => this.defV2?.setGateBroken(broken), interactHeld: () => hotkeyCodes('sortie').some(c => this.v2Held.has(c)),
+        canInteract: () => this.mode === 'none' && !this.over,
+        gateArt: broken => this.defV2?.setGateBroken(broken), gateSortieArt: open => this.defV2?.setGateSortie(open), interactHeld: () => hotkeyCodes('sortie').some(c => this.v2Held.has(c)),
         holders: (kind, seg) => this.defV2?.holders(kind, seg) ?? [], restStart: () => this.v2GarrisonRefill() });
       // 推梯要按住 F：记下现在按着的键（按 event.code，跟着改键走）
       this.v2Held.clear(); const kb = this.input.keyboard, down = (e: KeyboardEvent) => this.v2Held.add(e.code), up = (e: KeyboardEvent) => this.v2Held.delete(e.code);
@@ -491,6 +500,44 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
         storyScroll(this, GAME_WIDTH, GAME_HEIGHT, IS_DESKTOP, { name: 'story-defense-brief', confirmName: 'story-defense-brief-confirm', kicker: '守城 · 军情', title: `${this.city.name}告急`, lines, reward: '', confirm: '上城守御', background: 'rest_camp',
           onDone: () => { this.children.getByName('story-defense-brief')?.destroy(); if (!this.over && this.mode === 'story') this.setMode(was === 'story' ? 'none' : was); } }); };
       this.time.delayedCall(60, show);
+    }
+    /** 守城军情 / 诊断仅采样当前场景，不读取或导出永久存档。 */
+    private defenseBriefing(): DefenseBrief {
+      const a = this.assault, v2 = a?.gateHelp(), old = this.defend?.snapshot();
+      const snapshot = a?.snapshot() ?? old, waves = v2?.waves ?? old?.waves ?? 0;
+      const wave = v2?.wave ?? old?.wave ?? 0, phase = v2?.phase ?? old?.phase ?? 'attack';
+      const end = wave * (DEFENSE.attackSec + DEFENSE.restSec) + (phase === 'final' ? DEFENSE.finalSec : phase === 'rest' ? DEFENSE.attackSec + DEFENSE.restSec : DEFENSE.attackSec);
+      const left = v2?.left ?? Math.max(0, Math.ceil(end - this.elapsed));
+      const broken = snapshot?.gateOpen ?? false;
+      const action = v2?.sortieOpen ? '砸毁器械，及时回城' : phase === 'rest' ? '补给修整' : broken ? '退守府衙' : phase === 'final' ? '抵挡末波' : '守住城头与府衙';
+      const target = action + ' · ' + (wave + 1) + '/' + waves + '波';
+      const phaseLine = (phase === 'rest' ? '喘息' : phase === 'final' ? '末波' : phase === 'done' ? '已结束' : '敌军攻城') + ' · 剩余 ' + left + ' 秒';
+      const key = IS_DESKTOP ? hotkeyLabel('sortie') + ' 或点击互动提示' : '点击主将附近的互动提示';
+      const gate = v2?.reason ?? (broken ? '城门已破 · 退守府衙，无需开门' : '此守城规则不支持主动开门');
+      const details = [phase === 'rest' ? (v2 ? '补充滚木与热油；可修门或出城破坏器械。倒计时结束后进入下一波。' : '补充设施与守军；城门未破时可修门。倒计时结束后进入下一波。') : phase === 'final' ? '守到本波倒计时结束，或击败攻城主将即可获胜。' : '抵挡当前攻势，倒计时结束后休整；无需开门或清光所有敌兵才能推进。',
+        '府衙被毁或主将阵亡会失守；城门被破不等于立即失败。'];
+      if (v2) {
+        details.push('每波出城一次：攻城开始 ' + DEFENSE_V2.sortie.afterSec + ' 秒后，或喘息期可用；开门后 ' + DEFENSE_V2.sortie.durationSec + ' 秒回城。');
+        details.push('操作位置：门楼内侧互动点，' + key + '。城内楼梯处先上城头；' + (v2.atGate ? '你已到达门楼互动点。' : '请先靠近门楼内侧。'));
+        if (v2.prompt && v2.prompt !== v2.reason) details.push('当前位置：' + v2.prompt.replace(/^F · /, key + ' · '));
+        if (broken) details.push(phase === 'rest' ? '喘息期间在门楼内侧堵门，修到 ' + Math.round(DEFENSE_V2.assault.repair.reopenPct * 100) + '% 后关闭。' : '门楼内侧可下城守府衙；喘息时再堵门。');
+      } else details.push('当前为旧版守城：门由敌军攻破；不用按键开门，守住全部波次即可。');
+      const anomalies: string[] = [];
+      if (!snapshot || waves < 1) anomalies.push('守城控制器或波次缺失');
+      if (!this.over && this.mode === 'none') {
+        if (v2 && (v2.expectedPhase !== phase || v2.expectedWave !== wave)) anomalies.push('波次状态与计时不一致');
+        if (!v2 && phase === 'final' && this.elapsed > end + 1) anomalies.push('末波已到时但尚未结算');
+        if ((v2?.keep ?? old?.keep ?? 1) <= 0) anomalies.push('府衙已毁但尚未结算');
+      }
+      if (v2 && this.defV2) { const expected = broken ? 'broken' : v2.sortieOpen ? 'sortie' : 'closed'; if (this.defV2.gateVisualState !== expected) anomalies.push('城门外观与状态不一致'); }
+      return {target, phase: phaseLine, gate, details, anomalies, diagnostic: {
+        scene: this.sys.settings.key, city: this.city.id, rules: v2 ? 'defense-v2' : 'defense-v1', test: this.test,
+        mode: this.mode, over: this.over, elapsed: Math.round(this.elapsed * 10) / 10, combatMs: Math.round(this.combatNow),
+        wave: wave + 1, waves, phase, left, player: {hero: this.runConfig.character, x: Math.round(this.player.x), y: Math.round(this.player.y), hp: Math.round(this.player.hp)},
+        enemies: this.enemies.filter(e => e.active && !e.isSupplySlot).length, allies: this.legion.units.filter(u => u.active).length,
+        boss: this.boss ? {active: this.boss.active, hp: Math.round(this.boss.hp)} : null,
+        gateArt: this.defV2?.gateVisualState ?? (broken ? 'broken' : 'closed'), interactionKey: hotkeyLabel('sortie'), gateHelp: v2 ?? null, snapshot
+      }};
     }
     /** 测试用：守城控制器。 */
     get defenseBattle() { return this.defend; }
@@ -625,6 +672,7 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
         this.gateLabel.setText(`城门 ${Math.ceil(this.gate!.hp)}/${this.gate!.maxHp}` + (this.bossTimeReached ? ` · ${Math.max(0, Math.ceil(left))}秒内破门` : ''));
       }
       if (this.boss?.active && this.controller) this.hudTexts.bossEnergy.setText(this.controller.label);
+      this.defenseObjective?.update(time);
     }
     /** 攻城没有关间招募休整：战中招兵照常。 */
     /** 攻城：大将倒下后不立即结算，进入占领府衙阶段。 */

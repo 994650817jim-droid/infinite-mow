@@ -6,6 +6,19 @@
 
 /** 28 颗要星 / 主星的图标文件名（public/assets/star-map/icon_<名>.png；贴图 key 与星图页面相同：sm_icon_<名>）。 */
 export const STAR_ICON_FILE: Record<string, string> = {
+  'strength.NX1':'pozhen',
+  'strength.NX2':'zhanjiang',
+  'strength.K2':'wanrendi',
+  'agility.NX1':'zhuifeng',
+  'agility.NX2':'jiying',
+  'agility.K2':'yiqi',
+  'intellect.NX1':'qimou',
+  'intellect.NX2':'guangyu',
+  'intellect.K2':'huoshao',
+  'command.NX1':'haoling',
+  'command.NX2':'tongpao',
+  'command.K2':'sanjun',
+
   'strength.NC': 'qianjun', 'strength.NL1': 'pozhen', 'strength.NL2': 'zhanjiang', 'strength.NR1': 'tiegu', 'strength.NR2': 'beishui', 'strength.K': 'wanrendi',
   'agility.NC': 'qingqi', 'agility.NL1': 'youren', 'agility.NL2': 'jiying', 'agility.NR1': 'lianji', 'agility.NR2': 'zhuifeng', 'agility.K': 'yiqi',
   'intellect.NC': 'ningshen', 'intellect.NL1': 'lianzhu', 'intellect.NL2': 'guangyu', 'intellect.NR1': 'yujin', 'intellect.NR2': 'miaosuan', 'intellect.K': 'huoshao',
@@ -24,6 +37,19 @@ export const starIconUrl = (id: string): string => `assets/star-map/icon_${STAR_
  */
 export type StarFeedbackKind = 'trigger' | 'timed' | 'state';
 export const STAR_FEEDBACK: Record<string, StarFeedbackKind> = {
+  'strength.NX1':'trigger',
+  'strength.NX2':'trigger',
+  'strength.K2':'trigger',
+  'agility.NX1':'trigger',
+  'agility.NX2':'trigger',
+  'agility.K2':'trigger',
+  'intellect.NX1':'trigger',
+  'intellect.NX2':'trigger',
+  'intellect.K2':'trigger',
+  'command.NX1':'trigger',
+  'command.NX2':'trigger',
+  'command.K2':'trigger',
+
   'strength.NL1': 'trigger', 'intellect.NL1': 'trigger', 'agility.NL1': 'trigger', 'intellect.K': 'trigger',
   'agility.NL2': 'timed', 'bridge1.h': 'timed',
   'strength.NR2': 'state', 'command.NR2': 'state', 'bridge3.h': 'state', 'agility.NR2': 'state',

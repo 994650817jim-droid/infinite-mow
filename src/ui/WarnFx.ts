@@ -209,6 +209,8 @@ export class WarnFx {
     return true;
   }
 
+  /** 单个施法被打断或本体死亡，只回收对应预警。 */
+  cancel(id:string):void {const e=this.live.get(id);if(e){for(const img of e.imgs)img.destroy();this.live.delete(id);}this.impacted.delete(id);}
   clear(): void { for (const e of this.live.values()) for (const i of e.imgs) i.destroy(); this.live.clear(); this.impacted.clear(); }
 
   private get(id: string, n: number, key: string, now: number, plain = false): Live {

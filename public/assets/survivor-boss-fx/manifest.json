@@ -1,0 +1,214 @@
+[
+  {
+    "id": "thunder",
+    "original": "C:\\Users\\99465\\OneDrive\\文档\\deepseek-harness\\default-workspace\\infinite-mow\\assets\\generated\\survivor-boss-fx\\thunder-original.png",
+    "file": "assets/survivor-boss-fx/thunder.png",
+    "width": 768,
+    "height": 512,
+    "cell": 256,
+    "frames": [
+      {
+        "frame": 0,
+        "alphaRange": [
+          0,
+          251
+        ]
+      },
+      {
+        "frame": 1,
+        "alphaRange": [
+          0,
+          252
+        ]
+      },
+      {
+        "frame": 2,
+        "alphaRange": [
+          0,
+          253
+        ]
+      },
+      {
+        "frame": 3,
+        "alphaRange": [
+          0,
+          252
+        ]
+      },
+      {
+        "frame": 4,
+        "alphaRange": [
+          0,
+          251
+        ]
+      },
+      {
+        "frame": 5,
+        "alphaRange": [
+          0,
+          246
+        ]
+      }
+    ],
+    "bytes": 457042
+  },
+  {
+    "id": "quake",
+    "original": "C:\\Users\\99465\\OneDrive\\文档\\deepseek-harness\\default-workspace\\infinite-mow\\assets\\generated\\survivor-boss-fx\\quake-original.png",
+    "file": "assets/survivor-boss-fx/quake.png",
+    "width": 768,
+    "height": 512,
+    "cell": 256,
+    "frames": [
+      {
+        "frame": 0,
+        "alphaRange": [
+          0,
+          252
+        ]
+      },
+      {
+        "frame": 1,
+        "alphaRange": [
+          0,
+          253
+        ]
+      },
+      {
+        "frame": 2,
+        "alphaRange": [
+          0,
+          254
+        ]
+      },
+      {
+        "frame": 3,
+        "alphaRange": [
+          0,
+          253
+        ]
+      },
+      {
+        "frame": 4,
+        "alphaRange": [
+          0,
+          252
+        ]
+      },
+      {
+        "frame": 5,
+        "alphaRange": [
+          0,
+          252
+        ]
+      }
+    ],
+    "bytes": 621156
+  },
+  {
+    "id": "spear",
+    "original": "C:\\Users\\99465\\OneDrive\\文档\\deepseek-harness\\default-workspace\\infinite-mow\\assets\\generated\\survivor-boss-fx\\spear-original.png",
+    "file": "assets/survivor-boss-fx/spear.png",
+    "width": 768,
+    "height": 512,
+    "cell": 256,
+    "frames": [
+      {
+        "frame": 0,
+        "alphaRange": [
+          0,
+          252
+        ]
+      },
+      {
+        "frame": 1,
+        "alphaRange": [
+          0,
+          253
+        ]
+      },
+      {
+        "frame": 2,
+        "alphaRange": [
+          0,
+          253
+        ]
+      },
+      {
+        "frame": 3,
+        "alphaRange": [
+          0,
+          253
+        ]
+      },
+      {
+        "frame": 4,
+        "alphaRange": [
+          0,
+          253
+        ]
+      },
+      {
+        "frame": 5,
+        "alphaRange": [
+          0,
+          249
+        ]
+      }
+    ],
+    "bytes": 490382
+  },
+  {
+    "id": "arrow",
+    "original": "C:\\Users\\99465\\OneDrive\\文档\\deepseek-harness\\default-workspace\\infinite-mow\\assets\\generated\\survivor-boss-fx\\arrow-original.png",
+    "file": "assets/survivor-boss-fx/arrow.png",
+    "width": 768,
+    "height": 512,
+    "cell": 256,
+    "frames": [
+      {
+        "frame": 0,
+        "alphaRange": [
+          0,
+          253
+        ]
+      },
+      {
+        "frame": 1,
+        "alphaRange": [
+          0,
+          252
+        ]
+      },
+      {
+        "frame": 2,
+        "alphaRange": [
+          0,
+          253
+        ]
+      },
+      {
+        "frame": 3,
+        "alphaRange": [
+          0,
+          252
+        ]
+      },
+      {
+        "frame": 4,
+        "alphaRange": [
+          0,
+          253
+        ]
+      },
+      {
+        "frame": 5,
+        "alphaRange": [
+          0,
+          253
+        ]
+      }
+    ],
+    "bytes": 369786
+  }
+]

@@ -11,12 +11,19 @@ import type { EnemyKind } from '../types';
 
 /** 机制库（设计第二节 M1–M12 里第一批用到的几种 + 弓骑 / 兽群）。 */
 export type TraitDef =
+  /** 传令：原地鸣号，受击可打断；每个生命最多呼叫一次普通步兵。 */
+  | { kind: 'signal'; range: number; warnMs: number; retryMs: number; reinforcements: number }
+  /** 拒骑：锁定朝向架枪，正面抵挡主将兵器，之后直刺；侧后、火焰与部曲不吃此格挡。 */
+  | { kind: 'brace'; range: number; width: number; warnMs: number; everyMs: number; damage: number; allyDamage: number; front: number }
+  /** 散射：锁定方向，三条箭道预警后一次发射，不持续追踪。 */
+  | { kind: 'fanarcher'; range: number; warnMs: number; everyMs: number; spread: number; speed: number; damageMul: number }
+
   /** M1 蜂拥：一批 group 个一起刷，血少、跑得快 */
   | { kind: 'swarm' }
   /** M2 重装：慢、血厚、不吃击退；贴近后预警砸地，范围伤害 + 击退部曲 */
   | { kind: 'heavy'; slamRange: number; slamRadius: number; warnMs: number; everyMs: number; damage: number; allyDamage: number }
   /** M4 治疗：躲在友军身后，每 everyMs 给半径内友军回 share 最大生命（首领不回） */
-  | { kind: 'healer'; radius: number; share: number; everyMs: number; keepAway: number }
+  | { kind: 'healer'; radius: number; share: number; everyMs: number; keepAway: number; channelMs?: number; maxTargets?: number }
   /** M5 投掷：站在 range 外，每 everyMs 往主将脚下抛一块，落点圈预警 warnMs，范围伤害 */
   | { kind: 'lobber'; range: number; everyMs: number; warnMs: number; radius: number; damage: number; allyDamage: number; flightMs: number }
   /** M6 纵火：冲向主将，一路留下燃烧地面；死时爆燃 */
@@ -54,7 +61,7 @@ export type TraitDef =
   /** M11 绳网：保持距离投网，中了主将移速 × (1 − slow) 持续 slowMs */
   | { kind: 'net'; range: number; everyMs: number; slow: number; slowMs: number; hitDamage: number }
   /** M3 增益光环：躲在友军后面念咒，半径内友军移速 × speedMul、伤害 × damageMul（首领不吃）；倒下光环消失 */
-  | { kind: 'aura'; radius: number; speedMul: number; damageMul: number; keepAway: number }
+  | { kind: 'aura'; radius: number; speedMul: number; damageMul: number; keepAway: number; maxTargets?: number }
   /** 箭雨区：站远处，在主将脚下标一圈，warnMs 后落箭 */
   | { kind: 'volley'; range: number; everyMs: number; warnMs: number; radius: number; damage: number; allyDamage: number }
   /** 擂木：贴近后沿直线预警，滚木从脚下滚出 length（速度 speed），碾到就伤 */
@@ -78,6 +85,8 @@ export type RosterRole = 'fodder' | 'support' | 'heavy' | 'artillery' | 'ranged'
 
 export interface RosterType {
   id: string; name: string;
+  /** 复用素材时显示简短战术身份。 */
+  label?: string;
   /** 底层兵种（决定基础行为、受击、掉落、刷怪池里算哪类）。 */
   base: EnemyKind;
   role: RosterRole;
@@ -108,6 +117,19 @@ export interface RosterType {
 const A = (id: string, cell: number) => ({ walk: `enemy_${id}_walk`, attack: `enemy_${id}_attack`, cell });
 
 export const ROSTER: Record<string, RosterType> = {
+  // 11-23 后续章节第一批：复用现有正式兵种图，用名称签与攻击预警区分；不改第一章。
+  chuanling: { id: 'chuanling', name: '西凉传令骑', base: 'cavalry', role: 'support', mul: { hp: .85, speed: 1.05, damage: .55 }, trait: { kind: 'signal', range: 380, warnMs: 2400, retryMs: 8000, reinforcements: 2 }, art: A('qianghu',176), fallback: { tint: 0xd6b47a, scale: 1 }, cap: 1, noCharge: true },
+  juqi: { id: 'juqi', name: '宛城拒骑兵', base: 'infantry', role: 'lancer', mul: { hp: 1.25, speed: .8, damage: .9 }, trait: { kind: 'brace', range: 195, width: 42, warnMs: 950, everyMs: 3400, damage: 11, allyDamage: 12, front: .5 }, art: A('qiangzhen',144), fallback: { tint: 0x8a9ab1, scale: 1 }, cap: 2 },
+  sanshe: { id: 'sanshe', name: '袁军散射弩', base: 'archer', role: 'ranged', mul: { hp: 1, speed: .7, damage: .9 }, trait: { kind: 'fanarcher', range: 380, warnMs: 900, everyMs: 3800, spread: .27, speed: 250, damageMul: .7 }, art: A('xiandeng',144), fallback: { tint: 0xc1b184, scale: 1 }, cap: 2 },
+  // 第五至十二章扩充：复用已验证美术与机制，短标签区分战术职责。
+  fuwang: { id: 'fuwang', name: '江岸缚网卒', label: '缚网 · 横移', base: 'infantry', role: 'ranged', mul: { hp: .9, speed: .9, damage: .5 }, trait: { kind: 'net', range: 290, everyMs: 4600, slow: .3, slowMs: 1800, hitDamage: 3 }, art: A('lieshou',128), fallback: { tint: 0x90aaa5, scale: 1 }, cap: 2 },
+  shanyi: { id: 'shanyi', name: '荆南药师', label: '药师 · 可打断', base: 'infantry', role: 'support', mul: { hp: .85, speed: .8, damage: .4 }, trait: { kind: 'healer', radius: 190, share: .08, everyMs: 5000, keepAway: 280, channelMs: 1200, maxTargets: 3 }, art: A('jisi',128), fallback: { tint: 0x9db58b, scale: 1 }, cap: 1 },
+  shuliang: { id: 'shuliang', name: '蜀道押粮队', label: '押粮 · 截住有赏', base: 'infantry', role: 'courier', mul: { hp: 1.1, speed: .85, damage: .4 }, trait: { kind: 'courier', runMs: 18000, reinforce: 2, food: 12 }, art: A('yaliang',128), fallback: { tint: 0xbbaa87, scale: 1 }, cap: 1, xpMul: 2 },
+  hanzhongnu: { id: 'hanzhongnu', name: '汉中扇弩手', base: 'archer', role: 'ranged', mul: { hp: 1, speed: .75, damage: .9 }, trait: { kind: 'fanarcher', range: 360, warnMs: 1100, everyMs: 4200, spread: .35, speed: 260, damageMul: .7 }, art: A('funu',128), fallback: { tint: 0xa1a3b0, scale: 1 }, cap: 2 },
+  shouai: { id: 'shouai', name: '樊城守隘枪', base: 'infantry', role: 'lancer', mul: { hp: 1.35, speed: .7, damage: 1 }, trait: { kind: 'brace', range: 210, width: 46, warnMs: 1100, everyMs: 3700, damage: 13, allyDamage: 13, front: .5 }, art: A('qiangzhen',144), fallback: { tint: 0x999ca9, scale: 1 }, cap: 2 },
+  huhuo: { id: 'huhuo', name: '吴军护火卫', label: '护卫 · 引离首领', base: 'shield', role: 'heavy', mul: { hp: 1.8, speed: .8, damage: .95 }, trait: { kind: 'guard', radius: 180, mul: .65, engage: 210 }, art: A('zhuranqin',176), fallback: { tint: 0xae796c, scale: 1.1 }, cap: 2 },
+  manmao: { id: 'manmao', name: '南蛮投矛手', label: '投矛 · 近身压制', base: 'infantry', role: 'ranged', mul: { hp: .95, speed: 1.1, damage: .85 }, trait: { kind: 'javelin', range: 300, everyMs: 3000, speed: 270 }, art: A('danyang',144), fallback: { tint: 0xae9978, scale: 1 }, cap: 2 },
+  duzhan: { id: 'duzhan', name: '魏军督战旗手', label: '督战 · 优先击破', base: 'infantry', role: 'aura', mul: { hp: 1.15, speed: .7, damage: .5 }, trait: { kind: 'aura', radius: 190, speedMul: 1.15, damageMul: 1.12, keepAway: 300, maxTargets: 6 }, art: A('jisi',128), fallback: { tint: 0x9ca8b9, scale: 1 }, cap: 1 },
   // —— 第 1 章 黄巾 ——
   liumin: { id: 'liumin', name: '流民', base: 'infantry', role: 'fodder', mul: { hp: .35, speed: 1.15, damage: .5 }, trait: { kind: 'swarm' }, art: A('liumin', 128), fallback: { tint: 0xb8a888, scale: .8 }, group: [6, 8], cap: 32 },
   fushui: { id: 'fushui', name: '符水道徒', base: 'infantry', role: 'support', mul: { hp: 1.2, speed: .7, damage: .4 }, trait: { kind: 'healer', radius: 200, share: .03, everyMs: 1000, keepAway: 280 }, art: A('fushui', 144), fallback: { tint: 0xf0e2a0, scale: 1 }, cap: 2 },
@@ -187,49 +209,49 @@ export const STAGE_MIX: Record<string, StageMix> = {
   'huangjin.1': { traits: { liumin: { w: CH1_TRIAL ? CH1V6.stage1Mix.liumin : 10 } } }, // 1-1 新手关：只有流民（成群、很脆）
   'huangjin.2': { traits: { liumin: { w: 8 }, fushui: { w: 5, wave: 3 } } }, // 符水道徒挪到事件段：先学会打人群，再学先杀治疗
   'huangjin.3': { traits: { fushui: { w: 4, wave: 2 }, lishi: { w: 3, wave: 3 }, liumin: { w: 4, wave: 1 } } }, // 原 fushui 第 1 波就出 → 第 2 段；先锋补流民
-  'hulao.1': { traits: { gunshi: { w: 6 }, qianghu: { w: 3, wave: 4 } } }, // 汜水关：关守滚石兵 + 副将段西凉弓骑
-  'hulao.2': { traits: { qianghu: { w: 5 }, gunshi: { w: 4, wave: 3 } } },
+  'hulao.1': { traits: { chuanling: { w: 2, wave: 3 }, gunshi: { w: 6 }, qianghu: { w: 3, wave: 4 } } }, // 汜水关：关守滚石兵 + 副将段西凉弓骑
+  'hulao.2': { traits: { chuanling: { w: 2, wave: 3 }, qianghu: { w: 5 }, gunshi: { w: 4, wave: 3 } } },
   'hulao.3': { traits: { qianghu: { w: 4, wave: 1 }, zonghuo: { w: 7, wave: 1 } } }, // 2-3 火烧洛阳不分段（只有第 1 波），不动
   // 第 3 章 群雄
   'qunxiong.1': { traits: { qianghu: { w: 4 }, xianzhen: { w: 3, wave: 3 } } }, // 3-1 李傕郭汜：西凉弓骑打底，事件段陷阵营压上（原只有陷阵营）
-  'qunxiong.2': { traits: { yexi: { w: 6 }, zonghuo: { w: 3, wave: 3 } } }, // 3-2 宛城夜袭：夜袭兵 + 营中纵火
-  'qunxiong.3': { traits: { danyang: { w: 6 }, xianzhen: { w: 3, wave: 4 } } }, // 3-3 寿春：丹阳兵投矛 + 副将段盾阵
+  'qunxiong.2': { traits: { juqi: { w: 3, wave: 3 }, yexi: { w: 6 }, zonghuo: { w: 3, wave: 3 } } }, // 3-2 宛城夜袭：夜袭兵 + 营中纵火
+  'qunxiong.3': { traits: { juqi: { w: 2, wave: 3 }, danyang: { w: 6 }, xianzhen: { w: 3, wave: 4 } } }, // 3-3 寿春：丹阳兵投矛 + 副将段盾阵
   // 第 4 章 官渡
-  'guandu.1': { traits: { xiandeng: { w: 4 }, daji: { w: 4, wave: 3 } } }, // 原两种同时第 2 段出 → 大戟士挪到事件段
-  'guandu.2': { traits: { daji: { w: 4 }, xiandeng: { w: 3, wave: 3 } } }, // 原只有大戟士
+  'guandu.1': { traits: { sanshe: { w: 3, wave: 3 }, xiandeng: { w: 4 }, daji: { w: 4, wave: 3 } } }, // 原两种同时第 2 段出 → 大戟士挪到事件段
+  'guandu.2': { traits: { sanshe: { w: 2, wave: 3 }, daji: { w: 4 }, xiandeng: { w: 3, wave: 3 } } }, // 原只有大戟士
   'guandu.3': { traits: { yaliang: { w: 5 }, xiandeng: { w: 4, wave: 3 } } }, // 乌巢：押粮卒先出（截住有赏），再加先登
   // 第 5 章 赤壁
   'chibi.1': { traits: { qiangzhen: { w: 5 }, shuizu: { w: 3, wave: 4 } } }, // 5-1 长坂（原无新兵）：曹军枪阵追击，副将段水卒过河
-  'chibi.2': { traits: { shuizu: { w: 6 }, huochuan: { w: 3, wave: 3 } } }, // 火船挪到事件段（原第 2 段就出）
-  'chibi.3': { traits: { qiangzhen: { w: 6 }, shuizu: { w: 3, wave: 3 } } }, // 江陵：原只有枪阵兵
+  'chibi.2': { traits: { fuwang: { w: 2, wave: 3 }, shuizu: { w: 6 }, huochuan: { w: 3, wave: 3 } } }, // 火船挪到事件段（原第 2 段就出）
+  'chibi.3': { traits: { fuwang: { w: 2, wave: 3 }, qiangzhen: { w: 6 }, shuizu: { w: 3, wave: 3 } } }, // 江陵：原只有枪阵兵
   // 第 6 章 荆南
-  'jingnan.1': { traits: { wuxi: { w: 5 }, feishi: { w: 3, wave: 3 } } }, // 6-1（原无新兵）：五溪蛮扑跳 + 山越飞石
-  'jingnan.2': { traits: { feishi: { w: 4 }, wuxi: { w: 4, wave: 3 } } },
+  'jingnan.1': { traits: { shanyi: { w: 2, wave: 3 }, wuxi: { w: 5 }, feishi: { w: 3, wave: 3 } } }, // 6-1（原无新兵）：五溪蛮扑跳 + 山越飞石
+  'jingnan.2': { traits: { shanyi: { w: 2, wave: 3 }, feishi: { w: 4 }, wuxi: { w: 4, wave: 3 } } },
   'jingnan.3': { traits: { changsha: { w: 3 }, wuxi: { w: 4, wave: 3 } } }, // 长沙：强弓（上限 2）+ 五溪蛮（原只有强弓）
   // 第 7 章 入蜀
-  'shu.1': { traits: { liehu: { w: 6 }, dongzhou: { w: 3, wave: 4 } } },
+  'shu.1': { traits: { shuliang: { w: 2, wave: 3 }, liehu: { w: 6 }, dongzhou: { w: 3, wave: 4 } } },
   'shu.2': { traits: { liehu: { w: 4 }, funu: { w: 4, wave: 3 } } }, // 落凤坡：伏弩挪到事件段
-  'shu.3': { traits: { dongzhou: { w: 4 }, funu: { w: 3, wave: 3 } } }, // 原只有东州兵
+  'shu.3': { traits: { shuliang: { w: 2, wave: 3 }, dongzhou: { w: 4 }, funu: { w: 3, wave: 3 } } }, // 原只有东州兵
   // 第 8 章 汉中
-  'hanzhong.1': { traits: { jijiu: { w: 3 }, shanqi: { w: 4, wave: 3 } } }, // 阳平关：祭酒（上限 2）+ 魏军山地轻骑
+  'hanzhong.1': { traits: { hanzhongnu: { w: 2, wave: 3 }, jijiu: { w: 3 }, shanqi: { w: 4, wave: 3 } } }, // 阳平关：祭酒（上限 2）+ 魏军山地轻骑
   'hanzhong.2': { traits: { shanqi: { w: 6 }, jijiu: { w: 3, wave: 4 } } }, // 定军山：原只有山地轻骑
-  'hanzhong.3': { traits: { shanqi: { w: 4 }, pili: { w: 2, wave: 3 } } }, // 汉水：霹雳车（上限 1）挪到事件段，先锋 / 精锐出轻骑（原只有霹雳车）
+  'hanzhong.3': { traits: { hanzhongnu: { w: 2, wave: 3 }, shanqi: { w: 4 }, pili: { w: 2, wave: 3 } } }, // 汉水：霹雳车（上限 1）挪到事件段，先锋 / 精锐出轻骑（原只有霹雳车）
   // 第 9 章 襄樊
-  'xiangfan.1': { traits: { leimu: { w: 4 }, kuibing: { w: 4, wave: 4 } } }, // 樊城擂木 + 副将段溃兵
-  'xiangfan.2': { traits: { kuibing: { w: 6 }, leimu: { w: 3, wave: 3 } } }, // 水淹七军：原只有溃兵（杂兵）
+  'xiangfan.1': { traits: { shouai: { w: 2, wave: 3 }, leimu: { w: 4 }, kuibing: { w: 4, wave: 4 } } }, // 樊城擂木 + 副将段溃兵
+  'xiangfan.2': { traits: { shouai: { w: 2, wave: 3 }, kuibing: { w: 6 }, leimu: { w: 3, wave: 3 } } }, // 水淹七军：原只有溃兵（杂兵）
   'xiangfan.3': { traits: { baiyi: { w: 4 }, huogong: { w: 3, wave: 4 } } }, // 白衣渡江：吴军火攻兵在副将段接上（原只有白衣）
   // 第 10 章 夷陵
   'yiling.1': { traits: { linfu: { w: 4 }, huogong: { w: 3, wave: 3 } } },
-  'yiling.2': { traits: { huogong: { w: 4 }, linfu: { w: 3, wave: 2 }, zhuran: { w: 3, wave: 4 } } }, // 原三种第 2 段同时出 → 朱然亲军留到副将段
-  'yiling.3': { traits: { huogong: { w: 5 }, zhuran: { w: 2, wave: 4 } } }, // 火烧连营：原只有火攻兵
+  'yiling.2': { traits: { huhuo: { w: 2, wave: 4 }, huogong: { w: 4 }, linfu: { w: 3, wave: 2 }, zhuran: { w: 3, wave: 4 } } }, // 原三种第 2 段同时出 → 朱然亲军留到副将段
+  'yiling.3': { traits: { huhuo: { w: 2, wave: 4 }, huogong: { w: 5 }, zhuran: { w: 2, wave: 4 } } }, // 火烧连营：原只有火攻兵
   // 第 11 章 南征
-  'nanzheng.1': { traits: { mantoushi: { w: 5 }, dujian: { w: 3, wave: 3 } } }, // 原投石手权重 7 一种
-  'nanzheng.2': { traits: { dujian: { w: 4 }, xunshou: { w: 2, wave: 3 }, mantoushi: { w: 3, wave: 4 } } }, // 11-2（原无新兵）
+  'nanzheng.1': { traits: { manmao: { w: 2, wave: 3 }, mantoushi: { w: 5 }, dujian: { w: 3, wave: 3 } } }, // 原投石手权重 7 一种
+  'nanzheng.2': { traits: { manmao: { w: 2, wave: 3 }, dujian: { w: 4 }, xunshou: { w: 2, wave: 3 }, mantoushi: { w: 3, wave: 4 } } }, // 11-2（原无新兵）
   'nanzheng.3': { traits: { dujian: { w: 6 }, xunshou: { w: 3, wave: 3 } } }, // 驯兽兵挪到事件段
   // 第 12 章 北伐
-  'beifa.1': { traits: { qiangbing: { w: 5 }, huojian: { w: 3, wave: 3 } } }, // 街亭：原只有羌兵
+  'beifa.1': { traits: { duzhan: { w: 2, wave: 3 }, qiangbing: { w: 5 }, huojian: { w: 3, wave: 3 } } }, // 街亭：原只有羌兵
   'beifa.2': { traits: { huojian: { w: 5 }, qiangbing: { w: 3, wave: 3 } } }, // 陈仓：原只有火箭手
-  'beifa.3': { traits: { huwei: { w: 3 }, huojian: { w: 3, wave: 3 }, qiangbing: { w: 2, wave: 4 } } }, // 五丈原：原只有虎卫
+  'beifa.3': { traits: { duzhan: { w: 2, wave: 3 }, huwei: { w: 3 }, huojian: { w: 3, wave: 3 }, qiangbing: { w: 2, wave: 4 } } }, // 五丈原：原只有虎卫
 
   // ———— 支线战场（data/sideRoutes，统筹 11-21：配兵审计 wave-mix-audit.md 第 5 条「支线主题兵没进配兵表」）————
   // 键 = 支线 id + '.' + 第几关（白门楼走吕布战，不在这里）。支线不走五段（CHAPTER_INDEX 没有支线），用基础章节的三波：

@@ -22,6 +22,7 @@ import {checkWorld,ACHIEVEMENTS,unlockedMap} from '../systems/Achievements';
 import {HomeHeroPicker} from '../ui/HomeHeroPicker';
 import {dongzhuoStageUnlocked,dongzhuoStagePlayable,nextDongzhuoStage,yellowStageUnlocked,yellowStagePlayable,loadWorld,worldUnlocked,alertLossWarning} from '../world/WorldStore';
 import Phaser from 'phaser';
+import { coopSocketUrl } from '../coop/protocol';
 import {CUTSCENE_PREVIEW} from '../data/cutscenes';
 import { WAR, ensureWarTextures, warFrame } from '../ui/WarStyle';
 import { CHAPTERS, YELLOW_STAGES,DONGZHUO_STAGES, getChapter, type YellowStage, type ChapterId } from '../data/chapters';
@@ -223,9 +224,13 @@ export class MenuScene extends Phaser.Scene {
     card.hit.on('pointerup',()=>{const next=!card.isFolded;this.registry.set('heroCardFolded',next);card.setFolded(next,true);const sfx=uiSfx();sfx.unlock();sfx.play('uiClick');
       const from=heroEntry.y,to=entryY(next);this.tweens.addCounter({from:0,to:1,duration:380,ease:'Cubic.easeInOut',onUpdate:tw=>heroEntry.setY(from+(to-from)*(tw.getValue()??0))});});
     // 底部一行：存档 · 图鉴 · 战役回顾 · 设置（· 退出游戏，仅桌面版）——11-22 用户「这四个也要设计一下」：改成一组小图标按钮（homeNavIcon），在两颗水墨按钮下方等距排开
-    const navItems=IS_DESKTOP_APP?5:4,navX=(k:number)=>D?cx+(k-(navItems-1)/2)*(navItems>4?84:92):W*(.14+k*.24),navRowY=D?490:918+this.padY;
+    const coop = !!coopSocketUrl();
+    const navItems=(IS_DESKTOP_APP?5:4)+(coop?1:0);
+    const navX=(k:number)=>D?cx+(k-(navItems-1)/2)*(navItems>5?68:navItems>4?76:92):W*((k+.5)/navItems);
+    const navRowY=D?490:918+this.padY;
     this.homeSaveButton(navX(0),navRowY);
-    if(IS_DESKTOP_APP)this.homeQuitButton(navX(4),navRowY);
+    if(coop)this.homeNavIcon(navX(4),navRowY,{name:'home-coop',label:'联机',icon:'ach_all_heroes',onClick:()=>this.scene.start('CoopScene')});
+    if(IS_DESKTOP_APP)this.homeQuitButton(navX(coop?5:4),navRowY);
     // 战役回顾：乱世编年（已平定的关显示史录，未打到的锁住）；“前往选关”沿用原入口。
     this.homeNavIcon(navX(2),navRowY,{name:'home-review',label:'战役回顾',icon:'ach_events_10',onClick:()=>{if(this.children.getByName('campaign-chronicle'))return;new CampaignChronicle(this,arc=>{if(arc==='qunxiong'){requestDirectDepart(this);this.scene.start('ThirdChapterScene');return;}if(arc==='chibi'){requestDirectDepart(this);this.scene.start('ChibiChapterScene');return;}if(arc==='guandu'){requestDirectDepart(this);this.scene.start('GuanduChapterScene');return;}this.registry.set('menuChapterPicker',true);this.scene.restart();},(arc,stage)=>this.replayStage(arc,stage));}});
     this.homeNavIcon(navX(3),navRowY,{name:'home-settings',label:'设置',icon:'ach_level_20',onClick:()=>this.openHomeSettings()});

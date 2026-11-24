@@ -103,6 +103,8 @@ export class Enemy {
   lastHitHeavy = false;
   invulnerable = false;
   controlImmune = false;
+  /** Special controllers may keep physical prop collision while immune to crowd control. */
+  collidesWithPropsWhileImmune = false;
   stunUntil = 0;
   /** 张辽「震慑」层数 / 最后叠层时间、「溃逃」到期时间、溃兵踩踏冷却（weapons/zhangliaoWeapon.ts）。 */
   zhenshe = 0; zhensheAt = 0; routUntil = 0; trampleAt = 0;
@@ -167,6 +169,7 @@ export class Enemy {
     this.active = true;
     this.invulnerable = false;
     this.controlImmune = false;
+    this.collidesWithPropsWhileImmune = false;
     this.stunUntil = 0;
     this.zhenshe = 0; this.zhensheAt = 0; this.routUntil = 0; this.trampleAt = 0; this.withdrawUntil = 0; this.withdrawVx = 0; this.withdrawVy = 0; this.junlingUntil = 0; this.hookedUntil = 0; this.p3BurnUntil = 0;
     this.targetAlly = null; this.targetLife = 0;

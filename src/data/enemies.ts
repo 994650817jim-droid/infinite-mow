@@ -18,6 +18,8 @@ export interface EnemyDef {
   hp: number;
   speed: number;
   damage: number;
+  /** Single-player survivor opt-in; omitted by story bosses and ordinary enemies. */
+  survivorBoss?: { fixedSkillMul: number; phase2Signature: boolean };
   xp: number;
   radius: number;
 }

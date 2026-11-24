@@ -1,3 +1,4 @@
+import { playSurvivorBossFx } from './SurvivorBossFx';
 import { meleeReach } from '../data/bossReach';
 import { BOSS_CHARGE } from '../data/legion';
 import Phaser from 'phaser';
@@ -9,6 +10,7 @@ import { ArcBossV2, type ArcHost } from './ArcBossV2';
 import type { BossDebug } from './BossKit';
 import { BossMount } from './BossMount';
 import { emitBossPhase } from './BossPhase';
+import { warnRing } from '../ui/Telegraph';
 import { warnFx } from '../ui/WarnFx';
 import { KnifeFx } from './KnifeFx';
 import { bossFxImage, ensureBossFx, fxFrame } from './BossFx';
@@ -246,6 +248,7 @@ export class BossMoveset extends ArcBossV2<string> {
     if (this.phase === 2) return;
     const dismount = this.mounted;
     playCastFx(this.h.scene, this.theme, 'burst', this.h.boss.x, this.h.boss.y + 6, 300);   // 换阶段爆发
+    if (this.h.boss.def.survivorBoss && this.def.p2.moves[0]?.name === '封步枪阵') this.order = 0;
     this.phase = 2; this.phase2 = true; this.metrics.phase2++; if (dismount) this.metrics.dismount++;
     this.dash = null; this.ride = null; this.cur = null; this.hideUntil = 0; this.beat.set(null, 'idle', now, 0); this.next = now + 2200;
     // 一阶段的旗阵随换阶段撤掉（不带进二阶段减伤）；步战首领的狂暴演出里旗帜是倒下的
@@ -309,12 +312,17 @@ export class BossMoveset extends ArcBossV2<string> {
       if (Math.abs(along - d) <= 26 + p.radius * .5 && along <= k.len && across <= k.width / 2 + p.radius * .5) { k.hit = true; this.knifeStats.hits++; p.takeDamage(b.def.damage * k.dmg * this.dmgMul, now); this.metrics.playerHits++; }
     }
   }
+  private ringImpacts: Array<{x:number;y:number;r:number;inner:number;until:number}> = [];
   private updateHazards(now: number): void {
+    this.ringImpacts = this.ringImpacts.filter(z => z.until > now);
+    for (const z of this.ringImpacts) warnRing(this.gfx,z.x,z.y,z.r,z.inner,1,true);
     const wf = warnFx(this.h.scene), p = this.h.player, b = this.h.boss;
     for (let i = this.hazards.length - 1; i >= 0; i--) {
       const z = this.hazards[i], s = z.shape, prog = (now - z.from) / Math.max(1, z.at - z.from);
+      const hollow = !!b.def.survivorBoss && s.kind === 'circle' && !!s.inner;
       if (now < z.at) {
-        if (s.kind === 'circle') wf.circle(z.id, s.fx, s.x, s.y, s.r, prog, now);
+        if (hollow && s.kind === 'circle') warnRing(this.gfx,s.x,s.y,s.r,s.inner!,prog);
+        else if (s.kind === 'circle') wf.circle(z.id, s.fx, s.x, s.y, s.r, prog, now);
         else if (s.kind === 'lane') wf.lane(z.id, 'charge', s.x, s.y, s.angle, s.len, s.width, prog, now);
         else wf.sector(z.id, s.x, s.y, s.r, s.angle, prog, now);
         continue;
@@ -328,9 +336,10 @@ export class BossMoveset extends ArcBossV2<string> {
         this.h.army.hurtArea(s.x + Math.cos(s.angle) * s.len / 2, s.y + Math.sin(s.angle) * s.len / 2, s.len / 2, b.def.damage * z.dmg * .6 * this.dmgMul, now);
         continue;
       }
-      const themed = s.kind === 'circle' ? playThemeFx(this.h.scene, this.theme, { kind: 'circle', x: s.x, y: s.y, r: s.r })
+      if (hollow && s.kind === 'circle') { playSurvivorBossFx(this.h.scene,'spear',s.x,s.y,s.r*2.2,now); this.ringImpacts.push({x:s.x,y:s.y,r:s.r,inner:s.inner!,until:now+300}); warnRing(this.gfx,s.x,s.y,s.r,s.inner!,1,true); }
+      const themed = hollow || (s.kind === 'circle' ? playThemeFx(this.h.scene, this.theme, { kind: 'circle', x: s.x, y: s.y, r: s.r })
         : s.kind === 'lane' ? playThemeFx(this.h.scene, this.theme, { kind: 'lane', x: s.x, y: s.y, angle: s.angle, len: s.len, width: s.width })
-        : playThemeFx(this.h.scene, this.theme, { kind: 'sector', x: s.x, y: s.y, r: s.r, angle: s.angle });
+        : playThemeFx(this.h.scene, this.theme, { kind: 'sector', x: s.x, y: s.y, r: s.r, angle: s.angle }));
       if (!themed) { if (s.kind === 'circle') wf.shapeImpact(z.id, s.fx, s.x, s.y, s.r * 2, 0, now); else if (s.kind === 'lane') wf.shapeImpact(z.id, 'charge', s.x, s.y, s.len, s.angle, now, s.width); else wf.shapeImpact(z.id, 'sweep', s.x, s.y, s.r, s.angle, now); }
       const inside = (x: number, y: number, pad: number): boolean => {
         if (s.kind === 'circle') { const d = Math.hypot(x - s.x, y - s.y); return d <= s.r + pad && d >= (s.inner ?? 0) - pad; }
@@ -339,7 +348,9 @@ export class BossMoveset extends ArcBossV2<string> {
       };
       if (p.alive && inside(p.x, p.y, p.radius * .5)) { p.takeDamage(b.def.damage * z.dmg * this.dmgMul, now); this.metrics.playerHits++; if (this.theme) themeShake(this.h.scene, z.dmg >= 1.6); }
       const cx = s.kind === 'lane' ? s.x + Math.cos(s.angle) * s.len / 2 : s.x, cy = s.kind === 'lane' ? s.y + Math.sin(s.angle) * s.len / 2 : s.y;
-      this.h.army.hurtArea(cx, cy, s.kind === 'lane' ? s.len / 2 : s.r, b.def.damage * z.dmg * .6 * this.dmgMul, now, s.kind === 'sector' ? s.angle : undefined, s.kind === 'sector' ? s.arc : undefined);
+      if (hollow && s.kind === 'circle') {
+        for (const u of this.h.army.grid.query(s.x,s.y,s.r+24)) if (u.active && inside(u.x,u.y,u.radius*.5)) this.h.army.hurtByBoss(u,b.def.damage*z.dmg*.6*this.dmgMul,now);
+      } else this.h.army.hurtArea(cx, cy, s.kind === 'lane' ? s.len / 2 : s.r, b.def.damage * z.dmg * .6 * this.dmgMul, now, s.kind === 'sector' ? s.angle : undefined, s.kind === 'sector' ? s.arc : undefined);
     }
   }
 
@@ -363,7 +374,7 @@ export class BossMoveset extends ArcBossV2<string> {
     this.beat.set(name, 'windup', now, windupMs);
   }
   defeat(): void { if (this.mode === 'arc') super.defeat(); else { this.state = 'dead'; this.gfx.clear(); this.onDefeat(); } }
-  protected onDefeat(): void { this.clearWards(); this.hazards = []; this.knives = []; for (const f of this.flags) f.img?.destroy(); this.flags = []; this.mount?.destroy(); this.mount = undefined; this.h.boss.sprite.setAlpha(1); }
+  protected onDefeat(): void { this.clearWards(); this.ringImpacts = []; this.hazards = []; this.knives = []; for (const f of this.flags) f.img?.destroy(); this.flags = []; this.mount?.destroy(); this.mount = undefined; this.h.boss.sprite.setAlpha(1); }
   snapshot() { return { phase: this.phase, mounted: this.mounted, horse: !!this.mount?.hasHorse, state: this.state, cur: this.cur?.name ?? null, hazards: this.hazards.length, flags: this.flags.filter(f => f.e.active).length, guards: this.guards.filter(g => g.active).length, metrics: { ...this.metrics }, label: this.label }; }
   /** 当前打击判定用（DEV / 测试）。 */
   get depthHint(): number { return DEPTH.fx; }

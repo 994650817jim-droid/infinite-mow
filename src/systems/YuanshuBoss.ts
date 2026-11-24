@@ -1,3 +1,4 @@
+import { fixedBossDamage } from '../data/survivorBossBalance';
 import Phaser from 'phaser';
 import type { Enemy } from '../entities/Enemy';
 import { DEPTH } from '../config';
@@ -168,8 +169,8 @@ export class YuanshuBoss extends ArcBossV2<Move> {
         // 手绘金币：炸开 3–5；没图时用通用地动
         // 收敛（用户「首领的攻击特效也需要兼容适应」）：炸开从 3 倍半径缩到 2.4 倍、0.32 秒
         if (!playBossFx(this.h.scene, 'ys_coin', c.x, c.y, YS.coins.radius * 2.4, DEPTH.ground + 6, 3, 5, 320)) groundCracks(this.gfx, c.x, c.y, YS.coins.radius, 1, 0, Math.PI * 2, 0, true, 'slam');
-        if (Math.hypot(p.x - c.x, p.y - c.y) <= YS.coins.radius + p.radius && p.takeDamage(YS.coins.damage, now)) this.metrics.coinHits++;
-        this.h.army.hurtArea(c.x, c.y, YS.coins.radius, YS.coins.troopDamage, now);
+        if (Math.hypot(p.x - c.x, p.y - c.y) <= YS.coins.radius + p.radius && p.takeDamage(fixedBossDamage(this.h.boss.def, YS.coins.damage), now)) this.metrics.coinHits++;
+        this.h.army.hurtArea(c.x, c.y, YS.coins.radius, fixedBossDamage(this.h.boss.def, YS.coins.troopDamage), now);
         this.coins.splice(this.coins.indexOf(c), 1); continue;
       }
       // 金币是埋在地上的雷：贴地（原来和人物同层会盖住人）、缩到 2.2 倍半径、略调淡

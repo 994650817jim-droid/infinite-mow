@@ -1,0 +1,30 @@
+{
+  "rescueSeconds": 10,
+  "bosses": {
+    "zhangliang": ["yellow_zhangliang_walk", "sweep", "黄天横扫"],
+    "zhangbao": ["yellow_zhangbao_walk", "circle", "落雷"],
+    "zhangjiao": ["zhangjiao_walk", "circle", "天雷"],
+    "huaxiong": ["huaxiong_walk", "line", "裂地重斩"],
+    "zhangxiu": ["third_zhangxiu", "line", "追影突刺"],
+    "yuanshu": ["third_yuanshu", "circle", "旗令落阵"],
+    "yanliang": ["guandu_yanliang", "sweep", "斩阵"],
+    "wenchou": ["guandu_wenchou", "line", "破军奔袭"],
+    "caimao": ["chibi_caimao", "circle", "箭雨"],
+    "zhangren": ["shu_zhangren", "line", "贯阵长枪"],
+    "xiahouyuan": ["hanzhong_xiahouyuan", "circle", "急羽箭阵"],
+    "zhanghe": ["hanzhong_zhanghe", "line", "穿阵突击"],
+    "pangde": ["xf_pangde", "sweep", "抬棺重斩"],
+    "zhuran": ["yiling_zhuran", "line", "火线突刺"],
+    "lubu": ["lubu_walk", "sweep", "方天横扫"],
+    "caocao": ["hanzhong_caocao", "line", "破阵军令"],
+    "luxun": ["yiling_luxun", "circle", "火烧连营"],
+    "simayi": ["beifa_simayi", "circle", "落阵"],
+    "menghuo": ["nz_menghuo", "sweep", "蛮王震地"]
+  },
+  "rewards": [
+    { "id": "damage", "name": "砺兵", "detail": "每次攻击伤害 +1" },
+    { "id": "haste", "name": "疾攻", "detail": "攻击间隔缩短 9%" },
+    { "id": "health", "name": "养勇", "detail": "最大生命 +15，回复 15 生命" },
+    { "id": "speed", "name": "轻身", "detail": "移动速度 +7%" }
+  ]
+}

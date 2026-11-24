@@ -17,7 +17,7 @@ import { YUAN_HUE } from './YuanPalette';
 export interface IffMode { tint: boolean; marks: boolean; outline: boolean; /** 描边只给敌人（设置「仅敌人」）。 */ enemyOnly?: boolean; /** 粗描边（设置「粗」）。 */ thick?: boolean }
 export type IffSide = 'ally' | 'enemy';
 export type IffRank = 'normal' | 'elite' | 'boss';
-export interface IffUnit { sprite: Phaser.GameObjects.Image; foot: { x: number; y: number }; side: IffSide; rank: IffRank; visible: boolean; /** 保持原画（随行武将）。 */ keepColors?: boolean; /** 黄巾军（第一章）：不论图集名，阵营色一律偏黄。 */ yellow?: boolean }
+export interface IffUnit { sprite: Phaser.GameObjects.Image; foot: { x: number; y: number }; side: IffSide; rank: IffRank; visible: boolean; /** 保持原画（随行武将）。 */ keepColors?: boolean; /** 黄巾军（第一章）：不论图集名，阵营色一律偏黄。 */ yellow?: boolean; /** 幸存者：敌兵服色统一暗红，不按来源章节变色。 */ uniformEnemy?: boolean }
 
 const OUTLINE_KEY = 'im_iff_outline';
 /** 设置「敌我描边」（方案 c），默认关。 */
@@ -79,17 +79,17 @@ function sourcePixels(tm: Phaser.Textures.TextureManager, key: string): { w: num
 function track(game: Phaser.Game, key: string): void { const keys = game.registry.get('battleTextureKeys') as string[] | undefined; if (keys && !keys.includes(key)) keys.push(key); }
 
 /** 黄巾版换色副本另存一份（iffA_enemyY_…）：同一张通用敌兵图在第一章染黄、其他章节染红。 */
-export const recolorKey = (key: string, side: IffSide, yellow = false): string => `iffA_${side}${yellow && side === 'enemy' ? 'Y' : ''}_${key}`;
-const IFF_PREFIX = /^iffA_(ally|enemyY?)_/;
+export const recolorKey = (key: string, side: IffSide, yellow = false, uniform = false): string => `iffA_${side}${side === 'enemy' ? (uniform ? 'R' : yellow ? 'Y' : '') : ''}_${key}`;
+const IFF_PREFIX = /^iffA_(ally|enemy[YR]?)_/;
 export const outlineKeyOf = (key: string, thick = false): string => (thick ? 'iffOT_' : 'iffO_') + key.replace(IFF_PREFIX, '');
 
 /** 方案 a：生成换色副本，返回新键（失败返回 null）。 */
-export function buildRecolor(game: Phaser.Game, key: string, side: IffSide, yellow = false): string | null {
-  const tm = game.textures, target = recolorKey(key, side, yellow);
+export function buildRecolor(game: Phaser.Game, key: string, side: IffSide, yellow = false, uniform = false): string | null {
+  const tm = game.textures, target = recolorKey(key, side, yellow, uniform);
   if (tm.exists(target)) return target;
   if (failed.has(target) || !tm.exists(key) || key.startsWith('__')) return null;
   const px = sourcePixels(tm, key); if (!px) { failed.add(target); return null; }
-  const hue = side === 'ally' ? ALLY_HUE : yellow ? 48 : enemyHue(key);
+  const hue = side === 'ally' ? ALLY_HUE : uniform ? 355 : yellow ? 48 : enemyHue(key);
   if (hue === null) { failed.add(target); return null; } // 灰白势力：保持底图配色
   const d = px.data.data;
   for (let i = 0; i < d.length; i += 4) {
@@ -97,10 +97,11 @@ export function buildRecolor(game: Phaser.Game, key: string, side: IffSide, yell
     const [h, s, v] = rgb2hsv(d[i], d[i + 1], d[i + 2]);
     // 布料：有一定饱和度且不太暗；跳过皮肤（橙色低饱和）与金属（低饱和）
     const skin = h >= 8 && h <= 42 && s < .62 && v > .45;
-    if (s < .28 || v < .16 || skin) continue;
-    const k = Math.min(1, (s - .28) / .25); // 越鲜艳的布料换得越彻底
-    const nh = side === 'ally' ? hue : h + (((hue - h + 540) % 360) - 180) * .55;
-    const ns = Math.min(1, s * (side === 'ally' ? 1.05 : 1.15)), nv = side === 'ally' ? Math.min(1, v * 1.04) : v;
+    const uniformCloth = uniform && side === 'enemy';
+    if (s < (uniformCloth ? .16 : .28) || v < (uniformCloth ? .1 : .16) || skin) continue;
+    const k = uniform && side==='enemy' ? 1 : Math.min(1, (s - .28) / .25); // 越鲜艳的布料换得越彻底
+    const nh = side === 'ally' || uniform ? hue : h + (((hue - h + 540) % 360) - 180) * .55;
+    const ns = uniform&&side==='enemy'?Math.max(.45,Math.min(.72,s*.85)):Math.min(1,s*(side==='ally'?1.05:1.15)), nv=side==='ally'?Math.min(1,v*1.04):uniform?v*.92:v;
     const [r, g, b] = hsv2rgb((nh + 360) % 360, ns, nv);
     d[i] = d[i] + (r - d[i]) * k; d[i + 1] = d[i + 1] + (g - d[i + 1]) * k; d[i + 2] = d[i + 2] + (b - d[i + 2]) * k;
   }
@@ -178,7 +179,7 @@ export class IffOverlay {
     for (const u of this.units()) {
       const sp = u.sprite; if (!sp.active) continue;
       this.seen.add(sp); st.units++;
-      if (this.mode.tint && u.rank !== 'boss' && !u.keepColors && u.visible) { if (this.recolor(sp, u.side, !!u.yellow)) st.recolored++; }
+      if (this.mode.tint && u.rank !== 'boss' && !u.keepColors && u.visible) { if (this.recolor(sp, u.side, !!u.yellow, !!u.uniformEnemy)) st.recolored++; }
       if (this.mode.marks) {
         const m = this.marks.get(sp) ?? this.newImage(this.marks, sp, 'iff-mark-' + u.side + '-normal');
         const key = 'iff-mark-' + u.side + '-' + u.rank;
@@ -211,10 +212,10 @@ export class IffOverlay {
     map.set(sp, img); return img;
   }
 
-  private recolor(sp: Phaser.GameObjects.Image, side: IffSide, yellow: boolean): boolean {
-    const key = sp.texture.key;
-    if (key.startsWith('iffA_')) return true;
-    const had = this.scene.textures.exists(recolorKey(key, side, yellow)), target = buildRecolor(this.scene.game, key, side, yellow);
+  private recolor(sp: Phaser.GameObjects.Image, side: IffSide, yellow: boolean, uniform = false): boolean {
+    const key = sp.texture.key.replace(IFF_PREFIX,'');
+    if(sp.texture.key===recolorKey(key,side,yellow,uniform))return true;
+    const had=this.scene.textures.exists(recolorKey(key,side,yellow,uniform)), target=buildRecolor(this.scene.game,key,side,yellow,uniform);
     if (!target) return false;
     if (!had) this.stats.built++;
     sp.setTexture(target, sp.frame.name);

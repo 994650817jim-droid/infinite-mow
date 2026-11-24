@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import {STAR_COMBOS,type StarOuterView} from '../data/starOuter';
 import { DEPTH, actorDepth } from '../config';
 import { STAR_FX, STAR_FX_FOOT, type StarFxDef, type StarFxId } from '../data/starFx';
 import { STAR_BY_ID, STAR_NEAR_RADIUS } from '../data/starMap';
@@ -59,12 +60,12 @@ export class StarFx {
 
 export class StarFeedback {
   readonly hud: StarBuffHud; readonly fx: StarFx;
-  private nearAt = -1e9; private near = false;
+  private nearAt = -1e9; private near = false;private lastNotice='';
   constructor(scene: Phaser.Scene) { this.hud = new StarBuffHud(scene); this.fx = new StarFx(scene); }
   get alive(): boolean { return this.hud.alive; }
   hide(): void { if (this.hud.alive) this.hud.update([], 0, false, 0); this.fx.clear(); }
   /** below = 增益栏（接在它下面排）；units = 军团部曲（判断「主将身边有没有部曲」，每 0.2 秒看一次）。 */
-  update(player: Player, now: number, visible: boolean, below: { root: { y: number; visible: boolean }; rowsShown: number }, units: ReadonlyArray<{ active: boolean; x: number; y: number }>): void {
+  update(player: Player, now: number, visible: boolean, below: { root: { y: number; visible: boolean }; rowsShown: number }, units: ReadonlyArray<{ active: boolean; x: number; y: number }>, outer?:StarOuterView): void {
     const g = player.growth, lit = (star: string): boolean => g.stars.includes(star);
     if (now - this.nearAt >= 200 || now < this.nearAt) {
       this.nearAt = now; const r2 = STAR_NEAR_RADIUS * STAR_NEAR_RADIUS; this.near = false;
@@ -72,8 +73,12 @@ export class StarFeedback {
     }
     const entries: StarBuffEntry[] = [];
     for (const id of g.stars) { const n = STAR_BY_ID.get(id); if (n && (n.kind === 'notable' || n.kind === 'keystone')) entries.push({ id, name: n.name, desc: n.desc, kind: KIND_NAME[n.kind], active: g.starActive(id, now, this.near) }); }
+    for(const row of outer?.rows??[]){const entry=entries.find(e=>e.id===row.id);if(entry){entry.desc+='\n当前：'+row.text;entry.priority=1;}}
+    for(const id of outer?.combos??[]){const c=STAR_COMBOS[id];entries.push({id,name:c.name,desc:c.description,kind:'双主星衍生',active:true,iconId:c.keys[0],priority:2});}
     // 增益栏没东西时整栏隐藏：图标排顶到它的位置；有东西时接在最后一行下面
     this.hud.update(entries, now, visible, below.root.y + (below.root.visible ? 24 + below.rowsShown * 42 + 4 : 0));
+    this.hud.updateRuntime(outer,below.root.y);
+    const notice=outer?.notice??'';if(notice&&notice!==this.lastNotice)for(const id of outer?.combos??[])if(notice.startsWith(STAR_COMBOS[id].name))this.hud.flash(id);this.lastNotice=notice;
   }
   /**
    * 每帧调（GameScene.update；上面的 update 跟着 HUD 每 0.1 秒才跑一次）：取走触发信号——图标亮一下、在触发点播一次性特效；

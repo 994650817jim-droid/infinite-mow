@@ -1,3 +1,5 @@
+import { playSurvivorBossFx } from './SurvivorBossFx';
+import { fixedBossDamage } from '../data/survivorBossBalance';
 import Phaser from 'phaser';
 import type { Enemy } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
@@ -33,13 +35,14 @@ interface Pillar { e: Enemy; life: number; x: number; y: number; broken: boolean
 export class ZhangjiaoBoss {
   readonly kit: BossKit; private beat = new Beat<Move>();
   phase2 = false; energy = 0; stunUntil = 0;
+  private thunderLeft = 1;
   private next = 0; private order = 0; private round = 0; private nextRound = 0; private angle = 0;
   private points: { x: number; y: number }[] = [];
   private pillars: Pillar[] = []; private castCut = 0; private safe: { x: number; y: number }[] = [];
   private grid: { x: number; y: number; cells: number[][] } | null = null; private wave = 0;
   private summonAt = 0; private summons: { e: Enemy; life: number }[] = [];
   private gfx: Phaser.GameObjects.Graphics; private pillarGfx: Phaser.GameObjects.Graphics;
-  readonly metrics = { rain: 0, thunder: 0, heaven: 0, heavenBroken: 0, heavenUlt: 0, grid: 0, phase2: 0, hits: 0 };
+  readonly metrics = { rain: 0, thunder: 0, chainThunder: 0, chainStrikes: 0, heaven: 0, heavenBroken: 0, heavenUlt: 0, grid: 0, phase2: 0, hits: 0 };
 
   constructor(private h: Host, now: number) { warmCast(h.scene, 'zhangjiao');
     this.kit = new BossKit({ scene: h.scene, boss: h.boss, banner: h.banner, sfx: h.sfx });
@@ -115,8 +118,11 @@ export class ZhangjiaoBoss {
     this.angle = Math.atan2(p.y - b.y, p.x - b.x); this.round = 0;
     if (move === 'rain') { this.metrics.rain++; this.beat.set(move, 'windup', now, ZJ.rain.windupMs); this.h.sfx('bossVolley'); }
     else if (move === 'thunder') {
-      this.metrics.thunder++; this.beat.set(move, 'windup', now, ZJ.thunder.windupMs);
+      this.metrics.thunder++; this.thunderLeft = b.def.survivorBoss ? 3 : 1;
+      if (this.thunderLeft > 1) { this.metrics.chainThunder++; this.h.banner('连环天雷', '三次锁定落雷 · 持续移动'); }
+      this.beat.set(move, 'windup', now, ZJ.thunder.windupMs);
       this.points = [{ x: p.x, y: p.y }, { x: p.x + 95 * Math.cos(this.angle + 1.9), y: p.y + 95 * Math.sin(this.angle + 1.9) }, { x: p.x + 95 * Math.cos(this.angle - 1.9), y: p.y + 95 * Math.sin(this.angle - 1.9) }];
+      if (this.thunderLeft > 1) this.points = [{ x: p.x, y: p.y }];
     } else if (move === 'heaven') { this.metrics.heaven++; this.energy = 0; this.beat.set(move, 'windup', now, 700); this.h.banner('黄天当立', '打碎四根符柱打断吟唱'); this.h.sfx('bossSummon'); }
     else { this.metrics.grid++; this.wave = 0; this.beat.set(move, 'windup', now, 500); this.layGrid(); }
   }
@@ -136,7 +142,7 @@ export class ZhangjiaoBoss {
           this.kit.pose('lean', 1, dir);
           if (now >= this.nextRound && this.round < rounds) {
             this.nextRound = now + R.roundGapMs; const off = this.round % 2 ? R.spread / 2 : 0; this.round++;
-            for (let i = 0; i < R.bolts; i++) { const a = this.angle + off + (i - (R.bolts - 1) / 2) * R.spread; this.h.fireBolt(b.x, b.y, b.x + Math.cos(a) * 10, b.y + Math.sin(a) * 10, R.damage, R.speed); }
+            for (let i = 0; i < R.bolts; i++) { const a = this.angle + off + (i - (R.bolts - 1) / 2) * R.spread; this.h.fireBolt(b.x, b.y, b.x + Math.cos(a) * 10, b.y + Math.sin(a) * 10, fixedBossDamage(b.def, R.damage), R.speed); }
             this.h.sfx('bossVolley');
           }
           if (B.done(now)) this.toRecover(now, R.recoverMs);
@@ -149,7 +155,13 @@ export class ZhangjiaoBoss {
         else if (B.phase === 'warn') {
           this.kit.pose('cast', 1, dir);
           this.points.forEach((pt, i) => { if (!warnFx(this.h.scene).warn('zjt' + i, 'lightning', pt.x, pt.y, T.radius, prog, now)) warnCircle(this.gfx, pt.x, pt.y, T.radius, prog, 0x7a3cff, 0xd9c2ff, false, now); });
-          if (B.done(now)) { this.strike(this.points, T.radius, T.damage, T.troopDamage, now); this.toRecover(now, T.recoverMs); }
+          if (B.done(now)) {
+            const chain = !!b.def.survivorBoss;
+            this.strike(this.points, T.radius, T.damage * (chain ? .6 : 1), T.troopDamage * (chain ? .6 : 1), now);
+            if (chain) this.metrics.chainStrikes++;
+            if (--this.thunderLeft > 0) { this.points = [{ x: p.x, y: p.y }]; B.set('thunder', 'warn', now, T.warnMs); }
+            else this.toRecover(now, T.recoverMs);
+          }
         } else this.endRecover(now);
         break;
       }
@@ -196,8 +208,8 @@ export class ZhangjiaoBoss {
       const p = this.h.player, safe = this.safe.some(s => Math.hypot(p.x - s.x, p.y - s.y) <= H.safeRadius + p.radius);
       for (let i = 0; i < 4; i++) warnFx(this.h.scene).impact('lightning', cam.x + cam.width * (.15 + .23 * i), cam.y + cam.height * (.3 + .35 * (i % 2)), 110);
       this.h.scene.cameras.main.flash(180, 230, 220, 140, false); this.h.scene.cameras.main.shake(220, .008);
-      if (!safe && p.takeDamage(ZJ.heaven.ultDamage, now)) this.metrics.hits++;
-      for (const u of this.h.army.grid.query(p.x, p.y, 900)) if (u.active && !this.safe.some(s => Math.hypot(u.x - s.x, u.y - s.y) <= H.safeRadius)) this.h.army.hurtByBoss(u, H.ultTroopDamage, now);
+      if (!safe && p.takeDamage(fixedBossDamage(b.def, ZJ.heaven.ultDamage), now)) this.metrics.hits++;
+      for (const u of this.h.army.grid.query(p.x, p.y, 900)) if (u.active && !this.safe.some(s => Math.hypot(u.x - s.x, u.y - s.y) <= H.safeRadius)) this.h.army.hurtByBoss(u, fixedBossDamage(b.def, H.ultTroopDamage), now);
       this.h.sfx('bossSummon'); this.safe = []; this.toRecover(now, 1200);
     }
   }
@@ -269,9 +281,10 @@ export class ZhangjiaoBoss {
   // ---------- 公共 ----------
   /** 落雷：方格判定（雷阵）或圆判定。 */
   private strike(pts: { x: number; y: number }[], r: number, dmg: number, troop: number, now: number, square = false): void {
+    dmg = fixedBossDamage(this.h.boss.def, dmg); troop = fixedBossDamage(this.h.boss.def, troop);
     const p = this.h.player; let hit = false;
     for (const pt of pts) {
-      if (!warnFx(this.h.scene).impact('lightning', pt.x, pt.y, r)) groundCracks(this.gfx, pt.x, pt.y, r, 1, 0, Math.PI * 2, 0, true);
+      if (!(this.h.boss.def.survivorBoss && !square && playSurvivorBossFx(this.h.scene,'thunder',pt.x,pt.y,r*3,now)) && !warnFx(this.h.scene).impact('lightning', pt.x, pt.y, r)) groundCracks(this.gfx, pt.x, pt.y, r, 1, 0, Math.PI * 2, 0, true);
       this.h.army.hurtArea(pt.x, pt.y, r, troop, now);
       if (square ? Math.abs(p.x - pt.x) <= r && Math.abs(p.y - pt.y) <= r : Math.hypot(p.x - pt.x, p.y - pt.y) <= r + p.radius) hit = true;
     }
@@ -319,6 +332,8 @@ export class ZhangjiaoBoss {
   private enterPhase2(now: number): void {
     if (this.phase2) return;
     this.phase2 = true; this.metrics.phase2++; this.abort(); this.order = 0;
+    // First signature after the existing phase shift; preserve pillar counterplay and warning windows.
+    if (this.h.boss.def.survivorBoss?.phase2Signature && this.metrics.heaven === 0) this.energy = 100;
     this.kit.phaseShift(now, '苍天已死，黄天当立', '二阶段 · 雷阵：踩着灭掉的格子走', 0x3a2a05, .2);
     this.next = now + 1800;
   }

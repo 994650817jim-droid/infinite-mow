@@ -1,0 +1,190 @@
+.coop-layer {
+  --line: #9b80544f;
+  --gold: #edcd8d;
+  --muted: #cfbea3;
+  position: fixed;
+  inset: 0;
+  z-index: 44;
+  display: grid;
+  place-items: safe center;
+  box-sizing: border-box;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: max(22px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right))
+    max(22px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+  background: linear-gradient(180deg,#160f0b78,#160f0bd9 45%,#110d0bf5),
+    var(--coop-camp) center 37% / cover #201812;
+  color: #f7ecd9;
+  font-family: IMWarHeading, "Microsoft YaHei", serif;
+}
+.coop-card {
+  width: min(100%, 930px);
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.coop-card header {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 0 0 18px;
+  border-bottom: 1px solid #ba996e80;
+}
+.coop-card h1, .coop-card h2, .coop-card p { margin: 0; }
+.coop-card h1 {
+  color: #ffebc7;
+  font-size: clamp(30px,4vw,48px);
+  line-height: 1.18;
+  letter-spacing: .065em;
+  text-shadow: 0 2px 8px #160f0b;
+  border-inline-start: 5px solid #a34f3e;
+  padding-inline-start: 15px;
+}
+.coop-card h2 { color: var(--gold); font-size: 18px; font-weight: 500; }
+.coop-card p { color: var(--muted); line-height: 1.48; }
+.coop-card header p { grid-column: 1; font-size: 15px; }
+.coop-card .coop-status { color: var(--gold); font-size: 14px; }
+.coop-status:empty { display: none; }
+.coop-card input, .coop-layer button {
+  box-sizing: border-box;
+  min-height: 44px;
+  border: 1px solid #997950;
+  border-radius: 1px;
+  color: #f8ead4;
+  background: #30251bf0;
+  font: inherit;
+  padding: 6px 15px;
+}
+.coop-layer button { cursor: pointer; }
+.coop-layer button:active:not(:disabled) { filter: brightness(.85); }
+.coop-layer button:disabled { opacity: .55; cursor: default; }
+.coop-layer :focus-visible { outline: 2px solid #ffdf91; outline-offset: -4px; }
+.coop-layer .coop-primary {
+  color: #fff0d1;
+  border-color: #ceab78;
+  background: linear-gradient(105deg,#6e3028,#924b35 60%,#663024);
+  box-shadow: inset 0 0 0 3px #3c1e1855;
+  font-weight: 600;
+  letter-spacing: .12em;
+}
+.coop-card .coop-back {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  background: #1c1611ac;
+  border-color: var(--line);
+  font-size: 14px;
+}
+.coop-entries, .coop-entries > section { display: grid; gap: 12px; min-width: 0; }
+.coop-entries > section:first-child { grid-template-columns: 1fr auto; align-items: center; }
+.coop-entries .coop-primary { grid-column: 2; min-width: 174px; }
+.coop-feature {
+  grid-column: 1/-1; position: relative; isolation: isolate; overflow: hidden;
+  display: grid; align-content: end; gap: 5px; min-height: clamp(145px,25vh,218px); padding: 18px;
+  border-block: 1px solid #ac8b5c;
+  background: linear-gradient(90deg,#211810eb,transparent), var(--coop-cover) center 43% / cover;
+}
+.coop-feature img { position: absolute; z-index: -1; right: 1%; top: 0; width: 52%; height: 155%; object-fit: contain; object-position: top right; }
+.coop-feature strong { font-size: clamp(23px,3vw,34px); color: #fff0cb; text-shadow: 0 2px 5px #1a130c; }
+.coop-feature span { color: #f1dfc4; font-size: 14px; }
+.coop-entries > section + section {
+  grid-template-columns: 1fr minmax(240px,38%);
+  align-items: center;
+  padding: 14px 0;
+  border-block: 1px solid var(--line);
+}
+.coop-card form { display: flex; gap: 8px; min-width: 0; }
+.coop-card input { width: 100%; min-width: 0; flex: 1; background: #17120ee8; text-transform: uppercase; letter-spacing: .12em; font-size: 16px; }
+.coop-card input::placeholder { color: var(--muted); letter-spacing: 0; }
+.coop-lobby { grid-template-columns: minmax(0,1.35fr) minmax(0,1fr); column-gap: 26px; align-items: start; }
+.coop-lobby header { grid-column: 1/-1; }
+.coop-lobby h1 { font-size: clamp(25px,3vw,37px); }
+.coop-room-code { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; }
+.coop-room-code span { color: var(--muted); font-size: 13px; }
+.coop-code { font: bold clamp(19px,2.1vw,25px) ui-monospace,monospace; color: #ffe3a6; letter-spacing: .12em; user-select: text; }
+.coop-room-code button { font-size: 13px; }
+.coop-lineup { grid-column: 1; grid-row: 2/6; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.coop-member {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: end;
+  align-items: start;
+  min-height: clamp(205px,34vh,295px);
+  padding: 14px;
+  box-sizing: border-box;
+  border: 1px solid #aa875e8c;
+  background: linear-gradient(0deg,#201711e6,#3930205e),var(--coop-camp) 45% center / auto 100%;
+}
+.coop-member + .coop-member { background-position: center, 72% center; }
+.coop-member img {
+  position: absolute;
+  z-index: -2;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+}
+.coop-member::after {
+  content: '';
+  z-index: -1;
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(0deg,#1b1310f7, #21181499 23%,transparent 57%);
+}
+.coop-member span { font-size: 13px; color: var(--gold); }
+.coop-member strong { font-size: clamp(18px,2.1vw,29px); font-weight: 500; color: #ffedcf; }
+.coop-lobby > h2, .coop-hero-grid, .coop-lobby > .coop-status, .coop-lobby footer { grid-column: 2; }
+.coop-hero-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 6px; max-height: 196px; overflow: auto; scrollbar-color: #93754c #19130f; }
+.coop-hero-grid button { position: relative; overflow: hidden; padding: 34px 2px 4px; font-size: 14px; min-height: 58px; line-height: 1.25; background: #32261c; }
+.coop-hero-grid img { position: absolute; top: 0; left: 0; width: 100%; height: 34px; object-fit: cover; object-position: center 10%; pointer-events: none; }
+.coop-hero-grid button[aria-pressed="true"] { border-color: #f3ce88; background: #78442c; box-shadow: inset 0 0 0 1px #d8ae66; }
+.coop-lobby footer { display: flex; gap: 8px; }
+.coop-lobby footer .coop-primary { flex: 1; }
+.coop-summary { width: min(100%,420px); padding: 22px; background: #221a14f7; border-block: 2px solid #b39764; }
+.coop-summary header { display: block; }
+.coop-summary h1 { font-size: 27px; }
+.coop-summary header p { margin-top: 10px; }
+.coop-layer.coop-draft { background: #18120dd9; }
+.coop-party { display: grid; gap: 6px; }
+.coop-party-member { display: grid; align-items: center; grid-template-columns: 36px 1fr auto; gap: 3px 9px; padding: 6px 8px; background: #44342680; border-inline-start: 2px solid #ad956a; }
+.coop-party-member img { width: 36px; height: 38px; object-fit: cover; object-position: center 12%; grid-row: 1/4; }
+.coop-party-member strong { font-size: 15px; }
+.coop-party-member span, .coop-party-member small { font-size: 13px; color: #e5d4b6; }
+.coop-party-member progress { grid-column: 2; width: 100%; height: 5px; accent-color: #92b99c; }
+.coop-party-member small { grid-column: 3; grid-row: 2; text-align: right; }
+.coop-layer .coop-reward { display: grid; text-align: left; gap: 4px; padding: 10px 14px; }
+.coop-reward strong { color: var(--gold); font-size: 17px; }
+.coop-reward span { color: var(--muted); font-size: 14px; }
+.coop-layer.coop-during-battle { display: block; padding: 0; background: none; pointer-events: none; overflow: visible; }
+.coop-during-battle > button { position: absolute; right: max(12px,env(safe-area-inset-right)); top: max(12px,env(safe-area-inset-top)); font-size: 13px; pointer-events: auto; }
+@media (hover:hover) {
+  .coop-layer button:hover:not(:disabled) { border-color: #edd4a0; filter: brightness(1.1); }
+}
+@media (max-width: 680px) {
+  .coop-layer { background-position: center, 66% center; }
+  .coop-card { gap: 13px; }
+  .coop-card header { gap: 8px; padding-bottom: 13px; }
+  .coop-card header p { grid-column: 1/-1; font-size: 14px; }
+  .coop-card .coop-back { grid-row: 1; padding-inline: 10px; }
+  .coop-entries .coop-primary { grid-column: 1/-1; }
+  .coop-entries > section + section { grid-template-columns: auto minmax(0,1fr); gap: 10px; }
+  .coop-lobby { display: flex; flex-direction: column; align-items: stretch; }
+  .coop-lobby header { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+  .coop-room-code { width: 100%; }
+  .coop-room-code button { margin-inline-start: auto; }
+  .coop-lineup { gap: 8px; }
+  .coop-member { min-height: clamp(128px,22svh,180px); padding: 10px; }
+  .coop-hero-grid { max-height: 134px; }
+}
+@media (max-height: 540px) {
+  .coop-layer { align-items: start; }
+  .coop-member { min-height: 155px; }
+}
+
+/* 断线反馈不覆盖摇杆与退出入口，双方等待时服务器冻结战斗。 */
+.coop-reconnect { position:fixed; z-index:100020; top:max(116px,env(safe-area-inset-top)); left:50%; transform:translateX(-50%); max-width:calc(100vw - 24px); box-sizing:border-box; padding:12px 18px; border:1px solid #ae8b50; background:rgba(29,21,14,.94); color:#f2dfb5; font:600 15px/1.5 serif; text-align:center; pointer-events:none; }

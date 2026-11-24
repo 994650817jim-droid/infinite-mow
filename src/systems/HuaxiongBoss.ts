@@ -1,3 +1,5 @@
+import { playSurvivorBossFx } from './SurvivorBossFx';
+import { fixedBossDamage } from '../data/survivorBossBalance';
 import { meleeReach } from '../data/bossReach';
 /** 破军横扫半径（贴身近战：原 145 × BOSS_MELEE_REACH_MUL，预警、命中、刀光同一个值）。 */
 const SWEEP_R = meleeReach(145);
@@ -5,26 +7,28 @@ import Phaser from 'phaser';
 import type {Enemy} from '../entities/Enemy';
 import type {Player} from '../entities/Player';
 import type {Legion} from './Legion';
-import {TELEGRAPH_CLASSIC,groundCracks,laneCracks,windupFlash} from '../ui/Telegraph';
+import {TELEGRAPH_CLASSIC,groundCracks,laneCracks,windupFlash,warnRing} from '../ui/Telegraph';
 import {HINT_MOCK} from '../ui/HintStyle';import {warnFx} from '../ui/WarnFx';
 import {ensureBossTheme,playThemeFx,themeShake} from './BossThemeFx';
-type State='approach'|'sweepWarn'|'sweep'|'chargeWarn'|'charge'|'recover'|'enrage'|'slamWarn'|'slam'|'dead';
+type State='approach'|'sweepWarn'|'sweep'|'chargeWarn'|'charge'|'recover'|'enrage'|'slamWarn'|'slam'|'quakeWarn'|'quake'|'dead';
 interface Host {scene:Phaser.Scene;boss:Enemy;player:Player;army:Legion;hurtTroops:(x:number,y:number,r:number,d:number,now:number,a?:number,arc?:number)=>void;sfx:()=>void;}
 /** Combat-clock melee boss, no independent combat timers. */
 export class HuaxiongBoss {
   state:State='approach';phase2=false;
   private until=0;private started=0;private nextSweep=1800;private nextCharge=5000;
+  private nextQuake=Infinity;
   private nextSlam=8000;private waveVictims=new Set<string>();private angle=0;private x=0;private y=0;private travelled=0;private applied=false;private hurtUntil=0;private deathAge=0;
   private readonly gfx:Phaser.GameObjects.Graphics;private readonly slash:Phaser.GameObjects.Image;private corpse?:Phaser.GameObjects.Image;
   private readonly chargeVictims=new Set<string>();
-  readonly metrics={sweeps:0,charges:0,enrages:0,impacts:0,slams:0};
-  constructor(private h:Host,now:number){ensureBossTheme(h.scene,'blood');this.nextSlam+=now;this.nextSweep+=now;this.nextCharge+=now;this.gfx=h.scene.add.graphics().setDepth(39);this.slash=h.scene.add.image(0,0,'huaxiong_sweep',0).setDepth(40).setVisible(false);}
-  get label():string{return {approach:'华雄追击',sweepWarn:'横扫蓄力 · 离开扇形',sweep:'破军横扫',chargeWarn:'冲锋锁定 · 侧向躲避',charge:'铁甲冲锋',recover:'收势 · 反击机会',enrage:'半血狂暴',dead:'华雄败退',slamWarn:'裂地重斩 · 离开金线',slam:'裂地冲击'}[this.state];}
+  readonly metrics={sweeps:0,charges:0,enrages:0,impacts:0,slams:0,quakes:0};
+  constructor(private h:Host,now:number){ensureBossTheme(h.scene,'blood');if(h.boss.def.survivorBoss)this.nextQuake=now+4000;this.nextSlam+=now;this.nextSweep+=now;this.nextCharge+=now;this.gfx=h.scene.add.graphics().setDepth(39);this.slash=h.scene.add.image(0,0,'huaxiong_sweep',0).setDepth(40).setVisible(false);}
+  get label():string{return {approach:'华雄追击',sweepWarn:'横扫蓄力 · 离开扇形',sweep:'破军横扫',chargeWarn:'冲锋锁定 · 侧向躲避',charge:'铁甲冲锋',recover:'收势 · 反击机会',enrage:'半血狂暴',dead:'华雄败退',slamWarn:'裂地重斩 · 离开金线',slam:'裂地冲击',quakeWarn:'裂地震环 · 贴近或撤离',quake:'裂地震环'}[this.state];}
   hit(now:number):void{this.hurtUntil=now+100;}
   private enter(state:State,now:number,duration:number):void{this.state=state;this.started=now;this.until=now+duration;this.applied=false;}
   private aim():void{const b=this.h.boss,p=this.h.player;this.angle=Math.atan2(p.y-b.y,p.x-b.x);this.x=b.x;this.y=b.y;}
   private pose(key:string,frame:number):void{this.h.boss.sprite.setTexture(key,frame).setOrigin(.5,114/128).setDisplaySize(140,140).setFlipX(false);}
   private impact(now:number,r:number,damage:number,arc=Math.PI*2):void{
+    damage=fixedBossDamage(this.h.boss.def,damage);
     const b=this.h.boss,p=this.h.player,d=Math.hypot(p.x-b.x,p.y-b.y);
     if(d<=r+p.radius&&(arc===Math.PI*2||Math.cos(Math.atan2(p.y-b.y,p.x-b.x)-this.angle)>=Math.cos(arc/2)))p.takeDamage(damage,now);
     this.h.hurtTroops(b.x,b.y,r,damage,now,this.angle,arc);this.metrics.impacts++;
@@ -36,19 +40,33 @@ export class HuaxiongBoss {
     // 低调预警（默认）：不画填色长条与描边，改为沿刀路的地裂纹（预警时随蓄力加深，落下 / 冲击波时到头）
     if(!TELEGRAPH_CLASSIC&&!this.state.endsWith('Warn')&&this.slamArt)return;// 斩下后（含二阶段冲击波）由裂地命中图表现，不再逐帧画
     if(!TELEGRAPH_CLASSIC){const warn=this.state.endsWith('Warn'),p=warn?Math.min(1,Math.max(0,(this.now-this.started)/Math.max(1,this.until-this.started))):1;laneCracks(this.gfx,this.x+c*from,this.y+n*from,this.angle,to-from,width,p,!warn);return;}this.gfx.fillStyle(color,alpha).lineStyle(2,0xf3c778,.9).beginPath().moveTo(this.x+c*from-n*w,this.y+n*from+c*w).lineTo(this.x+c*to-n*w,this.y+n*to+c*w).lineTo(this.x+c*to+n*w,this.y+n*to-c*w).lineTo(this.x+c*from+n*w,this.y+n*from-c*w).closePath().fillPath().strokePath();}
-  private lineHit(from:number,to:number,width:number,damage:number,now:number,seen:Set<string>):void {const c=Math.cos(this.angle),n=Math.sin(this.angle);const inside=(x:number,y:number,r:number)=>{const dx=x-this.x,dy=y-this.y,a=dx*c+dy*n;return a>=from-r&&a<=to+r&&Math.abs(-dx*n+dy*c)<=width/2+r;};const p=this.h.player;if(!seen.has('p')&&inside(p.x,p.y,p.radius)){seen.add('p');p.takeDamage(damage,now);}for(const a of this.h.army.units){const k=a.id+':'+a.lifeId;if(a.active&&!seen.has(k)&&inside(a.x,a.y,a.radius)){seen.add(k);this.h.army.hurtByBoss(a,damage,now);}}}
+  private lineHit(from:number,to:number,width:number,damage:number,now:number,seen:Set<string>):void {damage=fixedBossDamage(this.h.boss.def,damage);const c=Math.cos(this.angle),n=Math.sin(this.angle);const inside=(x:number,y:number,r:number)=>{const dx=x-this.x,dy=y-this.y,a=dx*c+dy*n;return a>=from-r&&a<=to+r&&Math.abs(-dx*n+dy*c)<=width/2+r;};const p=this.h.player;if(!seen.has('p')&&inside(p.x,p.y,p.radius)){seen.add('p');p.takeDamage(damage,now);}for(const a of this.h.army.units){const k=a.id+':'+a.lifeId;if(a.active&&!seen.has(k)&&inside(a.x,a.y,a.radius)){seen.add(k);this.h.army.hurtByBoss(a,damage,now);}}}
   update(dt:number,now:number):void{
     const b=this.h.boss,p=this.h.player;if(!b.active||this.state==='dead')return;this.now=now;this.gfx.clear();this.slash.setVisible(false);
     if(!this.phase2&&b.hp<=b.maxHp*.5){this.phase2=true;this.metrics.enrages++;this.enter('enrage',now,600);}
     const dx=p.x-b.x,dy=p.y-b.y,d=Math.hypot(dx,dy)||1;
     const dir=Math.abs(dx)>Math.abs(dy)?dx<0?1:2:dy<0?3:0;
     if(this.state==='approach'){
-      if(now>=this.nextSlam){this.aim();this.enter('slamWarn',now,650);}
+      if(now>=this.nextQuake){this.aim();this.enter('quakeWarn',now,900);}
+      else if(now>=this.nextSlam){this.aim();this.enter('slamWarn',now,650);}
       else if(now>=this.nextCharge&&d>125){this.aim();this.enter('chargeWarn',now,800);}
       else if(now>=this.nextSweep&&d<175){this.aim();this.enter('sweepWarn',now,this.phase2?550:750);}
       else{if(d>85){b.sprite.x+=dx/d*b.def.speed*(this.phase2?1.15:1)*dt;b.sprite.y+=dy/d*b.def.speed*(this.phase2?1.15:1)*dt;}this.pose('huaxiong_walk',dir*4+(d>85?Math.floor(now/110)%4:0));if(now<this.hurtUntil)this.pose('huaxiong_actions',4);}
     }
-    if(this.state==='slamWarn'){
+    if(this.state==='quakeWarn'||this.state==='quake'){
+      const outer=this.phase2?185:160,inner=70;
+      this.pose('huaxiong_attack',dir*4+(this.state==='quakeWarn'?1:2));
+      warnRing(this.gfx,this.x,this.y,outer,inner,this.state==='quakeWarn'?(now-this.started)/900:1,this.state==='quake');
+      if(this.state==='quakeWarn'&&now>=this.until)this.enter('quake',now,350);
+      else if(this.state==='quake'){
+        if(!this.applied){this.applied=true;this.metrics.quakes++;playSurvivorBossFx(this.h.scene,'quake',this.x,this.y,outer*2.2,now);const damage=fixedBossDamage(b.def,16),inside=(x:number,y:number,r:number)=>{const d=Math.hypot(x-this.x,y-this.y);return d>=inner-r&&d<=outer+r;};
+          if(inside(p.x,p.y,p.radius))p.takeDamage(damage,now);
+          for(const u of this.h.army.grid.query(this.x,this.y,outer+24))if(u.active&&inside(u.x,u.y,u.radius))this.h.army.hurtByBoss(u,damage,now);
+          this.h.sfx();
+        }
+        if(now>=this.until){this.nextQuake=now+12000;this.enter('recover',now,650);}
+      }
+    }else if(this.state==='slamWarn'){
       this.pose('huaxiong_attack',this.lockedDir()*4+(now-this.started>=450?1:0));
       // 特效型警示（默认）：刀路上碎石跳动、地缝透光；缺图时照旧
       if(!(this.fxOn()&&warnFx(this.h.scene).warn('hx-slam','rift',this.x,this.y,220,(now-this.started)/Math.max(1,this.until-this.started),now,this.angle)))this.strip(0,220,44,0xe9bd70,.22);if(!TELEGRAPH_CLASSIC)windupFlash(b,now);
@@ -79,8 +97,8 @@ export class HuaxiongBoss {
     }else if(this.state==='charge'){
       const step=Math.min(340-this.travelled,(this.phase2?460:390)*dt),ox=b.x,oy=b.y;b.sprite.x+=Math.cos(this.angle)*step;b.sprite.y+=Math.sin(this.angle)*step;this.travelled+=step;
       const horizontal=Math.abs(Math.cos(this.angle))>.6;if(horizontal){this.pose('huaxiong_actions',1+Math.floor(now/90)%2);b.sprite.setFlipX(Math.cos(this.angle)<0);}else this.pose('huaxiong_walk',dir*4+Math.floor(now/75)%4);
-      const line=new Phaser.Geom.Line(ox,oy,b.x,b.y);if(!this.applied&&Phaser.Geom.Intersects.LineToCircle(line,new Phaser.Geom.Circle(p.x,p.y,p.radius+30))){p.takeDamage(18,now);this.applied=true;}
-      for(const u of this.h.army.units){const key=u.id+':'+u.lifeId;if(u.active&&!this.chargeVictims.has(key)&&Phaser.Geom.Intersects.LineToCircle(line,new Phaser.Geom.Circle(u.x,u.y,u.radius+30))){this.chargeVictims.add(key);this.h.army.hurtByBoss(u,18,now);}}
+      const line=new Phaser.Geom.Line(ox,oy,b.x,b.y);if(!this.applied&&Phaser.Geom.Intersects.LineToCircle(line,new Phaser.Geom.Circle(p.x,p.y,p.radius+30))){p.takeDamage(fixedBossDamage(b.def,18),now);this.applied=true;}
+      for(const u of this.h.army.units){const key=u.id+':'+u.lifeId;if(u.active&&!this.chargeVictims.has(key)&&Phaser.Geom.Intersects.LineToCircle(line,new Phaser.Geom.Circle(u.x,u.y,u.radius+30))){this.chargeVictims.add(key);this.h.army.hurtByBoss(u,fixedBossDamage(b.def,18),now);}}
       this.gfx.lineStyle(2,0xb3814e,.35).lineBetween(b.x-Math.cos(this.angle)*60,b.y-Math.sin(this.angle)*60,b.x,b.y);
       if(this.travelled>=340||now>=this.until){b.sprite.setFlipX(false);this.nextCharge=now+6500;this.enter('recover',now,650);}
     }else if(this.state==='recover'){b.sprite.setFlipX(false);this.pose('huaxiong_attack',dir*4+3);if(now>=this.until)this.enter('approach',now,0);}

@@ -4,7 +4,7 @@ import type { Enemy } from '../entities/Enemy';
 import type { SpatialGrid } from './SpatialGrid';
 import { DEPTH } from '../config';
 
-interface Arrow { active: boolean; launched: boolean; owner: Ally; lifeId: number; target: Enemy; spawnId: number; due: number; x: number; y: number; vx: number; vy: number; ttl: number; damage: number; image: Phaser.GameObjects.Image | null; }
+interface Arrow { active: boolean; launched: boolean; owner: Ally; lifeId: number; target: Enemy; spawnId: number; due: number; x: number; y: number; vx: number; vy: number; ttl: number; damage: number; image: Phaser.GameObjects.Image | null; starOrder?:number; }
 /** Logical arrows have no gameplay cap; a small reusable display pool bounds visual cost. */
 export class LegionProjectiles {
   private readonly shots: Arrow[] = [];
@@ -15,14 +15,14 @@ export class LegionProjectiles {
   private readonly near: Enemy[] = [];
   private readonly gfx: Phaser.GameObjects.Graphics;
   constructor(private readonly scene: Phaser.Scene) { this.gfx = scene.add.graphics().setDepth(DEPTH.projectile - .1); }
-  fire(owner: Ally, target: Enemy, damage: number, due: number): void {
+  fire(owner: Ally, target: Enemy, damage: number, due: number,starOrder?:number): void {
     const shot = this.free.pop();
-    const state = { active: true, launched: false, owner, lifeId: owner.lifeId, target, spawnId: target.spawnId, due, x: owner.x, y: owner.y, vx: 0, vy: 0, ttl: 0, damage, image: null };
+    const state = { active: true, launched: false, owner, lifeId: owner.lifeId, target, spawnId: target.spawnId, due, x: owner.x, y: owner.y, vx: 0, vy: 0, ttl: 0, damage, image: null,starOrder };
     if (shot) Object.assign(shot, state); else this.shots.push(state);
   }
   clear(): void { for (const s of this.shots) if (s.active) this.release(s); this.gfx.clear(); this.impacts.length = 0; }
   get count(): number { return this.shots.filter(s => s.active).length; }
-  update(dt: number, now: number, grid: SpatialGrid<Enemy>, damage: (e: Enemy, amount: number) => void): void {
+  update(dt: number, now: number, grid: SpatialGrid<Enemy>, damage: (e: Enemy, amount: number,owner?:Ally,life?:number,issued?:number) => void): void {
     this.gfx.clear();
     for (const s of this.shots) {
       if (!s.active || now < s.due) continue;
@@ -47,7 +47,7 @@ export class LegionProjectiles {
         const t = Math.max(0, Math.min(1, ((e.x - ax) * dx + (e.y - ay) * dy) / (length2 || 1)));
         if (t < firstT && Math.hypot(e.x - ax - t * dx, e.y - ay - t * dy) <= e.radius + 3) { first = e; firstT = t; }
       }
-      if (first) { if (s.image && this.impacts.length < 24) this.impacts.push({x:first.x,y:first.y-8,until:now+110}); this.release(s); damage(first, s.damage); }
+      if (first) { if (s.image && this.impacts.length < 24) this.impacts.push({x:first.x,y:first.y-8,until:now+110}); const amount=s.damage,owner=s.owner,life=s.lifeId,order=s.starOrder;this.release(s); damage(first,amount,owner,life,order); }
       else if (s.ttl <= 0) this.release(s);
     }
     for (let i=this.impacts.length-1;i>=0;i--) {

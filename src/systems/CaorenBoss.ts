@@ -1,3 +1,4 @@
+import { fixedBossDamage } from '../data/survivorBossBalance';
 import Phaser from 'phaser';
 import { DEPTH } from '../config';
 import { CR } from '../data/bossRedesign';
@@ -140,8 +141,8 @@ export class CaorenBoss extends ArcBossV2<Move> {
     // 死门伤害：主将与部曲
     if (now >= this.tickAt) {
       this.tickAt = now + G.deadTickMs;
-      if (this.playerGate === 'dead' && p.takeDamage(G.deadDamage, now)) this.metrics.deadTicks++;
-      for (const u of this.h.army.grid.query(this.cx, this.cy, G.radius)) if (u.active && this.inArena(u.x, u.y) && this.gates[this.sectorOf(u.x, u.y)] === 'dead') this.h.army.hurtByBoss(u, G.deadDamage, now);
+      if (this.playerGate === 'dead' && p.takeDamage(fixedBossDamage(this.h.boss.def, G.deadDamage), now)) this.metrics.deadTicks++;
+      for (const u of this.h.army.grid.query(this.cx, this.cy, G.radius)) if (u.active && this.inArena(u.x, u.y) && this.gates[this.sectorOf(u.x, u.y)] === 'dead') this.h.army.hurtByBoss(u, fixedBossDamage(this.h.boss.def, G.deadDamage), now);
     }
     this.drawGates(now, warning);
   }

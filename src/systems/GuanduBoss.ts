@@ -1,3 +1,4 @@
+import { fixedBossDamage } from '../data/survivorBossBalance';
 import { meleeReach } from '../data/bossReach';
 import Phaser from 'phaser';
 import { warnCircle, warnLane, TELEGRAPH_CLASSIC, groundCracks, windupFlash } from '../ui/Telegraph';
@@ -173,7 +174,7 @@ export class GuanduBoss {
   private fx(z: Zone) { const sc = this.h.scene, ok = z.radius ? playThemeFx(sc, 'dust', {kind: 'circle', x: z.x, y: z.y, r: z.radius}) : playThemeFx(sc, 'dust', {kind: 'lane', x: z.x, y: z.y, angle: z.angle, len: z.length, width: z.width}); if (ok) themeShake(sc, false); }
   private trailAt = 0;
   private impact(z: Zone, now: number, damage: number, key: string) {
-    const p = this.h.player; damage *= this.dmgMul * (this.comboOpt?.dmgMul ?? 1);
+    const p = this.h.player; damage = fixedBossDamage(this.h.boss.def, damage) * this.dmgMul * (this.comboOpt?.dmgMul ?? 1);
     const hit = (id: string, x: number, y: number, r: number, fn: () => void) => { const k = key + ':' + id; if (!this.seen.has(k) && this.inside(z, x, y, r)) { this.seen.add(k); fn(); this.metrics.damage++; } };
     hit('p', p.x, p.y, p.radius, () => p.takeDamage(damage, now));
     const cx = z.radius ? z.x : z.x + Math.cos(z.angle) * z.length / 2, cy = z.radius ? z.y : z.y + Math.sin(z.angle) * z.length / 2;

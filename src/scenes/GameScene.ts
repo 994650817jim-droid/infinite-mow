@@ -4,6 +4,7 @@ import { FRONTLINE, frontlineBreather, frontlineStage } from '../data/frontline'
 import { EnemyFormations } from '../systems/EnemyFormations';
 import {SIDE_STAGE_KEY,sideRoute,type SideRouteId} from '../data/sideRoutes';
 import { safeWorldPoint } from '../ui/SafeLabel';
+import { addMythicBossNameplate, type MythicNameplateStyle } from '../ui/MythicBossNameplate';
 import { SIGIL_LABEL, formationSigil, setFormationSigil, type FormationSigil } from '../systems/BattleSettings';
 import { FORMATION_IDS } from '../data/formations';
 import { FormationFx } from '../systems/FormationFx';
@@ -94,6 +95,8 @@ import {dongzhuoStageUnlocked,yellowStageUnlocked,unlockedTroopKinds} from '../w
 import {REPLAY_CLEARED} from '../data/replayRules';
 import {abandonExpedition,beginExpedition,settleExpedition,permanentEffects,worldUnlocked,worldChapterCleared,takeExpeditionReserve} from '../world/WorldStore';
 import Phaser from 'phaser';
+import {StarOuterCombat} from '../systems/StarOuterCombat';
+import {STAR_OUTER_TUNING as SO} from '../data/starOuter';
 import { PAD, PAD_LABEL, gamepad, keyHint } from '../platform/gamepad';
 import { bossProfile, BOSS_PROFILES } from '../data/bossMusic';
 import { titleOf } from '../ui/StoryBarkCardStyles';
@@ -369,7 +372,7 @@ export class GameScene extends Phaser.Scene {
    * 第二位 1.2 秒后从 second.at 登场（暗场减半）。keys = 两人在招降表里的键（null = 不弹窗）。
    */
   protected startDual(plan:DualPlan,first:{id:string;name:string;enemy:Enemy;ctrl:DualCtrl;mount?:BossMountT|null;ownKit?:boolean;key:string|null},
-    second:{id:string;name:string;at:{x:number;y:number};def:Partial<EnemyDef>;key:string|null;make:(e:Enemy)=>{ctrl:DualCtrl;mount?:BossMountT|null;ownKit?:boolean}}):void{
+    second:{id:string;name:string;at:{x:number;y:number};def:Partial<EnemyDef>;key:string|null;immediate?:boolean;make:(e:Enemy)=>{ctrl:DualCtrl;mount?:BossMountT|null;ownKit?:boolean}}):void{
     this.parley?.clear();this.parley=null;this.bossMount?.destroy();this.bossMount=null;
     const now=this.combatNow,s=this;
     const d=this.dual=new DualBoss({scene:this,player:()=>this.player,banner:(t,danger,c)=>this.showWaveBanner(t,danger,c),sfx:k=>this.sfx.play(k),
@@ -387,13 +390,14 @@ export class GameScene extends Phaser.Scene {
     {const {p,ref}=mk(first.enemy,first.key);ref.x=d.add({id:first.id,name:first.name,enemy:first.enemy,ctrl:first.ctrl,parley:p,mount:first.mount??null,ownKit:first.ownKit},now);}
     if(plan.lines[first.id]?.intro)this.time.delayedCall(200,()=>{if(first.enemy.active&&storyMode()!=='off')castBark(this,first.enemy.sprite,first.name,plan.lines[first.id].intro!,first.id);});
     this.announceBoss(plan.group,first.name+' · '+second.name);
-    d.later(now+DUAL.entranceGapMs,()=>{
+    const spawnSecond=()=>{
       const e=this.spawnEnemy('boss',second.at.x,second.at.y,1,true,{...this.chapter.enemies.boss,...second.def} as EnemyDef);if(!e)return;
       const made=second.make(e),{p,ref}=mk(e,second.key);
       ref.x=d.add({id:second.id,name:second.name,enemy:e,ctrl:made.ctrl,parley:p,mount:made.mount??null,ownKit:made.ownKit},this.combatNow);
       this.presence?.entrance(e,.5);this.sfx.boss();
       const line=plan.lines[second.id]?.intro;if(line&&storyMode()!=='off')castBark(this,e.sprite,second.name,line,second.id);
-    });
+    };
+    if(second.immediate)spawnSecond();else d.later(now+DUAL.entranceGapMs,spawnSecond);
   }
   /** 首领出场点（默认主将正北 430）；城墙封死的关覆盖，别刷到墙那边过不来（城墙专项 W5）。 */
   protected bossSpawnPoint(x:number,y:number):{x:number;y:number}{return {x,y};}
@@ -752,6 +756,7 @@ export class GameScene extends Phaser.Scene {
   protected spearShots: SpearShot[] = [];
   protected weaponHost!: WeaponHost;
   private martialFields!: MartialFields;
+  private starOuter?:StarOuterCombat;private starOuterBusy=false;
   private buildCombat!:BuildCombat;private statusFx?:StatusFx;private jinnangFx?:JinnangFx;
   private controlBuild?:ControlBuild;
   private bulwarkBuild?:BulwarkBuild;
@@ -1083,6 +1088,14 @@ export class GameScene extends Phaser.Scene {
      this.formationFx=new FormationFx(this,this.legion,this.player,()=>{const r=this.formationRt;return{id:r?.current??null,formed:!!r?.formed,settling:!!r&&this.combatNow<r.settleUntil,switches:r?.stats.switches??0};});
      this.events.once('shutdown',()=>{this.formationRt?.clear();this.formationRt=undefined;this.formationFx?.destroy();this.formationFx=undefined;this.enemyForms?.clear();this.enemyForms=undefined;});}
     this.buildCombat.setOrigin(()=>({x:this.player.x,y:this.player.y}));this.statusFx=new StatusFx(this,this.buildCombat);this.jinnangFx=new JinnangFx(this,()=>({x:this.player.x,y:this.player.y}));   // 敌人身上的灼烧 / 迟滞 / 眩晕 / 破甲标记（手绘序列帧）
+    this.starOuter?.clear();this.starOuterBusy=false;
+    this.starOuter=new StarOuterCombat({has:id=>this.player.growth.starsLive&&this.player.growth.stars.includes(id),position:()=>this.player,
+      query:(x,y,r)=>this.grid.query(x,y,r),slow:(e,n)=>this.controlBuild?.slowTarget(e,1-SO.slowFactor,SO.slowMs,n),
+      volley:(e,n,c,shield,accelerate)=>this.legion.requestStarVolley(e,n,c,shield,accelerate),
+      deal:(e,d,spell)=>{if(this.starOuterBusy)return;this.starOuterBusy=true;try{this.hitEnemy(e,d,this.combatNow,spell?'fire':WEAPON_HIT_TYPE[this.player.weapons[0]?.id??'']==='arrow'?'arrow':'melee',false,false);}finally{this.starOuterBusy=false;}},
+      fx:(id,x,y,a=0,size=64)=>{this.player.growth.pulse(id,x,y);buildVfx(this).emit(id==='combo.dragon'?'roaming_break':id==='combo.tactics'?'pure_command':id==='strength.K2'?'pure_charge':id.startsWith('strength')?'pure_critical':id.startsWith('agility')?'skirmish':id.startsWith('intellect')?'pull':'command',x,y-8,this.combatNow,size,a,360,true);}});
+    this.legion.onStarVolleyHit=(e,now,issued)=>this.starOuter?.coordinatedHit(e,now,issued);
+    this.events.once('shutdown',()=>{this.starOuter?.clear();this.starOuter=undefined;this.legion.onStarVolleyHit=undefined;});
     this.buildCombat.onFlank=targets=>this.flankBladeFx().strike(targets);
     this.buildCombat.onWindstep=e=>this.windstepFx().burst(e.x,e.y);
     // 流派重做（data/schools.ts）：奇谋 2 势被控制加深、震荡 / 冲阵 / 燎原的一圈、火油罐火区、疾风
@@ -1450,7 +1463,8 @@ export class GameScene extends Phaser.Scene {
     if(!this.terrainInit&&this.player){this.terrainInit=true;const tc0=this.terrainDef(),tc=tc0?.auto&&new URLSearchParams(location.search).get('groves')==='0'?{...tc0,auto:undefined}:tc0; /* ?groves=0：关掉自动树林（前后对比截图用） */if(tc){this.terrain=new Terrain(this,tc,tc.auto?this.treeAvoid():undefined);const t=this.terrain;if(tc.auto)this.supplies?.purge((x,y)=>t.treeNear(x,y,50)); /* 自动树林种下后，已经摆在树脚下的补给箱 / 道具收掉 */Ally.terrainMul=(x,y)=>t.speedMul(x,y);this.terrainNav=[...t.navBoxes(),...t.cliffBoxes];if(t.cliffBoxes.length){if(!this.sishuiObstacles)this.sishuiObstacles=new SishuiObstacles([]);this.sishuiObstacles.footprints.push(...t.cliffBoxes);} /* 山崖碰撞并进场景障碍：挡人、刷兵避开、随行也认 */this.events.once('shutdown',()=>{t.clear();if(this.terrain===t){this.terrain=null;Ally.terrainMul=null;}});}}
     if(!this.traits&&this.player)this.traits=new EnemyTraits({scene:this,player:this.player,enemies:()=>this.enemies,stageKey:()=>this.hardKey()+'.'+this.hardStage(),wave:()=>waveIndexAt(this.elapsed,this.chapter.waves)+1,enabled:()=>!this.hardMode&&this.mode==='none'&&(!this.runConfig.encounter||this.achievementArc()!==undefined),/* 第三章起的篇章场景都带 encounter（qunxiong），按自己的篇章键配兵；只排除 ?encounter= 预览 */
       baseDef:k=>{const b=this.chapter.enemies[k];if(!this.yellow)return b;const v=this.yellow.variant(b,this.elapsed);return v.behavior?b:v;},spawn:(k,x,y,def)=>this.spawnEnemy(k,x,y,undefined,false,def),
-      fireArrow:(e,tx,ty,d,sp)=>this.fireBolt(this.bullets,e.x,e.y,tx,ty,d*(this.env?.damageMul(e)??1),0,false,sp,enemyArrowTexture(this,e.sprite.texture.key)),hurtTroops:(x,y,r,d)=>this.legion.hurtArea(x,y,r,d,this.combatNow),
+      fireArrow:(e,tx,ty,d,sp,life)=>this.fireBolt(this.bullets,e.x,e.y,tx,ty,d*(this.env?.damageMul(e)??1),0,false,sp,enemyArrowTexture(this,e.sprite.texture.key),life),hurtTroops:(x,y,r,d)=>this.legion.hurtArea(x,y,r,d,this.combatNow),
+      hurtTroopsLane:(x,y,a,len,width,d)=>{const ca=Math.cos(a),sa=Math.sin(a);for(const u of this.legion.units){if(!u.active)continue;const dx=u.x-x,dy=u.y-y,along=dx*ca+dy*sa,side=-dx*sa+dy*ca;if(along>=-u.radius&&along<=len+u.radius&&Math.abs(side)<=width/2+u.radius*.6)this.legion.hurt(u,d,this.combatNow,{x,y,normal:false});}},
       move:(e,nx,ny,dt)=>{e.moveVx=nx*e.def.speed;e.moveVy=ny*e.def.speed;this.advanceEnemy(e,nx,ny,dt);},sfx:k=>this.sfx.play(k),
       ringDistance:()=>this.spawnRingDistance(),inWater:(x,y)=>this.terrain?.inWater(x,y)??false,waterPoint:(px,py)=>{const t=this.terrain;if(!t)return null;for(let i=0;i<40;i++){const a=Math.random()*Math.PI*2,d=420+Math.random()*560,x=px+Math.cos(a)*d,y=py+Math.sin(a)*d;if(t.inWater(x,y))return{x,y};}return null;},
       gainFood:n=>{if(this.killGrant.food)this.legion.food+=n;}, /* 押粮卒被截的粮：首领阶段超额不给 */boss:()=>this.boss,farPoint:(x,y)=>{const g=this.arena?.info.gates;if(!g?.length)return null;const p=this.player;return [...g].sort((a,b)=>Math.hypot(b.x-p.x,b.y-p.y)-Math.hypot(a.x-p.x,a.y-p.y))[0]??null;void x;void y;}}); // 机制自己定方向（保持距离 / 绕圈）：不用群体寻路的追击速度
@@ -1482,6 +1496,7 @@ export class GameScene extends Phaser.Scene {
     this.supplies?.resolveBodies(this.allies,(a,d,n)=>this.legion.hurt(a,d,n),(e,d,n)=>this.hitEnemy(e,d,n,'melee',false,false));
     this.sishuiObstacles?.resolve(this.player,this.allies,this.enemies);
     if(this.terrain){this.terrain.resolve(this.player,this.allies,this.enemies);this.terrain.updateCanopy(this.player,this.enemies.filter(e=>e.active&&!e.isSupplySlot&&(e.kind==='boss'||e.kind==='elite')));}
+    this.starOuter?.movement(Math.hypot(move.x,move.y)>.1&&time>=this.player.knockedUntil?Math.hypot(this.player.x-moveX,this.player.y-moveY):0,dt,time);this.starOuter?.update(time);
     this.player.growth.recordMovement(Math.hypot(move.x,move.y)>.1&&time>=this.player.knockedUntil?Math.hypot(this.player.x-moveX,this.player.y-moveY):0,dt);
     if(this.player.growth.masteries.dragging_blade||this.dragFx)this.dragBladeFx().update(dt,Math.hypot(move.x,move.y)>.1&&time>=this.player.knockedUntil?Math.hypot(this.player.x-moveX,this.player.y-moveY):0);
     this.buildCombat.movement(Math.hypot(move.x,move.y)>.1&&time>=this.player.knockedUntil?Math.hypot(this.player.x-moveX,this.player.y-moveY):0);
@@ -2016,16 +2031,21 @@ export class GameScene extends Phaser.Scene {
   /** 首领名号标题：画面上部一道短墨痕，墨上名号小字 + 名字，约 2.6 秒淡出；不拦截点击、不暂停。
    *  2026-11-16 试玩反馈「boss 出来那个预警 UI 太大了」：墨痕从横贯全屏缩成约 6 成宽、高度减半，字号降约 4 成，
    *  放在顶部 HUD 与主将之间的空地，不压 HUD、不挡主将。 */
-  protected announceBoss(title: string, name: string): void {
+  protected announceBoss(title: string, name: string, mythicStyle?: MythicNameplateStyle): void {
     this.children.getByName('boss-announce')?.destroy();
     // 同时在播的战场横幅（如 7-1 山道「山上伏兵！」）收掉：两者都在上半屏中间，墨幅会压在横幅字上（2026-11-20 第 7–12 章检查）
     for (const n of this.children.list.filter(o => o.name === 'combat-notice')) { this.tweens.killTweensOf(n); n.destroy(); }
     const W = GAME_WIDTH, D = IS_DESKTOP, y = GAME_HEIGHT * (D ? .25 : .2), bw = D ? 500 : Math.min(W * .78, 400), bh = D ? 70 : 72;
     const root = this.add.container(0, 0).setScrollFactor(0).setDepth(DEPTH.overlay - 8).setName('boss-announce').setVisible(this.mode === 'none');
-    const ink = this.textures.exists('btn_ink_secondary_normal') ? this.add.image(W / 2, y, 'btn_ink_secondary_normal').setDisplaySize(bw, bh).setTint(0x2a2420).setAlpha(.92) : this.add.rectangle(W / 2, y, bw, bh * .7, 0x120d0a, .8);
-    const t1 = this.add.text(W / 2, y - 14, title, { fontFamily: HEADING_FONT, fontSize: '12px', color: '#d9b26a', resolution: 2 }).setOrigin(.5).setLetterSpacing(5);
-    const t2 = this.add.text(W / 2, y + 7, name, { fontFamily: TITLE_FONT, fontSize: '28px', color: '#e2412b', resolution: 2 }).setOrigin(.5).setLetterSpacing(8).setShadow(0, 2, '#000', 4, true, true);
-    root.add([ink, t1, t2]);
+    let t2: Phaser.GameObjects.Text;
+    if (mythicStyle) {
+      t2 = addMythicBossNameplate(this, root, W / 2, D ? 101 : 132, title, name, mythicStyle);
+    } else {
+      const ink = this.textures.exists('btn_ink_secondary_normal') ? this.add.image(W / 2, y, 'btn_ink_secondary_normal').setDisplaySize(bw, bh).setTint(0x2a2420).setAlpha(.92) : this.add.rectangle(W / 2, y, bw, bh * .7, 0x120d0a, .8);
+      const t1 = this.add.text(W / 2, y - 14, title, { fontFamily: HEADING_FONT, fontSize: '12px', color: '#d9b26a', resolution: 2 }).setOrigin(.5).setLetterSpacing(5);
+      t2 = this.add.text(W / 2, y + 7, name, { fontFamily: TITLE_FONT, fontSize: '28px', color: '#e2412b', resolution: 2 }).setOrigin(.5).setLetterSpacing(8).setShadow(0, 2, '#000', 4, true, true);
+      root.add([ink, t1, t2]);
+    }
     for (const o of root.list) (o as unknown as Phaser.GameObjects.Components.ScrollFactor).setScrollFactor(0);
     root.setAlpha(0);
     // 用真实时钟驱动（与战斗计时器解耦，暂停 / 升级弹窗期间也能正常淡出）
@@ -2759,15 +2779,17 @@ export class GameScene extends Phaser.Scene {
 
   protected hitEnemy(enemy: Enemy, rawDamage: number, time: number, source: 'melee' | 'arrow' | 'fire' = 'melee', fromAlly = false, weaponHit = true): boolean {
     if (!enemy.active || this.over || enemy.invulnerable) return false;
+    const starSeed=rawDamage,starPrimary=!this.starOuterBusy&&!fromAlly&&weaponHit,starSpell=SPELL_WEAPONS.has(this.player.weapons[0]?.id??'');
+    if(starPrimary)rawDamage*=this.starOuter?.damageFactor(starSpell)??1;
     if (weaponHit && !fromAlly && this.branchRt && !enemy.isSupplySlot) this.branchRt.onWeaponHit(enemy, rawDamage); // 兵器专职（仁德 / 三英）
-    if (this.chain.until > time && !this.chain.sharing && this.chain.set.get(enemy) === enemy.spawnId) { this.chain.sharing = true; for (const [o, life] of this.chain.set) if (o !== enemy && o.active && o.spawnId === life) this.hitEnemy(o, rawDamage * .3, time, source, fromAlly, false); this.chain.sharing = false; } // 锦囊「连环计」
+    if (!this.starOuterBusy && this.chain.until > time && !this.chain.sharing && this.chain.set.get(enemy) === enemy.spawnId) { this.chain.sharing = true; for (const [o, life] of this.chain.set) if (o !== enemy && o.active && o.spawnId === life) this.hitEnemy(o, rawDamage * .3, time, source, fromAlly, false); this.chain.sharing = false; } // 锦囊「连环计」
     enemy.lastHitFromAlly = fromAlly;
     if(enemy.isSupplySlot){if(this.campSiege?.isCamp(enemy)){const d=this.campSiege.incoming(enemy,rawDamage,source,fromAlly,time);enemy.hp-=d;if(d>0)enemy.flash(time);this.sfx.play(d>0?'hitHeavy':'hitLight');if(enemy.hp<=0)this.killEnemy(enemy);return false;} /* 营寨攻坚：耐久 / 每秒上限 / 火攻 / 远打（systems/CampSiege） */enemy.hp-=Math.max(1,Math.round(rawDamage));enemy.flash(time);this.sfx.play('hitHeavy');if(enemy.hp<=0)this.killEnemy(enemy);return false;}
     if (enemy === this.boss) this.ensureBossPhase2();
     if (this.xiliang) rawDamage *= this.xiliang.incoming(enemy, source);
     if (enemy === this.boss && this.moveset) { rawDamage *= this.moveset.incoming(fromAlly); this.moveset.hit(time); }
     if (this.dzLubu && enemy === this.dzLubu.lubu) rawDamage = this.dzLubu.clampDamage(enemy, rawDamage); // 2-3 吕布锁在 1/3 血
-    if (enemy.def.trait && this.traits) rawDamage *= this.traits.damageTakenMul(enemy);
+    if (enemy.def.trait && this.traits) rawDamage *= this.traits.damageTakenMul(enemy,fromAlly,source==='fire');
     if (this.enemyForms) rawDamage *= this.enemyForms.damageMul(enemy, time); // 敌方军阵：盾墙正面减伤 / 阵破易伤 // 新兵种：盾墙 / 举盾正面减伤
     if(this.yellow&&enemy.kind==='shield'&&enemy.shieldMax===0&&enemy.def.behavior!=='wall'&&!fromAlly&&source!=='fire'){const angle=enemy.direction==='left'?Math.PI:enemy.direction==='right'?0:enemy.direction==='up'?-Math.PI/2:Math.PI/2;if(Math.cos(Math.atan2(this.player.y-enemy.y,this.player.x-enemy.x)-angle)>.25)rawDamage*=.65;}
     if (source === 'arrow') this.sfx.play('hitArrow');
@@ -2781,16 +2803,16 @@ export class GameScene extends Phaser.Scene {
     { let v = this.player.passive.vulnerability(enemy, time); for (const fp of this.followerPassives) v = Math.max(v, 1 + (fp.vulnerability(enemy, time) - 1) * FOLLOW.passiveScale); rawDamage *= v; } // 貂蝉倾城：易伤（部曲伤害同样吃加成；随行貂蝉的按随行系数折算）
     if (this.synergy) rawDamage *= this.synergy.incoming(enemy, fromAlly, time); // 八门金锁阵里加深 / 背水一战 / 铁壁军阵之后全军冲杀
     const firstStrike = !fromAlly && weaponHit && !!this.relics?.firstStrike(enemy);
-    const crit = this.debugCrit !== null && !fromAlly ? this.debugCrit : firstStrike || weaponHit && Math.random() < Math.min(0.65, this.player.stats.critChance + this.player.growth.criticalBonus() + (!fromAlly ? this.player.passive.critBonus(time) + this.player.growth.aimCriticalBonus() + this.buildCombat.criticalBonus(enemy, time) : 0))
-      || fromAlly && !!this.synergy?.allyCrit(Math.min(0.65, this.player.stats.critChance + this.player.growth.criticalBonus() + this.buildCombat.criticalBonus(enemy, time))); // 合击「弩阵」：部曲也会暴击
+    const crit = !this.starOuterBusy && (this.debugCrit !== null && !fromAlly ? this.debugCrit : firstStrike || weaponHit && Math.random() < Math.min(0.65, this.player.stats.critChance + this.player.growth.criticalBonus() + (!fromAlly ? this.player.passive.critBonus(time) + this.player.growth.aimCriticalBonus() + this.buildCombat.criticalBonus(enemy, time) : 0))
+      || fromAlly && !!this.synergy?.allyCrit(Math.min(0.65, this.player.stats.critChance + this.player.growth.criticalBonus() + this.buildCombat.criticalBonus(enemy, time)))); // 合击「弩阵」：部曲也会暴击
     enemy.lastHitHeavy = !fromAlly && (crit || this.player.passive.isInvulnerable(time) || this.player.weapons[0]?.id === 'dangyang_roar'); // 重击：暴击 / 马超冲锋中 / 张飞大喝（死亡特效击飞）
     if(!fromAlly&&weaponHit)rawDamage=this.buildCombat.damage(enemy,rawDamage,crit,time);
     if(!fromAlly)rawDamage*=this.player.growth.gearHitMultiplier(enemy.kind);
     // 智力：非武器伤害（技艺、灼烧等）按法术系数 × 智力、含主属性；法术武器（火旗 / 火雷 / 连弩 / 团扇）的武器命中再乘法术系数
-    if(!fromAlly&&!weaponHit)rawDamage*=this.player.growth.skillDamageMultiplier();else if(!fromAlly)rawDamage*=this.player.growth.spellWeaponMultiplier(this.player.weapons[0]?.id);
-    if(!fromAlly)rawDamage*=this.primaryPerkHit(enemy,time,weaponHit,crit); // 主属性专精（千钧 / 破阵 / 疾影 / 连珠）
-    if(!fromAlly)rawDamage*=this.player.growth.starHit(time,weaponHit,crit,SPELL_WEAPONS.has(this.player.weapons[0]?.id??'')); // 星图·骁锐 / 奇谋（开关关着恒为 1）
-    const spellHit=!fromAlly&&!this.starPyreBusy&&(!weaponHit||SPELL_WEAPONS.has(this.player.weapons[0]?.id??'')); // 星图主星·火烧连营：这一下是不是主将的法术伤害（爆燃自己的伤害不算）
+    if(!fromAlly&&!weaponHit&&!this.starOuterBusy)rawDamage*=this.player.growth.skillDamageMultiplier();else if(!fromAlly)rawDamage*=this.player.growth.spellWeaponMultiplier(this.player.weapons[0]?.id);
+    if(!fromAlly&&!this.starOuterBusy)rawDamage*=this.primaryPerkHit(enemy,time,weaponHit,crit); // 主属性专精（千钧 / 破阵 / 疾影 / 连珠）
+    if(!fromAlly&&!this.starOuterBusy)rawDamage*=this.player.growth.starHit(time,weaponHit,crit,SPELL_WEAPONS.has(this.player.weapons[0]?.id??'')); // 星图·骁锐 / 奇谋（开关关着恒为 1）
+    const spellHit=!this.starOuterBusy&&!fromAlly&&!this.starPyreBusy&&(!weaponHit||SPELL_WEAPONS.has(this.player.weapons[0]?.id??'')); // 星图主星·火烧连营：这一下是不是主将的法术伤害（爆燃自己的伤害不算）
     let damage = Math.max(1, Math.round(rawDamage * (crit ? BALANCE.critMultiplier * (fromAlly ? 1 : 1 + this.buildCombat.critDamageBonus() + this.player.growth.critDamageBonus()) : 1) * (firstStrike ? RELIC.zhanjiangMul : 1)));
     enemy.flash(time);
     if(!fromAlly&&source==='arrow')this.artEffects.show(3,enemy.x,enemy.y-8,32,time,120);
@@ -2824,6 +2846,7 @@ export class GameScene extends Phaser.Scene {
       this.spawnDamageText(enemy.x, enemy.y - enemy.radius, shown, crit, !fromAlly);
       if (r.body <= 0) return true;
       damage = r.body; enemy.hp -= damage; this.damageDealt += damage; credit(damage);
+      if(starPrimary)this.starOuter?.hit(enemy,starSeed,time,starSpell);
       if (enemy.hp <= 0) { this.starSpellKill = spellHit; this.killEnemy(enemy); this.starSpellKill = false; }
       return true;
     }
@@ -2840,6 +2863,7 @@ export class GameScene extends Phaser.Scene {
       const lg=this.player.growth.charmLegend,seal=lg.human_seal;if(seal!==undefined&&this.relicHits%CHARM_LEGEND.charm_human_seal.every[seal]===0){if(this.relicWaves.length>=4)this.relicWaves.shift();this.relicWaves.push({x:enemy.x,y:enemy.y,at:time});for(const e of this.grid.query(enemy.x,enemy.y,110).filter(e=>e.active&&!e.isSupplySlot&&Math.hypot(e.x-enemy.x,e.y-enemy.y)<=110).slice(0,CHARM_LEGEND.charm_human_seal.targets[seal]))this.hitEnemy(e,rawDamage*.35,time,'melee',false,false);}
       if(lg.heaven_ember!==undefined&&time>=this.relicFireAt){this.relicFireAt=time+CHARM_LEGEND.charm_heaven_ember.cd[lg.heaven_ember];this.martialFields.add(enemy.x,enemy.y,65,rawDamage,1500,1);this.spawnFlameFx(enemy.x,enemy.y,65);}
     }
+    if(starPrimary)this.starOuter?.hit(enemy,starSeed,time,starSpell);
     if(enemy===this.boss){this.huaxiong?.hit(time);this.xurong?.hit(time);}else{const old=this.chasingBosses.find(t=>t.enemy===enemy&&t.life===enemy.spawnId);old?.huaxiong?.hit(time);old?.xurong?.hit(time);}
     if (enemy.hp <= 0) { this.starSpellKill = spellHit; this.killEnemy(enemy); this.starSpellKill = false; }
     else if (enemy === this.boss) this.ensureBossPhase2();
@@ -3011,6 +3035,7 @@ export class GameScene extends Phaser.Scene {
     fromPlayer: boolean,
     speed: number,
     textureKey?: string,
+    lifeSeconds = 2.6,
   ): void {
     let bolt = pool.find((b) => !b.active);
     if (!bolt) {
@@ -3036,7 +3061,7 @@ export class GameScene extends Phaser.Scene {
     bolt.vy = (dy / dist) * speed;
     bolt.damage = damage;
     bolt.bounce = bounce;
-    bolt.life = 2.6;
+    bolt.life = Math.max(.05,Math.min(2.6,lifeSeconds));
     bolt.lastHit = null;
     bolt.hitIds = new Set();
     // 射向营垒 / 连营 / 城门的主将箭：锁定它，途中伏兵不挡（11-20：黄月英连弩站营垒边 270 秒只拆 1 座，箭全被身边伏兵挡掉）
@@ -5098,7 +5123,7 @@ export class GameScene extends Phaser.Scene {
     { const st = branchStatus(this.player.weapons[0], s => this.player.growth.build.tags()[s] ?? 0, s => SCHOOLS[s].name); this.passiveHud.updateBranch(st); this.buffHud?.root.setY(st ? 214 : 180); } // 专职行在被动栏下，增益栏往下让
     buildVfx(this).density=this.enemies.filter(e=>e.active&&!e.isSupplySlot).length+this.legion.count;
     this.buffHud.update(this.player,this.combatNow,!overlay&&!this.over&&!this.relicExpanded,(id,now)=>this.buffProgress(id,now));
-    if(this.player.growth.starsLive){if(this.starFeedback&&!this.starFeedback.alive)this.starFeedback=undefined;(this.starFeedback??=new StarFeedback(this)).update(this.player,this.combatNow,!overlay&&!this.over&&!this.relicExpanded,this.buffHud,this.legion.units);}else this.starFeedback?.hide(); // 星图 · 战斗内反馈（增益栏图标排 + 特效挂点；开关关着不建）
+    if(this.player.growth.starsLive){if(this.starFeedback&&!this.starFeedback.alive)this.starFeedback=undefined;(this.starFeedback??=new StarFeedback(this)).update(this.player,this.combatNow,!overlay&&!this.over&&!this.relicExpanded,this.buffHud,this.legion.units,this.starOuter?.view(this.combatNow));}else this.starFeedback?.hide(); // 星图 · 战斗内反馈（增益栏图标排 + 特效挂点；开关关着不建）
     this.hudGfx.setVisible(!overlay);
     if (this.hudTexts) for (const t of Object.values(this.hudTexts)) t.setVisible(!overlay && (t !== this.hudTexts.bag || mechShown('gear')));
     if (this.statusFrame) { this.statusFrame.setVisible(!overlay); this.hudTexts?.level.setVisible(false); }
@@ -5555,7 +5580,7 @@ export class GameScene extends Phaser.Scene {
     this.attributePauseText?.setText(`星图 · ${this.player.growth.unallocated}`);
     if(this.starPanel&&!this.starPanel.root.scene)this.starPanel=undefined; // 场景重开后旧面板已随属性面板销毁
     this.starPanel??=(()=>{const p=new StarMapUI(this,{
-      state:()=>{const g=this.player.growth;return{hero:this.runConfig.character,heroName:getCharacter(g.character).name,level:this.heroLv,gate:g.starGate,lit:g.stars,free:g.unallocated};},
+      state:()=>{const g=this.player.growth;return{hero:this.runConfig.character,heroName:getCharacter(g.character).name,level:this.heroLv,gate:g.starGate,lit:g.stars,free:g.unallocated,triggers:this.starOuter?.stats};},
       onLight:star=>{const g=this.player.growth;if(!g.lightStar(this.player,star))return false;this.player.passive.areaMul=g.areaMultiplier();if(g.heroFree>0){g.heroFree--;if(!isChapterTestRun())lightHeroStar(this.runConfig.character as HeroKey,star);}this.updateHud();return true;},
       close:{label:()=>this.attributeReturn==='none'?'继续战斗':'返回暂停菜单',act:()=>this.setMode(this.attributeReturn)}});this.attributePanel.add(p.root);return p;})();
     // 原属性面板的零件（命中区、按钮）在输入排序里会压在星图上面、吞掉点击：星图开着时全部藏起、关掉交互

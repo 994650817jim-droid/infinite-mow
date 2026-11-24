@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { actorDepth, DEPTH } from '../config';
+import { actorDepth, DEPTH, FONT } from '../config';
 import type { EnemyDef } from '../data/enemies';
 import { ROSTER, STAGE_MIX, type RosterType, type TraitDef } from '../data/enemyRoster';
 import type { Enemy } from '../entities/Enemy';
@@ -31,7 +31,8 @@ export interface TraitHost {
   /** 本章该底层兵种的基础定义（含本章外观）。 */
   baseDef: (kind: EnemyKind) => EnemyDef;
   spawn: (kind: EnemyKind, x: number, y: number, def: EnemyDef) => Enemy | null;
-  fireArrow: (e: Enemy, tx: number, ty: number, damage: number, speed: number) => void;
+  fireArrow: (e: Enemy, tx: number, ty: number, damage: number, speed: number, lifeSeconds?: number) => void;
+  hurtTroopsLane?: (x:number,y:number,angle:number,length:number,width:number,damage:number)=>void;
   hurtTroops: (x: number, y: number, r: number, damage: number) => void;
   move: (e: Enemy, nx: number, ny: number, dt: number) => void;
   sfx: (key: string) => void;
@@ -46,7 +47,7 @@ export interface TraitHost {
   boss?: () => Enemy | null;
 }
 
-interface St { life: number; next: number; drop: number; slamAt: number; sx: number; sy: number; owner?: Enemy; ownerLife?: number; ang: number;
+interface St { badge?: Phaser.GameObjects.Text; called?: boolean; life: number; next: number; drop: number; slamAt: number; sx: number; sy: number; owner?: Enemy; ownerLife?: number; ang: number;
   /** 第二批：朝向（盾墙 / 举盾）、两态 / 预警 / 腾空、伏兵是否还藏着、目标点、出生时间、跟随的布景（火船）、冲刺到何时、腾空起点 */
   disguised?: boolean; face?: number; phase?: 'up' | 'down' | 'move' | 'warn' | 'air' | 'roll'; until?: number; shots?: number; hidden?: boolean; tx?: number; ty?: number; born?: number; imgs?: Phaser.GameObjects.Components.Transform[]; dashUntil?: number; air?: { x0: number; y0: number; from: number }; boom?: boolean }
 interface Hazard { look?: 'slam' | 'arrows'; fire?: { ms: number; r: number; dmg: number }; id: string; kind: 'stone' | 'fire'; x: number; y: number; r: number; from: number; at: number; end: number; damage: number; allyDamage: number; tick: number; img?: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite }
@@ -69,7 +70,7 @@ export class EnemyTraits {
   private seq = 0;
   /** 测试 / 调试用计数。 */
   readonly metrics = { spawned: 0, slams: 0, heals: 0, throws: 0, fires: 0, bursts: 0, darts: 0, poisonTicks: 0, arrows: 0, enraged: 0,
-    fromWater: 0, nets: 0, snared: 0, auraPulses: 0, volleyZones: 0, rolls: 0, firepots: 0, bursts3: 0, guarded: 0, fireArrows: 0, reveals: 0, blocked: 0, bashes: 0, javelins: 0, sweeps: 0, volleys: 0, delivered: 0, intercepted: 0, shipBooms: 0, thrusts: 0, leaps: 0, snipes: 0 };
+    fromWater: 0, nets: 0, snared: 0, auraPulses: 0, volleyZones: 0, rolls: 0, firepots: 0, bursts3: 0, guarded: 0, fireArrows: 0, reveals: 0, blocked: 0, bashes: 0, javelins: 0, sweeps: 0, volleys: 0, delivered: 0, intercepted: 0, shipBooms: 0, thrusts: 0, leaps: 0, snipes: 0, signals: 0, interruptedSignals: 0, signalReinforcements: 0, fanShots: 0, interruptedHeals: 0 };
 
   constructor(private h: TraitHost) {
     const ids = Object.keys(STAGE_MIX[h.stageKey()]?.traits ?? {}), sc = h.scene;
@@ -147,7 +148,7 @@ export class EnemyTraits {
 
   private state(e: Enemy): St {
     let s = this.st.get(e);
-    if (!s || s.life !== e.spawnId) { s = { life: e.spawnId, next: 0, drop: 0, slamAt: 0, sx: 0, sy: 0, ang: Math.random() * Math.PI * 2 }; this.st.set(e, s); }
+    if (!s || s.life !== e.spawnId) { s?.badge?.destroy(); s = { life: e.spawnId, next: 0, drop: 0, slamAt: 0, sx: 0, sy: 0, ang: Math.random() * Math.PI * 2 }; this.st.set(e, s); }
     return s;
   }
 
@@ -158,7 +159,12 @@ export class EnemyTraits {
     if (s.next === 0) s.next = now + 600 + Math.random() * 900;
     if (s.hidden) return this.lurk(e, s, now, target);
     const dx = target.x - e.x, dy = target.y - e.y, dist = Math.hypot(dx, dy) || 1, nx = dx / dist, ny = dy / dist;
+    const label=ROSTER[e.def.roster ?? '']?.label;
+    if(label)this.badge(e,s,label);
     switch (t.kind) {
+      case 'signal': return this.signal(e,s,t,dt,now,dist,nx,ny);
+      case 'brace': this.badge(e,s,s.phase==='warn'?'架枪 · 绕侧':'拒骑兵');return this.lancer(e,s,t,dt,now,dist,nx,ny);
+      case 'fanarcher': return this.fanarcher(e,s,t,dt,now,dist,nx,ny);
       case 'heavy': return this.heavy(e, s, t, dt, now, target, dist, nx, ny);
       case 'healer': return this.healer(e, s, t, dt, now, dist, nx, ny);
       case 'lobber': return this.lobber(e, s, t, dt, now, dist, nx, ny);
@@ -186,6 +192,46 @@ export class EnemyTraits {
       case 'firearrow': return this.firearrow(e, s, t, dt, now, dist, nx, ny);
       default: return false; // swarm / tamer：普通追击
     }
+  }
+
+  private clearNewWarning(life:number):void {const wf=warnFx(this.h.scene);wf.cancel('trait-lance-'+life);for(let i=-1;i<=1;i++)wf.cancel('trait-fan-'+life+'-'+i);}
+  private badge(e:Enemy,s:St,label:string):void {
+    if(!s.badge)s.badge=this.h.scene.add.text(e.x,e.y-64,label,{fontFamily:FONT,fontSize:'13px',color:'#f5d5a2',stroke:'#221510',strokeThickness:3}).setOrigin(.5).setName('trait-badge-'+e.spawnId);
+    s.badge.setText(label).setPosition(e.x,e.y-64).setDepth(actorDepth(e.y)+.2);
+  }
+  private signal(e:Enemy,s:St,t:Extract<TraitDef,{kind:'signal'}>,dt:number,now:number,dist:number,nx:number,ny:number):boolean {
+    if(s.called){this.badge(e,s,'传令已毕');return false;}
+    if(s.phase==='warn'){
+      e.moveVx=e.moveVy=0;this.badge(e,s,'鸣号 '+Math.max(0,((s.until??now)-now)/1000).toFixed(1)+'秒');
+      if(now>=(s.until??Infinity)){
+        s.phase=undefined;s.called=true;this.metrics.signals++;this.h.sfx('bossSummon');
+        for(let i=0;i<t.reinforcements;i++){
+          const p=this.h.player,a=Math.atan2(e.y-p.y,e.x-p.x)+(i-.5)*.45,r=Math.max(520,this.h.ringDistance?.()??700);
+          const base=this.h.baseDef('infantry');
+          if(this.h.spawn('infantry',p.x+Math.cos(a)*r,p.y+Math.sin(a)*r,{...base,roster:undefined,trait:undefined}))this.metrics.signalReinforcements++;
+        }
+        this.badge(e,s,'援兵已至');
+      }return true;
+    }
+    this.badge(e,s,'传令骑');
+    if(dist>t.range){this.h.move(e,nx,ny,dt);return true;}
+    if(now>=s.next){s.phase='warn';s.until=now+t.warnMs;e.moveVx=e.moveVy=0;e.startAttack(now,dirOf(nx,ny));e.windupCol=0;e.attackUntil=s.until+180;return true;}
+    if(dist<t.range*.55)this.h.move(e,-nx*.65,-ny*.65,dt);else e.moveVx=e.moveVy=0;return true;
+  }
+  private fanarcher(e:Enemy,s:St,t:Extract<TraitDef,{kind:'fanarcher'}>,dt:number,now:number,dist:number,nx:number,ny:number):boolean {
+    const wf=warnFx(this.h.scene),id='trait-fan-'+e.spawnId;this.badge(e,s,s.phase==='warn'?'散射 · 避箭道':'散射弩');
+    if(s.phase==='warn'){
+      e.moveVx=e.moveVy=0;const face=s.face??0,k=1-((s.until??now)-now)/t.warnMs;
+      for(let i=-1;i<=1;i++)wf.lane(id+'-'+i,'charge',e.x,e.y,face+i*t.spread,t.range,14,k,now);
+      if(now>=(s.until??Infinity)){s.phase=undefined;this.metrics.fanShots++;this.h.sfx('enemyArrow');
+        for(let i=-1;i<=1;i++){const a=face+i*t.spread;this.h.fireArrow(e,e.x+Math.cos(a)*t.range,e.y+Math.sin(a)*t.range,e.def.damage*t.damageMul,t.speed,t.range/t.speed);}
+      }return true;
+    }
+    if(dist>t.range){this.h.move(e,nx,ny,dt);return true;}
+    if(dist<t.range*.45){this.h.move(e,-nx,-ny,dt);return true;}
+    e.moveVx=e.moveVy=0;
+    if(now>=s.next){s.next=now+t.everyMs;s.phase='warn';s.until=now+t.warnMs;s.face=Math.atan2(ny,nx);e.startAttack(now,dirOf(nx,ny));e.windupCol=0;e.attackUntil=s.until+270;}
+    return true;
   }
 
   /** 力士：慢慢逼近，贴近后原地举锤 warnMs、砸地（圈内主将 / 部曲受伤）；不吃击退。 */
@@ -218,7 +264,27 @@ export class EnemyTraits {
   }
 
   /** 符水道徒：躲在离主将 keepAway 外，每 everyMs 给身边友军回血（首领不回）。 */
+  /** 荆南药师：可打断的施药，结算时重新选取范围内最低生命的有限目标。 */
+  private fieldMedic(e:Enemy,s:St,t:Extract<TraitDef,{kind:'healer'}>,dt:number,now:number,dist:number,nx:number,ny:number):boolean {
+    const targets=()=>this.h.enemies().filter(o=>o.active&&o.hp>0&&o!==e&&o.kind!=='boss'&&!o.isSupplySlot&&!o.invulnerable&&o.hp<o.maxHp&&Math.hypot(o.x-e.x,o.y-e.y)<=t.radius);
+    if(s.phase==='warn'){
+      e.moveVx=e.moveVy=0;this.badge(e,s,'施药 '+Math.max(0,((s.until??now)-now)/1000).toFixed(1)+'秒');
+      if(now>=(s.until??Infinity)){
+        s.phase=undefined;s.next=now+t.everyMs;
+        const injured=targets().sort((a,b)=>a.hp/a.maxHp-b.hp/b.maxHp).slice(0,t.maxTargets??3);
+        for(const o of injured){o.hp=Math.min(o.maxHp,o.hp+Math.max(1,Math.round(o.maxHp*t.share)));this.metrics.heals++;
+          if(!playSheet(this.h.scene,'fx_heal_fushui',o.x,o.y-20,{size:60,depth:actorDepth(o.y)+.05,ms:500,alpha:.8}))this.glow(o,0xb8ffc0,now);
+        }
+        this.badge(e,s,injured.length?'施药完成':'施药落空');
+      }return true;
+    }
+    if(now>=s.next){s.next=now+500;if(targets().length){s.phase='warn';s.until=now+(t.channelMs??1200);e.moveVx=e.moveVy=0;e.startAttack(now,dirOf(nx,ny));e.attackUntil=s.until+120;return true;}}
+    if(dist<t.keepAway)this.h.move(e,-nx*.8,-ny*.8,dt);else if(dist>t.keepAway+140)this.h.move(e,nx,ny,dt);else e.moveVx=e.moveVy=0;
+    return true;
+  }
+
   private healer(e: Enemy, s: St, t: Extract<TraitDef, { kind: 'healer' }>, dt: number, now: number, dist: number, nx: number, ny: number): boolean {
+    if(t.channelMs)return this.fieldMedic(e,s,t,dt,now,dist,nx,ny);
     if (dist < t.keepAway) this.h.move(e, -nx * .9, -ny * .9, dt);
     else if (dist > t.keepAway + 140) this.h.move(e, nx, ny, dt);
     else this.h.move(e, -ny * .35, nx * .35, dt);
@@ -312,9 +378,12 @@ export class EnemyTraits {
   /** 正面角度差（弧度）：朝向 face 与指向主将的方向。 */
   private frontDiff(e: Enemy, face: number): number { const a = Math.atan2(this.h.player.y - e.y, this.h.player.x - e.x); return Math.abs(Phaser.Math.Angle.Wrap(a - face)); }
   /** 受伤倍率（GameScene.hitEnemy 调）：盾墙 / 举盾时正面 ±60° 减伤。 */
-  damageTakenMul(e: Enemy): number {
+  damageTakenMul(e: Enemy, fromAlly = false, fire = false): number {
     const t = e.def.trait; if (!t) return 1;
     const s = this.st.get(e); if (!s || s.life !== e.spawnId) return 1;
+    if (t.kind === 'signal' && s.phase === 'warn') { s.phase=undefined; s.next=this.now()+t.retryMs; this.metrics.interruptedSignals++; this.badge(e,s,'传令中断'); }
+    if (t.kind === 'healer' && t.channelMs && s.phase === 'warn') { s.phase=undefined;s.next=this.now()+t.everyMs;this.metrics.interruptedHeals++;this.badge(e,s,'施药中断'); }
+    if (t.kind === 'brace' && !fromAlly && !fire && s.phase === 'warn' && (s.until??0)>this.now() && s.face !== undefined && this.frontDiff(e,s.face)<Math.PI/3) { this.metrics.blocked++;return 1-t.front; }
     if (t.kind === 'shieldwall' && s.face !== undefined && this.frontDiff(e, s.face) < Math.PI / 3) { this.metrics.blocked += 1; return 1 - t.front; }
     if (t.kind === 'stance' && s.phase === 'up' && s.face !== undefined && this.frontDiff(e, s.face) < Math.PI / 3) { this.metrics.blocked += 1; return 1 - t.front; }
     if (t.kind === 'guard') { const b = this.h.boss?.(); if (b?.active && Math.hypot(b.x - e.x, b.y - e.y) <= t.radius) { this.metrics.guarded += 1; return t.mul; } }
@@ -374,7 +443,7 @@ export class EnemyTraits {
     const dx = s.tx - e.x, dy = (s.ty ?? 0) - e.y, d = Math.hypot(dx, dy) || 1;
     if (d < 60 || now - (s.born ?? now) > t.runMs) {
       this.metrics.delivered += 1; const x = e.x, y = e.y, base = ROSTER[e.def.roster ?? '']?.base ?? 'infantry';
-      e.deactivate(); this.st.delete(e);
+      s.badge?.destroy();e.deactivate(); this.st.delete(e);
       for (let i = 0; i < t.reinforce; i++) this.h.spawn(i ? 'infantry' : 'shield', x + (i - 1) * 40, y, this.h.baseDef(i ? 'infantry' : 'shield'));
       void base; return true;
     }
@@ -406,7 +475,7 @@ export class EnemyTraits {
     for (const im of s.imgs ?? []) (im as unknown as Phaser.GameObjects.GameObject).destroy(); s.imgs = [];
   }
   /** 曹军枪阵兵：贴近后预警一条直线，长枪贯穿。 */
-  private lancer(e: Enemy, s: St, t: Extract<TraitDef, { kind: 'lancer' }>, dt: number, now: number, dist: number, nx: number, ny: number): boolean {
+  private lancer(e: Enemy, s: St, t: Extract<TraitDef, { kind: 'lancer' | 'brace' }>, dt: number, now: number, dist: number, nx: number, ny: number): boolean {
     const id = `trait-lance-${e.spawnId}`, wf = warnFx(this.h.scene);
     if (s.phase === 'warn') {
       e.moveVx = e.moveVy = 0; const a = s.face ?? 0;
@@ -414,7 +483,7 @@ export class EnemyTraits {
       if (now >= (s.until ?? 0)) {
         s.phase = undefined; this.metrics.thrusts += 1; wf.shapeImpact(id, 'charge', e.x, e.y, t.range, a, now, t.width); this.h.sfx('hitHeavy');
         if (this.inLane(e.x, e.y, a, t.range, t.width)) { const p = this.h.player; if (p.takeDamage(t.damage, now)) this.h.scene.cameras.main.flash(90, 180, 40, 40, false); }
-        this.h.hurtTroops(e.x + Math.cos(a) * t.range * .5, e.y + Math.sin(a) * t.range * .5, t.width, t.allyDamage);
+        if(t.kind==='brace'&&this.h.hurtTroopsLane)this.h.hurtTroopsLane(e.x,e.y,a,t.range,t.width,t.allyDamage);else this.h.hurtTroops(e.x + Math.cos(a) * t.range * .5, e.y + Math.sin(a) * t.range * .5, t.width, t.allyDamage);
       }
       return true;
     }
@@ -489,20 +558,20 @@ export class EnemyTraits {
     return true;
   }
   /** 增益光环：每 250ms 给半径内友军（首领除外）记一笔「到何时、加多少」，GameScene 移动 / 伤害时乘上。 */
-  private auraTill = new Map<Enemy, { until: number; speed: number; damage: number }>();
+  private auraTill = new Map<Enemy, { life: number; until: number; speed: number; damage: number }>();
   private aura(e: Enemy, s: St, t: Extract<TraitDef, { kind: 'aura' }>, dt: number, now: number, dist: number, nx: number, ny: number): boolean {
     if (dist < t.keepAway) this.h.move(e, -nx * .9, -ny * .9, dt); else if (dist > t.keepAway + 160) this.h.move(e, nx, ny, dt); else this.h.move(e, -ny * .3, nx * .3, dt);
     if (now >= s.next) {
       s.next = now + 250; let n = 0;
-      for (const o of this.h.enemies()) { if (!o.active || o === e || o.kind === 'boss' || o.isSupplySlot || Math.hypot(o.x - e.x, o.y - e.y) > t.radius) continue; this.auraTill.set(o, { until: now + 400, speed: t.speedMul, damage: t.damageMul }); n++; }
+      for (const o of this.h.enemies()) { if (!o.active || o === e || o.kind === 'boss' || o.isSupplySlot || Math.hypot(o.x - e.x, o.y - e.y) > t.radius) continue; this.auraTill.set(o, { life:o.spawnId, until: now + 400, speed: t.speedMul, damage: t.damageMul }); n++;if(n>=(t.maxTargets??Infinity))break; }
       if (n && now >= (s.until ?? 0)) { s.until = now + 1800; e.startAttack(now, dirOf(nx, ny)); this.metrics.auraPulses += 1; playSheet(this.h.scene, 'fx_heal_fushui', e.x, e.y - 20, { size: t.radius * .9, depth: actorDepth(e.y) - .05, ms: 700, alpha: .45, tint: 0xffb070 }); }
     }
     return true;
   }
   /** 光环中的友军：移速倍率（GameScene.advanceEnemy 乘）。 */
-  speedMul(e: Enemy): number { const a = this.auraTill.get(e); return a && a.until > this.now() ? a.speed : 1; }
+  speedMul(e: Enemy): number { const a = this.auraTill.get(e); return a && a.life===e.spawnId && a.until > this.now() ? a.speed : 1; }
   /** 光环中的友军：伤害倍率（接触伤害 / 放箭乘）。 */
-  damageMul(e: Enemy): number { const a = this.auraTill.get(e); return a && a.until > this.now() ? a.damage : 1; }
+  damageMul(e: Enemy): number { const a = this.auraTill.get(e); return a && a.life===e.spawnId && a.until > this.now() ? a.damage : 1; }
   /** 伏弩手：远处站定，在主将脚下标一圈，落箭。 */
   private volleyStep(e: Enemy, s: St, t: Extract<TraitDef, { kind: 'volley' }>, dt: number, now: number, dist: number, nx: number, ny: number): boolean {
     if (dist > t.range) this.h.move(e, nx, ny, dt); else if (dist < t.range * .5) this.h.move(e, -nx, -ny, dt); else e.moveVx = e.moveVy = 0;
@@ -600,12 +669,18 @@ export class EnemyTraits {
         o.baseTint = 0xff9070; o.sprite.setTint(0xff9070); s.owner = undefined; this.metrics.enraged += 1;
       }
     }
-    this.st.delete(e);
+    this.clearNewWarning(e.spawnId);this.st.get(e)?.badge?.destroy();this.st.delete(e);
   }
 
   // ———— 每帧：落石、地火、毒箭、中毒 ————
   update(now: number): void {
     const p = this.h.player, wf = warnFx(this.h.scene);
+    for(const [e,s]of this.st)if(s.badge){
+      if(!e.active||e.spawnId!==s.life){this.clearNewWarning(s.life);s.badge.destroy();s.badge=undefined;}
+      else {s.badge.setPosition(e.x,e.y-64).setDepth(actorDepth(e.y)+.2);const t=e.def.trait;
+        if(s.phase==='warn'&&(e.stunUntil>now||e.routUntil>now)&&t&&(t.kind==='signal'||t.kind==='brace'||t.kind==='fanarcher'||(t.kind==='healer'&&!!t.channelMs))){s.phase=undefined;s.next=now+(t.kind==='signal'?t.retryMs:t.everyMs);s.badge.setText('起手中断');this.clearNewWarning(s.life);}
+      }
+    }
     if (this.snareUntil && now >= this.snareUntil) { this.snareUntil = 0; p.snareSpeedMul = 1; } // 绳网到时松开
     if (this.auraTill.size > 200) for (const [e, a] of this.auraTill) if (a.until < now || !e.active) this.auraTill.delete(e);
     // 跟着本体走的布景（火船）；本体没了就收掉
@@ -651,6 +726,7 @@ export class EnemyTraits {
   poisonStacks(now = this.now()): number { return this.poison.filter(x => x > now).length; }
 
   clear(): void {
+    for(const s of this.st.values())if(s.badge){s.badge.destroy();this.clearNewWarning(s.life);}
     for (const z of this.hazards) z.img?.destroy();
     for (const d of this.darts) d.img.destroy();
     for (const s of this.st.values()) for (const im of s.imgs ?? []) (im as unknown as Phaser.GameObjects.GameObject).destroy();

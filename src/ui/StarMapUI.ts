@@ -1,7 +1,9 @@
 import Phaser from 'phaser';
+import {STAR_ICON_FILE} from '../data/starFx';
+import {STAR_COMBOS,type StarComboId} from '../data/starOuter';
 import { takeStarNotice } from '../systems/HeroProgress';
 import { FONT, HEADING_FONT, TITLE_FONT, GAME_WIDTH, GAME_HEIGHT, IS_DESKTOP } from '../config';
-import { STAR_EDGES, STAR_NODES, STAR_BY_ID, STAR_REGIONS, STAR_RULES, keystonesLit, lightBlock, litSet, starPoints, type StarNode } from '../data/starMap';
+import { STAR_EDGES, STAR_NODES, STAR_BY_ID, STAR_REGIONS, STAR_RULES, keystonesLit, planStarPath, lightBlock, litSet, starPoints, type StarNode } from '../data/starMap';
 import type { AttributeId } from '../data/attributes';
 import { statEffective, statSource } from '../data/heroStats';
 import { CHARACTERS } from '../data/characters';
@@ -25,6 +27,7 @@ export interface StarMapState {
   lit: readonly string[];
   /** 还能点几颗。 */
   free: number;
+  triggers?:Readonly<Record<string,number>>;
 }
 export interface StarMapOpts {
   state: () => StarMapState;
@@ -55,7 +58,7 @@ const XS = STAR_NODES.map(n => n.x), YS = STAR_NODES.map(n => n.y);
 const BOUNDS = { x0: Math.min(...XS) - 40, x1: Math.max(...XS) + 40, y0: Math.min(...YS) - 40, y1: Math.max(...YS) + 40 };
 /** 中心头像位：四个入口围出的方框中点。 */
 const CENTER = (() => { const g = STAR_NODES.filter(n => n.kind === 'gate'); return { x: g.reduce((s, n) => s + n.x, 0) / g.length, y: g.reduce((s, n) => s + n.y, 0) / g.length }; })();
-const ZOOM_MIN = .8, ZOOM_MAX = 1.6;
+const ZOOM_MIN = .8, ZOOM_MAX = IS_DESKTOP ? 1.6 : 3.4;
 /** 底图（美术之后交 bg_starmap_stars.webp 替换时只改这里）。 */
 export const STAR_BG = { key: P + 'bg', file: 'bg_starmap.webp' } as const;
 /**
@@ -142,7 +145,7 @@ export class StarMapUI {
     // 图：容器里用设计稿坐标；默认缩放 = 正好一屏放下（左右各留出文字栏）
     this.map = s.add.container(0, 0).setScrollFactor(0).setName('star-map-layer'); this.root.add(this.map);
     const sideL = IS_DESKTOP ? 210 : 0, sideR = IS_DESKTOP ? 230 : 0;
-    this.clip = { l: sideL, r: W - sideR, t: 4, b: H - 24 };
+    this.clip = { l: sideL, r: W - sideR, t: IS_DESKTOP?4:148, b: IS_DESKTOP?H-24:H-410 };
     // 默认缩放：整张图放进可见区并让出淡出带，默认视图里没有一颗星是半透明的
     const availW = this.clip.r - this.clip.l - 2 * FADE_E, availH = this.clip.b - this.clip.t - 2 * FADE_E;
     this.fit = Math.min(availW / (BOUNDS.x1 - BOUNDS.x0), availH / (BOUNDS.y1 - BOUNDS.y0));
@@ -163,7 +166,7 @@ export class StarMapUI {
     for (const n of STAR_NODES) {
       const base = s.add.image(n.x, n.y, nodeKey(n, 'off')).setDisplaySize(DISP[n.kind] * this.baseScale(n.kind), DISP[n.kind] * this.baseScale(n.kind)).setScrollFactor(0).setName('star-base-' + n.id);
       this.map.add(base);
-      const ic = ICONS[n.name], size = ICON[n.kind];
+      const ic = (STAR_ICON_FILE[n.id] ?? ICONS[n.name]), size = ICON[n.kind];
       const icon = ic && size ? s.add.image(n.x, n.y, P + 'icon_' + ic).setDisplaySize(size, size).setScrollFactor(0) : undefined;
       if (icon) this.map.add(icon);
       const r = HIT[n.kind], hit = s.add.zone(n.x, n.y, r * 2, r * 2).setScrollFactor(0).setName('star-' + n.id).setInteractive({ useHandCursor: true, hitArea: new Phaser.Geom.Circle(r, r, r), hitAreaCallback: Phaser.Geom.Circle.Contains });
@@ -232,25 +235,27 @@ export class StarMapUI {
     const lx = 22;
     this.left = t(lx, 22, 26, '#f3d9a0', TITLE_FONT).setName('star-map-hero');
     this.leftSub = t(lx, 62, 13, '#e4d5b2').setLineSpacing(6).setWordWrapWidth(190, true).setName('star-map-stats');
-    const rx = W - 226, rw = 204;
-    this.rTitle = t(rx, 40, 20, '#f6dc9a', HEADING_FONT).setWordWrapWidth(rw, true).setName('star-map-sel-name');
-    this.rKind = t(rx, 70, 12, '#bda57a').setName('star-map-sel-kind');
-    this.rDesc = t(rx, 92, 14, '#efe3c6').setWordWrapWidth(rw, true).setLineSpacing(4).setName('star-map-sel-desc');
-    this.rStatus = t(rx, 200, 12, '#d8a890').setWordWrapWidth(rw, true).setLineSpacing(3).setName('star-map-sel-status');
+    const rx = W - 226, rw = IS_DESKTOP?204:W-44;
+    this.rTitle = t(IS_DESKTOP?rx:22, IS_DESKTOP?40:H-390, IS_DESKTOP?20:28, '#f6dc9a', HEADING_FONT).setWordWrapWidth(rw, true).setName('star-map-sel-name');
+    this.rKind = t(IS_DESKTOP?rx:22, IS_DESKTOP?70:H-358, IS_DESKTOP?12:18, '#bda57a').setWordWrapWidth(rw,true).setName('star-map-sel-kind');
+    this.rDesc = t(IS_DESKTOP?rx:22, IS_DESKTOP?92:H-330, IS_DESKTOP?14:19, '#efe3c6').setWordWrapWidth(rw, true).setLineSpacing(4).setName('star-map-sel-desc');
+    this.rStatus = t(IS_DESKTOP?rx:22, IS_DESKTOP?200:H-220, IS_DESKTOP?12:17, '#d8a890').setWordWrapWidth(rw, true).setLineSpacing(3).setName('star-map-sel-status');
     this.msg = t(rx, H - 128, 12, '#9fd0a0').setWordWrapWidth(rw, true).setName('star-map-msg');
     // 小号描金文字按钮：洗点 / 返回
     const small = (x: number, y: number, name: string, act: () => void) => {
-      const b = t(x, y, 14, '#e8c77e', HEADING_FONT).setOrigin(0, .5).setName(name).setPadding(4, 4).setInteractive({ useHandCursor: true });
+      const b = t(x, y, IS_DESKTOP?14:20, '#e8c77e', HEADING_FONT).setOrigin(0, .5).setName(name).setPadding(4, 4).setInteractive({ useHandCursor: true });
       b.on('pointerover', () => b.setColor('#fff0c8')).on('pointerout', () => b.setColor('#e8c77e'));
       b.on('pointerup', act); return b;
     };
+    if(!IS_DESKTOP){small(W-92,28,'star-map-zoom-out',()=>this.zoomStep(1/1.3)).setText('－').setFontSize(24).setPadding(8,8);small(W-42,28,'star-map-zoom-in',()=>this.zoomStep(1.3)).setText('＋').setFontSize(24).setPadding(8,8);}
+    small(IS_DESKTOP?22:22,H-84,'star-map-next',()=>{const st=this.o.state(),p=this.selected?planStarPath(st.lit,this.selected,st.gate):null,n=p?.path[0]?STAR_BY_ID.get(p.path[0]):null;if(!n){this.say(p?.block??'先选择目标星');return;}this.selected=n.id;this.zoom=Math.max(this.zoom,IS_DESKTOP?1.2:2.3);this.map.setScale(this.fit*this.zoom).setPosition(this.home.x-n.x*this.fit*this.zoom,this.home.y-n.y*this.fit*this.zoom);this.applyFade();this.render();}).setText('定位下一星').setPadding(8,10);
     if (this.o.respec) this.respecBtn = small(rx, H - 30, 'star-map-respec', () => { if (!this.o.state().lit.length) { this.say('还没有点亮的星，不用洗点'); return; } this.say(this.o.respec!.act()); this.selected = null; this.render(); });
     this.closeBtn = small(this.o.respec ? rx + 120 : rx, H - 30, 'star-map-close', () => this.o.close.act());
     // 悬停说明（跟着星走）
     this.tip = s.add.text(0, 0, '', { fontFamily: FONT, fontSize: '12px', color: '#f1e4c4', resolution: 2, backgroundColor: '#0b0806dd', padding: { x: 8, y: 5 }, wordWrap: { width: 220, useAdvancedWrap: true } }).setScrollFactor(0).setVisible(false).setName('star-map-tip');
     this.root.add(this.tip);
     // 操作提示
-    t(W / 2, H - 14, 11, '#8f8268').setOrigin(.5).setText('拖动平移 · 滚轮缩放 · 单击选中，双击或「点亮」确认').setName('star-map-help');
+    t(W / 2, H - 10, IS_DESKTOP?11:12, '#8f8268').setOrigin(.5).setText(IS_DESKTOP?'拖动平移 · 滚轮缩放 · 单击选中，双击或「点亮」确认':'拖动星图 · ＋/－缩放 · 点亮确认').setName('star-map-help');
   }
 
   // ───────────────────────────── 交互 ─────────────────────────────
@@ -272,6 +277,7 @@ export class StarMapUI {
   private unbind(): void { const i = this.scene.input; i?.off('wheel', this.onWheel); i?.off('pointerdown', this.onDown); i?.off('pointermove', this.onMove); i?.off('pointerup', this.onUp); }
   private visible(): boolean { let o: Phaser.GameObjects.Container | null = this.root; while (o) { if (!o.visible || !o.active) return false; o = o.parentContainer; } return this.built; }
 
+  private zoomStep(k:number):void{const old=this.zoom;this.zoom=Phaser.Math.Clamp(old*k,ZOOM_MIN,ZOOM_MAX);const ratio=this.zoom/old;this.map.setPosition(this.home.x-(this.home.x-this.map.x)*ratio,this.home.y-(this.home.y-this.map.y)*ratio).setScale(this.fit*this.zoom);this.clampPan();this.applyFade();}
   private applyView(): void { this.zoom = 1; this.map.setScale(this.fit); this.map.setPosition(this.home.x - ((BOUNDS.x0 + BOUNDS.x1) / 2) * this.fit, this.home.y - ((BOUNDS.y0 + BOUNDS.y1) / 2) * this.fit); }
   /** 平移不能把图整个拖出屏：图的中心留在屏幕内。 */
   private clampPan(): void {
@@ -322,7 +328,8 @@ export class StarMapUI {
       const gk = n.kind === 'gate' ? (s === 'on' ? 1.12 : 1) : 1;
       v.base.setTexture(nodeKey(n, s)).setDisplaySize(k * gk, k * gk); v.baseAlpha = n.kind === 'gate' && s === 'ready' ? .8 : 1; v.iconAlpha = ICON_ALPHA[s];
     }
-    for (const l of this.lines) { const on = lit.has(l.a) && lit.has(l.b); l.gold.setVisible(on); l.ink.setVisible(!on); }
+    const route=this.selected?planStarPath(st.lit,this.selected,st.gate):null,planned=new Set(route?.path??[]);
+    for (const l of this.lines) { const on = lit.has(l.a) && lit.has(l.b),preview=(planned.has(l.a)&&(planned.has(l.b)||lit.has(l.b)))||(planned.has(l.b)&&lit.has(l.a));l.gold.setTint(preview?0x82d5de:0xffffff).setVisible(on||preview);l.ink.setVisible(!on&&!preview); }
     this.applyFade();
     // 选中圈
     this.ring.clear();
@@ -335,6 +342,7 @@ export class StarMapUI {
     const namedLine = named.length ? named.map(n => (n.kind === 'keystone' ? '◆ ' : '· ') + n.name + (n.todo ? '（未开放）' : '')).join('\n') : '尚未点亮要星';
     this.left.setText(st.heroName);
     this.leftSub.setText([`Lv.${st.level}　入口 ${ATTR_SHORT[STAR_BY_ID.get(st.gate)!.attr!]}`, `可用 ${st.free} 颗 · 已点 ${st.lit.length} 颗`, `主星 ${keystonesLit(st.lit)} / ${STAR_RULES.keystoneMax}`, '', '四维', effLine, '', '已点亮的要星 / 主星', namedLine].join('\n'));
+    if(!IS_DESKTOP)this.leftSub.setWordWrapWidth(this.W-44,true).setFontSize(18).setLineSpacing(3).setText(`Lv.${st.level} · 可用 ${st.free} 星 · 主星 ${keystonesLit(st.lit)}/2\n${named.filter(n=>n.kind==='keystone').map(n=>n.name).join(' ＋ ')||'沿星路选择你的打法'}\n108颗星 · 点选目标查看连接路线`);
     // 右栏
     this.lightBtn?.g.destroy(); this.lightBtn?.hit.destroy(); this.lightBtn?.caption.destroy(); this.lightBtn = undefined;
     const W = this.W, H = this.H;
@@ -342,10 +350,12 @@ export class StarMapUI {
       this.rTitle.setText('选一颗星'); this.rKind.setText(''); this.rDesc.setText(this.intro + '单击星看说明；可点的星外圈有一道亮笔触。\n双击或按下方「点亮」确认。'); this.rStatus.setText('');
     } else {
       const where = sel.region === 'bridge' ? `${ATTR_SHORT[sel.between![0]]} ↔ ${ATTR_SHORT[sel.between![1]]}` : ATTR_SHORT[sel.region as AttributeId] + '区';
-      this.rTitle.setText(sel.name); this.rKind.setText(`${KIND_NAME[sel.kind]} · ${where}`).setY(this.rTitle.y + this.rTitle.height + 4);
-      this.rDesc.setText(sel.id === st.gate ? '你的入口：免费、自动点亮，本身不加属性。' : sel.desc).setY(this.rKind.y + 22);
+      this.rTitle.setText(sel.name); this.rKind.setText(`${KIND_NAME[sel.kind]} · ${where}`+this.comboHint(sel.id,st.lit)).setY(this.rTitle.y + this.rTitle.height + 4);
+      this.rDesc.setText(sel.id === st.gate ? '你的入口：免费、自动点亮，本身不加属性。' : sel.desc).setY(this.rKind.y + this.rKind.height + 8);
       const b = this.block(sel.id), stat = lit.has(sel.id) ? '已点亮' : b ? '不能点亮：' + b : '可以点亮（花 1 颗星）';
       this.rStatus.setText((sel.todo ? '效果尚未开放（可以点亮，暂无效果）\n' : '') + stat).setColor(lit.has(sel.id) ? '#9fd0a0' : b ? '#d8a890' : '#f3d48a').setY(this.rDesc.y + this.rDesc.height + 12);
+      if(route&&!lit.has(sel.id)){const text=route.block??`路线还需 ${route.cost} 星 · ${st.free>=route.cost?'星数足够':'还缺 '+(route.cost-st.free)+' 星'}\n下一颗：${STAR_BY_ID.get(route.path[0])?.name??'—'}`;this.rStatus.setText((b?'不能点亮：'+b+'\n':'')+text);}
+      if(st.triggers&&lit.has(sel.id))this.rStatus.setText(this.rStatus.text+`\n本关触发 ${st.triggers[sel.id]??0} 次`);
     }
     // 唯一的主按钮「点亮」：可点时是水墨主按钮，不可点时置灰（原因写在上面）
     const can = !!sel && !lit.has(sel.id) && this.block(sel.id) === null;
@@ -358,6 +368,7 @@ export class StarMapUI {
     if (this.respecBtn) this.closeBtn.setX(this.respecBtn.x + this.respecBtn.width + 20); // 返回排在洗点后面，不叠字
     this.root.bringToTop(this.tip); this.renderTip();
   }
+  private comboHint(id:string,lit:readonly string[]):string{const key=(Object.keys(STAR_COMBOS) as StarComboId[]).find(k=>(STAR_COMBOS[k].keys as readonly string[]).includes(id));if(!key)return '';const c=STAR_COMBOS[key],active=c.keys.every(n=>lit.includes(n));return '\n'+c.name+(active?' · 已成':' · 需'+(STAR_BY_ID.get(c.keys.find(n=>n!==id)!)?.name??''));}
   private renderTip(): void {
     if (!this.built) return;
     const id = this.hover, n = id ? STAR_BY_ID.get(id) : undefined;

@@ -5,16 +5,20 @@ import { TalentHallScene } from './scenes/TalentHallScene';
 import './platform/desktop';
 // 中途退出不算：上次没打完就关了 / 刷新 / 崩溃 → 先把存档回滚到那场进关前（必须在任何模块缓存存档之前）
 import './systems/BattleSnapshotBoot';
-import {NanzhengChapterScene} from './scenes/NanzhengChapterScene';import {nanzhengGameSceneClass} from './scenes/NanzhengGameScene';import {YILING_STAGES,YILING_SHEETS,yilingBattle,yilingTexture} from './data/yilingChapter';import {YilingChapterScene} from './scenes/YilingChapterScene';import {yilingGameSceneClass} from './scenes/YilingGameScene';import {BEIFA_STAGES,BEIFA_SHEETS,beifaBattle,beifaTexture} from './data/beifaChapter';import {BeifaChapterScene} from './scenes/BeifaChapterScene';import {beifaGameSceneClass} from './scenes/BeifaGameScene';import {EndingScene} from './scenes/EndingScene';import {XiangfanChapterScene} from './scenes/XiangfanChapterScene';import {xiangfanGameSceneClass} from './scenes/XiangfanGameScene';import {ShuChapterScene} from './scenes/ShuChapterScene';import {shuGameSceneClass} from './scenes/ShuGameScene';import {ThirdChapterScene} from './scenes/ThirdChapterScene';import {ChibiChapterScene} from './scenes/ChibiChapterScene';import {CHIBI_STAGES,chibiBattle} from './data/chibiChapter';import {JINGNAN_STAGES,JINGNAN_SHEETS,jingnanBattle,jingnanTexture} from './data/jingnanChapter';import {JingnanChapterScene} from './scenes/JingnanChapterScene';import {jingnanGameSceneClass} from './scenes/JingnanGameScene';import {HANZHONG_STAGES,HANZHONG_SHEETS,hanzhongBattle,hanzhongTexture} from './data/hanzhongChapter';import {HanzhongChapterScene} from './scenes/HanzhongChapterScene';import {hanzhongGameSceneClass} from './scenes/HanzhongGameScene';import {thirdGameSceneClass} from './scenes/ThirdGameScene';import {GuanduChapterScene} from './scenes/GuanduChapterScene';import {guanduGameSceneClass} from './scenes/GuanduGameScene';import {siegeGameSceneClass} from './scenes/SiegeGameScene';import {intelGameSceneClass} from './scenes/IntelGameScene';import {lubuGameSceneClass} from './scenes/LubuGameScene';
-import { gauntletGameSceneClass } from './scenes/GauntletGameScene';
+import {NanzhengChapterScene} from './scenes/NanzhengChapterScene';import {YilingChapterScene} from './scenes/YilingChapterScene';import {BeifaChapterScene} from './scenes/BeifaChapterScene';import {EndingScene} from './scenes/EndingScene';import {XiangfanChapterScene} from './scenes/XiangfanChapterScene';import {ShuChapterScene} from './scenes/ShuChapterScene';import {ThirdChapterScene} from './scenes/ThirdChapterScene';import {ChibiChapterScene} from './scenes/ChibiChapterScene';import {JingnanChapterScene} from './scenes/JingnanChapterScene';import {HanzhongChapterScene} from './scenes/HanzhongChapterScene';import {GuanduChapterScene} from './scenes/GuanduChapterScene';
+
 import { GauntletPickScene } from './scenes/GauntletPickScene';
 import {loadGameFonts} from './ui/GameFonts';
+
+import './coop/room.css';
+import { lazyScene } from './systems/LazyScene';
+import { lazyBattleScenes } from './systems/BattleSceneLoaders';
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH, IS_DESKTOP, RENDER_SCALE, initLayout, switchLayout } from './config';
 import { BootScene } from './scenes/BootScene';
 import { installFastFill } from './systems/RenderTweaks';
-import { sideGameScenes, sideLubuGameSceneClass } from './scenes/SideRouteGameScene';
-import { GameScene } from './scenes/GameScene';
+
+
 import { CityRecruitScene } from './scenes/CityRecruitScene';
 import { TownScene } from './scenes/TownScene';
 import { CityScene } from './scenes/CityScene';
@@ -81,23 +85,7 @@ if (RENDER_SCALE !== 1) {
 
 async function startGame(): Promise<void> {
   await loadGameFonts();
-  const BattleScene = import.meta.env.DEV ? (await import('./dev/DevGameScene')).DevGameScene : GameScene;
-  const ThirdBattleScene=thirdGameSceneClass(BattleScene);
-  const GuanduBattleScene=guanduGameSceneClass(BattleScene);
-  const ChibiBattleScene=thirdGameSceneClass(BattleScene,{key:'ChibiGameScene',arc:'chibi',stageKey:'chibiStage',transferKey:'chibiTransfer',stages:CHIBI_STAGES,texture:id=>'chibi_'+id,sheet:id=>'assets/chibi/'+id+'.png',battle:s=>chibiBattle(s),campPrefix:'chibi-',fireShips:[2]});
-  const JingnanBattleScene=jingnanGameSceneClass(BattleScene,{key:'JingnanGameScene',arc:'jingnan',stageKey:'jingnanStage',transferKey:'jingnanTransfer',stages:JINGNAN_STAGES,texture:jingnanTexture,sheet:id=>JINGNAN_SHEETS[jingnanTexture(id)],battle:s=>jingnanBattle(s),campPrefix:'jingnan-'});
-  const ShuBattleScene=shuGameSceneClass(BattleScene);
-  const XiangfanBattleScene=xiangfanGameSceneClass(BattleScene);
-  const NanzhengBattleScene=nanzhengGameSceneClass(BattleScene);
-  const HanzhongBattleScene=hanzhongGameSceneClass(BattleScene,{key:'HanzhongGameScene',arc:'hanzhong',stageKey:'hanzhongStage',transferKey:'hanzhongTransfer',stages:HANZHONG_STAGES,texture:hanzhongTexture,sheet:id=>HANZHONG_SHEETS[hanzhongTexture(id)],battle:s=>hanzhongBattle(s),campPrefix:'hanzhong-'});
-  const YilingBattleScene=yilingGameSceneClass(BattleScene,{key:'YilingGameScene',arc:'yiling',stageKey:'yilingStage',transferKey:'yilingTransfer',stages:YILING_STAGES,texture:yilingTexture,sheet:id=>YILING_SHEETS[yilingTexture(id)],battle:s=>yilingBattle(s),campPrefix:'yiling-'});
-  const BeifaBattleScene=beifaGameSceneClass(BattleScene,{key:'BeifaGameScene',arc:'beifa',stageKey:'beifaStage',transferKey:'beifaTransfer',stages:BEIFA_STAGES,texture:beifaTexture,sheet:id=>BEIFA_SHEETS[beifaTexture(id)],battle:s=>beifaBattle(s),campPrefix:'beifa-'});
-  const SiegeBattleScene=siegeGameSceneClass(BattleScene);
-  const IntelBattleScene=intelGameSceneClass(BattleScene);
-  const LubuBattleScene=lubuGameSceneClass(BattleScene);
-  const GauntletBattleScene=gauntletGameSceneClass(BattleScene); // 名将连战（data/gauntlet.ts；11-22 起一开始就能玩，选将页 GauntletPickScene）
-  // 其他势力支线（data/sideRoutes.ts）：每条支线一个三关框架场景 + 下邳白门楼的吕布战
-  const SideBattleScenes=sideGameScenes(BattleScene),SideLubuBattleScene=sideLubuGameSceneClass(BattleScene);
+  const battleScenes = lazyBattleScenes();
   installFastFill(); // 凸多边形填充走扇形三角化（systems/RenderTweaks）
   const game = new Phaser.Game({
     type: Phaser.AUTO,
@@ -116,7 +104,7 @@ async function startGame(): Promise<void> {
     input: {
       activePointers: 3,
     },
-    scene: [BootScene, OpeningScene, CityScene, CityRecruitScene, TownScene, TalentHallScene, WorldMapScene, MenuScene, BattleScene, ThirdChapterScene, ThirdBattleScene, GuanduChapterScene, GuanduBattleScene, ChibiChapterScene, ChibiBattleScene, JingnanChapterScene, JingnanBattleScene, ShuChapterScene, ShuBattleScene, HanzhongChapterScene, HanzhongBattleScene, XiangfanChapterScene, XiangfanBattleScene, YilingChapterScene, YilingBattleScene, NanzhengChapterScene, NanzhengBattleScene, BeifaChapterScene, BeifaBattleScene, EndingScene, SiegeBattleScene, IntelBattleScene, LubuBattleScene, GauntletBattleScene, GauntletPickScene, ...SideBattleScenes, SideLubuBattleScene],
+    scene: [BootScene, OpeningScene, CityScene, CityRecruitScene, TownScene, TalentHallScene, WorldMapScene, MenuScene, ThirdChapterScene, GuanduChapterScene, ChibiChapterScene, JingnanChapterScene, ShuChapterScene, HanzhongChapterScene, XiangfanChapterScene, YilingChapterScene, NanzhengChapterScene, BeifaChapterScene, EndingScene, GauntletPickScene, lazyScene('CoopScene', () => import('./scenes/CoopScene').then(m => m.CoopScene)), ...battleScenes],
   });
 
   // 手柄：每帧轮询 + 界面焦点导航（STEAM_PLAN.md · S2）

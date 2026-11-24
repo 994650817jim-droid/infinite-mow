@@ -1,3 +1,4 @@
+import {STAR_OUTER_TUNING as SO} from '../data/starOuter';
 import {LegionNavigation} from './LegionNavigation';
 import {LegionFormation} from './LegionFormation';
 import {CAMP_TRAINING,freshTraining,type CampTraining,type CampTrainingId,type CampGroup} from '../data/camp';
@@ -28,6 +29,22 @@ export class Legion {
   onDeath?: (u: Ally, now: number) => void;
   /** 部曲集火目标：曹操倚天剑这一剑的目标（host.focusAllies 设；目标死了 / 换了一条命就失效）。 */
   focus: Enemy | null = null; focusLife = 0;
+  private starOrders=new Map<Ally,{life:number;target:Enemy;spawn:number;until:number;issued:number;used:boolean}>();
+  private starClock=0;
+  private starTarget(u:Ally):Enemy|null{const m=this.starOrders.get(u);return m&&!m.used&&m.life===u.lifeId&&this.starClock<m.until&&m.target.active&&m.target.hp>0&&m.target.spawnId===m.spawn&&!m.target.invulnerable?m.target:null;}
+  onStarVolleyHit?:(e:Enemy,now:number,issued:number)=>void;
+  private takeStarOrder(u:Ally,e:Enemy,now:number):number|undefined{const m=this.starOrders.get(u);if(!m||m.used||m.life!==u.lifeId||m.target!==e||m.spawn!==e.spawnId||now>=m.until||!this.tactics.canAttack(u))return;m.used=true;return m.issued;}
+  requestStarVolley(e:Enemy,now:number,count:number,shield:boolean,accelerate:boolean):number{
+    if(this.stopped||!e.active||e.hp<=0||e.invulnerable)return 0;this.starClock=now;let n=0;
+    for(const u of this.units){if(!u.active||u.hp<=0||u.kind==='medic'||this.arriving.has(u)||this.busy?.(u)||u.ai.recall||['retreat','regroup','return'].includes(u.ai.mode)||!this.tactics.canAttack(u))continue;
+      const command=this.command.target(u);if(command&&command!==e||this.focus?.active&&this.focus!==e)continue;
+      const range=u.def.range*(u.def.ranged?this.rangeMul:u.kind==='halberdier'&&u.level===3?1.25:1)*(this.fm?.range(u)??1)*(this.postRangeMul?.(u)??1);
+      if(Math.hypot(u.x-this.player.x,u.y-this.player.y)>SO.volleyNear||Math.hypot(u.x-e.x,u.y-e.y)>range)continue;
+      if(accelerate){this.starOrders.set(u,{life:u.lifeId,target:e,spawn:e.spawnId,until:now+SO.volleyWindow,issued:now,used:false});u.cooldown=Math.min(u.cooldown,SO.volleyReady);u.ai.nextThink=0;}
+      if(shield){u.shield=Math.max(now<u.shieldUntil?u.shield:0,u.maxHp*SO.shieldRatio);u.shieldUntil=Math.max(u.shieldUntil,now+SO.shieldMs);}
+      if(++n>=count)break;
+    }return n;
+  }
   training=freshTraining();groups:Partial<Record<TroopKind,CampGroup>>={};
   purchaseCampTraining(id:CampTrainingId):boolean{const def=CAMP_TRAINING[id],lv=this.training[id];if(!def||lv>=3||this.food<def.costs[lv])return false;this.food-=def.costs[lv];this.training[id]++;if(id==='hp')for(const u of this.units)if(u.active)u.applyCampaignHp(this.hpMultiplier());return true;}
   campTarget?:(u:Ally)=>Enemy|null;
@@ -84,7 +101,7 @@ export class Legion {
   order: Order = 'guard';
   private readonly projectiles: LegionProjectiles;
   private readonly tactics: LegionTactics;
-  private readonly strikes:Array<{owner:Ally;life:number;target:Enemy;spawn:number;due:number;amount:number}>=[];
+  private readonly strikes:Array<{owner:Ally;life:number;target:Enemy;spawn:number;due:number;amount:number;starOrder?:number}>=[];
   private readonly heals: Array<{ owner: Ally; life: number; target: Ally; targetLife: number; due: number; amount: number }> = [];
   visibleCount = 0;
   private viewClock = 0; private combatClock = 0; private nextSquadSlot = 0;
@@ -109,7 +126,7 @@ export class Legion {
     this.formation=new LegionFormation(player);this.artEffects=new ArtEffects(scene);
     this.command=new CommandBuild(scene,player.growth.build,units,player,(u,now)=>this.fx(u,u.x,u.y,now,true));
     this.gfx = scene.add.graphics().setDepth(DEPTH.fx);
-    this.projectiles = new LegionProjectiles(scene); this.tactics = new LegionTactics(this.centerProxy(player),u=>this.command.target(u)??(this.focus?.active&&this.focus.spawnId===this.focusLife?this.focus:null)??this.campTarget?.(u)??null,u=>{const p=this.formation.position(u);return this.freeAt?this.freeAt(p.x,p.y):p;},o=>this.formation.extent+(o==='guard'?this.formation.leashAdj:0),(u,x,y,now)=>{const w=this.flowRoute?.(u.x,u.y,x,y);if(w){this.navStats.routed++;return w;}return this.navigation.steer(u.id,u.x,u.y,x,y,u.radius,now);});
+    this.projectiles = new LegionProjectiles(scene); this.tactics = new LegionTactics(this.centerProxy(player),u=>this.command.target(u)??this.starTarget(u)??(this.focus?.active&&this.focus.spawnId===this.focusLife?this.focus:null)??this.campTarget?.(u)??null,u=>{const p=this.formation.position(u);return this.freeAt?this.freeAt(p.x,p.y):p;},o=>this.formation.extent+(o==='guard'?this.formation.leashAdj:0),(u,x,y,now)=>{const w=this.flowRoute?.(u.x,u.y,x,y);if(w){this.navStats.routed++;return w;}return this.navigation.steer(u.id,u.x,u.y,x,y,u.radius,now);});
     this.tactics.relocate=(u,x,y)=>this.place(u,x,y); // 收回兜底也走统一换位（屏外直接换、屏内淡出淡入）
   }
   /** 在编兵力（城防弓手是城里的守军，不算）。 */
@@ -241,8 +258,8 @@ export class Legion {
   /** 第一章试验数值 ch1v6（GameScene 每帧设）：随军粮、部曲生命按 data/ch1Trial。 */
   private ch1Trial = false; private trialKills = 0;
   setCh1Trial(on: boolean): void { if (on === this.ch1Trial) return; this.ch1Trial = on; for (const u of this.units) if (u.active) u.applyCampaignHp(this.hpMultiplier()); }
-  stop(): void { this.command.clear(); this.stopped = true; this.player.armyDamageTakenMul = 1; this.effects.length = 0; this.artEffects.clear(); this.heals.length = 0; this.strikes.length=0; this.projectiles.clear(); this.gfx.clear(); }
-  clear(): void { this.corpses.clear(); this.command.clear();this.projectiles.clear(); this.heals.length = 0;this.strikes.length=0; for (const u of this.units) { const v = u.release(); if (v) this.views.push(v); } this.units.length = 0;this.navigation.clear();this.formation.clear(); this.squads.clear(); this.grid.clear(); }
+  stop(): void { this.starOrders.clear();this.command.clear(); this.stopped = true; this.player.armyDamageTakenMul = 1; this.effects.length = 0; this.artEffects.clear(); this.heals.length = 0; this.strikes.length=0; this.projectiles.clear(); this.gfx.clear(); }
+  clear(): void { this.starOrders.clear();this.corpses.clear(); this.command.clear();this.projectiles.clear(); this.heals.length = 0;this.strikes.length=0; for (const u of this.units) { const v = u.release(); if (v) this.views.push(v); } this.units.length = 0;this.navigation.clear();this.formation.clear(); this.squads.clear(); this.grid.clear(); }
   /** 援兵从场外跑向自己的阵位：到了（或 3 秒到点）才入列。 */
   private stepArrival(u: Ally, dt: number): void {
     const a = this.arriving.get(u)!; if (!u.active || u.lifeId !== a.life) { this.arriving.delete(u); return; }
@@ -268,15 +285,17 @@ export class Legion {
     if (this.stopped) return;
     this.formation.setNarrow(this.navigation.nearWall(this.player.x,this.player.y,this.formation.narrow));this.formation.update(dt);const signature=JSON.stringify(this.groups);if(signature!==this.groupSignature){this.groupSignature=signature;this.regroup();for(const u of this.units)u.ai.nextThink=now+(u.id*53)%240;}
     this.command.update(now,(x,y,r)=>enemyGrid.query(x,y,r));
-    this.projectiles.update(dt, now, enemyGrid, damage);
+    const deal=(e:Enemy,n:number,u?:Ally,life?:number,issued?:number):void=>{const hp=e.hp,spawn=e.spawnId;damage(e,n);if(issued!==undefined&&u?.active&&u.lifeId===life&&e.spawnId===spawn&&e.hp<hp)this.onStarVolleyHit?.(e,now,issued);};
+    this.projectiles.update(dt, now, enemyGrid, deal);
     if (this.stopped) return;
     for (let i = this.heals.length - 1; i >= 0; i--) {
       const h = this.heals[i]; if (now < h.due) continue;
       this.heals.splice(i, 1);
       if (h.owner.active && h.owner.lifeId === h.life && h.target.active && h.target.lifeId === h.targetLife && Math.hypot(h.owner.x - h.target.x, h.owner.y - h.target.y) <= h.owner.def.range) { h.target.hp = Math.min(h.target.maxHp, h.target.hp + h.amount); this.fx(h.owner, h.target.x, h.target.y, now, true); }
     }
-    for(let i=this.strikes.length-1;i>=0;i--){const hit=this.strikes[i];if(now<hit.due)continue;this.strikes.splice(i,1);if(hit.owner.active&&hit.owner.lifeId===hit.life&&hit.target.active&&hit.target.spawnId===hit.spawn&&Math.hypot(hit.owner.x-hit.target.x,hit.owner.y-hit.target.y)<=hit.owner.def.range+hit.target.radius){this.fx(hit.owner,hit.target.x,hit.target.y,now,false);this.knock(hit.owner,hit.target,4,now);damage(hit.target,hit.amount);}if(this.stopped)return;}
+    for(let i=this.strikes.length-1;i>=0;i--){const hit=this.strikes[i];if(now<hit.due)continue;this.strikes.splice(i,1);if(hit.owner.active&&hit.owner.lifeId===hit.life&&hit.target.active&&hit.target.spawnId===hit.spawn&&Math.hypot(hit.owner.x-hit.target.x,hit.owner.y-hit.target.y)<=hit.owner.def.range+hit.target.radius){this.fx(hit.owner,hit.target.x,hit.target.y,now,false);this.knock(hit.owner,hit.target,4,now);deal(hit.target,hit.amount,hit.owner,hit.life,hit.starOrder);}if(this.stopped)return;}
     this.viewClock += dt; this.combatClock += dt;
+    this.starClock=now;for(const[u,m]of this.starOrders)if(!u.active||u.lifeId!==m.life||now>=m.until||!m.target.active||m.target.spawnId!==m.spawn)this.starOrders.delete(u);
     const stats = { range: this.rangeMul, melee: this.damageMul*this.player.growth.allyDamageMultiplier()*1, attackSpeed: 1 };
     for (const u of this.units) {
       if (!u.active) continue;
@@ -312,15 +331,16 @@ export class Legion {
         candidates.sort((a, b) => a === target ? -1 : b === target ? 1 : (a.x - u.x) ** 2 + (a.y - u.y) ** 2 - (b.x - u.x) ** 2 - (b.y - u.y) ** 2);
         const hits = u.kind === 'halberdier' ? candidates.filter(e => Math.hypot(e.x - candidates[0].x, e.y - candidates[0].y) < 75) : candidates.slice(0, u.level === 3 && ['swordsman', 'archer'].includes(u.kind) ? 2 : u.kind === 'rider' && u.level === 3 ? 3 : 1);
         u.cooldown = u.def.cooldown / stats.attackSpeed; this.attackSound?.(u.kind); u.act(candidates[0].x, candidates[0].y, now, u.kind === 'crossbowman' ? 420 : u.def.ranged ? 340 : 300);
+        const starOrder=this.takeStarOrder(u,target,now);
         for (const e of hits) {
           if (u.kind === 'rider' && u.ai.mode === 'charge') {
             if (u.ai.chargeHits.has(e.spawnId) || u.ai.chargeHits.size >= (u.level === 3 ? 3 : 1)) continue;
             u.ai.chargeHits.add(e.spawnId);
           }
           const amount = u.def.damage * this.drillMultiplier * (1+CAMP_TRAINING.attack.perLevel*this.training.attack) * (1 + .25 * (u.level - 1)) * stats.melee * (u.kind === 'spearman' && e.kind === 'cavalry' && u.level === 3 ? 2 : 1) * (this.fm?.dmg(u, e) ?? 1) * (this.hitMul?.(u, e) ?? 1) * this.player.growth.allyNearDamageFactor(u.x - this.player.x, u.y - this.player.y); // 末项：星图「号令」（开关关着恒为 1）
-          if (u.def.ranged) { if (u.kind === 'crossbowman') { const total = Math.max(1, Math.round(amount)), first = u.level === 3 ? total : Math.ceil(total / 2), second = u.level === 3 ? total : Math.floor(total / 2); this.projectiles.fire(u, e, first, now + 180); if (second) this.projectiles.fire(u, e, second, now + 260); } else this.projectiles.fire(u, e, amount, now + 180); }
-          else if(u.kind==='spearman'){this.strikes.push({owner:u,life:u.lifeId,target:e,spawn:e.spawnId,due:now+120,amount});}
-          else { this.fx(u, e.x, e.y, now, false); this.knock(u, e, u.kind==='rider'?5:3, now); damage(e, amount); }
+          if (u.def.ranged) { if (u.kind === 'crossbowman') { const total = Math.max(1, Math.round(amount)), first = u.level === 3 ? total : Math.ceil(total / 2), second = u.level === 3 ? total : Math.floor(total / 2); this.projectiles.fire(u, e, first, now + 180,starOrder); if (second) this.projectiles.fire(u, e, second, now + 260,starOrder); } else this.projectiles.fire(u, e, amount, now + 180,starOrder); }
+          else if(u.kind==='spearman'){this.strikes.push({owner:u,life:u.lifeId,target:e,spawn:e.spawnId,due:now+120,amount,starOrder});}
+          else { this.fx(u, e.x, e.y, now, false); this.knock(u, e, u.kind==='rider'?5:3, now); deal(e, amount,u,u.lifeId,starOrder); }
           if (this.stopped) return;
         }
       }
@@ -339,6 +359,7 @@ export class Legion {
     for (const u of this.units) if (u.active && u.view) {
       u.render(now);
       u.view.label.setVisible(false);
+      const signal=this.starOrders.get(u);if(signal&&signal.life===u.lifeId&&now<signal.until){const x=u.x-9,y=u.y-38,alpha=Math.min(1,(signal.until-now)/180);this.gfx.lineStyle(1,0xe6c57c,alpha).lineBetween(x,y,x,y+13);this.gfx.fillStyle(signal.used?0xb5d9c2:0xd9b46e,alpha).fillTriangle(x+1,y,x+11,y+3,x+1,y+7);}
       if (now < u.ai.blockUntil) {
         const x=u.x+u.facingX*16,y=u.y+u.facingY*16-9;
         this.gfx.lineStyle(2,0xe1d5a7,.85).lineBetween(x-6,y-5,x-10,y-9).lineBetween(x+6,y-5,x+10,y-9);

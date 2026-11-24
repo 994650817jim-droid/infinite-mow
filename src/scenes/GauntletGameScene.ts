@@ -1,4 +1,14 @@
+import { preloadMythicNameplates } from '../ui/MythicBossNameplate';
+import { survivorBossHp, survivorBossProfile } from '../data/survivorBossBalance';
+import { GAUNTLET_ROSTER_IDS, pickGauntletRoster } from '../data/gauntletRoster';
+import { ROSTER } from '../data/enemyRoster';
+import { tallyRoster } from '../systems/RosterMix';
+import type { IffUnit } from '../systems/IffOverlay';
+import { loadSurvivorBossFx, updateSurvivorBossFx, clearSurvivorBossFx } from '../systems/SurvivorBossFx';
 import Phaser from 'phaser';
+import { DIVINE_GENERALS, GHOST_GENERALS, challengeBoss, challengeChoices, challengeWave, mythicArtKey, mythicBoss, tierTitle, type GauntletRunTier } from '../data/mythicGauntlet';
+import { preloadMythic, prepareMythicActions } from '../systems/MythicArt';
+import { MythicBossController } from '../systems/MythicBossController';
 import { GameScene } from './GameScene';
 import { BALANCE, DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, actorDepth } from '../config';
 import { getBattleChapter, getChapter, type ChapterDef } from '../data/chapters';
@@ -6,10 +16,14 @@ import type { EnemyDef } from '../data/enemies';
 import { GAUNTLET, GAUNTLET_MOVES, GAUNTLET_POOL, GAUNTLET_TROOPS, type GauntletArc, type GauntletProps, endlessBoss, gauntletReward, pickBosses, readGauntletBest, gauntletPool, GAUNTLET_NAME, waveScale, writeGauntletBest, type GauntletBoss } from '../data/gauntlet';
 import { GAUNTLET_RECRUIT, recruitCost, recruitTier } from '../data/gauntletCards';
 import { TROOPS } from '../data/legion';
+import { lqButton, lqPanel, lqLabelColor, type LqState } from '../ui/LacquerKit';
 import { GAUNTLET_BUILD, RARITY, STAR_CARD_IDS, cardCategory, cardRarity, pickByRarity, rollRarity, starCardPool, type GCategory, type GRarity, type StarCard } from '../data/gauntletCards';
 import { STAR_BY_ID, STAR_REGIONS } from '../data/starMap';
 import { starIconKey, starIconUrl } from '../data/starFx';
 import { ARC_CHAPTER, guardDef, troopChapter, troopTextures, waveTroopSet, type TroopKind } from '../data/gauntletTroops';
+import { HEBEI_PLAN } from '../data/dualBossPlans';
+import { BossMount } from '../systems/BossMount';
+import { BOSS_MOUNTS } from '../data/bossMoves';
 import { BOSS_MOVES, type BossMovesetDef } from '../data/bossMoves';
 import { supplyOption } from '../data/upgrades';
 import { arcPalette, thirdBattle } from '../data/thirdChapter';
@@ -78,6 +92,7 @@ const TEMPLATE: Record<string, FollowerTemplate> = { xiahouyuan: 'blade', luxun:
 function adaptMoves(d: BossMovesetDef, b: GauntletBoss): BossMovesetDef {
   const drop = b.drop ?? [], f = (m: BossMovesetDef['p1']['moves']) => { const k = m.filter(x => !drop.includes(x.name)); return k.length ? k : m; };
   const p1 = { ...d.p1, moves: [...f(d.p1.moves), ...(b.add?.p1 ?? [])] }, p2 = { ...d.p2, moves: [...f(d.p2.moves), ...(b.add?.p2 ?? [])] };
+  if (b.id === 'zhangxiu') p2.moves = [...(b.add?.p2 ?? []), ...f(d.p2.moves)]; // 坠马后先展示封步枪阵，再接原枪法。
   const boost = b.p2Boost; if (boost) { p2.speedMul *= boost.speed; p2.moves = p2.moves.map(m => ({ ...m, dmg: m.dmg * boost.dmg })); }
   return { ...d, p1, p2 };
 }
@@ -107,6 +122,12 @@ const SEAL_KEY = 'ending_seal_red';
 /** 每位名将的首领图与战役数值（从各章的数据 / 场景配置取，和战役里同一张图、同一份数值）。 */
 function bossArt(b: GauntletBoss): BossArt {
   const arc = (c: ChapterDef, tex: string, sheet: string | undefined): BossArt => ({ tex, sheet, def: { ...c.enemies.boss, texture: tex }, style: c.bossStyle, layout: 'arc' });
+  if (mythicBoss(b.id)) {
+    const tex = mythicArtKey(b.id);
+    const base = getChapter('hulao').enemies.boss;
+    return { tex, def: { ...base, texture: tex, walkVisual: undefined, attackVisual: undefined, tint: 0xffffff },
+      style: 'siege', layout: 'arc' };
+  }
   switch (b.arc) {
     case 'huangjin': { const c = getBattleChapter('huangjin', b.stage), d = c.enemies.boss; return { tex: d.walkVisual?.texture ?? d.texture, def: d, style: c.bossStyle, layout: 'walk' }; }
     case 'hulao': {
@@ -160,6 +181,15 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     /** 本局：第几阵（1 起）、阶段与进入时刻（关内秒）、十阵名单、当前名将、斩过的名将、是否已通关十阵 / 进了无尽。 */
     gWave = 1; gPhase: 'mow' | 'boss' | 'clear' | 'choice' | 'done' = 'mow'; gAt = 0; gOrder: GauntletBoss[] = []; gCur: GauntletBoss | null = null;
     gKills: GauntletBoss[] = []; gCleared = false; gEndless = false; private gPool: GauntletBoss[] = [];
+    gTier: GauntletRunTier = 'mortal';
+    gMilestones = 0;
+    private get difficultyWave(): number {
+      if (this.gTier==='ghost') return 10+Math.ceil((this.gWave-10)/5);
+      if (this.gTier==='divine') return 12+Math.ceil((this.gWave-20)/5);
+      if (this.gTier==='endless'&&this.gMilestones>1) return this.gWave-8*(this.gMilestones-1);
+      return this.gWave;
+    }
+    private get mowSeconds(): number { return this.gTier==='ghost'||this.gTier==='divine' ? 8 : GAUNTLET.mowSec; }
     private gCtrl: GCtrl | null = null; private gLootShown = false; private gEliteAt = 0; private gFollowers: Array<{ f: Follower; boss: GauntletBoss }> = [];
     /**
      * 从哪进来的（结算「返回」回哪）：主菜单是主要入口（11-22 起一开始就能玩），只有从天下地图牙旗进来的回地图；开发直进也算主菜单。
@@ -171,8 +201,11 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     gStats = { lootPicks: [] as string[], spawned: 0, cleared: 0 };
 
     preload() {
+      loadSurvivorBossFx(this);
       (Base.prototype as unknown as { preload?: () => void }).preload?.call(this); // 基类（开发构建的 DevGameScene）有 preload 就先跑
       // 名将池的首领图都先载好（第一 / 二章的张梁、张宝、张角、华雄、徐荣、吕布开机就有）
+      preloadMythic(this);
+      preloadMythicNameplates(this);
       for (const b of gauntletPool()) { const a = bossArt(b); if (a.sheet && !this.textures.exists(a.tex)) loadBossSheet(this.load, a.tex, a.sheet); }
       if (!this.textures.exists(HILL_ART[0].key)) this.load.image(HILL_ART[0].key, HILL_ART[0].url); // 高地圈（汉中山头同一张图）
       if (!this.textures.exists('gauntlet_oil_jar')) this.load.spritesheet('gauntlet_oil_jar', 'assets/props/gauntlet_oil_jar.png', { frameWidth: 256, frameHeight: 256 }); // 兀突骨火油罐（美术 11-21：完好 / 碎裂）
@@ -180,7 +213,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       for (const id of STAR_CARD_IDS) if (!this.textures.exists(starIconKey(id))) this.load.image(starIconKey(id), starIconUrl(id)); // 将星卡图标（星图页同一套）
       if (!this.textures.exists(SEAL_KEY)) this.load.image(SEAL_KEY, 'assets/ending/seal_red_2.png'); // 进度条斩将盖的朱印（结局麒麟阁同一枚，缩小用）
       // 每阵杂兵 / 名将亲兵用到的各章兵种图（data/gauntletTroops.ts）：蜀 / 襄樊 / 南中按 176 格载，其余 v2 兵种表走 loadV2TroopSheets（同各章场景）
-      const keys = troopArtKeys(), grid = gridTroops(), gridKeys = new Set(grid.map(t => t.walk));
+      const keys = [...troopArtKeys(),...GAUNTLET_ROSTER_IDS.flatMap(id=>[ROSTER[id].art.walk,ROSTER[id].art.attack])], grid = gridTroops(), gridKeys = new Set(grid.map(t => t.walk));
       for (const t of grid) if (keys.includes(t.walk) && !this.textures.exists(t.walk)) this.load.spritesheet(t.walk, t.file, { frameWidth: 176, frameHeight: 176 });
       loadV2TroopSheets(this, keys.filter(k => !gridKeys.has(k) && Object.prototype.hasOwnProperty.call(ART_V2_FILES, k) && isV2Texture(k))); // 只载有文件的原图；换色派生键（f_ / yuan_ / readable_）isV2Texture 也认，但要 create 里现生成，载了会报错并把源图记成缺失
     }
@@ -211,6 +244,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       this.gFrom = this.registry.get('gauntletFrom') === 'map' ? 'map' : 'menu';
       this.registry.remove('campaignTransfer'); this.registry.remove('worldCampaign'); // 无行营 / 无整军：不带部曲、不读征程构筑
       this.registry.set('runConfig', { ...saved, character: saved?.character ?? 'zhaoyun', chapter: 'hulao', westStage: 3, encounter: 'qunxiong' }); // encounter：不建剧情、不记战役进度、不建西凉专属机制（同篇章场景）
+      this.gTier = 'mortal'; this.gMilestones = 0;
       this.gWave = 1; this.gPhase = 'mow'; this.gAt = 0; this.gKills = []; this.gCleared = false; this.gEndless = false; this.gCtrl = null; this.gLootShown = false; this.gFollowers = []; this.gPendingReplace = null; this.gResult = null; this.gPortrait.clear();
       this.gStats = { lootPicks: [], spawned: 0, cleared: 0 };
       const test = isChapterTestRun();
@@ -218,7 +252,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       this.gPool = pool.filter(b => b.name !== heroName).length ? pool.filter(b => b.name !== heroName) : pool; // 本局主将同名的名将不出（主将黄忠 / 孟获 / 祝融……）
       this.gOrder = pickBosses(this.gPool);
       // 从 0 开局 + 卡池全开（基类 create 里按 mechOpen 建系统、读卡池上限，所以先开）；各章兵种换色图先备好
-      this.gGear = {}; this.gCharms = []; this.gHorse = undefined; this.gRecruitBtn = null; this.gRecruits = { times: 0, men: 0 }; this.gResultTab = 'kills'; // 本局兵装 / 信物 / 坐骑：从 0 开局，空
+      this.gGear = {}; this.gCharms = []; this.gHorse = undefined; this.gRecruitBtn = null; this.gRecruitCardState = ''; this.gRecruits = { times: 0, men: 0 }; this.gResultTab = 'kills'; // 本局兵装 / 信物 / 坐骑：从 0 开局，空
       const F = GAUNTLET.from0; this.gRerollFree = F.freeRerolls; this.gRerollPaid = 0; this.gExcludes = F.excludes; this.gExcluded.clear(); this.gExcluding = false; this.gExcludeBtn = null;
       this.openPool(); this.events.once('shutdown', () => this.closePool());
       this.ensureTroopArt();
@@ -228,21 +262,39 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       this.gFormations = []; this.gQiyuWaves = []; this.gQiyuPending = false; this.formationRt?.setLoadout([]); // 军阵从 0：只靠奇遇拿
       this.player.growth.cardStars = true; this.gRarity.clear(); this.gBuildLog = []; this.gRarityMarks = []; ensureItemTextures(this); // 将星卡：星图开关关着也生效
       this.itemDrops = null;
-      this.chapter = this.makeChapter(this.gOrder[0]);
+      const preview = test ? new URLSearchParams(location.search).get('mythic') : null;
+      const previewBoss = preview ? mythicBoss(preview) : undefined;
+      if (previewBoss) {
+        this.gTier=previewBoss.tierName;
+        const lineup=this.gTier==='ghost'?GHOST_GENERALS:DIVINE_GENERALS;
+        this.gWave=(this.gTier==='ghost'?10:20)+lineup.indexOf(previewBoss)+1;
+        this.gAt=this.elapsed-this.mowSeconds+2;
+      }
+      this.chapter = this.makeChapter(this.waveBoss());
+      if(previewBoss)prepareMythicActions(this,previewBoss.id);
       this.bossWarned = true; this.gEliteAt = GAUNTLET.eliteFirst;
       this.hudTexts.chapter.setText(''); // 关名不写（见 updateTrack）
-      this.time.delayedCall(500, () => { if (!this.over) this.showWaveBanner(GAUNTLET_NAME + ' · 第 1 阵', false, `敌军 ${waveTroopSet(1).troops.name} · 割草 ${GAUNTLET.mowSec} 秒后名将登场 · 共 ${GAUNTLET.waves} 阵`); });
+      this.time.delayedCall(500, () => { if (!this.over && !previewBoss) this.showWaveBanner(GAUNTLET_NAME + ' · 第 1 阵', false, `敌军 ${waveTroopSet(1).troops.name} · 割草 ${GAUNTLET.mowSec} 秒后名将登场 · 共 ${GAUNTLET.waves} 阵`); });
       this.moveDevBadge();
-      this.gTrack?.destroy(); this.gTrack = new GauntletTrack(this, GAUNTLET.waves, 'hud_medal2_' + this.runConfig.character, SEAL_KEY); this.gTrack.setWave(1, true);
+      this.gTrack?.destroy(); this.gTrack = new GauntletTrack(this, GAUNTLET.waves, 'hud_medal2_' + this.runConfig.character, SEAL_KEY); this.gTrack.setWave(this.gWave, true);
       this.gStrikes = new Strikes({ scene: this, player: this.player, army: this.legion, now: () => this.combatNow }); // 地面落点打击（手绘预警圈 → 命中序列帧）：郝昭箭楼、司马懿
       if (this.gPool.some(b => b.id === 'dongzhuo')) ensureTroopArt(this, ['dongzhuo_walk', 'dongzhuo_attack']); // 董卓行走 / 攻击图（同 2-3，按需载入）
       this.events.once('shutdown', () => { this.gCtrl?.clear(); this.gCtrl = null; this.gTrack?.destroy(); this.gTrack = null; this.clearProps(); this.clearEscort(); this.clearHill(); this.clearBand(); this.gStrikes?.clear(); this.gStrikes = null; });
     }
     /** 自定关：不进战役关卡逻辑（剧情、进度、段落、招降都按自定关跳过）。 */
     protected customChapter() { return this.chapter?.name === GAUNTLET_NAME ? this.chapter : { ...this.makeChapter(this.gOrder[0] ?? gauntletPool()[0]), bossStyle: 'lubu' as const }; } // 开局建场景时用中性的首领风格：华雄 / 徐荣的风格会让基类搭汜水关城墙、荥阳伏兵营
+    /** 本模式所有敌方小怪统一阵营服色，主将、首领与我方随从保留原样。 */
+    protected *iffUnits():Generator<IffUnit> {
+      for(const u of super.iffUnits())yield u.side==='enemy'&&u.rank!=='boss'?{...u,yellow:false,uniformEnemy:true}:u;
+    }
+    protected spawnEnemy(kind:EnemyDef['kind'],x:number,y:number,hpScale=this.chapter.hpScale(this.elapsed),force=false,override?:EnemyDef):Enemy|null {
+      const e=super.spawnEnemy(kind,x,y,hpScale,force,override);
+      if(e&&kind!=='boss'&&(e.def.speed>0||e.def.damage>0)){e.baseTint=0xffffff;e.def={...e.def,tint:0xffffff};e.sprite.clearTint();}
+      return e;
+    }
     protected phaseEligible() { return false; }
     protected lootBlocked() { return true; }
-    protected victoryLabel() { return this.gEndless ? '无尽止步' : '十阵通关'; }
+    protected victoryLabel() { return this.gEndless ? '无尽止步' : this.gMilestones ? [ '', '凡将十阵告捷', '鬼将十阵告捷', '神将十阵告捷' ][this.gMilestones] : '连战结算'; }
 
     // ———— 从 0 开局（用户 11-21「名将挑战是从 0 开始 build 起来」「全新从 0 开始的不继承主剧情的 build」）————
     // 主将 1 级、加点 0；不带星图 / 兵装 / 信物 / 坐骑 / 武将谱（本命淬炼、战法心得）/ 城建 / 部曲；专属兵器与招牌被动照有（武将自带）。
@@ -264,7 +316,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     }
     /** 新卡按第十二章那档出（新卡替换率 0.4、各类权重都开）；「名将来投」按本阵兵种那一章的时代。 */
     protected newCardChapter(): number { return 12; }
-    protected newCardEra(): number { return ARC_CHAPTER[waveTroopSet(this.gWave).troops.arc]; }
+    protected newCardEra(): number { return ARC_CHAPTER[waveTroopSet(this.difficultyWave).troops.arc]; }
     /** 三选一节奏：前期升级快，两次面板最短隔 pickGapSec 秒（中间升的级攒着连选）。 */
     protected pickGapOk(): boolean { return this.forcePickNow || this.elapsed - this.lastPickAt >= GAUNTLET.from0.pickGapSec; }
 
@@ -348,7 +400,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     }
     /** 稀有度 → 兵装品质（普通出白 / 绿，精良蓝、稀有紫、传说橙）。 */
     private qualityOf(r: GRarity): ItemQuality { return r === 'legend' ? 'orange' : r === 'rare' ? 'purple' : r === 'fine' ? 'blue' : Math.random() < .5 ? 'white' : 'green'; }
-    private kitChapter(): number { return ARC_CHAPTER[waveTroopSet(this.gWave).troops.arc]; }
+    private kitChapter(): number { return ARC_CHAPTER[waveTroopSet(this.difficultyWave).troops.arc]; }
     /** 一张兵装卡：随机一栏、这一档品质，比这一栏现在穿的好才出（每栏一件，新的换旧的）。 */
     private gearCard(r: GRarity): UpgradeOption | null {
       const q = this.qualityOf(r), slots = (['armor', 'helm', 'boots'] as const).filter(s => { const cur = this.gGear[s]; return !cur || QUALITY_ORDER.indexOf(cur.quality) < QUALITY_ORDER.indexOf(q); });
@@ -430,7 +482,8 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     }
 
     // ———— 花钱币招兵（钱币小出口）：斩将后清场那几秒，屏幕下方一个按钮 ————
-    private gRecruitBtn: Phaser.GameObjects.Text | null = null;
+    private gRecruitBtn: Phaser.GameObjects.Container | null = null;
+    private gRecruitCardState = '';
     /** 本局招了几次 / 几名兵（结算「本局打法」用）。 */
     gRecruits = { times: 0, men: 0 };
     /** 现在能不能招：清场阶段、没有面板。 */
@@ -444,18 +497,55 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       this.sfx.play('gong'); this.showGrowthNotice(`招兵 · ${TROOPS[kind].name} ×${GAUNTLET_RECRUIT.per}（${this.legion.levels[kind]} 阶）· −${cost} 钱币`);
       this.paintRecruit(); return true;
     }
-    /** 招兵按钮：清场时出现在屏幕下方正中（不压技能栏），写这一阵能招的兵种、价格；钱不够变灰。 */
     private paintRecruit(): void {
-      const show = this.recruitOpen();
-      if (!show) { this.gRecruitBtn?.setVisible(false); return; }
-      let b = this.gRecruitBtn;
-      if (!b || !b.scene) {
-        b = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 132, '', { fontFamily: HEADING_FONT, fontSize: '20px', color: '#f6e6c2', resolution: 2, align: 'center' }).setOrigin(.5).setPadding(22, 10).setBackgroundColor('rgba(40,26,14,0.88)').setStroke('#120904', 4).setScrollFactor(0).setDepth(DEPTH.hud + 5).setName('gauntlet-recruit')
-          .setInteractive({ useHandCursor: true }).on('pointerdown', () => { if (this.recruitOpen()) this.recruitTroops(); });
-        this.gRecruitBtn = b;
+      if (!this.recruitOpen()) {
+        this.gRecruitBtn?.setVisible(false);
+        return;
       }
-      const cost = recruitCost(this.gWave), T = recruitTier(this.gWave), ok = this.legion.food >= cost;
-      b.setText(`招兵 · ${GAUNTLET_RECRUIT.per} 名 · ${cost} 钱币\n${T.kinds.map(k => TROOPS[k].name).join(' / ')} · ${T.level} 阶 · 兵力 ${this.legion.count}`).setVisible(true).setAlpha(ok ? 1 : .55);
+
+      const cost = recruitCost(this.gWave);
+      const tier = recruitTier(this.gWave);
+      const funds = this.legion.food;
+      const state = [this.gWave, funds, this.legion.count].join(':');
+      if (this.gRecruitBtn?.scene && state === this.gRecruitCardState) {
+        this.gRecruitBtn.setVisible(true);
+        return;
+      }
+
+      const width = Math.min(414, GAME_WIDTH - 32);
+      const height = 98;
+      const root = this.gRecruitBtn?.scene ? this.gRecruitBtn : this.add.container()
+        .setScrollFactor(0).setDepth(DEPTH.hud + 5).setName('gauntlet-recruit');
+      this.gRecruitBtn = root;
+      this.gRecruitCardState = state;
+      root.removeAll(true);
+      root.setPosition((GAME_WIDTH - width) / 2, GAME_HEIGHT - (GAME_WIDTH < 600 ? 245 : 132) - height / 2).setVisible(true);
+
+      const panel = this.add.graphics();
+      lqPanel(panel, 0, 0, width, height, { alpha: .94, glow: false });
+      const textStyle = { fontFamily: HEADING_FONT, resolution: 2 };
+      const heading = this.add.text(22, 15, `招募 ×${GAUNTLET_RECRUIT.per} · ${tier.level}阶`, { ...textStyle, fontSize: '21px', color: '#f6dc9a' });
+      const kinds = tier.kinds.map(kind => TROOPS[kind].name);
+      const split = Math.min(3, kinds.length);
+      const pool = [kinds.slice(0, split), kinds.slice(split)].filter(line => line.length).map(line => line.join(' · '));
+      const detail = this.add.text(22, 43, pool.join('\n'), { ...textStyle, fontSize: '15px', color: '#e5d3b3', lineSpacing: 3 });
+      const commandX = width - 91;
+      const ok = funds >= cost;
+      const command = this.add.graphics();
+      const label = this.add.text(commandX, 41, ok ? `招募 · ${cost}钱` : `差 ${cost - funds} 钱`, { ...textStyle, fontSize: '16px' }).setOrigin(.5);
+      const balance = this.add.text(commandX, 76, `钱币 ${funds} · 兵力 ${this.legion.count}`, { ...textStyle, fontSize: '13px', color: '#cbb996' }).setOrigin(.5);
+      const hit = this.add.zone(commandX, 41, 136, 44).setScrollFactor(0).setName('gauntlet-recruit-buy');
+      const paint = (buttonState: LqState) => {
+        const offset = lqButton(command.clear(), commandX, 41, 136, 44, buttonState, 'gold');
+        label.setColor(lqLabelColor(buttonState)).setY(41 + offset);
+      };
+      paint(ok ? 'idle' : 'off');
+      if (ok) hit.setInteractive({ useHandCursor: true })
+        .on('pointerover', () => paint('hover'))
+        .on('pointerout', () => paint('idle'))
+        .on('pointerdown', () => paint('down'))
+        .on('pointerup', () => { if (this.recruitOpen()) this.recruitTroops(); });
+      root.add([panel, heading, detail, command, label, balance, hit]);
     }
     // ———— 结算「本局打法」（局内 build 第 6 条；界面上不写英文）：斩将头像那一块加两个页签，「本局打法」按类列出这一局拿到的东西 ————
     /**
@@ -559,8 +649,11 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
      * 首领 = 这一阵的名将（他自己的图与招式；生命 / 伤害按表）。刷兵节奏统一用第二章的（按阵往后推、再乘 count）。
      */
     private makeChapter(b: GauntletBoss): ChapterDef {
-      const base = getChapter('hulao'), W = waveTroopSet(this.gWave), T = W.troops, src = W.chapter, art = bossArt(b), d = art.def;
-      const boss: EnemyDef = { ...d, kind: 'boss', hp: T.bossHp, damage: T.bossDmg };
+      const base = getChapter('hulao'), W = waveTroopSet(this.difficultyWave), T = W.troops, src = W.chapter, art = bossArt(b), d = art.def;
+      const mythic = mythicBoss(b.id);
+      const boss: EnemyDef = { ...d, kind: 'boss',
+        hp: mythic ? (mythic.tierName==='ghost'?8650+180*(this.gWave-10):10450+240*(this.gWave-20)) : survivorBossHp(b.id, this.difficultyWave, T.bossHp),
+        damage: T.bossDmg, survivorBoss: mythic ? undefined : survivorBossProfile(b.id, T.bossDmg) };
       const t0 = 45 + (this.gWave - 1) * 30; // 刷兵节奏按阵往后推（间隔越来越短）
       return { ...base, name: GAUNTLET_NAME, label: GAUNTLET_NAME, description: '割草 · 斩将 · 连战', bossName: b.name, bossStyle: art.style, stage: undefined, westStage: undefined,
         waves: [{ name: GAUNTLET_NAME, start: 0 }], recruitWaves: [], enemies: { ...src.enemies, ...W.defs, boss }, objective: undefined, bossAtStart: false, enemyCap: BALANCE.enemyCap,
@@ -571,7 +664,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     /** 名将的亲兵 / 号令来的兵：用他自己那一章的兵（外形），强度按本阵；那一章的图没备好就用本阵的兵。 */
     private guard(kind: TroopKind): EnemyDef | undefined {
       const b = this.gCur; if (!b) return undefined;
-      const g = guardDef(b.arc, b.stage, kind, this.gWave), tex = g.walkVisual?.texture ?? g.texture;
+      const g = guardDef(b.arc, b.stage, kind, this.difficultyWave), tex = g.walkVisual?.texture ?? g.texture;
       return this.textures.exists(tex) ? g : undefined;
     }
     /** 这一阵割草开始到现在几秒。 */
@@ -580,12 +673,12 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     // ———— 刷兵：割草按阵加强；名将在场刷新量减半；清场 / 抉择时不刷 ————
     protected updateSpawner(dt: number): void {
       if (this.gPhase !== 'mow' && this.gPhase !== 'boss') return;
-      const sc = waveScale(this.gWave), bossOn = this.gPhase === 'boss' && !!this.boss?.active, cap = BALANCE.enemyCap, t = this.gPhase === 'mow' ? this.waveT : GAUNTLET.mowSec;
+      const sc = waveScale(this.difficultyWave), bossOn = this.gPhase === 'boss' && !!this.boss?.active, cap = BALANCE.enemyCap, t = this.gPhase === 'mow' ? this.waveT : this.mowSeconds;
       this.spawnTimer -= dt;
       if (this.spawnTimer <= 0 && this.activeEnemyCount() < cap) {
         this.spawnTimer = this.chapter.spawnInterval(t) / sc.count * (bossOn ? GAUNTLET.bossInterval : 1);
         const burst = Math.max(1, Math.round(this.chapter.spawnBurst(t) * sc.count * (bossOn ? GAUNTLET.bossBurst : 1)));
-        for (let i = 0; i < burst; i++) { if (this.activeEnemyCount() >= cap) break; if (!this.spawnAroundPlayer(this.chapter.pickEnemy(t))) break; this.gStats.spawned++; }
+        for (let i = 0; i < burst; i++) { if (this.activeEnemyCount() >= cap) break; const special=this.traits?pickGauntletRoster(this.gWave,t,tallyRoster(this.enemies)):null; const spawned=special?this.traits!.spawnSpecial(special):null; if (!spawned&&!this.spawnAroundPlayer(this.chapter.pickEnemy(t))) break; this.gStats.spawned++; }
       }
       if (this.gPhase === 'mow' && this.waveT >= this.gEliteAt) { this.gEliteAt = this.waveT + GAUNTLET.eliteEvery; this.spawnAroundPlayer('elite', true); }
     }
@@ -593,18 +686,20 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     // ———— 阶段推进 ————
     update(time: number, delta: number) {
       super.update(time, delta);
+      updateSurvivorBossFx(this,this.combatNow);
+      if (this.over) clearSurvivorBossFx(this);
       this.gCtrl?.updateDeath?.(delta);
       if (this.over || !this.player?.alive) return;
       this.hudTexts.wave.setText(''); // 阵数看顶部十阵进度条（总制作人 11-21：去掉左上角那行，兵力行保留）
       this.updateTrack(); this.paintRecruit();
       if (this.mode !== 'none') return;
       this.gStrikes?.update();
-      if (this.gPhase === 'mow' && this.waveT >= GAUNTLET.mowSec) this.startBoss();
+      if (this.gPhase === 'mow' && this.waveT >= this.mowSeconds) this.startBoss();
       else if (this.gPhase === 'boss' && !this.boss?.active && !this.bossKilled) this.spawnBoss(); // 首领没刷出来（落点被挡）：下一帧再试
       else if (this.gPhase === 'clear') {
         if (this.gQiyuPending) this.openQiyu();
         else if (!this.gLootShown && this.waveT >= 1.8) { this.gLootShown = true; this.openLoot(); }
-        else if (this.gLootShown && this.waveT >= GAUNTLET.clearSec) { if (this.gWave === GAUNTLET.waves && !this.gEndless) this.openClearChoice(); else this.nextWave(); }
+        else if (this.gLootShown && this.waveT >= GAUNTLET.clearSec) { if (challengeChoices(this.gTier,this.gWave,GAUNTLET.waves).length) this.openClearChoice(); else this.nextWave(); }
       }
     }
     /** 开发构建：左上的 DEV 徽标会盖住进度条左端——本模式下挪到左下（兵力 / 增益栏下面、FPS 行上面），离开场景放回原处。正式版没有这个徽标。 */
@@ -617,16 +712,17 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     }
     /** 进度条线下的小字：第 N/10 阵 · 距名将登场 mm:ss / 名将名字 / 已斩；无尽写「无尽 · 第 N 阵」。 */
     private waveLine(): string {
-      const n = this.gEndless || this.gWave > GAUNTLET.waves ? `无尽 · 第 ${this.gWave} 阵` : `第 ${this.gWave}/${GAUNTLET.waves} 阵`;
-      if (this.gPhase === 'mow') { const left = Math.max(0, Math.ceil(GAUNTLET.mowSec - this.waveT)); return `${n} · 距名将登场 ${String(Math.floor(left / 60)).padStart(2, '0')}:${String(left % 60).padStart(2, '0')}`; }
-      if (this.gPhase === 'boss') return `${n} · ${this.gWave === GAUNTLET.waves && !this.gEndless ? '守关 · ' : ''}${this.gCur?.name ?? ''}`;
+      const n = this.gEndless ? `无尽 · 第 ${this.gWave} 阵` :
+        `${tierTitle[this.gTier]} · ${challengeWave(this.gTier,this.gWave,GAUNTLET.waves)}/${GAUNTLET.waves}`;
+      if (this.gPhase === 'mow') { const left = Math.max(0, Math.ceil(this.mowSeconds - this.waveT)); return `${n} · 距名将登场 ${String(Math.floor(left / 60)).padStart(2, '0')}:${String(left % 60).padStart(2, '0')}`; }
+      if (this.gPhase === 'boss') return `${n} · ${challengeChoices(this.gTier,this.gWave,GAUNTLET.waves).length ? '守关 · ' : ''}${this.gCur?.dual?'河北双雄 · 颜良 / 文丑':this.gCur?.name ?? ''}`;
       return `${n} · 已斩 ${this.gKills[this.gKills.length - 1]?.name ?? ''}`;
     }
     /** 十阵进度条：割草时标按时间从上一节点匀速走向这一阵的节点（走到头 = 名将登场），名将在场 / 斩将后停在节点。 */
     private updateTrack(): void {
       const t = this.gTrack; if (!t) return;
       const W = GAUNTLET.waves, local = ((this.gWave - 1) % W) + 1;
-      const pos = this.gPhase === 'mow' ? (local - 1 + Math.min(1, this.waveT / GAUNTLET.mowSec)) / W : local / W;
+      const pos = this.gPhase === 'mow' ? (local - 1 + Math.min(1, this.waveT / this.mowSeconds)) / W : local / W;
       t.update(pos, this.gPhase === 'boss' && !!this.boss?.active, this.waveLine());
       // 显隐自己每帧定（不跟着计时器：计时器在名将登场时被藏，跟着它会一起藏住）；名将登场的水墨横幅期间藏计时与小字，顶部只留横幅
       const hud = this.mode === 'none' && !this.over, ink = this.combatNow < this.gInkUntil;
@@ -663,6 +759,8 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     }
     /** 这一阵的名将：十阵名单里的；无尽时现抽一位（全池循环）并记进名单。 */
     private waveBoss(): GauntletBoss {
+      const challenge = challengeBoss(this.gTier,this.gWave,GAUNTLET.waves);
+      if (challenge) return challenge;
       let b = this.gOrder[this.gWave - 1];
       if (!b) { b = endlessBoss(this.gPool, this.gKills[this.gKills.length - 1] ?? null, Math.random, this.gKills); this.gOrder[this.gWave - 1] = b; }
       return b;
@@ -671,13 +769,24 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     private variant(b: GauntletBoss): GauntletBoss { const L = b.late; return L && this.gWave >= L.fromWave ? { ...b, arc: L.arc, stage: L.stage, ctrl: L.ctrl } : b; }
     /** 名将登场：先收掉上一位留下的控制器，按这一阵换关卡定义，再出首领（带亲兵）。 */
     startBoss(): void {
+      this.clearGauntletDual();
+      clearSurvivorBossFx(this);
       const b = this.variant(this.waveBoss());
+      if(mythicBoss(b.id)?.art==='actions')prepareMythicActions(this,b.id);
       this.clearProps(); this.clearEscort(); this.clearHill(); this.clearBand(); this.gStrikes?.clear();
       this.gCur = b; this.gPhase = 'boss'; this.gAt = this.elapsed;
       this.gCtrl?.clear(); this.gCtrl = null; this.lubu?.clear(); this.lubu = null; this.zhangjiao?.clear(); this.zhangjiao = null; this.huaxiong?.clear(); this.huaxiong = null; this.xurong?.clear(); this.xurong = null; this.moveset?.clear(); this.moveset = null; this.bossMount?.destroy(); this.bossMount = null;
       this.boss = null; this.bossSpawned = false; this.bossKilled = false; this.bossWarned = true; this.bossPhase2 = false; this.bossEnergy = 0;
       this.chapter = this.makeChapter(b);
       this.spawnBoss();
+    }
+    protected announceBoss(title: string, name: string): void {
+      const boss = this.gCur && mythicBoss(this.gCur.id);
+      if (boss) {
+        super.announceBoss(boss.title, name, { tier: boss.tierName, portraitKey: this.head(boss) });
+      } else {
+        super.announceBoss(title, name);
+      }
     }
     protected spawnBoss(): void {
       const had = !!this.boss?.active; if (!had) this.makeRoom(GAUNTLET_BOSS_ROOM);
@@ -687,7 +796,9 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       if (GAUNTLET.stallOff) this.bossStallCfg = { quotaSec: 1e9, enrageSec: 1e9 }; // 首领防拖关掉（阵数节奏已经限住每阵长度）
       const art = bossArt(b), now = this.combatNow;
       const host: ArcHost = { scene: this, boss, player: this.player, army: this.legion, spawn: (k, x, y, def) => this.spawnEnemy(k, x, y, 1, true, def), def: k => this.chapter.enemies[k], banner: (t, c) => this.gBanner(t, c), sfx: k => this.sfx.play(k) };
-      if (b.ctrl === 'moveset') { this.moveset?.clear(); this.moveset = null; const mv = BOSS_MOVES[b.arc + '.' + b.id] ?? BOSS_MOVES[b.id] ?? GAUNTLET_MOVES[b.id]; if (mv) this.gCtrl = new BossMoveset(host, art.layout === 'walk' ? boss.sprite.texture.key : art.tex, now, adaptMoves(mv, b), art.layout); }
+      if (mythicBoss(b.id)) this.gCtrl = new MythicBossController(host,b.id,now);
+      else if (b.dual === 'hebei') { this.spawnHebeiDual(boss,now); }
+      else if (b.ctrl === 'moveset') { this.moveset?.clear(); this.moveset = null; const mv = BOSS_MOVES[b.arc + '.' + b.id] ?? BOSS_MOVES[b.id] ?? GAUNTLET_MOVES[b.id]; if (mv) this.gCtrl = new BossMoveset(host, art.layout === 'walk' ? boss.sprite.texture.key : art.tex, now, adaptMoves(mv, b), art.layout); }
       else if (b.ctrl === 'yuanshu') this.gCtrl = new YuanshuBoss(host, art.tex, now, { endlessHoney: !!b.endlessHoney });
       else if (b.ctrl === 'caoren') this.gCtrl = new CaorenBoss(host, art.tex, now);
       else if (b.ctrl === 'guandu') this.gCtrl = new GuanduBoss({ scene: this, boss, player: this.player, army: this.legion, spawn: (k, x, y) => this.spawnEnemy(k, x, y, 1, true),
@@ -702,7 +813,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       this.spawnProps(b, boss, now); this.spawnEscort(b, boss, now);
       // 亲兵：围在名将身边（他自己那一章的兵，强度按本阵）
       let k = 0; for (const [kind, n] of GAUNTLET.guards) for (let i = 0; i < n; i++, k++) { const a = k / 4 * Math.PI * 2; this.spawnEnemy(kind, boss.x + Math.cos(a) * 70, boss.y + Math.sin(a) * 50, 1, true, this.guard(kind)); }
-      const last = this.gWave === GAUNTLET.waves && !this.gEndless;
+      const last = challengeChoices(this.gTier,this.gWave,GAUNTLET.waves).length>0;
       this.gTrack?.bossUp(this.gWave, this.head(b)); void last;
       // 名将登场只留基类的水墨横幅（称号 + 名字），约 2.7 秒内顶部不放别的横幅、计时与进度条小字先藏（11-21 验收：顶部挤成一团）；「杂兵减半」不再提示
     }
@@ -710,6 +821,20 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
      * 名将登场要的空位：同屏敌人到了上限（从 0 开局前期杀得慢，杂兵会攒满 150）时，离主将最远的杂兵先撤掉几个，
      * 腾出名将 + 亲兵 + 随身布置 + 护卫的位置（否则名将刷不出来，这一阵卡住）。
      */
+    private clearGauntletDual(): void {
+      if(!this.dual)return;const entries=[...this.dual.entries];this.dual.clear();this.dual=null;
+      for(const x of entries)if(x.enemy.active&&x.enemy.spawnId===x.spawnId)x.enemy.deactivate();
+    }
+    private spawnHebeiDual(boss: Enemy,now:number): void {
+      this.makeRoom(2);
+      const host=(e:Enemy)=>({scene:this,boss:e,player:this.player,army:this.legion,spawn:(k:Enemy['kind'],x:number,y:number)=>this.spawnEnemy(k,x,y,1,true)});
+      boss.def={...boss.def,texture:GUANDU_STAGES[0].atlas};
+      const yan=new GuanduBoss(host(boss),1,now,{kit:'yanliang'});
+      this.gCtrl=null;
+      this.startDual({...HEBEI_PLAN,outcomeFlag:undefined},{id:'yanliang',name:'颜良',enemy:boss,ctrl:yan,ownKit:true,key:null},
+        {id:'wenchou',name:'文丑',at:{x:boss.x+180,y:boss.y-20},def:{texture:GUANDU_STAGES[1].atlas},key:null,immediate:true,
+          make:e=>{const ctrl=new GuanduBoss(host(e),2,this.combatNow,{kit:'wenchou'});return{ctrl,ownKit:true,mount:new BossMount(this,e,BOSS_MOUNTS.wenchou,()=>ctrl.busy())};}});
+    }
     private makeRoom(n: number): void {
       const need = n - (BALANCE.enemyCap - this.activeEnemyCount()); if (need <= 0) return;
       const pl = this.player, far = this.enemies.filter(e => e.active && !e.isSupplySlot && e.kind !== 'boss').sort((a, b) => Math.hypot(b.x - pl.x, b.y - pl.y) - Math.hypot(a.x - pl.x, a.y - pl.y));
@@ -749,12 +874,16 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     private onBossDown(): void {
       const b = this.gCur; if (!b || this.gPhase !== 'boss') return;
       this.gTrack?.bossDown(this.gWave); this.clearProps(true); this.escortLeave();
-      this.gKills.push(b); this.gPhase = 'clear'; this.gAt = this.elapsed; this.gLootShown = false;
-      if (this.gWave === GAUNTLET.waves && !this.gEndless) this.gCleared = true;
+      this.gKills.push(b); this.gPhase = 'clear'; this.gAt = this.elapsed; this.gLootShown = false; this.traits?.clear();
+      const checkpoint = challengeChoices(this.gTier,this.gWave,GAUNTLET.waves).length > 0;
+      if (checkpoint) {
+        this.gCleared = true;
+        this.gMilestones = this.gWave/GAUNTLET.waves;
+      }
       // 清场：场上的杂兵退散（淡出，不给经验 / 掉落）；地上的经验珠留着捡
-      for (const e of this.enemies) if (e.active && !e.isSupplySlot && e.kind !== 'boss') { this.gStats.cleared++; const sp = e.sprite, life = e.spawnId; this.tweens.add({ targets: sp, alpha: 0, duration: 600, onComplete: () => { if (e.active && e.spawnId === life) { e.deactivate(); sp.setAlpha(1); } } }); }
+      for (const e of this.enemies) if (e.active && !e.isSupplySlot && e.kind !== 'boss') { this.gStats.cleared++; if(e.def.trait)e.stunUntil=Math.max(e.stunUntil,this.combatNow+1200); const sp = e.sprite, life = e.spawnId; this.tweens.add({ targets: sp, alpha: 0, duration: 600, onComplete: () => { if (e.active && e.spawnId === life) { e.deactivate(); sp.setAlpha(1); } } }); }
       const heal = Math.round(this.player.maxHp * GAUNTLET.from0.clearHeal); this.player.heal(heal); // 清场休整
-      this.showWaveBanner(`斩将 · ${b.name}`, false, this.gCleared ? '十阵连斩！' : `第 ${this.gWave} 阵告捷 · 已斩 ${this.gKills.length} 将 · 休整回复 ${Math.round(GAUNTLET.from0.clearHeal * 100)}% 生命`);
+      this.showWaveBanner(`斩将 · ${b.dual?'河北双雄':b.name}`, false, checkpoint ? tierTitle[this.gTier]+'告捷！' : `第 ${this.gWave} 阵告捷 · 已斩 ${this.gKills.length} 将 · 休整回复 ${Math.round(GAUNTLET.from0.clearHeal * 100)}% 生命`);
     }
 
     // ———— 随身布置（适配表规则 a）：登场在名将身边立几件可打掉的物件，立着时名将受伤减；有持续时间 ————
@@ -842,7 +971,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
         const label = this.add.text(x, y - H.radius * .55 - 18, '高地', { fontFamily: FONT, fontSize: '14px', color: '#f5e2b0', stroke: '#1a120b', strokeThickness: 3 }).setOrigin(.5).setDepth(DEPTH.fx + 2).setAlpha(.6);
         this.gHill = { x, y, r: H.radius, upAt: now + H.warnSec * 1000, until: now + (H.warnSec + H.lastSec) * 1000, objs: [img, flag, label].filter((o): o is NonNullable<typeof o> => !!o), img };
         this.gHillAt = now + H.everySec * 1000;
-        this.gBanner('高地 · 可以抢', `站上高地：主将伤害 +${Math.round((H.playerDmg - 1) * 100)}% · ${this.gCur?.name ?? ''}站上去出招更快`);
+        this.gBanner('高地 · 可以抢', `站上高地：主将伤害 +${Math.round((H.playerDmg - 1) * 100)}% · ${this.gCur?.dual?'河北双雄 · 颜良 / 文丑':this.gCur?.name ?? ''}站上去出招更快`);
       }
       const h = this.gHill; if (!h) return;
       const up = now >= h.upAt, k = up ? 1 : .3 + .7 * Math.max(0, 1 - (h.upAt - now) / (H.warnSec * 1000));
@@ -906,7 +1035,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     private gEscort: { e: Enemy; life: number; ctrl: BossMoveset; def: NonNullable<GauntletBoss['escort']>; name: string; leaving: boolean } | null = null;
     private spawnEscort(b: GauntletBoss, boss: Enemy, now: number): void {
       const E = b.escort, eb = E && GAUNTLET_POOL.find(x => x.id === E.id); if (!E || !eb) return;
-      const art = bossArt(eb), T = waveTroopSet(this.gWave).troops;
+      const art = bossArt(eb), T = waveTroopSet(this.difficultyWave).troops;
       let def: EnemyDef = { ...art.def, kind: 'boss', hp: Math.round(T.bossHp * E.hpFrac), damage: T.bossDmg * .8 }, tex = art.tex, layout = art.layout, mv: BossMovesetDef | undefined;
       if (eb.id === 'lubu') { const v2 = isV2Texture('boss_lubu'); def = { ...def, texture: 'boss_lubu', walkVisual: { texture: 'boss_lubu', scale: v2 ? .5 : 218 / 256, groundY: v2 ? 256 / 288 : 224 / 256, matched: true }, attackVisual: this.textures.exists('lubu_attack') ? 'lubu_attack' : undefined }; tex = 'boss_lubu'; layout = 'walk'; mv = LUBU_ESCORT; } // 同 2-3 的城下吕布
       else { const m = BOSS_MOVES[eb.arc + '.' + eb.id] ?? BOSS_MOVES[eb.id]; if (m) mv = adaptMoves(m, eb); }
@@ -973,7 +1102,13 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
         { id: 'gauntlet_spoils', name: '取其辎重', desc: `钱币 +${food}\n立刻回满生命`, kind: 'foundation', categoryLabel: '战利品', scope: 'once', icon: 'growth_icon_pickup', apply: () => { this.coinBurst(this.player.x, this.player.y, food); this.legion.food += food; this.player.heal(this.player.maxHp); } }, // 钱不飘字：铜钱从主将处飞进行囊（coins.md）
         this.lootRareCard() ?? supplyOption(b.chapter), // 第三张：保底一张稀有以上（统筹 11-21 局内 build 第 3 条）
       ];
+      if (mythicBoss(b.id)) opts[0] = this.pickBlessing(food);
       this.showLoot(`斩将 · ${b.name} · 战利品三选一`, '本局有效 · 选一样', opts, () => { if (this.gPendingReplace) { const nb = this.gPendingReplace; this.gPendingReplace = null; this.openReplace(nb); } else this.maybeQiyu(); });
+    }
+    private pickBlessing(food: number): UpgradeOption {
+      return { id:'mythic_soldier_purse', name:'整军赏钱', desc:`钱币 +${Math.round(food*1.5)} · 可用于招兵`,
+        kind:'foundation', categoryLabel:'战利品', scope:'once', icon:'growth_icon_pickup',
+        apply:() => { const coins=Math.round(food*1.5); this.coinBurst(this.player.x,this.player.y,coins); this.legion.food+=coins; } };
     }
     private showLoot(title: string, hint: string, opts: UpgradeOption[], after: () => void): void {
       this.sfx.level();
@@ -1004,37 +1139,64 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       const sq = this.followers; if (!sq) return; const i = sq.members.indexOf(f); if (i >= 0) { f.destroy(); sq.members.splice(i, 1); sq.members.forEach((m, k) => { m.slot = k; }); }
       this.gFollowers = this.gFollowers.filter(x => x.f !== f);
     }
-    /** 第十阵斩完：通关，选继续无尽还是收兵结算。 */
     private openClearChoice(): void {
-      this.gPhase = 'choice'; writeGauntletBest(this.gKills.length, this.gWave, Math.round(this.elapsed * 1000), isChapterTestRun());
-      const opts: UpgradeOption[] = [
-        { id: 'gauntlet_endless', name: '继续 · 无尽', desc: '名将再来一轮，一阵比一阵强，直到阵亡\n记最高连斩', kind: 'foundation', categoryLabel: GAUNTLET_NAME, scope: 'run', icon: 'growth_icon_might', apply: () => { this.gEndless = true; } },
-        { id: 'gauntlet_settle', name: '收兵 · 结算', desc: '十阵通关，按斩将数领奖', kind: 'foundation', categoryLabel: GAUNTLET_NAME, scope: 'once', icon: 'growth_icon_pickup', apply: () => { this.gPhase = 'done'; } },
-      ];
-      this.showLoot(GAUNTLET_NAME + ' · 十阵通关', '继续无尽，或者收兵结算', opts, () => { if (this.gEndless) this.nextWave(); else this.time.delayedCall(200, () => this.finish(true, 'boss')); });
+      const choices = challengeChoices(this.gTier,this.gWave,GAUNTLET.waves);
+      if (!choices.length) return;
+      this.gPhase = 'choice';
+      writeGauntletBest(this.gKills.length,this.gWave,Math.round(this.elapsed*1000),isChapterTestRun());
+      let advance = false;
+      const opts: UpgradeOption[] = choices.map(choice => ({
+        id:'gauntlet_'+choice,
+        name: choice==='ghost'?'挑战鬼将':choice==='divine'?'挑战神将':'继续 · 无尽',
+        desc: choice==='endless'?'凡将继续轮换，记录最高连斩':tierTitle[choice]+' · 继承本局成长、军队与钱币',
+        kind:'foundation', categoryLabel:tierTitle[this.gTier], scope:'run',
+        icon: choice==='ghost'?this.portrait(GHOST_GENERALS[4]):choice==='divine'?this.portrait(DIVINE_GENERALS[9]):'growth_icon_might',
+        apply:() => { this.gTier=choice; this.gEndless=choice==='endless'; advance=true; },
+      }));
+      opts.push({id:'gauntlet_settle',name:'收兵 · 结算',desc:'按本局斩将数领奖',kind:'foundation',
+        categoryLabel:tierTitle[this.gTier],scope:'once',icon:'growth_icon_pickup',apply:() => { this.gPhase='done'; }});
+      const hint = this.gTier==='mortal'?'鬼门将开 · 是否挑战鬼神名将？':
+        this.gTier==='ghost'?'鬼门已破 · 是否挑战神将？':'三十阵告捷 · 可结算或进入无尽';
+      this.showLoot(tierTitle[this.gTier]+' · 告捷',hint,opts,() => {
+        if (advance) this.nextWave();
+        else this.time.delayedCall(200,() => this.finish(true,'boss'));
+      });
     }
     nextWave(): void {
+      this.clearGauntletDual();
+      clearSurvivorBossFx(this);
+      this.traits?.clear(); // 清场期间的飞网与临时强化不带入下一阵。
       // 斩将后基类记着「首领已倒」（bossKilled）：收尾保护会让主将无敌、场上杂兵溃退（victoryHold）。清场那几秒要这样；进下一阵必须清掉——
       // 第一版漏了，第 2 阵起割草时主将一直无敌、新刷的兵全往外跑（11-21 从 0 开局实打发现）
       this.bossKilled = false; for (const e of this.enemies) e.routUntil = 0; // 清场时记的溃退时刻别带进新一阵（还没淡出完的）
       this.refreshSoftLevel(); // 无尽：软上限跟着阵数抬
-      this.gWave++; this.gTrack?.setWave(this.gWave, this.gWave <= GAUNTLET.waves); this.gPhase = 'mow'; this.gAt = this.elapsed; this.gLootShown = false; this.gEliteAt = GAUNTLET.eliteFirst; this.spawnTimer = .5;
-      this.chapter = this.makeChapter(this.waveBoss());
-      this.showWaveBanner(this.gEndless ? `无尽 · 第 ${this.gWave} 阵` : this.gWave === GAUNTLET.waves ? `第 ${this.gWave} 阵 · 守关之战` : `第 ${this.gWave} 阵`, false, `敌军 ${waveTroopSet(this.gWave).troops.name} · 割草 ${GAUNTLET.mowSec} 秒后名将登场`);
+      this.gWave++; this.gTrack?.setWave(this.gWave, !this.gEndless); this.gPhase = 'mow'; this.gAt = this.elapsed; this.gLootShown = false; this.gEliteAt = GAUNTLET.eliteFirst; this.spawnTimer = .5;
+      const upcoming=this.waveBoss();
+      this.chapter = this.makeChapter(upcoming);
+      prepareMythicActions(this,upcoming.id);
+      if (this.gTier==='ghost'||this.gTier==='divine') {
+        this.showWaveBanner(tierTitle[this.gTier]+' · 第 '+challengeWave(this.gTier,this.gWave,GAUNTLET.waves)+' 阵',false,
+          this.waveBoss().name+' · '+this.mowSeconds+' 秒后登场');
+        return;
+      }
+      this.showWaveBanner(this.gEndless ? `无尽 · 第 ${this.gWave} 阵` : this.gWave === GAUNTLET.waves ? `第 ${this.gWave} 阵 · 守关之战` : `第 ${this.gWave} 阵`, false, `敌军 ${waveTroopSet(this.difficultyWave).troops.name} · 割草 ${GAUNTLET.mowSec} 秒后名将登场`);
     }
 
     // ———— 结算：打到第几阵、斩了哪些名将（头像一排）、用时、最高连斩；按斩将数给钱币 / 武学残卷 ————
     protected finish(victory: boolean, reason: RunEndReason = 'death') {
       if (this.over) return;
       this.gRecruitBtn?.setVisible(false); this.gTrack?.setVisible(false); // 结算画面后面不透出招兵按钮、十阵进度条和它的小字
+      if(this.gCtrl instanceof MythicBossController) { this.gCtrl.clear(); this.gCtrl=null; }
       super.finish(victory, reason);
       const kills = this.gKills.length, debug = this.debugRun(), test = isChapterTestRun(), before = readGauntletBest(test);
       const record = writeGauntletBest(kills, this.gWave, Math.round(this.elapsed * 1000), test), best = Math.max(before.kills, kills);
       let first = false; try { first = this.gCleared && !debug && localStorage.getItem(GAUNTLET.firstClearKey) !== '1'; if (first) localStorage.setItem(GAUNTLET.firstClearKey, '1'); } catch { first = false; }
       const rw = gauntletReward(kills, first); if (!debug) { if (rw.provisions) addProvisions(rw.provisions); if (rw.scrolls) addScrolls(rw.scrolls); }
       const keep = this.resultTexts.body.text.split('\n').filter(l => /^武将等级|^经验已满|^属性点|^星图/.test(l));
-      const reached = this.gEndless ? `第 ${this.gWave} 阵（无尽）` : `第 ${this.gWave} 阵 / ${GAUNTLET.waves}`;
-      this.resultTexts.subtitle.setText(this.gCleared ? (this.gEndless ? `十阵通关 · 无尽斩将 ${kills}` : '十阵连斩 · 通关') : `止步第 ${this.gWave} 阵 · 斩将 ${kills}`);
+      const reached = this.gEndless ? `第 ${this.gWave} 阵（无尽）` :
+        tierTitle[this.gTier]+' · '+challengeWave(this.gTier,this.gWave,GAUNTLET.waves)+'/'+GAUNTLET.waves;
+      const cleared = this.gMilestones===3?'凡、鬼、神三十阵通关':this.gMilestones===2?'已破凡将、鬼将十阵':'凡将十阵通关';
+      this.resultTexts.subtitle.setText(this.gCleared ? `${cleared} · 斩将 ${kills}` : `止步第 ${this.gWave} 阵 · 斩将 ${kills}`);
       // 正文（逻辑 / 测试读；电脑版结算画面按它画奖励格：「永久奖励 钱币 +N」「武学残卷 +N」「武将等级 …」）
       this.resultTexts.body.setText([
         '打到　　' + reached, '斩将　　' + (kills ? kills + ' 位：' + this.gKills.map(b => b.name).join('、') : '无'), '用时　　' + this.formatTime(this.elapsed),
@@ -1060,8 +1222,9 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       // 电脑版：底下一行战况换成本模式的（第几阵 · 斩将 · 用时 · 最高连斩）；斩将头像排在分隔线下面
       (this.resultPanel.getByName('result-stats') as Phaser.GameObjects.Text | null)?.setText([`第 ${this.gWave} 阵`, `斩将 ${kills} 位`, '用时 ' + this.formatTime(this.elapsed), `最高连斩 ${best}${record ? '（新纪录）' : ''}`].join('　·　'));
       // 斩将一排（11-21 总制作人「头像太小」）：每位一块同尺寸的底牌，人像裁掉留白后等比放进底牌、脚踩同一条底线，名字在牌下；最多 12 位（无尽多了取最后 12 位）
-      const row = this.gKills.slice(-12), n = row.length, faces: Phaser.GameObjects.GameObject[] = [];
-      const PW = 76, PH = 92, gap = n > 10 ? 10 : 16, w = n * PW + (n - 1) * gap, x0 = this.resultTexts.subtitle.x - w / 2 + PW / 2, top = this.resultTop + 146, cy = top + PH / 2;
+      const mobile = GAME_WIDTH < 900;
+      const row = this.gKills.slice(mobile?-5:-10), n = row.length, faces: Phaser.GameObjects.GameObject[] = [];
+      const PW = mobile?64:76, PH = mobile?78:92, gap = mobile?8:12, w = n * PW + (n - 1) * gap, x0 = this.resultTexts.subtitle.x - w / 2 + PW / 2, top = this.resultTop + 146, cy = top + PH / 2;
       row.forEach((b, i) => {
         const x = x0 + i * (PW + gap), plate = this.add.rectangle(x, cy, PW, PH, 0x1a120b, .72).setStrokeStyle(1.5, 0xd9b46a, .8).setScrollFactor(0).setName('gauntlet-face-plate');
         const img = this.add.image(x, top + PH - 6, this.portrait(b)).setOrigin(.5, 1).setScrollFactor(0).setName('gauntlet-face'); img.setScale(Math.min((PW - 10) / img.width, (PH - 12) / img.height));
@@ -1074,7 +1237,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       const build = this.drawBuild(top + 2, PH + 14); this.resultPanel.add(build); // 两行图标 + 小字，底边不超过斩将名字那一行（下面是奖励格）
       const tab = (label: string, key: 'kills' | 'build', x: number) => this.add.text(x, top - 13, label, { fontFamily: HEADING_FONT, fontSize: '14px', color: '#f0dcae', resolution: 2 }).setOrigin(.5).setPadding(12, 2) /* 骑在分隔线上，不压副标题 */.setBackgroundColor('#1a120b').setStroke('#0a0603', 3).setScrollFactor(0).setName('gauntlet-tab-' + key)
         .setInteractive({ useHandCursor: true }).on('pointerdown', () => setTab(key));
-      const tabs = { kills: tab('斩将 · ' + n, 'kills', this.resultTexts.subtitle.x - 78), build: tab('本局打法', 'build', this.resultTexts.subtitle.x + 78) }; this.resultPanel.add([tabs.kills, tabs.build]);
+      const tabs = { kills: tab('斩将 · ' + kills, 'kills', this.resultTexts.subtitle.x - 78), build: tab('本局打法', 'build', this.resultTexts.subtitle.x + 78) }; this.resultPanel.add([tabs.kills, tabs.build]);
       const setTab = (key: 'kills' | 'build') => { this.gResultTab = key; for (const o of faces) (o as Phaser.GameObjects.Text).setVisible(key === 'kills'); for (const o of build) (o as Phaser.GameObjects.Text).setVisible(key === 'build');
         for (const k of ['kills', 'build'] as const) tabs[k].setColor(k === key ? '#ffd76a' : '#9d8f78').setBackgroundColor(k === key ? '#3a2614' : '#1a120b'); };
       setTab(this.gResultTab);
@@ -1095,7 +1258,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     get gauntletCaps() { return { mech: MECH_FLAGS.allMechanics, rank: BuildState.rankCap, slot: BuildState.slotCap, extra: RunGrowth.extraCap, over: WEAPON_OVER.cap }; }
     /** 测试用：从 0 开局（等级 / 加点 / 星图 / 兵装 / 信物 / 坐骑 / 武将谱）、卡池上限、换一批 / 排除、本阵兵种。 */
     get gauntletFrom0() {
-      const g = this.player.growth, gear = g.gear as unknown as Record<string, unknown>, W = waveTroopSet(this.gWave);
+      const g = this.player.growth, gear = g.gear as unknown as Record<string, unknown>, W = waveTroopSet(this.difficultyWave);
       return { level: this.player.level, xp: Math.round(this.player.xp), soft: this.player.softLevel, attrs: Object.values(g.attributes).reduce((n, v) => n + v, 0), unallocated: g.unallocated, heroFree: g.heroFree, stars: g.stars.length,
         gear: Object.entries(gear).filter(([k, v]) => k !== 'specials' && typeof v === 'number' && v !== 0).length + g.gear.specials.length, charms: this.charmInfo?.treasures.length ?? 0, charmHp: this.charmInfo?.hp ?? 0, mount: !!this.mount, temper: g.temperDamage, xinde: g.xinde.length,
         caps: this.gauntletCaps,

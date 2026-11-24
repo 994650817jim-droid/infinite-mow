@@ -1,3 +1,4 @@
+import { STAR_OUTER_NAMES, STAR_OUTER_DESCS, STAR_OUTER_TUNING } from './starOuter';
 import { PRIMARY_ATTRIBUTE, type AttributeId } from './attributes';
 import { STAT_ORDER, statSource, type StatSource } from './heroStats';
 
@@ -51,6 +52,10 @@ export const STAR_TUNING = {
  */
 export const STAR_NEAR_RADIUS = 220;
 export const STAR_EFFECT = {
+  'strength.NX1': STAR_OUTER_TUNING, 'strength.NX2': STAR_OUTER_TUNING,
+  'agility.NX1': STAR_OUTER_TUNING, 'agility.NX2': STAR_OUTER_TUNING,
+  'intellect.NX1': STAR_OUTER_TUNING, 'intellect.NX2': STAR_OUTER_TUNING,
+  'command.NX1': STAR_OUTER_TUNING, 'command.NX2': STAR_OUTER_TUNING,
   /** 铁骨：生命上限 +8%，受到的伤害 −5%。 */
   'strength.NR1': { hp: .08, taken: .05 },
   /** 背水：生命低于 40% 时伤害 +15%。 */
@@ -82,6 +87,7 @@ export type StarEffectId = keyof typeof STAR_EFFECT;
  * 万人敌的部曲伤害 −30% 与三军统帅的 +30% 都进部曲伤害加法桶，同时点正好抵消（设计稿「方向相反，互相抵消，是有意的」）。
  */
 export const STAR_KEYSTONE = {
+  'strength.K2':STAR_OUTER_TUNING, 'agility.K2':STAR_OUTER_TUNING, 'intellect.K2':STAR_OUTER_TUNING, 'command.K2':STAR_OUTER_TUNING,
   /** 万人敌：主将全伤害 +15%，对首领再 +5%；部曲伤害 −30%。 */
   'strength.K': { damage: .15, boss: .05, allyDamage: -.3 },
   /** 一骑当千：暴击 +10%，闪避 +10%（合计封顶 STAR_TUNING.dodgeCap）；生命上限 −20%（最终生命上限 ×0.8）。 */
@@ -192,6 +198,8 @@ const ROWS: readonly Row[] = [
   ['bridge3.a', 'command', 'small', 539, 514],
   ['bridge3.h', 'bridge', 'notable', 539, 450, '身先士卒', '主将身边的部曲受伤 −10%，主将生命上限 +6%', ['command', 'strength']],
   ['bridge3.b', 'strength', 'small', 539, 387],
+
+  ...(['strength','agility','intellect','command'] as const).flatMap((region,i):Row[]=>{const coords=[[365,210],[300,220],[235,170],[255,90],[320,25],[390,-30]],ids=['O1','NX1','O2','NX2','O3','K2'];return ids.map((suffix,j):Row=>{const named=j===1?0:j===3?1:j===5?2:-1,[x,y]=coords[j];return [region+'.'+suffix,region,j===5?'keystone':named>=0?'notable':'small',i===1||i===2?1600-x:x,i>=2?900-y:y,named>=0?STAR_OUTER_NAMES[region][named as 0|1|2]:undefined,named>=0?STAR_OUTER_DESCS[region][named as 0|1|2]:undefined];});}),
 ];
 const EDGES: ReadonlyArray<readonly [string, string]> = [
   ['strength.G', 'strength.T1'], ['strength.T1', 'strength.T2'], ['strength.T2', 'strength.L1'], ['strength.T2', 'strength.R1'], ['strength.T2', 'strength.C1'],
@@ -212,6 +220,7 @@ const EDGES: ReadonlyArray<readonly [string, string]> = [
   ['bridge0.b', 'agility.L2'], ['strength.G', 'agility.G'], ['agility.R2', 'bridge1.a'], ['bridge1.a', 'bridge1.h'], ['bridge1.h', 'bridge1.b'], ['bridge1.b', 'intellect.L2'],
   ['agility.G', 'intellect.G'], ['intellect.R2', 'bridge2.a'], ['bridge2.a', 'bridge2.h'], ['bridge2.h', 'bridge2.b'], ['bridge2.b', 'command.L2'], ['intellect.G', 'command.G'],
   ['command.R2', 'bridge3.a'], ['bridge3.a', 'bridge3.h'], ['bridge3.h', 'bridge3.b'], ['bridge3.b', 'strength.L2'], ['command.G', 'strength.G'],
+  ...(['strength','agility','intellect','command'] as const).flatMap(a=>{const ids=['NL2','O1','NX1','O2','NX2','O3','K2'];return ids.slice(1).map((id,i)=>[a+'.'+ids[i],a+'.'+id] as const);}),
 ];
 export const STAR_EDGES = EDGES;
 export const STAR_NODES: readonly StarNode[] = ROWS.map(([id, region, kind, x, y, name, desc, between]) => {
@@ -301,3 +310,27 @@ export const STAR_PRESETS = {
 export type StarPresetId = keyof typeof STAR_PRESETS;
 /** 预设走法的前 n 颗星（n 省略 = 全部）；按等级取用 presetStars(key, starsAt(level))。 */
 export function presetStars(key: StarPresetId, n = Infinity): string[] { const o = STAR_PRESETS[key].order; return o.slice(0, Math.max(0, Math.min(o.length, Math.floor(n)))); }
+
+/** A legal next-node sequence, including the regional prerequisite before a keystone. */
+export function planStarPath(lit:Iterable<string>,target:string,gate:string):{path:string[];cost:number;block:string|null}{
+ const owned=litSet(lit,gate),goal=STAR_BY_ID.get(target),path:string[]=[];
+ if(!goal)return{path,cost:0,block:'没有这颗星'};
+ if(owned.has(target))return{path,cost:0,block:null};
+ if(goal.kind==='keystone'&&keystonesLit(owned)>=STAR_RULES.keystoneMax)return{path,cost:0,block:'主星已满：需先按原规则洗点'};
+ const shortest=(to:string):string[]|null=>{
+  const q=[...owned],parents=new Map<string,string|null>(q.map(id=>[id,null]));
+  for(let i=0;i<q.length;i++){const cur=q[i];if(cur===to){const out:string[]=[];let p:string|null=to;while(p!==null&&!owned.has(p)){out.push(p);p=parents.get(p)??null;}return out.reverse();}
+   for(const id of starNeighbors(cur)){const n=STAR_BY_ID.get(id)!;if(parents.has(id)||(n.kind==='keystone'&&id!==to))continue;parents.set(id,cur);q.push(id);}}
+  return null;
+ };
+ const first=shortest(target);if(!first)return{path,cost:0,block:'没有可用连接路线'};
+ for(const id of first){const n=STAR_BY_ID.get(id)!;
+  if(n.kind==='keystone')while(regionLit(owned,n.region,gate)<STAR_RULES.keystoneNeed){
+   const options=STAR_NODES.filter(v=>v.region===n.region&&v.kind!=='keystone'&&!owned.has(v.id)).map(v=>shortest(v.id)).filter((p):p is string[]=>!!p&&p.length>0).sort((a,b)=>a.length-b.length);
+   if(!options.length)return{path,cost:path.length,block:'本区前置不足'};
+   for(const p of options[0])if(!owned.has(p)){if(lightBlock(owned,p,gate))return{path,cost:path.length,block:'连接条件不足'};owned.add(p);path.push(p);}
+  }
+  if(!owned.has(id)){const block=lightBlock(owned,id,gate);if(block)return{path,cost:path.length,block};owned.add(id);path.push(id);}
+ }
+ return{path,cost:path.length,block:null};
+}

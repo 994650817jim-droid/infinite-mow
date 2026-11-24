@@ -52,6 +52,8 @@ export interface GauntletBoss {
   props?: GauntletProps;
   /** 随行护卫（规则 c）：和名将一起登场，护卫在时名将受伤减；护卫打到 leaveAt 血退场（不算斩将）。 */
   escort?: GauntletEscort;
+  /** 主章节河北双雄复用：一阵两将，全败才结算。 */
+  dual?: 'hebei';
   /** 斩将后「收为副将」收的是谁（韩玄那阵收黄忠）。 */
   followAs?: string;
   /** 倒下后原地再起几次（孟获三擒：规则 c，不隐身、不无敌、不逃走）：每次回 hp 比例血、移速 ×speed、招式间隔 ×gap。 */
@@ -88,11 +90,11 @@ export const GAUNTLET_POOL: readonly GauntletBoss[] = [
   // 第三章
   { id: 'lijue', name: '李傕', chapter: 3, arc: 'qunxiong', stage: 1, ctrl: 'moveset', tier: 'front', clearKey: 'third-1', drop: ['西凉残部'], off: '李郭双首领（单独出场）' },
   { id: 'guosi', name: '郭汜', chapter: 3, arc: 'qunxiong', stage: 1, ctrl: 'moveset', tier: 'front', clearKey: 'third-1', off: '李郭双首领（单独出场）' },
-  { id: 'zhangxiu', name: '张绣', chapter: 3, arc: 'qunxiong', stage: 2, ctrl: 'moveset', tier: 'front', clearKey: 'third-2', drop: ['白马突阵', '二连扇刺'] },
+  { id: 'zhangxiu', name: '张绣', chapter: 3, arc: 'qunxiong', stage: 2, ctrl: 'moveset', tier: 'front', clearKey: 'third-2', drop: ['白马突阵', '二连扇刺'], add: { p2: [{ kind: 'rings', name: '封步枪阵', windupMs: 950, cd: 12000, dmg: .9, radii: [110, 190], gapMs: 900, band: 36 }] } },
   { id: 'yuanshu', name: '袁术', chapter: 3, arc: 'qunxiong', stage: 3, ctrl: 'yuanshu', tier: 'mid', clearKey: 'third-3', endlessHoney: true, off: '蜜水 25 秒限时与逃脱回血（改为追上就打）' },
   // 第四章
   { id: 'yanliang', name: '颜良', chapter: 4, arc: 'guandu', stage: 1, ctrl: 'guandu', tier: 'mid', clearKey: 'guandu-1', off: '焚粮军心（不减伤）、4-1 负伤败走（本模式正常斩杀）' },
-  { id: 'wenchou', name: '文丑', chapter: 4, arc: 'guandu', stage: 2, ctrl: 'guandu', tier: 'mid', clearKey: 'guandu-2', props: { art: 'cart', name: '袁军辎重', count: 3, takenMul: .6, hpFrac: .07, lifeSec: 40, shaken: true }, off: '延津散落辎重（改随身辎重车）、4-2 颜良文丑双首领（单独出场）' },
+  { id: 'wenchou', name: '文丑', chapter: 4, arc: 'guandu', stage: 2, ctrl: 'guandu', tier: 'mid', clearKey: 'guandu-2', dual: 'hebei', off: '复用4-2河北双雄；不叠加辎重车减伤机关' },
   { id: 'chunyuqiong', name: '淳于琼', chapter: 4, arc: 'guandu', stage: 3, ctrl: 'guandu', tier: 'mid', clearKey: 'guandu-3', props: { art: 'granary', name: '乌巢粮垛', count: 3, takenMul: .5, hpFrac: .07, lifeSec: 40, shaken: true }, off: '乌巢粮仓（改随身粮垛：在时减伤，烧掉一座僵直）' },
   // 第五章
   { id: 'caochun', name: '曹纯', chapter: 5, arc: 'chibi', stage: 1, ctrl: 'moveset', tier: 'mid', clearKey: 'chibi-1', drop: ['马刀横扫'], off: '护百姓辎重（关卡目标）' },

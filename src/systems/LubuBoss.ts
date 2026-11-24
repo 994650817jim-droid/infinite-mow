@@ -1,3 +1,5 @@
+import { playSurvivorBossFx } from './SurvivorBossFx';
+import { fixedBossDamage } from '../data/survivorBossBalance';
 import Phaser from 'phaser';
 import { LubuUltimate } from './LubuUltimate';
 import type { Enemy } from '../entities/Enemy';
@@ -114,7 +116,7 @@ export class LubuBoss {
       if (!TELEGRAPH_CLASSIC) windupFlash(boss, now);
       if (now >= this.until) {
         this.state = 'sweep'; this.until = now + C.sweepFlashMs;
-        this.host.hurtTroops?.(this.ox, this.oy, C.sweepRadius, C.sweepDamage, now, this.angle, C.sweepAngle * Math.PI / 180);
+        this.hurtTroops(this.ox, this.oy, C.sweepRadius, C.sweepDamage, now, this.angle, C.sweepAngle * Math.PI / 180);
         const dx = player.x - this.ox, dy = player.y - this.oy, d = Math.hypot(dx, dy);
         if (!this.hitApplied && d <= C.sweepRadius && Math.cos(Math.atan2(dy, dx) - this.angle) >= Math.cos(C.sweepAngle * Math.PI / 360)) {
           this.hitApplied = true; this.hurt(C.sweepDamage, now);
@@ -137,7 +139,7 @@ export class LubuBoss {
     } else if (this.state === 'dash') {
       const ax = boss.x, ay = boss.y, step = Math.min(C.dashLength - this.travelled, C.dashSpeed * dt);
       boss.sprite.x += Math.cos(this.angle) * step; boss.sprite.y += Math.sin(this.angle) * step; this.travelled += step;
-      this.host.hurtTroops?.((ax + boss.x) / 2, (ay + boss.y) / 2, C.dashHalfWidth + step / 2, C.dashDamage, now);
+      this.hurtTroops((ax + boss.x) / 2, (ay + boss.y) / 2, C.dashHalfWidth + step / 2, C.dashDamage, now);
       this.gfx.lineStyle(5, 0xffb347, .55); this.gfx.lineBetween(ax - Math.cos(this.angle) * 40, ay - Math.sin(this.angle) * 40, boss.x, boss.y);
       this.gfx.lineStyle(2, 0xfff3dd, .85); this.gfx.lineBetween(ax, ay, boss.x, boss.y);
       if (!this.hitApplied && segmentDistance(player.x, player.y, ax, ay, boss.x, boss.y) <= C.dashHalfWidth + player.radius) {
@@ -167,10 +169,11 @@ export class LubuBoss {
   };
   private segs: { kind: 'thrust' | 'sweep' | 'smash'; x: number; y: number; angle: number }[] = [];
   private seg = 0; private fold = 0; private folds = 0; private foldSign = 1;
+  private shotRepeat = 0;
   private shotCd = 4; private spinCd = 2; private spinTick = 0; private hopFrom = { x: 0, y: 0 }; private hopTo = { x: 0, y: 0 };
   private whirl: Phaser.GameObjects.Image | null = null;
   private shotFlashUntil = 0; private shotLine = { x: 0, y: 0, a: 0 };
-  readonly v2Metrics = { combo: 0, zig: 0, shot: 0, spin: 0, hits: 0 };
+  readonly v2Metrics = { combo: 0, zig: 0, shot: 0, twinShot: 0, spin: 0, hits: 0 };
 
   private beginV2(state: 'comboWindup' | 'zigWindup' | 'hop' | 'spinWindup', now: number): void {
     const { boss, player } = this.host;
@@ -184,7 +187,7 @@ export class LubuBoss {
       this.angle += this.foldSign * .45; this.until = now + LB.zigzag.firstWarnMs; this.state = 'zigWindup'; this.host.playSfx('chargeWarn');
       this.kit?.banner('赤兔嘶鸣');
     } else if (state === 'hop') {
-      this.v2Metrics.shot++; this.lastAttack = 'dash'; this.state = 'hop'; this.until = now + LB.shot.hopMs;
+      this.shotRepeat = 0; this.v2Metrics.shot++; this.lastAttack = 'dash'; this.state = 'hop'; this.until = now + LB.shot.hopMs;
       this.hopFrom = { x: boss.x, y: boss.y }; this.hopTo = { x: boss.x - Math.cos(this.angle) * LB.shot.hop, y: boss.y - Math.sin(this.angle) * LB.shot.hop };
     } else {
       this.v2Metrics.spin++; this.lastAttack = 'sweep'; this.state = 'spinWindup'; this.until = now + LB.spin.windupMs; this.host.playSfx('chargeWarn');
@@ -234,19 +237,19 @@ export class LubuBoss {
             boss.sprite.x += Math.cos(s.angle) * 26; boss.sprite.y += Math.sin(s.angle) * 26;
             laneCracks(this.gfx, s.x, s.y, s.angle, K.thrust.length, K.thrust.width, 1, true);
             if (segmentDistance(player.x, player.y, s.x, s.y, s.x + Math.cos(s.angle) * K.thrust.length, s.y + Math.sin(s.angle) * K.thrust.length) <= K.thrust.width / 2 + pr) this.hitPlayer(K.thrust.damage, now);
-            for (let k = 1; k <= 3; k++) this.host.hurtTroops?.(s.x + Math.cos(s.angle) * K.thrust.length * k / 4, s.y + Math.sin(s.angle) * K.thrust.length * k / 4, K.thrust.width, K.thrust.damage, now);
+            for (let k = 1; k <= 3; k++) this.hurtTroops(s.x + Math.cos(s.angle) * K.thrust.length * k / 4, s.y + Math.sin(s.angle) * K.thrust.length * k / 4, K.thrust.width, K.thrust.damage, now);
             this.host.playSfx('allySlash');
           } else if (s.kind === 'sweep') {
             groundCracks(this.gfx, s.x, s.y, K.sweep.radius, 1, s.angle, K.sweep.arcDeg * Math.PI / 180, 0, true);
             const ddx = player.x - s.x, ddy = player.y - s.y;
             if (Math.hypot(ddx, ddy) <= K.sweep.radius + pr && Math.cos(Math.atan2(ddy, ddx) - s.angle) >= Math.cos(K.sweep.arcDeg * Math.PI / 360)) this.hitPlayer(K.sweep.damage, now);
-            this.host.hurtTroops?.(s.x, s.y, K.sweep.radius, K.sweep.damage, now, s.angle, K.sweep.arcDeg * Math.PI / 180);
+            this.hurtTroops(s.x, s.y, K.sweep.radius, K.sweep.damage, now, s.angle, K.sweep.arcDeg * Math.PI / 180);
             this.sweepMask.clear(); cone(this.sweepMask, s.x, s.y, s.angle, K.sweep.radius * 1.15, K.sweep.arcDeg);
             this.host.playSfx('allySlash');
           } else {
             groundCracks(this.gfx, s.x, s.y, K.smash.radius, 1, 0, Math.PI * 2, 0, true, 'slam');
             if (Math.hypot(player.x - s.x, player.y - s.y) <= K.smash.radius + pr) this.hitPlayer(K.smash.damage, now);
-            this.host.hurtTroops?.(s.x, s.y, K.smash.radius, K.smash.damage, now);
+            this.hurtTroops(s.x, s.y, K.smash.radius, K.smash.damage, now);
             this.host.scene.cameras.main.shake(140, .006); this.host.playSfx('hitHeavy');
           }
           this.state = 'combo'; this.startedAt = now; this.until = now + K.gapMs;
@@ -272,7 +275,7 @@ export class LubuBoss {
         kit.pose('lean', 1, dir);
         boss.sprite.x += Math.cos(this.angle) * step; boss.sprite.y += Math.sin(this.angle) * step; this.travelled += step;
         laneCracks(this.gfx, this.ox, this.oy, this.angle, Z.length, Z.halfWidth * 2, 1, true);
-        this.host.hurtTroops?.((ax + boss.x) / 2, (ay + boss.y) / 2, Z.halfWidth + step / 2, Z.damage, now);
+        this.hurtTroops((ax + boss.x) / 2, (ay + boss.y) / 2, Z.halfWidth + step / 2, Z.damage, now);
         if (segmentDistance(player.x, player.y, ax, ay, boss.x, boss.y) <= Z.halfWidth + player.radius) this.hitPlayer(Z.damage, now);
         if (this.travelled >= Z.length) {
           if (++this.fold < this.folds) {
@@ -300,14 +303,24 @@ export class LubuBoss {
         if (locked) laneCracks(this.gfx, boss.x, boss.y, this.angle, S.length, S.width, 1 - (this.until - now) / S.lockMs);
         if (now >= this.until) {
           this.state = 'shot'; this.startedAt = now; this.until = now + 160; this.shotLine = { x: boss.x, y: boss.y, a: this.angle }; this.shotFlashUntil = now + 220;
-          if (segmentDistance(player.x, player.y, boss.x, boss.y, ex, ey) <= S.width / 2 + player.radius) this.hitPlayer(S.damage, now);
-          for (let k = 1; k <= 12; k++) this.host.hurtTroops?.(boss.x + Math.cos(this.angle) * S.length * k / 13, boss.y + Math.sin(this.angle) * S.length * k / 13, S.width / 2 + 10, S.damage, now);
+          if (segmentDistance(player.x, player.y, boss.x, boss.y, ex, ey) <= S.width / 2 + player.radius) this.hitPlayer(S.damage * (this.shotRepeat ? .7 : 1), now);
+          for (let k = 1; k <= 12; k++) this.hurtTroops(boss.x + Math.cos(this.angle) * S.length * k / 13, boss.y + Math.sin(this.angle) * S.length * k / 13, S.width / 2 + 10, S.damage * (this.shotRepeat ? .7 : 1), now);
+          if (boss.def.survivorBoss) playSurvivorBossFx(this.host.scene,'arrow',(boss.x+ex)/2,(boss.y+ey)/2,S.length*1.1,now,this.angle);
           laneCracks(this.gfx, boss.x, boss.y, this.angle, S.length, S.width, 1, true);
           this.host.scene.cameras.main.shake(100, .004); this.host.playSfx('hitArrow');
         }
         break;
       }
-      case 'shot': kit.pose('lean', .6, dir); if (now >= this.until) { this.shotCd = LB.shot.cooldown; this.recoverV2(now, LB.shot.recoverMs); } break;
+      case 'shot':
+        kit.pose('lean', .6, dir);
+        if (now >= this.until) {
+          if (this.phase2 && boss.def.survivorBoss && this.shotRepeat === 0) {
+            this.shotRepeat = 1; this.v2Metrics.twinShot++; this.hitApplied = false;
+            this.angle = Math.atan2(player.y - boss.y, player.x - boss.x); this.state = 'aim'; this.startedAt = now; this.until = now + LB.shot.aimMs;
+            kit.banner('辕门连射', '第二箭重新瞄准 · 继续侧移'); this.host.playSfx('chargeWarn');
+          } else { this.shotCd = LB.shot.cooldown; this.recoverV2(now, LB.shot.recoverMs); }
+        }
+        break;
       case 'spinWindup': {
         const P = LB.spin;
         kit.pose('crouch', prog, dir); windupFlash(boss, now);
@@ -327,7 +340,7 @@ export class LubuBoss {
           this.spinTick = now + P.tickMs; this.hitApplied = false;
           groundCracks(this.gfx, boss.x, boss.y, r, 1, 0, Math.PI * 2, 0, true, 'slam');
           if (d <= r + player.radius) this.hitPlayer(P.damage, now);
-          this.host.hurtTroops?.(boss.x, boss.y, r, P.damage, now);
+          this.hurtTroops(boss.x, boss.y, r, P.damage, now);
         }
         if (now >= this.until) { this.spinCd = P.cooldown; this.recoverV2(now, P.recoverMs); }
         break;
@@ -435,8 +448,11 @@ export class LubuBoss {
       px = x; py = y;
     }
   }
+  private hurtTroops(x: number, y: number, radius: number, damage: number, now: number, angle?: number, arc?: number): void {
+    this.host.hurtTroops?.(x, y, radius, fixedBossDamage(this.host.boss.def, damage), now, angle, arc);
+  }
   private hurt(damage: number, now: number): void {
-    if (this.host.player.takeDamage(damage, now)) this.host.scene.cameras.main.flash(90, 180, 40, 40, false);
+    if (this.host.player.takeDamage(fixedBossDamage(this.host.boss.def, damage), now)) this.host.scene.cameras.main.flash(90, 180, 40, 40, false);
   }
   clear(): void { this.whirl?.destroy(); this.whirl = null; this.kit?.clear(); this.ultimate.clear(); this.state = 'approach'; this.energy = 0; this.gfx.clear(); this.slash.setVisible(false); }
   snapshot(): { state: LubuState; phase2: boolean; until: number; progress: number; hitApplied: boolean } {

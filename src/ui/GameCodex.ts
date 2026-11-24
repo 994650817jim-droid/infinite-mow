@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import {CHARACTERS} from '../data/characters';
 import {TROOPS,TROOP_KINDS,type TroopKind} from '../data/legion';
 import {CHARACTER_PASSIVES} from '../data/passives';
-import {WEAPON_META} from '../data/upgrades';
+import {WEAPON_META,weaponName} from '../data/upgrades';
 import {MARTIALS} from '../systems/RunGrowth';
 import {FONT,HEADING_FONT,GAME_WIDTH as W,GAME_HEIGHT as H,IS_DESKTOP as D,BALANCE,TITLE_FONT} from '../config';
 import {visualTextureKey} from '../systems/ReadableTextures';
@@ -10,55 +10,93 @@ import {lqButton,lqHitBox,lqPanel,lqSkin,type LqState} from './LacquerKit';
 import {SURRENDER_MOVES} from '../data/surrenderMoves';
 import {SURRENDER_DEFS,YUJIN} from '../data/surrender';
 import {TEMPLATES} from '../data/recruits';
-/** 图鉴「降将」页：每位可招降首领（含剧情附送的于禁）与他的专属招式（2026-11-18 用户批准）。 */
+import {CODEX_PASSIVES} from '../data/codexPassives';
+import {HERO_STATS} from '../data/heroStats';
+import {heroUnlocked} from '../systems/HeroUnlocks';
+import {heroOwned,lordRules,lordHero} from '../systems/RosterStore';
+import {LOCKED_HINT} from '../data/heroUnlocks';
+import {CODEX_ENEMIES,CODEX_CHAPTERS,chapterEnemies,enemyCodexBody} from '../data/enemyCodex';
+import {ART_V2_FILES} from '../systems/ArtStyle';
+import {surrenderedIds} from '../systems/SurrenderStore';
 const SURRENDERED=Object.keys(SURRENDER_MOVES).map(id=>{const d=SURRENDER_DEFS.find(x=>x.id===id&&x.template);return id===YUJIN.id?{id,name:YUJIN.name,title:'七军统帅',template:YUJIN.template}:{id,name:d?.name??id,title:d?.title??'',template:d?.template??'blade'};});
-// 2026-11-17 文案审校：12 名武将都有说明（原只有前 4 名，其余显示 undefined；黄忠旧写「3 秒 / 连弩」），顺序同 CHARACTERS，数值同 data/passives.ts PASSIVE_RULES
-const passiveDetails=['命中积龙胆（满7层）。满层后下一次枪刺多出一枪，枪长 +25%。','一刀砍中3名以上敌人积1层武势（满3层），每层刀斩范围 +4%；满层后下一刀伤害 +25%。','重箭命中积蓄势（满4层）。满层进入「神射」6秒：暴击率 +10%，重箭命中处小范围爆裂（50%伤害）。受伤掉1层蓄势，神射中受伤不打断。','无首领时，天火每发都积1层星象；有首领 / 精锐时只算同一目标（满3层）。满层后下一发必定暴击且伤害×2（算无遗策），落地留下4.5秒星火焦土，灼烧范围内所有敌人。','命中积怒气（满5层）。满层大喝：周围敌人震慑1.2秒（无法行动）并受140%伤害，脚下留下3秒断桥区。','命中积铁骑（满6层）。满层后下一枪化为冲锋：向前突进，160%伤害；冲锋中无敌，结束后2秒受伤 -30%。','受伤积拒敌（每0.5秒最多1层，满5层）；身边每有3名敌人，每秒再积1层。满层「谁敢杀我」：向6个方向劈出裂波（各80%伤害），3秒内受伤 -30%。','一剑同时砍中两名敌人积1层仁德（满4层）。满层：伤害 +15%，回复8%生命，部曲回复35%，4秒内攻速 +30%。','一次连锁引爆3枚以上火雷积1层计策（满3层）。满层「火烧连环」：身边布6枚环形火雷，踩到或2秒后齐爆并留火2秒。生命低于30%时脚下自动布4枚火雷（每30秒一次）。','命中积机括（满12层）。满层后额外射出6支扇形弩箭，每支60%伤害。','移动中每0.8秒积1层疾步（满6层）。满层召2名执刀侍婢护身6秒（最多3名），绕身挥刀。','被双扇扇中2次的敌人倒戈3秒（精锐减半）：转而攻击同伴，且受伤 +20%；首领不会倒戈，改为受伤 +15%。满层「闭月」：舞带环身2秒，圈内敌人倒戈并每0.4秒受50%伤害。'];
-/** Read-only troop codex; hero selection reuses the menu's existing confirmation callback. */
+const TROOP_ROLE:Record<TroopKind,string>={swordsman:'前排近战，兼顾承伤与输出。',spearman:'长距离近战，适合应对骑兵。',archer:'远程射击，注意与敌军保持距离。',crossbowman:'连续远程输出，身板较薄。',guardian:'高生命与护甲，适合前线承伤。',rider:'移动迅速，适合追击与机动。',halberdier:'近战范围攻击，适合密集敌群。',medic:'治疗受伤友军，不主动攻击敌人。'};
+type Tab='hero'|'troop'|'surrender'|'enemy';
+/** 首页只读图鉴；选将仍经过现有主公与解锁规则，不在这里发放任何成长。 */
 export class GameCodex {
- readonly root:Phaser.GameObjects.Container;private content:Phaser.GameObjects.Container;private tab:'hero'|'troop'|'surrender'='hero';private index=0;
- constructor(private scene:Phaser.Scene,private selectHero:(index:number)=>void){
-  this.root=scene.add.container(0,0).setDepth(550).setName('game-codex');this.content=scene.add.container(0,0);
-  // 漆底描金整屏卷（与结算卷、行囊同系）；页签、卡片、按钮都是漆金三态
-  this.root.add(scene.add.rectangle(W/2,H/2,W,H,0x0c0805,.96).setInteractive());
-  // 2026-11-21 全界面体检：电脑版不要整屏金边大框、不用水墨页签 / 返回（每屏最多一个水墨按钮）
-  if(!D){const frame=scene.add.graphics();lqPanel(frame,8,8,W-16,H-16,{shadow:false});this.root.add(frame);}
-  this.root.add(this.text(W/2,D?40:46,'将士图鉴',28,D?TITLE_FONT:HEADING_FONT).setOrigin(.5).setColor(D?'#efd399':'#f6dc9a').setStroke(D?'#120904':'#2a170b',4));
-  const TABS=['hero','troop','surrender'] as const;
-  this.tabs=['武将','兵种','降将'].map((label,i)=>{const t=this.text(W/2+(i-1)*136,D?76:92,label,18,HEADING_FONT).setOrigin(.5).setInteractive({useHandCursor:true}).setName('codex-tab-'+i).on('pointerdown',()=>{this.tab=TABS[i];this.index=0;this.render();});
-   const on=()=>this.tab===TABS[i],skin=lqSkin(scene,t,t,()=>({w:120,h:38}),{tone:'auto',on});lqHitBox(t,120,38);this.root.add([skin.gfx,t]);return skin;});
-  this.root.add(this.content);
-  const close=this.text(W/2,H-(D?32:40),'返回',18,HEADING_FONT).setOrigin(.5).setInteractive({useHandCursor:true}).setName('codex-close').on('pointerdown',()=>this.root.destroy());
-  const cs=lqSkin(scene,close,close,()=>({w:D?160:200,h:D?38:42}),{tone:'quiet'});lqHitBox(close,D?160:200,D?38:42);this.root.add([cs.gfx,close]);this.render();
- }
+ readonly root:Phaser.GameObjects.Container;
+ private content:Phaser.GameObjects.Container;
+ private tab:Tab='hero';private index=0;private page=0;private ownedOnly=false;private enemyChapter=1;
+ private memory:Record<Tab,number>={hero:0,troop:0,surrender:0,enemy:0};
  private tabs:Array<{repaint:(s?:LqState)=>void}>=[];
+ private detail?:Phaser.GameObjects.Text;private mask?:Phaser.Display.Masks.GeometryMask;private maskGraphics?:Phaser.GameObjects.Graphics;
+ private viewport=new Phaser.Geom.Rectangle();private scroll=0;private maxScroll=0;private track?:Phaser.GameObjects.Graphics;private scrollHint?:Phaser.GameObjects.Text;
+ private drag?:{id:number;y:number};private loads=new Set<string>();
+ constructor(private scene:Phaser.Scene,private selectHero:(index:number)=>void){
+  this.root=scene.add.container(0,0).setDepth(550).setScrollFactor(0).setName('game-codex').setData('ui',this);this.content=scene.add.container(0,0);
+  this.root.add(scene.add.rectangle(W/2,H/2,W,H,0x0c0805,1).setInteractive());
+  if(!D){const frame=scene.add.graphics();lqPanel(frame,8,8,W-16,H-16,{shadow:false});this.root.add(frame);}
+  this.root.add(this.text(W/2,D?36:42,'将士图鉴',28,D?TITLE_FONT:HEADING_FONT).setOrigin(.5).setColor('#efd399'));
+  const types:Tab[]=['hero','troop','surrender','enemy'];
+  this.tabs=['武将','我军','降将','敌军'].map((label,i)=>{const t=this.text(W/2+(i-1.5)*124,D?76:90,label,18,HEADING_FONT).setOrigin(.5).setInteractive({useHandCursor:true}).setName('codex-tab-'+i).on('pointerup',()=>{this.memory[this.tab]=this.index;this.tab=types[i];this.index=this.memory[this.tab];const entries=this.tab==='hero'&&this.ownedOnly?CHARACTERS.map((c,i)=>({c,i})).filter(x=>heroUnlocked(x.c.id)).map(x=>x.i):null;this.page=Math.floor((entries?Math.max(0,entries.indexOf(this.index)):this.index)/this.perPage);this.render();});const skin=lqSkin(scene,t,t,()=>({w:110,h:D?40:56}),{tone:'auto',on:()=>this.tab===types[i]});lqHitBox(t,110,D?40:56);this.root.add([skin.gfx,t]);return skin;});
+  this.root.add(this.content);
+  this.button(this.root,W/2,H-(D?34:44),'返回','codex-close',()=>this.close(),180);
+  scene.input.on('wheel',this.wheel);scene.input.on('pointerdown',this.down);scene.input.on('pointermove',this.move);scene.input.on('pointerup',this.up);scene.input.on('pointerupoutside',this.up);
+  scene.input.keyboard?.on('keydown-ESC',this.escape);
+  scene.load.on('complete',this.loaded);
+  this.root.once('destroy',()=>{scene.input.off('wheel',this.wheel);scene.input.off('pointerdown',this.down);scene.input.off('pointermove',this.move);scene.input.off('pointerup',this.up);scene.input.off('pointerupoutside',this.up);scene.input.keyboard?.off('keydown-ESC',this.escape);scene.load.off('complete',this.loaded);this.mask?.destroy();this.maskGraphics?.destroy();});
+  this.render();
+ }
+ private get perPage(){return D?12:8;}
+ close():void{if(this.root.active)this.root.destroy();}
+ private escape=()=>this.close();
+ private loaded=()=>{if(this.root.active)this.render();};
  private text(x:number,y:number,value:string,size=16,font=FONT){return this.scene.add.text(x,y,value,{fontFamily:font,fontSize:size+'px',color:'#e9d5b0',resolution:2}).setScrollFactor(0);}
+ private button(parent:Phaser.GameObjects.Container,x:number,y:number,label:string,name:string,run:()=>void,w=120,enabled=true){const t=this.text(x,y,label,D?15:19,HEADING_FONT).setOrigin(.5).setName(name);if(enabled)t.setInteractive({useHandCursor:true}).on('pointerup',run);const skin=lqSkin(this.scene,t,t,()=>({w,h:D?42:60}),{tone:'quiet',enabled:()=>enabled});if(enabled)lqHitBox(t,w,D?42:60);else t.setAlpha(.45);parent.add([skin.gfx,t]);return t;}
+ private point(p:Phaser.Input.Pointer){return p.positionToCamera(this.scene.cameras.main) as Phaser.Math.Vector2;}
+ private wheel=(p:Phaser.Input.Pointer,_o:unknown,_x:number,y:number)=>{if(this.root.active&&this.viewport.contains(this.point(p).x,this.point(p).y))this.scrollTo(this.scroll+y*.7);};
+ private down=(p:Phaser.Input.Pointer)=>{const v=this.point(p);if(this.viewport.contains(v.x,v.y))this.drag={id:p.id,y:v.y};};
+ private move=(p:Phaser.Input.Pointer)=>{if(this.drag?.id===p.id&&p.isDown){const y=this.point(p).y;this.scrollTo(this.scroll+this.drag.y-y);this.drag.y=y;}};
+ private up=()=>{this.drag=undefined;};
+ private scrollTo(n:number){this.scroll=Phaser.Math.Clamp(n,0,this.maxScroll);this.detail?.setY(this.viewport.y-this.scroll);const v=this.viewport,g=this.track?.clear();if(g&&this.maxScroll>0){const h=Math.max(26,v.height*v.height/(v.height+this.maxScroll)),y=v.y+(v.height-h)*this.scroll/this.maxScroll;g.fillStyle(0x78613c,.35).fillRect(v.right+7,v.y,3,v.height).fillStyle(0xc6a263,.9).fillRect(v.right+7,y,3,h);}this.scrollHint?.setText(this.maxScroll>0?(this.scroll>=this.maxScroll-1?'已到末尾 · 向下拖动回看':D?'滚轮查看详情':'在详情内上下滑动'):'资料已完整显示');}
+ private troopKey(kind:TroopKind){const d=TROOPS[kind],key=visualTextureKey(this.scene,d.walkVisual?.texture??d.art+'_walk_sheet');if(this.scene.textures.exists(key))return key;const custom='codex_troop_'+kind;if(!this.scene.textures.exists(custom)&&!this.loads.has(custom)){this.loads.add(custom);this.scene.load.image(custom,'assets/processed-v2/troops/'+kind+'_walk.png');if(!this.scene.load.isLoading())this.scene.load.start();}if(this.scene.textures.exists(custom)){const t=this.scene.textures.get(custom);if(!t.has('down_0')){const cell=(t.getSourceImage() as HTMLImageElement).width/4;t.add('down_0',0,0,0,cell,cell);}}return custom;}
+ private enemyKey(index:number){const e=CODEX_ENEMIES[index],source=e.art.walk;if(this.scene.textures.exists(source))return source;const key='codex_'+source,url=ART_V2_FILES[source];if(!url)return '';if(!this.scene.textures.exists(key)&&!this.loads.has(key)){this.loads.add(key);this.scene.load.image(key,url);if(!this.scene.load.isLoading())this.scene.load.start();}if(this.scene.textures.exists(key)){const tex=this.scene.textures.get(key);if(!tex.has('down_0')){const n=(tex.getSourceImage() as HTMLImageElement).width/4;tex.add('down_0',0,0,0,n,n);}}return key;}
  private render():void{
-  this.content.removeAll(true);for(const t of this.tabs)t.repaint();
-  const hero=this.tab==='hero',sur=this.tab==='surrender',items=hero?CHARACTERS.map(c=>c.name):sur?SURRENDERED.map(s=>s.name):TROOP_KINDS.map(k=>TROOPS[k].name),cols=4;
-  // 电脑：左侧 3 列小卡（头像 + 名字），右侧详情；手机：上方 4 列卡片，详情紧跟在卡片下方（按行数排，不再与卡片重叠）
-  const cw=D?96:(W-52-24)/4,ch=sur?(D?40:52):D?50:104,gap=D?6:8,gx=D?24:26,gy=D?112:124; // 降将 17 人：卡片矮一些（只写名字）
-  for(const [i,name]of items.entries()){
-   const x=gx+cw/2+(i%cols)*(cw+gap),y=gy+ch/2+Math.floor(i/cols)*(ch+gap),sel=this.index===i;
-   const g=this.scene.add.graphics();let st:LqState=sel?'on':'idle';const paint=()=>{g.clear();lqButton(g,x,y,cw,ch,st,sel?'cinnabar':'quiet');};paint();
-   const hit=this.scene.add.rectangle(x,y,cw,ch,0,.001).setInteractive({useHandCursor:true}).setName('codex-item-'+i).on('pointerdown',()=>{this.index=i;this.render();})
-    .on('pointerover',()=>{if(!sel){st='hover';paint();}}).on('pointerout',()=>{if(!sel){st='idle';paint();}});
-   this.content.add([g,hit]);
-   const def=hero||sur?null:TROOPS[TROOP_KINDS[i]],key=sur?'':hero?CHARACTERS[i].portrait:visualTextureKey(this.scene,def!.walkVisual?.texture??(def!.art.startsWith('xiliang')?def!.art+'_walk':def!.art+'_walk_sheet'));
-   if(key&&this.scene.textures.exists(key))this.content.add(this.scene.add.image(D?x-cw/2+24:x,D?y-1:y-15,key,hero?undefined:'down_0').setDisplaySize(D?40:58,D?40:58));
-   this.content.add(this.text(sur?x:D?x+16:x,sur?y:D?y:y+35,name,D?15:15,HEADING_FONT).setOrigin(.5).setColor(sel?'#fff3d6':'#e9d5b0'));
+  this.detail?.clearMask();this.mask?.destroy();this.mask=undefined;this.maskGraphics?.destroy();this.maskGraphics=undefined;this.content.removeAll(true);this.detail=undefined;this.track=undefined;this.scrollHint=undefined;this.drag=undefined;for(const t of this.tabs)t.repaint();
+  const hero=this.tab==='hero',sur=this.tab==='surrender',foe=this.tab==='enemy',unlocked=new Set(CHARACTERS.filter(c=>heroUnlocked(c.id)).map(c=>c.id));
+  const all=foe?chapterEnemies(this.enemyChapter).map(i=>({i,name:CODEX_ENEMIES[i].name,locked:false})):hero?CHARACTERS.map((c,i)=>({i,name:c.name,locked:!unlocked.has(c.id)})):sur?SURRENDERED.map((c,i)=>({i,name:c.name,locked:false})):TROOP_KINDS.map((k,i)=>({i,name:TROOPS[k].name,locked:false}));
+  const items=hero&&this.ownedOnly?all.filter(c=>!c.locked):all;
+  if(!items.some(c=>c.i===this.index))this.index=items[0]?.i??0;
+  const pages=Math.max(1,Math.ceil(items.length/this.perPage));this.page=Phaser.Math.Clamp(this.page,0,pages-1);
+  const gx=24,listW=D?362:W-48,cw=(listW-24)/4,ch=D?78:88,gap=8,gy=D?154:194;
+  this.content.add(this.text(gx,D?112:144,foe?'敌军 · '+items.length+'类':hero?'已解锁 '+unlocked.size+'/'+CHARACTERS.length:sur?'专属招式 · '+items.length+'位':'我方兵种 · '+items.length+'类',D?14:17).setName('codex-count'));
+  if(hero)this.button(this.content,gx+listW-66,D?120:154,this.ownedOnly?'已解锁':'全部武将','codex-filter',()=>{this.ownedOnly=!this.ownedOnly;this.page=0;this.render();},132);
+  if(foe)this.button(this.content,gx+listW-86,D?120:154,CODEX_CHAPTERS[this.enemyChapter].short+' ▸','codex-enemy-chapter',()=>{this.enemyChapter=(this.enemyChapter+1)%CODEX_CHAPTERS.length;this.index=chapterEnemies(this.enemyChapter)[0]??0;this.page=0;this.render();},172);
+  for(const [slot,item]of items.slice(this.page*this.perPage,(this.page+1)*this.perPage).entries()){
+   const x=gx+cw/2+(slot%4)*(cw+gap),y=gy+ch/2+Math.floor(slot/4)*(ch+gap),sel=this.index===item.i;
+   const g=this.scene.add.graphics();let state:LqState=sel?'on':'idle';const paint=()=>{g.clear();lqButton(g,x,y,cw,ch,state,sel?'cinnabar':'quiet');};paint();
+   const hit=this.scene.add.rectangle(x,y,cw,ch,0,.001).setInteractive({useHandCursor:true}).setName('codex-item-'+item.i).on('pointerup',()=>{this.index=item.i;this.render();}).on('pointerover',()=>{if(!sel){state='hover';paint();}}).on('pointerout',()=>{if(!sel){state='idle';paint();}});this.content.add([g,hit]);
+   const key=foe?this.enemyKey(item.i):hero?CHARACTERS[item.i].portrait:sur?'':this.troopKey(TROOP_KINDS[item.i]);
+   if(key&&this.scene.textures.exists(key)){const tex=this.scene.textures.get(key),frame=hero?undefined:tex.has('down_0')?'down_0':0,img=this.scene.add.image(x,y-12,key,frame);img.setScale(Math.min((D?38:44)/img.width,(D?38:44)/img.height));if(item.locked)img.setTintFill(0x655c4d);this.content.add(img);}
+   else if(!sur)this.content.add(this.text(x,y-12,hero||foe?item.name.slice(0,1):TROOPS[TROOP_KINDS[item.i]].mark,20).setOrigin(.5));
+   this.content.add(this.text(x,sur?y-8:y+14,item.name,foe?(D?12:16):D?14:18,HEADING_FONT).setOrigin(.5).setColor(sel?'#fff3d6':item.locked?'#a4977e':'#e9d5b0'));
+   if(item.locked)this.content.add(this.text(x,y+31,'未归附',D?10:12).setOrigin(.5).setColor('#a4977e'));
+   if(sur)this.content.add(this.text(x,y+13,surrenderedIds().includes(SURRENDERED[item.i].id)?'已归附':'招式资料',11).setOrigin(.5));
   }
-  const gridBottom=gy+Math.ceil(items.length/cols)*(ch+gap);
-  const x=D?gx+cols*(cw+gap)+22:36,y=D?112:gridBottom+16,width=D?W-x-36:W-72;
-  if(D){const sep=this.scene.add.graphics();sep.lineStyle(1,0xc9a35e,.4).lineBetween(x-12,112,x-12,H-80);this.content.add(sep);}
-  let name='',body='';
-  if(hero){const c=CHARACTERS[this.index];name=c.name+' · '+c.desc;body=`初始生命：${Math.round(BALANCE.player.maxHp*c.hpMul)}\n移动速度：${Math.round(BALANCE.player.speed*c.speedMul)}\n伤害倍率：${c.damageMul.toFixed(2)}\n本命兵器：${WEAPON_META[c.startWeapon].name}\n\n天赋被动 · ${CHARACTER_PASSIVES[c.id].name}\n${passiveDetails[this.index]}\n\n专属武艺\n${Object.values(MARTIALS).filter(m=>m.character===c.id).map(m=>m.name).join(' / ')}`;}
-  else if(sur){const s=SURRENDERED[this.index],m=SURRENDER_MOVES[s.id];name=s.name+' · '+s.title;body=`招降后入麾下，按「${TEMPLATES[s.template].name}」模板随行出手。\n\n专属 · ${m.name}\n${m.desc}\n\n每出手 ${m.every} 下出一次（两次至少间隔 ${m.cd/1000} 秒）；招式预警与命中都是淡青色，是自己人在放招。\n\n出自：${m.from}`;}
-  else{const d=TROOPS[TROOP_KINDS[this.index] as TroopKind];name=d.name+' · 基础Lv.1';body=`生命 ${d.hp}    护甲 ${d.armor}\n每次伤害 ${d.damage}    攻击间隔 ${d.cooldown}秒\n射程 ${d.range}    移速 ${d.speed}\n招募消耗 ${d.cost}钱币\n\n${d.perk}\n\n${['保护前排、格挡普通攻击。','保持刺击距离，优先应对骑兵。','后排射击，优先敌方远程。','后排快速连射，集火威胁目标。','承受前线压力，正面减伤。','短距离突击后回到队伍。','横扫附近敌群。','不主动攻击，优先治疗受伤友军。'][this.index]}\n\n实际战斗属性还会受到训练、武将宝物与主城增益影响。`;}
-  const title=this.text(x,y,name,D?20:21,HEADING_FONT).setColor('#f6dc9a').setWordWrapWidth(width,true);this.content.add(title);
-  this.content.add(this.text(x,y+title.height+12,body,D?15:16).setLineSpacing(D?5:7).setWordWrapWidth(width,true));
-  // 2026-11-17 用户批准 UI 审查 D：主公规则下主公不能换，图鉴只看不选（去掉「选择此武将出战」）
-  if(hero&&!D){const sel=this.text(D?x+width/2:W/2,H-(D?82:96),'选择此武将出战',19,HEADING_FONT).setOrigin(.5).setInteractive({useHandCursor:true}).setName('codex-select-hero').on('pointerdown',()=>{this.selectHero(this.index);this.root.destroy();});
-   const sk=lqSkin(this.scene,sel,sel,()=>({w:240,h:46}),{tone:'cinnabar'});lqHitBox(sel,240,46);this.content.add([sk.gfx,sel]);}
+  const listBottom=gy+Math.min(D?3:2,Math.ceil(items.length/4))*(ch+gap);
+  if(pages>1){this.button(this.content,gx+48,listBottom+(D?22:30),'上一页','codex-prev',()=>{this.page--;this.render();},96,this.page>0);this.content.add(this.text(gx+listW/2,listBottom+(D?22:30),(this.page+1)+' / '+pages,14).setOrigin(.5).setName('codex-page'));this.button(this.content,gx+listW-48,listBottom+(D?22:30),'下一页','codex-next',()=>{this.page++;this.render();},96,this.page<pages-1);}
+  const x=D?420:30,y=D?116:listBottom+(pages>1?80:18),width=D?W-x-32:W-72;
+  let name='',body='',status='';
+  if(foe){const e=CODEX_ENEMIES[this.index];name=e.name;status=CODEX_CHAPTERS[this.enemyChapter].title+' · 战术资料';body=enemyCodexBody(e);}
+  else if(hero){const c=CHARACTERS[this.index],locked=!unlocked.has(c.id),stats=HERO_STATS[c.id];name=c.name+' · '+(c.faction??'蜀');status=locked?LOCKED_HINT:lordRules()&&lordHero()===c.id?'本档主公 · 已解锁':'已解锁 · 武将资料';
+   body=locked?LOCKED_HINT+'\n\n继续征战，留意来投与劝降机会。归附后可查看完整兵器、被动与武艺资料。':c.desc+'\n\n基础本色（Lv.1）\n力量 '+stats.base[0]+' · 敏捷 '+stats.base[1]+' · 智力 '+stats.base[2]+' · 统御 '+stats.base[3]+'\n模板生命 '+Math.round(BALANCE.player.maxHp*c.hpMul)+' · 模板移速 '+Math.round(BALANCE.player.speed*c.speedMul)+'\n角色伤害系数 ×'+c.damageMul.toFixed(2)+'\n模板数值未计入四维本色、等级、装备、星图与战役加成；实战以属性面板为准。\n\n本命兵器 · '+weaponName(c.startWeapon,c.id)+'\n'+WEAPON_META[c.startWeapon].desc+'\n\n天赋被动 · '+CHARACTER_PASSIVES[c.id].name+'\n'+CODEX_PASSIVES[c.id]+'\n\n专属武艺（各最高Lv.3）\n'+Object.values(MARTIALS).filter(m=>m.character===c.id).map(m=>m.name+'：'+m.desc).join('\n\n');
+  }else if(sur){const c=SURRENDERED[this.index],m=SURRENDER_MOVES[c.id];name=c.name+' · '+c.title;status=surrenderedIds().includes(c.id)?'本档已归附':'随行招式资料 · 不代表已招募';body='随行兵器\n按「'+TEMPLATES[c.template].name+'」模板出手。\n\n专属招式 · '+m.name+'\n'+m.desc+'\n\n触发条件\n累计出手 '+m.every+' 次，且距上次至少 '+m.cd/1000+' 秒，两项同时满足才释放。\n\n基础倍率\n每段为随行普通攻击的 '+Math.round(m.dmg*100)+'%，每段最多命中 '+m.maxHits+' 名敌人。\n\n识别提示\n预警与命中特效为友军淡青色。可玩武将与降将随行招式不是同一套技能。\n\n来源：'+m.from;
+  }else{const k=TROOP_KINDS[this.index],d=TROOPS[k];name=d.name;status='基础Lv.1 · 不含训练和增益';body='兵种定位\n'+TROOP_ROLE[k]+'\n\n基础属性\n生命 '+d.hp+' · 护甲 '+d.armor+'\n'+(k==='medic'?'基础治疗':'每次伤害')+' '+d.damage+' · 行动间隔 '+d.cooldown+'秒\n'+(k==='medic'?'治疗距离':'攻击距离')+' '+d.range+' · 移速 '+d.speed+'\n\n招募\n基础价格 '+d.cost+' 钱币；实际费用随在编人数变化，请以招募界面为准。\n\n兵种升阶\n'+d.perk+'\n\n配合说明\n护阵时跟随保护主将，出击时按现有索敌规则作战。定位是配队建议，不代表强制站位或专门锁定某类敌人。\n\n实际属性会受到训练、装备、武将与军团效果影响；不设固定兵力人数上限。';}
+  this.content.add(this.text(x,y,name,D?23:22,HEADING_FONT).setColor('#f6dc9a').setName('codex-detail-title').setWordWrapWidth(width,true));
+  this.content.add(this.text(x,y+34,status,D?13:17).setColor('#cbb88d').setName('codex-status').setWordWrapWidth(width,true));
+  const footer=H-(D?108:152),dy=y+76,vh=Math.max(88,footer-dy-(D?36:24));
+  this.viewport.setTo(x,dy,width-16,vh);this.detail=this.text(x,dy,body,D?16:20).setLineSpacing(6).setWordWrapWidth(width-16,true).setName('codex-detail');this.content.add(this.detail);
+  this.maskGraphics=this.scene.add.graphics().setScrollFactor(0).setVisible(false);this.maskGraphics.fillStyle(0xffffff).fillRect(x,dy,width,vh);this.mask=this.maskGraphics.createGeometryMask();this.detail.setMask(this.mask);this.maxScroll=Math.max(0,this.detail.height-vh);this.track=this.scene.add.graphics();this.content.add(this.track);
+  this.scrollHint=this.text(x+width/2,dy+vh+12,'',D?11:14).setOrigin(.5).setColor('#ab9979').setName('codex-scroll-hint');this.content.add(this.scrollHint);this.scrollTo(0);
+  if(hero){const c=CHARACTERS[this.index],allowed=heroOwned(c.id),label=allowed?'选择此武将出战':unlocked.has(c.id)?'本档主公已确定':'尚未归附';this.button(this.content,D?x+width/2:W/2,H-(D?90:116),label,'codex-select-hero',()=>{if(!heroOwned(c.id))return;this.selectHero(this.index);this.close();},D?260:280,allowed);}
  }
 }

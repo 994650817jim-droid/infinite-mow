@@ -1,3 +1,4 @@
+import { fixedBossDamage } from '../data/survivorBossBalance';
 import { warnCircle, TELEGRAPH_CLASSIC, groundCracks } from '../ui/Telegraph';
 import { HINT_MOCK, keyOutline } from '../ui/HintStyle';
 import { warnFx } from '../ui/WarnFx';
@@ -53,9 +54,9 @@ export class LubuUltimate {
       this.restore(); this.boss.sprite.setPosition(this.targetX, this.targetY);
       this.fieldUntil = now + C.ultFieldMs;
       this.paintMask();
-      this.hurtTroops?.(this.targetX, this.targetY, C.ultRadius, C.ultDamage, now);
+      this.hurtTroops?.(this.targetX, this.targetY, C.ultRadius, fixedBossDamage(this.boss.def, C.ultDamage), now);
       if (Math.hypot(this.player.x - this.targetX, this.player.y - this.targetY) <= C.ultRadius + this.player.radius) {
-        if (this.player.takeDamage(C.ultDamage, now)) {
+        if (this.player.takeDamage(fixedBossDamage(this.boss.def, C.ultDamage), now)) {
           const a = Math.atan2(this.player.y - this.targetY, this.player.x - this.targetX);
           this.player.knockUp(now, C.ultKnockupMs, Math.cos(a) * 40, Math.sin(a) * 40);
         }

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { DEPTH, FONT } from '../config';
+import { DEPTH, FONT, IS_DESKTOP, GAME_HEIGHT } from '../config';
+import {STAR_COMBOS,type StarOuterView} from '../data/starOuter';
 import { STAR_FEEDBACK, STAR_HUD, STAR_ICON_FILE, starIconKey, starIconUrl } from '../data/starFx';
 
 /**
@@ -9,7 +10,7 @@ import { STAR_FEEDBACK, STAR_HUD, STAR_ICON_FILE, starIconKey, starIconUrl } fro
  * 反馈：触发式的星触发时图标放大再回落约 0.4 秒；状态式 / 限时式的成立时不透明、不成立时半透明；常驻的一直正常显示。
  * 外框和说明底板沿用增益栏的画法（细线框 + 深色底），不是特效。
  */
-export interface StarBuffEntry { id: string; name: string; desc: string; kind: string; /** 状态式 / 限时式：现在成立吗；null = 常驻或触发式。 */ active: boolean | null }
+export interface StarBuffEntry { id: string; name: string; desc: string; kind: string; /** 状态式 / 限时式：现在成立吗；null = 常驻或触发式。 */ active: boolean | null; iconId?:string; priority?:number }
 interface Slot { root: Phaser.GameObjects.Container; frame: Phaser.GameObjects.Graphics; image: Phaser.GameObjects.Image; text: Phaser.GameObjects.Text; hit: Phaser.GameObjects.Rectangle; entry?: StarBuffEntry; more?: StarBuffEntry[]; key: string; flashUntil: number; wasActive: boolean }
 
 export class StarBuffHud {
@@ -17,7 +18,8 @@ export class StarBuffHud {
   private readonly slots: Slot[] = [];
   private readonly tip: Phaser.GameObjects.Container; private readonly tipBg: Phaser.GameObjects.Graphics; private readonly tipTitle: Phaser.GameObjects.Text; private readonly tipText: Phaser.GameObjects.Text;
   private readonly requested = new Set<string>();
-  private now = 0; private hover: Slot | null = null;
+  private readonly runtimeText:Phaser.GameObjects.Text;private readonly runtimeBars:Phaser.GameObjects.Graphics;
+  private now = 0; private hover: Slot | null = null;private pinned:Slot|null=null;
 
   constructor(private readonly scene: Phaser.Scene) {
     const H = STAR_HUD, step = H.size + H.gap;
@@ -31,12 +33,15 @@ export class StarBuffHud {
       const hit = scene.add.rectangle(H.size / 2, H.size / 2, step, step, 0, .001).setScrollFactor(0).setInteractive({ useHandCursor: true }).setName('star-buff-' + i);
       const slot: Slot = { root, frame, image, text, hit, key: '', flashUntil: 0, wasActive: false };
       root.add([frame, image, text, hit]); this.root.add(root); this.slots.push(slot);
-      hit.on('pointerover', () => { this.hover = slot; this.renderTip(); }).on('pointerout', () => { if (this.hover === slot) { this.hover = null; this.tip.setVisible(false); } })
-        .on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => { e?.stopPropagation(); this.hover = slot; this.renderTip(); });
+      hit.on('pointerover', () => { this.hover = slot; this.renderTip(); }).on('pointerout', () => { if (this.hover === slot&&!this.pinned) { this.hover = null; this.tip.setVisible(false); } })
+        .on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => { e?.stopPropagation();if(this.pinned===slot){this.pinned=this.hover=null;this.tip.setVisible(false);}else{this.pinned=slot;this.hover = slot;this.renderTip();} });
     }
+    this.runtimeBars=scene.add.graphics().setName('star-runtime-bars');this.runtimeText=label(0,0,'',IS_DESKTOP?12:16).setLineSpacing(IS_DESKTOP?8:10).setName('star-runtime-status');this.root.add([this.runtimeBars,this.runtimeText]);
     this.tip = scene.add.container(0, 0).setVisible(false); this.tipBg = scene.add.graphics(); this.tipTitle = label(10, 8, '', 15); this.tipText = label(10, 32, '', 13, '#d4c7ad').setWordWrapWidth(228, true).setLineSpacing(3);
     this.tip.add([this.tipBg, this.tipTitle, this.tipText]); this.root.add(this.tip);
+    scene.input.on('pointerdown',this.outside);this.root.once('destroy',()=>scene.input?.off('pointerdown',this.outside));scene.events.once('shutdown',()=>scene.input.off('pointerdown',this.outside));
   }
+  private readonly outside=():void=>{this.pinned=this.hover=null;this.tip.setVisible(false);};
   get alive(): boolean { return !!this.root.scene; }
   /** 图标排占的高度（含标题；没东西显示时 0）。 */
   height = 0;
@@ -51,6 +56,17 @@ export class StarBuffHud {
   /** 测试 / 调试用：现在显示的每一格（编号、透明度、是不是正在亮）。 */
   snapshot(): Array<{ id: string; alpha: number; flashing: boolean; scale: number }> { return this.slots.filter(s => s.root.visible).map(s => ({ id: s.key, alpha: +s.root.alpha.toFixed(2), flashing: this.now < s.flashUntil, scale: +(s.image.displayWidth / STAR_HUD.size).toFixed(2) })); }
 
+  updateRuntime(view?:StarOuterView,besideY=180):void{
+    this.runtimeBars.clear();this.runtimeText.setText('');if(!this.root.visible||!view)return;
+    const rows=view.rows.slice(0,2),line=IS_DESKTOP?23:30,lines=rows.map(r=>r.label+' '+r.text);
+    const combo=view.notice||view.combos.map(id=>STAR_COMBOS[id].name).join(' · ');if(combo)lines.push(combo);
+    const y=this.height+2;this.runtimeText.setY(y).setText(lines.join('\n'));
+    rows.forEach((r,i)=>{const by=y+(i+1)*line-4;this.runtimeBars.fillStyle(0x463c2b,.65).fillRect(0,by,156,2).fillStyle(r.ready?0xcfe7ce:0xc1a364,.9).fillRect(0,by,156*Math.min(1,Math.max(0,r.progress)),2);});
+    this.height=y+this.runtimeText.height+8;
+    // If the existing buff column is full, use its right side rather than covering it.
+    if(this.root.y+this.height>GAME_HEIGHT-(IS_DESKTOP?100:340))this.root.setPosition(118,besideY);
+    this.root.bringToTop(this.tip);
+  }
   private renderTip(): void {
     const s = this.hover, e = s?.entry; if (!s || !e) { this.tip.setVisible(false); return; }
     const state = e.active === null ? '' : e.active ? '\n▸ 生效中' : '\n▸ 条件未成立';
@@ -62,12 +78,12 @@ export class StarBuffHud {
 
   update(entries: StarBuffEntry[], now: number, visible: boolean, y: number): void {
     this.now = now;
-    if (!visible || !entries.length) { this.root.setVisible(false); this.tip.setVisible(false); this.hover = null; this.height = 0; return; }
+    if (!visible || !entries.length) { this.root.setVisible(false); this.tip.setVisible(false); this.pinned=this.hover = null; this.height = 0; return; }
     const H = STAR_HUD, max = H.perRow * H.rows;
     // 会动的（触发 / 限时 / 状态）排前面，其余按点亮先后
-    const sorted = [...entries].sort((a, b) => Number(!(a.id in STAR_FEEDBACK)) - Number(!(b.id in STAR_FEEDBACK)));
+    const sorted = [...entries].sort((a, b) => (b.priority??0)-(a.priority??0)||Number(!(a.id in STAR_FEEDBACK)) - Number(!(b.id in STAR_FEEDBACK)));
     const over = sorted.length > max, show = sorted.slice(0, over ? max - 1 : max), rest = over ? sorted.slice(max - 1) : [];
-    this.root.setVisible(true).setY(y); this.height = 16 + Math.ceil((show.length + (over ? 1 : 0)) / H.perRow) * (H.size + H.gap) + 4;
+    this.root.setVisible(true).setPosition(22,y); this.height = 16 + Math.ceil((show.length + (over ? 1 : 0)) / H.perRow) * (H.size + H.gap) + 4;
     let loading = false;
     for (let i = 0; i < this.slots.length; i++) {
       const s = this.slots[i], e: StarBuffEntry | undefined = show[i] ?? (over && i === max - 1 ? { id: 'more', name: '其余 ' + rest.length + ' 颗星', desc: '', kind: '', active: null } : undefined);
@@ -75,9 +91,9 @@ export class StarBuffHud {
       if (s.key !== e.id) { s.key = e.id; s.flashUntil = 0; s.wasActive = !!e.active; s.image.setVisible(false); s.text.setText(e.id === 'more' ? '+' + rest.length : e.name[0]); }
       else if (e.id === 'more') s.text.setText('+' + rest.length);
       if (e.id !== 'more' && !s.image.visible) {
-        const key = starIconKey(e.id);
+        const iconId=e.iconId??e.id,key = starIconKey(iconId);
         if (this.scene.textures.exists(key)) { s.image.setTexture(key).setVisible(true); s.text.setText(''); }
-        else if (STAR_ICON_FILE[e.id] && !this.requested.has(key)) { this.requested.add(key); this.scene.load.image(key, starIconUrl(e.id)); loading = true; }
+        else if (STAR_ICON_FILE[iconId] && !this.requested.has(key)) { this.requested.add(key); this.scene.load.image(key, starIconUrl(iconId)); loading = true; }
       }
       // 限时式（疾影 / 奇谋）刚开始生效时也亮一下
       if (STAR_FEEDBACK[e.id] === 'timed' && e.active && !s.wasActive) s.flashUntil = now + H.flashMs;
@@ -87,6 +103,6 @@ export class StarBuffHud {
       s.frame.clear().fillStyle(0x191711, .62).fillRect(0, 0, H.size, H.size).lineStyle(1, p >= 0 ? 0xfff2c8 : e.active ? 0xffd879 : 0x8a7a55, p >= 0 ? 1 : .75).strokeRect(.5, .5, H.size - 1, H.size - 1);
     }
     if (loading) this.scene.load.start();
-    if (this.hover && (!this.hover.entry || !this.hover.root.visible)) { this.hover = null; this.tip.setVisible(false); }
+    if (this.hover && (!this.hover.entry || !this.hover.root.visible)) { this.pinned=this.hover = null; this.tip.setVisible(false); }else if(this.hover)this.renderTip();
   }
 }

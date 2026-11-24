@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "node tools/build.mjs",
+    "coop": "npm start --prefix server",
     "preview": "vite preview --host 0.0.0.0",
     "check": "tsc --noEmit",
     "pretest:regression": "npm run build",

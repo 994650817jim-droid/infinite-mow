@@ -34,6 +34,8 @@ export class DefenseWallV2 {
   /** 走道贴图的纹理名（walkway_a + b 横拼成一张；占段变红的那层复用）。 */
   readonly walkKey = 'defv2_walk_ab';
   /** 城门楼两层（整张在人后、外侧城垛往下在人前）；城门破了换成破门版（同尺寸同标注）。 */
+  private gatePassage?: Phaser.GameObjects.Graphics;
+  private gateSortie = false;
   private gateBack: Phaser.GameObjects.Image | null = null; private gateFront: Phaser.GameObjects.Image | null = null; private gateBroken = false;
   /** 测试读。 */
   readonly stats = { built: false, assigned: 0, refills: 0, called: 0, autoSent: 0, autoBack: 0 };
@@ -129,10 +131,13 @@ export class DefenseWallV2 {
   }
   /** 城门破了 / 堵上了：门楼两层一起换图（破门版：门板撞碎、门洞是暗通道），分层不变。墙图还没载入完就先记着，摆出来时再换。 */
   setGateBroken(on: boolean): void {
-    this.gateBroken = on; const key = on ? KEY.gateBroken : KEY.gate, A = DEFENSE_V2.art.gate;
+    this.gateBroken = on; this.gatePassage?.setVisible(this.gateSortie && !on); const key = on ? KEY.gateBroken : KEY.gate, A = DEFENSE_V2.art.gate;
     if (!this.h.scene.textures.exists(key)) return;
     this.gateBack?.setTexture(key); if (this.gateFront) { this.gateFront.setTexture(key); this.gateFront.setCrop(0, A.crenel, A.w, A.h - A.crenel); }
   }
+  /** 出城时仅打开完好的门洞，不冒用被攻破的残骸贴图。 */
+  setGateSortie(open: boolean): void { this.gateSortie = open; this.gatePassage?.setVisible(open && !this.gateBroken); }
+  get gateVisualState(): 'closed' | 'sortie' | 'broken' { return this.gateBroken ? 'broken' : this.gateSortie ? 'sortie' : 'closed'; }
   /** 测试读：门楼现在用的贴图。 */
   get gateTexture(): string { return this.gateBack?.texture.key ?? ''; }
   /** 岗位一览（测试 / 截图用）。 */
@@ -173,6 +178,14 @@ export class DefenseWallV2 {
     { this.gateBack = s.add.image(g.gx, g.F, KEY.gate).setOrigin(.5, A.gate.ground / A.gate.h).setScale(gs).setDepth(actorDepth(g.top) - .01).setName('defv2-gate'); this.art.push(this.gateBack);
       const front = s.add.image(g.gx, g.F, KEY.gate).setOrigin(.5, A.gate.ground / A.gate.h).setScale(gs).setDepth(actorDepth(g.W) + .005).setName('defv2-gate-front');
       front.setCrop(0, A.gate.crenel, A.gate.w, A.gate.h - A.gate.crenel); this.art.push(front); this.gateFront = front; if (this.gateBroken) this.setGateBroken(true);
+      // 原画门洞坐标；独立地道暗面与内开门侧边，仅显示在出城窗口。无新碰撞、无持续粒子。
+      const passage = s.add.graphics().setPosition(g.gx - A.gate.w * gs / 2, g.F - A.gate.ground * gs)
+        .setScale(gs).setDepth(front.depth + .001).setName('defv2-gate-passage');
+      passage.fillStyle(0x171512, 1).fillPoints([{x:342,y:807},{x:342,y:680},{x:350,y:648},{x:370,y:622},{x:399,y:605},{x:433,y:598},{x:466,y:605},{x:494,y:623},{x:515,y:649},{x:525,y:681},{x:525,y:807}], true);
+      passage.fillStyle(0x302820, 1).fillPoints([{x:342,y:807},{x:380,y:780},{x:489,y:780},{x:525,y:807}], true);
+      passage.lineStyle(3,0x4d3b29,1).lineBetween(355,671,355,800).lineBetween(512,671,512,800);
+      passage.lineStyle(2,0x756047,.65).lineBetween(349,698,349,799).lineBetween(518,698,518,799);
+      this.gatePassage = passage.setVisible(this.gateSortie && !this.gateBroken); this.art.push(passage);
       // 门楼后排女墙（楼阁两侧）原图带垛口、走道图是平压顶，接缝处一边垛口一边平顶——两侧盖一条走道图的女墙带，内侧女墙一路平顶接过去（楼阁不盖）
       const half = A.gate.w * gs / 2, pav = (A.gate.pavR - A.gate.pavL) / 2 * gs;
       for (const [x0, x1] of [[g.gx - half, g.gx - pav], [g.gx + pav, g.gx + half]]) this.art.push(s.add.tileSprite((x0 + x1) / 2, g.walkTop + WK.band / 2, x1 - x0, WK.band, walkKey).setTilePosition(x0 - g.X0, 0).setDepth(actorDepth(g.top) - .009).setName('defv2-gate-parapet')); }
@@ -191,5 +204,5 @@ export class DefenseWallV2 {
     if (s.textures.exists('siege_mid_ram')) for (const dx of DEFENSE_V2.spawn.xs) this.art.push(s.add.image(g.gx + dx, g.F + DEFENSE_V2.spawn.dy + 90, 'siege_mid_ram', 7).setOrigin(.5, .85).setDisplaySize(190, 190).setDepth(actorDepth(g.F + DEFENSE_V2.spawn.dy + 90)).setName('defv2-camp'));
     this.stats.built = true;
   }
-  clear(): void { this.alive = false; this.gateBack = this.gateFront = null; for (const o of this.art) o.destroy(); this.art.length = 0; this.slots.clear(); }
+  clear(): void { this.alive = false; this.gateBack = this.gateFront = null; this.gatePassage = undefined; for (const o of this.art) o.destroy(); this.art.length = 0; this.slots.clear(); }
 }

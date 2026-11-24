@@ -22,6 +22,7 @@ export class ControlBuild {
  /** 乱阵眩晕了一个敌人（合击「十面埋伏」在 SchoolSynergy 接）。 */
  onStun?:(e:Enemy,now:number)=>void;
  /** 一片减速（合击「声东击西」）：圈内普通敌人减速 slow、ms 毫秒（也算一次控制）。 */
+ slowTarget(e:Enemy,slow:number,ms:number,now:number):void{this.now=now;this.mark(e,slow,now+ms);}
  slowArea(x:number,y:number,r:number,slow:number,ms:number,now:number):number{this.now=now;let n=0;for(const t of this.nearby(x,y,r))if(this.valid(t)&&Math.hypot(t.x-x,t.y-y)<=r&&this.mark(t,slow,now+ms))n++;return n;}
  isControlled(e:Enemy,now:number):boolean{const m=this.marks.get(e.uid);return !!m&&m.spawn===e.spawnId&&m.until>now&&this.valid(e);}
  onHit(e:Enemy,now:number):void{this.now=now;

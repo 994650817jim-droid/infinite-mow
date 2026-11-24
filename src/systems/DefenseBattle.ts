@@ -83,6 +83,8 @@ export class DefenseBattle {
     this.objs.push(this.hud);
     { const lab = (x: number, t: string) => s.add.text(x, 112, t, { fontFamily: FONT, fontSize: '12px', color: '#f3e3bf', resolution: 2, stroke: '#0c0805', strokeThickness: 4 }).setOrigin(1, .5).setScrollFactor(0).setDepth(DEPTH.hud + 1);
       this.hudBars = s.add.graphics().setScrollFactor(0).setDepth(DEPTH.hud + 1).setName('defense-hud-bars'); this.hudGate = lab(GAME_WIDTH / 2 - 92, '城门').setName('defense-hud-gate'); this.hudKeep = lab(GAME_WIDTH / 2 + 46, '府衙').setName('defense-hud-keep'); this.objs.push(this.hudBars, this.hudGate, this.hudKeep); }
+    const gateHint = s.add.text(o.gateX, o.wallLine + 70, '守城无需开门 · 守住全部波次', { fontFamily: FONT, fontSize: '13px', color: '#e5d5b1', resolution: 2, stroke: '#16100a', strokeThickness: 3 }).setOrigin(.5).setDepth(DEPTH.dmgText - 2).setName('defense-gate-rule');
+    this.objs.push(gateHint);
     this.spaceKey = s.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
   }
   get keepPos() { return { x: this.o.start.x + DEFENSE.keep.x, y: this.o.start.y + DEFENSE.keep.y }; }

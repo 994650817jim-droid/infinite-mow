@@ -148,7 +148,7 @@ export class BattleHotkeys {
         if (a === 'back') { h.togglePause(); return false; }
         return false;
       case 'attributes':
-        if (a === 'attributes' || a === 'back') return click(s, 'attributes-close');
+        if (a === 'attributes' || a === 'back') return click(s, 'star-map-close') || click(s, 'attributes-close');
         return false;
       case 'recruit': {
         if (i !== undefined) { const o = nth(s, RECRUIT_CARDS, i); return !!o && clickObject(s, o); }
@@ -196,7 +196,7 @@ const HINTS: Record<string, Array<[string | RegExp, HotkeyAction | ((i: number) 
   pause: [['pause-resume', 'back'], ['pause-build', 'build']], // 「返回主菜单」不标键：战斗中 M 是舆图
   levelup: [[/^upgrade-card-[0-2]$/, i => (['pick1', 'pick2', 'pick3'] as const)[i]], ['upgrade-reroll', 'reroll']],
   bossloot: [[/^upgrade-card-[0-2]$/, i => (['pick1', 'pick2', 'pick3'] as const)[i]]],
-  attributes: [['attributes-close', 'back']],
+  attributes: [[/^(star-map-close|attributes-close)$/, 'back']],
   recruit: [[RECRUIT_CARDS, i => (['pick1', 'pick2', 'pick3', 'pick4'] as const)[i]], ['recruit-close', 'back']],
   aid: [[/^aid-card-/, i => (['pick1', 'pick2', 'pick3', 'pick4'] as const)[i]]],
   rest: [[/^camp-tab-[0-9]+$/, i => (['pick1', 'pick2', 'pick3', 'pick4'] as const)[i]], ['camp-depart', 'confirm'], ['camp-bag', 'bag']],

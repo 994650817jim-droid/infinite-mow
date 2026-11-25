@@ -1,3 +1,5 @@
+import {armyExit,threatened,ordinaryWarning,rangedStandOff,sortieFlank,COMPANY_LEASH} from '../src/rules/retinueTactics.ts';
+import {dualWarnings} from './coop-dual.mjs';
 import {shadowExit} from '../src/data/ghostZhangxiu.ts';
 import {weiAdvance,weiBowExit} from '../src/data/divineCaocao.ts';
 import {GAUNTLET} from '../src/data/gauntlet.ts';
@@ -61,12 +63,18 @@ export function strikeRetainer(room,u,raw,boss=false,deathFloor=0){
   return true;
 }
 export function updateRetinue(room,dt){
+  const threats=dualWarnings(room.run).filter(ordinaryWarning);
+  const clear=(_,point)=>point.x>=16&&point.y>=16&&point.x<=arena.width-16&&point.y<=arena.height-16;
   for(const p of room.players.values()){
     const c=p.company;if(!c)continue;
     c.units=c.units.filter(u=>u.hp>0);
     for(const [i,u] of c.units.entries()){
       const def=TROOPS[u.kind],sortie=c.order==='sortie'&&p.hp>0;
       const fx=p.x+((i%4)-1.5)*26,fy=p.y+30+Math.floor(i/4)*24;
+      if(threats.length){
+        const exit=armyExit(threats,u,6,clear,u.id,u.escapeGoal);
+        if(exit){u.escapeGoal=exit;advance(u,exit.x,exit.y,def.speed,dt);continue;}
+      }
       const wei=room.run.warning;
       if(wei?.shadow){
         const exit=shadowExit(wei,u,(_,p)=>p.x>=16&&p.y>=16&&p.x<=arena.width-16&&p.y<=arena.height-16);
@@ -80,18 +88,22 @@ export function updateRetinue(room,dt){
         const exit=weiBowExit(wei,u,(_,to)=>to.x>=16 && to.y>=16 && to.x<=arena.width-16 && to.y<=arena.height-16);
         if(exit){advance(u,exit.x,exit.y,def.speed,dt);continue;}
       }
-      const before=wei?.wei?.stance==='shield'?{x:u.x,y:u.y}:undefined;
+      const before=threats.length || wei?.wei?.stance==='shield'?{x:u.x,y:u.y}:undefined;
       if(room.run.warning?.charge){
         const exit=halberdExit(room.run.warning,u,(_,to)=>to.x>=12&&to.y>=12&&to.x<=arena.width-12&&to.y<=arena.height-12);
         if(exit){advance(u,exit.x,exit.y,def.speed,dt);continue;}
       }
       let target,dist=Infinity;
       for(const e of room.enemies){
-        if(e.hp<=0 || Math.hypot(e.x-p.x,e.y-p.y)>(sortie?320:150))continue;
+        if(e.hp<=0 || Math.hypot(e.x-p.x,e.y-p.y)>(sortie?COMPANY_LEASH.sortie:COMPANY_LEASH.guard))continue;
         const d=Math.hypot(e.x-u.x,e.y-u.y);if(d<dist){dist=d;target=e;}
       }
       const range=def.range*(u.kind==='halberdier'&&u.level===3?1.25:1);
       if(target&&dist<=range&&p.hp>0){
+        if(def.ranged && target.boss){
+          const back=rangedStandOff(u,target,range,u.id,clear);
+          if(back)advance(u,back.x,back.y,def.speed,dt);
+        }
         if(room.seconds>=u.fireAt){
           u.fireAt=room.seconds+def.cooldown;u.strike++;
           const bonus=nearOrderBonus(has(p,'command.NR2'),u.x-p.x,u.y-p.y,0);
@@ -104,10 +116,15 @@ export function updateRetinue(room,dt){
             troopHit(room,e,u,allyAttack(def.damage,u.level)*(3/22)*bonus*(u.kind==='spearman'&&u.level===3&&cavalry?2:1));
           }
         }
-      }else if(sortie&&target)advance(u,target.x,target.y,def.speed,dt);
+      }else if(sortie&&target){
+        const flank=target.boss&&!def.ranged?sortieFlank(p,target,range,u.id,u.kind==='guardian'):target;
+        const dest=clear(u,flank)?flank:target;
+        advance(u,dest.x,dest.y,def.speed,dt);
+      }
       else advance(u,fx,fy,def.speed,dt);
       const held=before && weiAdvance(wei,before,u,room.seconds);
       if(held){u.x=Math.max(16,Math.min(arena.width-16,held.x));u.y=Math.max(16,Math.min(arena.height-16,held.y));}
+      if(before && threats.length && !threatened(threats,before,6) && threatened(threats,u,6)){u.x=before.x;u.y=before.y;}
     }
   }
   // Use each attacker's own contact timer. A regular attacker chooses only one nearby soldier.

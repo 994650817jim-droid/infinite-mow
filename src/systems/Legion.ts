@@ -1,3 +1,4 @@
+import {armyExit,threatened,insideArmyThreat,type ArmyThreat,type ArmyExit} from '../rules/retinueTactics';
 import {shadowExit} from '../data/ghostZhangxiu';
 import {weiAdvance,weiBowExit} from '../data/divineCaocao';
 import {STAR_OUTER_TUNING as SO} from '../data/starOuter';
@@ -74,6 +75,9 @@ export class Legion {
   readonly command:CommandBuild;
   readonly formation:LegionFormation;
   readonly navigation=new LegionNavigation();
+  readonly warnings=new Map<object,ArmyThreat>();
+  private escapeGoals=new WeakMap<Ally,ArmyExit>();
+  insideField?: (x:number,y:number,r:number)=>boolean;
   /**
    * 我方绕障（2026-11-21 用户试玩「关于我自己的兵也会被围栏卡住」）：GameScene 接到敌兵绕障导航（EnemyFlowField，以主将为终点）。
    * flowRoute：去阵位 / 目标的连线被挡时给绕路路点（null = 直走或交回 navigation 局部绕角）；freeAt：阵位点压在栅栏 / 城墙里时挪到最近可走点。
@@ -262,6 +266,13 @@ export class Legion {
     return ok;
   }
   /** 范围伤害：目前只有首领招式调用（张角雷、华雄、吕布、徐荣），按首领倍率结算。 */
+  hurtThreat(threat:ArmyThreat,damage:number,now:number):void {
+    const r=threat.radius+(threat.halfWidth??0)+30;
+    for(const u of this.grid.query(threat.x,threat.y,r,this.friends)){
+      if(u.active && insideArmyThreat(threat,u,u.radius*.5))this.hurtByBoss(u,damage,now);
+      if(this.stopped)break;
+    }
+  }
   hurtArea(x: number, y: number, radius: number, damage: number, now: number, angle?: number, arc = Math.PI * 2): void {
     for (const u of this.grid.query(x, y, radius + 20, this.friends)) if (u.active && Math.hypot(u.x - x, u.y - y) <= radius + u.radius && (angle === undefined || Math.cos(Math.atan2(u.y - y, u.x - x) - angle) >= Math.cos(arc / 2))) this.hurtByBoss(u, damage, now);
   }
@@ -276,7 +287,7 @@ export class Legion {
   private ch1Trial = false; private trialKills = 0;
   setCh1Trial(on: boolean): void { if (on === this.ch1Trial) return; this.ch1Trial = on; for (const u of this.units) if (u.active) u.applyCampaignHp(this.hpMultiplier()); }
   stop(): void { this.starOrders.clear();this.command.clear(); this.stopped = true; this.player.armyDamageTakenMul = 1; this.effects.length = 0; this.artEffects.clear(); this.heals.length = 0; this.strikes.length=0; this.projectiles.clear(); this.gfx.clear(); }
-  clear(): void { this.starOrders.clear();this.corpses.clear(); this.command.clear();this.projectiles.clear(); this.heals.length = 0;this.strikes.length=0; for (const u of this.units) { const v = u.release(); if (v) this.views.push(v); } this.units.length = 0;this.navigation.clear();this.formation.clear(); this.squads.clear(); this.grid.clear(); }
+  clear(): void { this.warnings.clear(); this.starOrders.clear();this.corpses.clear(); this.command.clear();this.projectiles.clear(); this.heals.length = 0;this.strikes.length=0; for (const u of this.units) { const v = u.release(); if (v) this.views.push(v); } this.units.length = 0;this.navigation.clear();this.formation.clear(); this.squads.clear(); this.grid.clear(); }
   /** 援兵从场外跑向自己的阵位：到了（或 3 秒到点）才入列。 */
   private stepArrival(u: Ally, dt: number, now: number): void {
     const a = this.arriving.get(u)!; if (!u.active || u.lifeId !== a.life) { this.arriving.delete(u); return; }
@@ -299,6 +310,7 @@ export class Legion {
   }
   update(dt: number, now: number, enemies: Enemy[], enemyGrid: SpatialGrid<Enemy>, damage: (e: Enemy, n: number) => void): void {
     this.corpses.update(now);
+    const threats=this.warnings.size?[...this.warnings.values()]:null;
     if (this.stopped) return;
     this.formation.setNarrow(this.navigation.nearWall(this.player.x,this.player.y,this.formation.narrow));this.formation.update(dt);const signature=JSON.stringify(this.groups);if(signature!==this.groupSignature){this.groupSignature=signature;this.regroup();for(const u of this.units)u.ai.nextThink=now+(u.id*53)%240;}
     this.command.update(now,(x,y,r)=>enemyGrid.query(x,y,r));
@@ -322,6 +334,10 @@ export class Legion {
       u.simDebt += dt; const nearPlayer = Math.hypot(u.x - this.player.x, u.y - this.player.y) < 900;
       if (!nearPlayer && u.simDebt < LEGION.farStep) continue;
       const step = nearPlayer ? dt : u.simDebt; u.simDebt = 0;
+      if(threats){
+        const goal=armyExit(threats,u,u.radius*.5,(a,b)=>(this.insideField?.(b.x,b.y,u.radius)??true) && this.navigation.clearSegment(a.x,a.y,b.x,b.y,u.radius),u.id,this.escapeGoals.get(u));
+        if(goal){this.escapeGoals.set(u,goal);u.moveTo(goal.x,goal.y,step,u.def.speed,now);continue;}
+      }
       if(this.spearShadow){
         const exit=shadowExit(this.spearShadow,u,(a,b)=>(this.spearBounds?.(b.x,b.y,u.radius)??true) && this.navigation.clearSegment(a.x,a.y,b.x,b.y,u.radius));
         if(exit){u.moveTo(exit.x,exit.y,step,u.def.speed,now);continue;}
@@ -339,12 +355,13 @@ export class Legion {
         const exit=weiBowExit(wei,u,(a,b)=>(this.weiBounds?.(b.x,b.y,u.radius)??true) && this.navigation.clearSegment(a.x,a.y,b.x,b.y,u.radius));
         if(exit){u.moveTo(exit.x,exit.y,step,u.def.speed,now);continue;}
       }
-      const before=wei?.wei?.stance==='shield'?{x:u.x,y:u.y}:undefined;
+      const before=threats || wei?.wei?.stance==='shield'?{x:u.x,y:u.y}:undefined;
       this.tactics.postOf = this.postOf;
       this.tactics.think(u, now, this.order, enemyGrid, this.grid);
       this.tactics.move(u, step, now, this.grid);
       const held=before && weiAdvance(wei,before,u,now/1000);
       if(held)u.setPosition(held.x,held.y);
+      if(before && threats && !threatened(threats,before,u.radius*.5) && threatened(threats,u,u.radius*.5))u.setPosition(before.x,before.y);
       u.cooldown = Math.max(0, u.cooldown - step);
       if (this.freeAt) this.rejoinIfStuck(u, now);
     }

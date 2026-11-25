@@ -1,10 +1,11 @@
+import {COMPANY_LEASH,rangedStandOff,sortieFlank} from '../rules/retinueTactics';
 import type { Ally } from '../entities/Ally';
 import type { Enemy } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
 import { RECALL, type Order } from '../data/legion';
 import type { SpatialGrid } from './SpatialGrid';
 
-export const TACTICS = { thinkMs: 240, retreatHp: .3, returnHp: .6, retreatMinMs: 1600, guardLeash: 260, sortieLeash: 400, blockMs: 1500, chargeMs: 550, chargeCooldownMs: 4200 } as const;
+export const TACTICS = { thinkMs: 240, retreatHp: .3, returnHp: .6, retreatMinMs: 1600, guardLeash: COMPANY_LEASH.guard, sortieLeash: COMPANY_LEASH.sortie, blockMs: 1500, chargeMs: 550, chargeCooldownMs: 4200 } as const;
 export interface TacticState {
   nextThink: number; mode: 'advance' | 'retreat' | 'regroup' | 'charge' | 'return'; until: number;
   spaceX: number; spaceY: number; target: Enemy | null; spawn: number; x: number; y: number; danger: number;
@@ -114,7 +115,8 @@ export class LegionTactics {
     }
     if (a.mode === 'charge' && now >= a.until) { a.mode = 'return'; a.until = now + 1100; }
     if (a.mode === 'return' && now >= a.until) a.mode = 'advance';
-    if (a.danger >= Math.max(4, (support + 1) * 2) || Math.hypot(u.x - this.player.x, u.y - this.player.y) > leash + 50) {
+    const pressureLimit=order==='sortie'&&ratio>=TACTICS.returnHp?6:4;
+    if (a.danger >= Math.max(pressureLimit, (support + 1) * 2) || Math.hypot(u.x - this.player.x, u.y - this.player.y) > leash + 50) {
       a.mode = a.mode === 'return' ? 'return' : 'regroup'; a.until = Math.max(a.until, now + 900);
     } else if (a.mode === 'regroup' && now >= a.until) a.mode = 'advance';
     if (a.mode === 'regroup' || a.mode === 'return') { a.target = null; this.safe(u, this.player.x, this.player.y, grid); return; }
@@ -139,6 +141,10 @@ export class LegionTactics {
       a.mode = 'charge'; a.until = now + TACTICS.chargeMs; a.chargeReady = now + TACTICS.chargeCooldownMs; a.chargeHits.clear();
     }
     if (a.mode === 'charge') { a.x = target.x + a.faceX * 55; a.y = target.y + a.faceY * 55; return; }
+    if(u.def.ranged && target.kind==='boss'){
+      const back=rangedStandOff(u,target,u.def.range,u.slot);
+      if(back){a.x=back.x;a.y=back.y;return;}
+    }
     const minRange = u.def.ranged ? Math.min(130, u.def.range * .5) : u.kind === 'spearman' ? 75 : 0;
     if (distance < minRange) {
       const escape = distance < 2 ? (u.slot % 2 ? 1 : -1) : -dx / distance;
@@ -146,7 +152,9 @@ export class LegionTactics {
       if (this.dangerAt(a.x, a.y, grid) > a.danger) this.safe(u, this.player.x, this.player.y, grid);
     } else {
       const stop = u.def.range * (u.def.ranged ? .82 : u.kind === 'spearman' ? .82 : .7);
-      if (distance > stop) { const angle=Math.atan2(dy,dx)+(u.slot%7-3)*.11;a.x = target.x-Math.cos(angle)*stop; a.y = target.y-Math.sin(angle)*stop; }
+      if (distance > stop && order==='sortie' && !u.def.ranged && target.kind==='boss'){
+        const flank=sortieFlank(this.player,target,u.def.range,u.slot,u.kind==='guardian');a.x=flank.x;a.y=flank.y;
+      }else if (distance > stop) { const angle=Math.atan2(dy,dx)+(u.slot%7-3)*.11;a.x = target.x-Math.cos(angle)*stop; a.y = target.y-Math.sin(angle)*stop; }
       else { a.x = u.x; a.y = u.y; }
     }
   }
@@ -181,7 +189,8 @@ export class LegionTactics {
     const length=Math.hypot(sx,sy),scale=length>1?1/length:1;
     const blend=1-Math.exp(-14*dt);
     a.spaceX+=(sx*scale-a.spaceX)*blend;a.spaceY+=(sy*scale-a.spaceY)*blend;
-    if(attacking){
+    const withdrawFromBoss=u.def.ranged && a.target?.kind==='boss' && Math.hypot(a.target.x-u.x,a.target.y-u.y)<u.def.range*.66;
+    if(attacking && !withdrawFromBoss){
       // Small cosmetic-space adjustment within existing reach, preserving facing and attack frames.
       if(Math.hypot(a.spaceX,a.spaceY)>.05)u.moveTo(u.x+a.spaceX*24,u.y+a.spaceY*24,dt,28,now,true,true);
     }else{

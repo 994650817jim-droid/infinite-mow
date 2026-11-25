@@ -1,3 +1,4 @@
+import {ordinaryWarning} from '../rules/retinueTactics';
 import {windBand,windContact} from '../data/divineZhouyu';
 import {lockHalberdCharge} from '../data/ghostLubu';
 import type { Enemy } from '../entities/Enemy';
@@ -83,6 +84,8 @@ export class MythicBossController {
       this.next=this.queue.at(-1)!.endsAt+(this.phase2?1.55:2);
     }
     const warning=this.queue[0];
+    if(ordinaryWarning(warning) && now>=warning.startsAt)army.warnings.set(this,warning);
+    else army.warnings.delete(this);
     if(id==='ghost_zhangxiu'){
       army.spearShadow=warning?.shadow && now>=warning.startsAt && !warning.resolved ? warning : undefined;
       if(warning?.shadow)boss.contactCd=Math.max(boss.contactCd,.25);
@@ -159,7 +162,7 @@ export class MythicBossController {
   defeat(): void {
     this.clearEye();
     if(this.definition.id==='ghost_lubu'){this.host.army.halberdWarning=undefined;this.host.army.halberdBounds=undefined;}
-    this.clearSpear(); this.clearWei(); this.clearWind();
+    this.host.army.warnings.delete(this); this.clearSpear(); this.clearWei(); this.clearWind();
     this.state='dead';
     this.queue=[];
     clearMythicWarning(this.graphics);
@@ -188,5 +191,5 @@ export class MythicBossController {
       this.host.army.weiBounds=undefined;
     }
   }
-  clear(): void { this.clearSpear(); this.clearWind(); this.clearWei(); if(this.definition.id==='ghost_lubu'){this.host.army.halberdWarning=undefined;this.host.army.halberdBounds=undefined;} this.clearEye(); this.groundWalk.clear(); this.queue=[]; this.graphics.destroy(); this.signature.destroy(); this.corpse?.destroy(); }
+  clear(): void { this.host.army.warnings.delete(this); this.clearSpear(); this.clearWind(); this.clearWei(); if(this.definition.id==='ghost_lubu'){this.host.army.halberdWarning=undefined;this.host.army.halberdBounds=undefined;} this.clearEye(); this.groundWalk.clear(); this.queue=[]; this.graphics.destroy(); this.signature.destroy(); this.corpse?.destroy(); }
 }

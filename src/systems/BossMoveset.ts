@@ -1,3 +1,4 @@
+import type {ArmyThreat} from '../rules/retinueTactics';
 import { playSurvivorBossFx } from './SurvivorBossFx';
 import { meleeReach } from '../data/bossReach';
 import { BOSS_CHARGE } from '../data/legion';
@@ -19,7 +20,7 @@ import { ensureBossCast, ensureBossTheme, playCastFx, playThemeFx, themeOf, them
 type Shape = { kind: 'circle'; x: number; y: number; r: number; inner?: number; fx: 'slam' | 'arrows' | 'fire' }
   | { kind: 'lane'; x: number; y: number; angle: number; len: number; width: number }
   | { kind: 'sector'; x: number; y: number; r: number; angle: number; arc: number };
-interface Hazard { id: string; shape: Shape; from: number; at: number; dmg: number; hit: boolean; visualOnly?: boolean; /** 飞刀道：到点不当场结算，改飞出一把刀（速度 px/s） */ knife?: number }
+interface Hazard { threat: ArmyThreat; id: string; shape: Shape; from: number; at: number; dmg: number; hit: boolean; visualOnly?: boolean; /** 飞刀道：到点不当场结算，改飞出一把刀（速度 px/s） */ knife?: number }
 /** 飞在半空的飞刀（判定跟着刀走）。 */
 interface FlyingKnife { x: number; y: number; angle: number; len: number; width: number; t0: number; speed: number; dmg: number; hit: boolean }
 
@@ -306,7 +307,13 @@ export class BossMoveset extends ArcBossV2<string> {
   }
 
   // ---------- 地面预警与结算 ----------
-  private add(shape: Shape, now: number, at: number, dmg: number, visualOnly = false, knife?: number): void { this.hazards.push({ id: `bm-${this.def.id}-${++this.seq}`, shape, from: now, at, dmg, hit: false, visualOnly, knife }); }
+  private add(shape: Shape, now: number, at: number, dmg: number, visualOnly = false, knife?: number): void { const threat:ArmyThreat=shape.kind==='lane'
+    ? {kind:'line',x:shape.x,y:shape.y,angle:shape.angle,radius:shape.len,halfWidth:shape.width/2}
+    : shape.kind==='sector'?{kind:'sweep',x:shape.x,y:shape.y,angle:shape.angle,radius:shape.r,arc:shape.arc}
+    : {kind:shape.inner?'ring':'circle',x:shape.x,y:shape.y,radius:shape.r,innerRadius:shape.inner};
+    const zone={id:`bm-${this.def.id}-${++this.seq}`,shape,threat,from:now,at,dmg,hit:false,visualOnly,knife};
+    this.hazards.push(zone);this.h.army.warnings.set(zone,threat);
+  }
   /** 飞刀：刀尖到哪判到哪（刀尖前后 26 像素、道宽内）；飞完整条道消失。友军按整条道受一次 0.6 倍（同其他长条招）。 */
   private updateKnives(now: number): void {
     const p = this.h.player, b = this.h.boss;
@@ -333,13 +340,13 @@ export class BossMoveset extends ArcBossV2<string> {
         else wf.sector(z.id, s.x, s.y, s.r, s.angle, prog, now);
         continue;
       }
-      this.hazards.splice(i, 1);
+      this.hazards.splice(i, 1);this.h.army.warnings.delete(z);
       if (z.visualOnly) continue;
       if (z.knife && s.kind === 'lane') {
         // 飞刀道：飞出一把手绘飞刀（KnifeFx），判定跟着刀尖走（updateKnives）；友军整条道受一次
         this.knives.push({ x: s.x, y: s.y, angle: s.angle, len: s.len, width: s.width, t0: now, speed: z.knife, dmg: z.dmg, hit: false }); this.knifeStats.thrown++;
         (this.knifeFx ??= new KnifeFx(this.h.scene)).fire(s.x, s.y - 30, s.x + Math.cos(s.angle) * s.len, s.y + Math.sin(s.angle) * s.len - 30, { speed: z.knife });
-        this.h.army.hurtArea(s.x + Math.cos(s.angle) * s.len / 2, s.y + Math.sin(s.angle) * s.len / 2, s.len / 2, b.def.damage * z.dmg * .6 * this.dmgMul, now);
+        this.h.army.hurtThreat(z.threat,b.def.damage*z.dmg*.6*this.dmgMul,now);
         continue;
       }
       if (hollow && s.kind === 'circle') { playSurvivorBossFx(this.h.scene,'spear',s.x,s.y,s.r*2.2,now); this.ringImpacts.push({x:s.x,y:s.y,r:s.r,inner:s.inner!,until:now+300}); warnRing(this.gfx,s.x,s.y,s.r,s.inner!,1,true); }
@@ -353,10 +360,7 @@ export class BossMoveset extends ArcBossV2<string> {
         const d = Math.hypot(x - s.x, y - s.y), da = Math.abs(Phaser.Math.Angle.Wrap(Math.atan2(y - s.y, x - s.x) - s.angle)); return d <= s.r + pad && da <= s.arc / 2;
       };
       if (p.alive && inside(p.x, p.y, p.radius * .5)) { p.takeDamage(b.def.damage * z.dmg * this.dmgMul, now); this.metrics.playerHits++; if (this.theme) themeShake(this.h.scene, z.dmg >= 1.6); }
-      const cx = s.kind === 'lane' ? s.x + Math.cos(s.angle) * s.len / 2 : s.x, cy = s.kind === 'lane' ? s.y + Math.sin(s.angle) * s.len / 2 : s.y;
-      if (hollow && s.kind === 'circle') {
-        for (const u of this.h.army.grid.query(s.x,s.y,s.r+24)) if (u.active && inside(u.x,u.y,u.radius*.5)) this.h.army.hurtByBoss(u,b.def.damage*z.dmg*.6*this.dmgMul,now);
-      } else this.h.army.hurtArea(cx, cy, s.kind === 'lane' ? s.len / 2 : s.r, b.def.damage * z.dmg * .6 * this.dmgMul, now, s.kind === 'sector' ? s.angle : undefined, s.kind === 'sector' ? s.arc : undefined);
+      this.h.army.hurtThreat(z.threat,b.def.damage*z.dmg*.6*this.dmgMul,now);
     }
   }
 
@@ -380,7 +384,7 @@ export class BossMoveset extends ArcBossV2<string> {
     this.beat.set(name, 'windup', now, windupMs);
   }
   defeat(): void { if (this.mode === 'arc') super.defeat(); else { this.state = 'dead'; this.gfx.clear(); this.onDefeat(); } }
-  protected onDefeat(): void { this.clearWards(); this.ringImpacts = []; this.hazards = []; this.knives = []; for (const f of this.flags) f.img?.destroy(); this.flags = []; this.mount?.destroy(); this.mount = undefined; this.h.boss.sprite.setAlpha(1); }
+  protected onDefeat(): void { this.clearWards(); this.ringImpacts = []; for(const z of this.hazards)this.h.army.warnings.delete(z); this.hazards = []; this.knives = []; for (const f of this.flags) f.img?.destroy(); this.flags = []; this.mount?.destroy(); this.mount = undefined; this.h.boss.sprite.setAlpha(1); }
   snapshot() { return { phase: this.phase, mounted: this.mounted, horse: !!this.mount?.hasHorse, state: this.state, cur: this.cur?.name ?? null, hazards: this.hazards.length, flags: this.flags.filter(f => f.e.active).length, guards: this.guards.filter(g => g.active).length, metrics: { ...this.metrics }, label: this.label }; }
   /** 当前打击判定用（DEV / 测试）。 */
   get depthHint(): number { return DEPTH.fx; }

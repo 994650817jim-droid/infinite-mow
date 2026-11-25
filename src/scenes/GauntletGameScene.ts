@@ -292,6 +292,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       // 不带随从（副将位只给本局收的名将）、不掉战役兵装
       this.followers?.clear(); this.followers = null;
       this.gFormations = []; this.gQiyuWaves = []; this.gQiyuPending = false; this.formationRt?.setLoadout([]); // 军阵从 0：只靠奇遇拿
+      this.legion.insideField=(x,y,r)=>this.arena?.inside(x,y,r)??true;
       this.player.growth.cardStars = true; this.gRarity.clear(); this.gBuildLog = []; this.gRarityMarks = []; ensureItemTextures(this); // 将星卡：星图开关关着也生效
       this.itemDrops = null;
       const preview = test ? new URLSearchParams(location.search).get('mythic') : null;

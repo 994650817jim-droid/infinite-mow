@@ -79,7 +79,7 @@ export class MenuScene extends Phaser.Scene {
   create(): void {
     if(!isChapterTestRun()) {
       try {
-        if(localStorage.getItem('im_gauntlet_claim_v1')) void import('../systems/GauntletSettlement').then(m=>m.recoverGauntletSettlement()).catch(e=>console.warn('战报待恢复',e));
+        void import('../systems/GauntletSettlement').then(m=>m.recoverGauntletSettlement()).catch(e=>console.warn('战报待恢复',e));
       } catch { /* 首页在浏览器禁用存储时仍可进入。 */ }
     }
     playMenuMusic(this); /* 武将来投（systems/HeroUnlocks）：按进度补查、弹没看过的揭幕 */this.time.delayedCall(500,()=>checkHeroJoins(this));

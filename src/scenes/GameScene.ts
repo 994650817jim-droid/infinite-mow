@@ -897,7 +897,8 @@ export class GameScene extends Phaser.Scene {
     // 中途退出不算：进关先记下存档，告捷 / 战败才丢掉（systems/BattleSnapshot.ts）
     // Keep ground telegraphs readable even on the first frame of a hit flash.
     this.cameras.main.flashEffect.alpha = 0.20;
-    beginBattle(this.scene.key);
+    // 连战成长仅在局内；整档回滚会覆盖另一个标签页已经结算的合法收益。
+    if(this.scene.key!=='GauntletGameScene') beginBattle(this.scene.key);
     stopMenuMusic();
     startCityAmbient(this, k => this.sfx?.play(k), ['amb_wind', 'amb_wind', 'amb_flag'], [9000, 16000]); // 战斗环境声：很稀的风 / 旗声（音效审计第二批）
     this.hadStarterHorse = ownedHorses().some(h => h.id === STARTER_HORSE);
@@ -2579,7 +2580,7 @@ export class GameScene extends Phaser.Scene {
 
   /** 暂停菜单主动离开：本场作废，仍存活的后备兵归还主城。 */
   /** 中途离开战斗（撤退 / 返回主菜单共用，同一条回滚路径）：放弃远征；本关新获得的回滚（BattleSnapshot），回滚了就整页重载到 bootTo（不填则按启动规则进主页）。 */
-  protected leaveBattle(target:string,bootTo:string|null):void{this.abandonRun();this.registry.remove('campaignTransfer');if(rollbackBattle()){if(bootTo)try{sessionStorage.setItem(BOOT_TO_KEY,bootTo);}catch{/* 存储不可用：重载后回主页 */}reloadGame();return;}this.scene.start(target);}
+  protected leaveBattle(target:string,bootTo:string|null):void{this.abandonRun();this.registry.remove('campaignTransfer');if(this.scene.key!=='GauntletGameScene' && rollbackBattle()){if(bootTo)try{sessionStorage.setItem(BOOT_TO_KEY,bootTo);}catch{/* 存储不可用：重载后回主页 */}reloadGame();return;}this.scene.start(target);}
   protected abandonRun():void{if(this.worldCampaign&&!this.over)abandonExpedition(this.expeditionId,this.allies.filter(a=>a.active&&a.reserveSoldier).map(a=>a.kind));}
   protected handleBattlePointer(_pointer:Phaser.Input.Pointer):boolean{return false;}
   private tentOrder?: { enemy: Enemy; life: number; label: Phaser.GameObjects.Text; hp: number };
@@ -4866,7 +4867,7 @@ export class GameScene extends Phaser.Scene {
     this.sweepCoins(); // 地上没捡的钱币先入账（结算、战报按入账后的数）
     this.over = true;
     if (victory) this.fortunes?.farewell(); // 机缘降将：本关结束告别一句
-    commitBattle(); // 告捷（战报）与战败都按现行规则结算，本场写入生效
+    if(this.scene.key!=='GauntletGameScene') commitBattle(); // 告捷（战报）与战败都按现行规则结算，本场写入生效
     this.player.passive.stop();
     // 动作层：胜利举兵器 / 战败倒地（有素材的武将才播放，播完定格）
     this.player.playAction(victory ? 'win' : 'die', 'down');

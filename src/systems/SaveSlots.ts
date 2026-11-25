@@ -15,7 +15,7 @@ export const SLOT_TOUCH_KEY = 'im_slot_touched';
 const META_KEY = 'im_save_slots';
 const slotKey = (i: number): string => `im_slot_${i}`;
 /** 属于“一个存档”的键；其余 im_ 键（音量、布局等）是全局设置。 */
-export const PROGRESS_KEYS = [WORLD_KEY, BACKUP_KEY, CHAPTER_CLEAR_KEY, 'im_last_hero', SLOT_TOUCH_KEY, 'im_items_v1', 'im_items_v2', 'im_roster_v1', 'im_heroes_v1', 'im_mastery_v1', 'im_campaign_v1', 'im_story_v1', 'im_story_seen_v1', 'im_side_routes_v1', 'im_merchant_v1', 'im_gauntlet_claim_v1'];
+export const PROGRESS_KEYS = [WORLD_KEY, BACKUP_KEY, CHAPTER_CLEAR_KEY, 'im_last_hero', SLOT_TOUCH_KEY, 'im_items_v1', 'im_items_v2', 'im_roster_v1', 'im_heroes_v1', 'im_mastery_v1', 'im_campaign_v1', 'im_story_v1', 'im_story_seen_v1', 'im_side_routes_v1', 'im_merchant_v1', 'im_gauntlet_claim_v1', 'im_gauntlet_paid_v2', 'im_gauntlet_modes_v1', 'im_gauntlet_modes_v1_test'];
 
 export interface SlotSummary {
   index: number;
@@ -144,6 +144,9 @@ export function switchSlot(i: number): boolean {
 
 /** 删除存档位 i（当前存档位则清空当前进度）。调用当前存档位后需要重新加载游戏。 */
 export function deleteSlot(i: number): void {
+  if (!validSlot(i)) return;
+  const pendingPrefix='im_gauntlet_pending:'+i+':';
+  for(let n=localStorage.length-1;n>=0;n--){const k=localStorage.key(n);if(k?.startsWith(pendingPrefix))del(k);}
   if (i === activeSlot()) { for (const k of PROGRESS_KEYS) del(k); }
   else del(slotKey(i));
 }

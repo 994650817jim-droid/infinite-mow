@@ -23,14 +23,14 @@ try{
     if(fail)throw new Error('simulated interruption');
     return original.call(this,k,v);
    };
-   try{C.settleGauntlet('gauntlet:proof',20,true);}catch{}finally{Storage.prototype.setItem=original;}
+   try{await C.settleGauntlet('gauntlet:proof',20,true);}catch{}finally{Storage.prototype.setItem=original;}
    return {grain,scrolls};
   },point);
   await p.reload();
   const result=await p.evaluate(async()=>{
     const C=await import('/src/systems/GauntletSettlement.ts'), W=await import('/src/world/WorldStore.ts'),M=await import('/src/systems/MasteryStore.ts');
-    C.recoverGauntletSettlement();C.recoverGauntletSettlement();
-    const paid=C.settleGauntlet('gauntlet:proof',20,true);
+    await C.recoverGauntletSettlement();await C.recoverGauntletSettlement();
+    const paid=await C.settleGauntlet('gauntlet:proof',20,true);
     return {paid,grain:W.loadWorld().provisions,scrolls:JSON.parse(localStorage.getItem(M.MASTERY_KEY)).scrolls,first:localStorage.getItem('im_gauntlet_first_clear')};
   });
   assert.equal(result.grain-before.grain,result.paid.provisions);
@@ -38,7 +38,7 @@ try{
   assert.ok(result.paid.provisions>0&&result.paid.scrolls>0);results.push({point,before,result});await p.close();
  }
  if(results.length)writeFileSync(join(out,'claim-proofs.json'),JSON.stringify(results,null,2));if(results.length)console.log('5/5 interrupted and replayed receipts passed');
- for(const mobile of [false,true]){
+ for(const mobile of process.argv.includes('--wallet-only')?[]:[false,true]){
   const p=await browser.newPage({viewport:mobile?{width:390,height:844}:{width:1280,height:720}});
   p.on('pageerror', e=>console.log('PAGE',String(e),e.stack));await p.goto(base+'/?gauntlet=1&dev=1&layout='+(mobile?'mobile':'desktop'));
   await p.waitForFunction(()=>window.__game?.scene.getScene('GauntletGameScene')?.player?.sprite?.active,null,{timeout:90000});

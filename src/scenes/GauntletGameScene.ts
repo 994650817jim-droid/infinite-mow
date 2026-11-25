@@ -13,7 +13,7 @@ import { GameScene } from './GameScene';
 import { BALANCE, DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, IS_DESKTOP, actorDepth } from '../config';
 import { getBattleChapter, getChapter, type ChapterDef } from '../data/chapters';
 import type { EnemyDef } from '../data/enemies';
-import { GAUNTLET, GAUNTLET_MOVES, GAUNTLET_POOL, GAUNTLET_TROOPS, type GauntletArc, type GauntletProps, endlessBoss, gauntletReward, pickBosses, readGauntletBest, gauntletPool, GAUNTLET_NAME, waveScale, writeGauntletBest, type GauntletBoss } from '../data/gauntlet';
+import { GAUNTLET, GAUNTLET_MOVES, GAUNTLET_POOL, GAUNTLET_TROOPS, type GauntletArc, type GauntletProps, endlessBoss, gauntletReward, pickBosses, gauntletPool, GAUNTLET_NAME, waveScale, type GauntletBoss } from '../data/gauntlet';
 import { GAUNTLET_RECRUIT, recruitCost, recruitTier } from '../data/gauntletCards';
 import { TROOPS } from '../data/legion';
 import { campaignPanel } from '../ui/GauntletCampaignPanel';
@@ -68,6 +68,8 @@ import { GuanduBoss } from '../systems/GuanduBoss';
 import type { ArcHost } from '../systems/ArcBossV2';
 import { ART_V2_FILES, isV2Texture, loadBossSheet, loadV2TroopSheets } from '../systems/ArtStyle';
 import { isChapterTestRun } from '../systems/ChapterProgress';
+import { activeSlot } from '../systems/SaveSlots';
+import { modeHistory, modeKey, modeLabel, saveModeBest } from '../systems/GauntletHistory';
 import { settleGauntlet } from '../systems/GauntletSettlement';
 import { FollowerSquad, type Follower } from '../systems/FollowerSquad';
 import { GauntletTrack } from '../ui/GauntletTrack';
@@ -182,6 +184,8 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     gWave = 1; gPhase: 'mow' | 'boss' | 'clear' | 'choice' | 'done' = 'mow'; gAt = 0; gOrder: GauntletBoss[] = []; gCur: GauntletBoss | null = null;
     private closeGate?:()=>void;
     private claimId='';
+    private claimSlot=0;
+    private get recordKey() { return modeKey(false,this.mythicSize,this.gTier==='endless'); }
     private checkpointRecordKills = 0;
     gKills: GauntletBoss[] = []; gCleared = false; gEndless = false; private gPool: GauntletBoss[] = [];
     gTier: GauntletRunTier = 'mortal';
@@ -253,6 +257,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       this.registry.set('runConfig', { ...saved, character: saved?.character ?? 'zhaoyun', chapter: 'hulao', westStage: 3, encounter: 'qunxiong' }); // encounter：不建剧情、不记战役进度、不建西凉专属机制（同篇章场景）
       this.gTier = 'mortal'; this.gMilestones = 0;
       this.closeGate?.();this.closeGate=undefined;
+      this.claimSlot=activeSlot();
       this.claimId='gauntlet:'+(globalThis.crypto?.randomUUID?.() ?? Date.now().toString(36)+'-'+Math.random().toString(36).slice(2));
       this.checkpointRecordKills = 0;
       this.gWave = 1; this.gPhase = 'mow'; this.gAt = 0; this.gKills = []; this.gCleared = false; this.gEndless = false; this.gCtrl = null; this.gLootShown = false; this.gFollowers = []; this.gPendingReplace = null; this.gResult = null; this.gPortrait.clear();
@@ -1124,7 +1129,10 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       const choices = challengeChoices(this.gTier,this.gWave,GAUNTLET.waves,this.mythicSize);
       if (!choices.length) return;
       this.gPhase = 'choice';
-      if (writeGauntletBest(this.gKills.length,this.gWave,Math.round(this.elapsed*1000),isChapterTestRun())) this.checkpointRecordKills = this.gKills.length;
+      const checkpointId=this.claimId, checkpointKills=this.gKills.length;
+      void saveModeBest(this.recordKey,{kills:checkpointKills,wave:this.gWave,ms:Math.round(this.elapsed*1000)},this.debugRun(),this.claimSlot)
+        .then(r=>{if(r.record && this.claimId===checkpointId)this.checkpointRecordKills=checkpointKills;})
+        .catch(e=>console.warn('晋级战绩待结算',e));
       let advance = false;
       const opts: UpgradeOption[] = choices.map(choice => ({
         id:'gauntlet_'+choice,
@@ -1180,20 +1188,23 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     }
 
     // ———— 结算：打到第几阵、斩了哪些名将（头像一排）、用时、最高连斩；按斩将数给钱币 / 武学残卷 ————
-    protected finish(victory: boolean, reason: RunEndReason = 'death') {
+    protected async finish(victory: boolean, reason: RunEndReason = 'death') {
       if (this.over) return;
       this.gRecruitBtn?.setVisible(false); this.gTrack?.setVisible(false); // 结算画面后面不透出招兵按钮、十阵进度条和它的小字
       if(this.gCtrl instanceof MythicBossController) { this.gCtrl.clear(); this.gCtrl=null; }
       super.finish(victory, reason);
-      const kills = this.gKills.length, debug = this.debugRun(), test = isChapterTestRun(), before = readGauntletBest(test);
-      const best = Math.max(before.kills, kills);
-      const record = writeGauntletBest(kills, this.gWave, Math.round(this.elapsed * 1000), test) ||
-        (kills > 0 && kills === this.checkpointRecordKills && kills === before.kills);
-      let first=false, pending=false, rw={provisions:0,scrolls:0};
-      if(!debug){
-        try {const paid=settleGauntlet(this.claimId,kills,this.gCleared);rw=paid;first=paid.first;}
-        catch(error){pending=true;console.warn('战报奖励写入未完成',error);}
-      }
+      const kills=this.gKills.length, debug=this.debugRun(), key=this.recordKey, runId=this.claimId;
+      const score={kills,wave:this.gWave,ms:Math.round(this.elapsed*1000)};
+      let best=0,record=false,first=false,pending=false,rw={provisions:0,scrolls:0};
+      this.resultPanel.setVisible(false);
+      try {
+        const receipt=debug ? await saveModeBest(key,score,true,this.claimSlot) :
+          await settleGauntlet(runId,kills,this.gCleared,key,score,this.claimSlot);
+        best=receipt.best?.kills??0;
+        record=!!receipt.record || (kills>0 && kills===this.checkpointRecordKills && kills===best);
+        if ('provisions' in receipt) {rw=receipt;first=receipt.first;}
+      } catch(error) {pending=true;console.warn('战报写入未完成',error);}
+      if(this.claimId!==runId || !this.sys.isActive())return;
       const keep = this.resultTexts.body.text.split('\n').filter(l => /^武将等级|^经验已满|^属性点|^星图/.test(l));
       const reached = this.gEndless ? `第 ${this.gWave} 阵（无尽）` :
         tierTitle[this.gTier]+' · '+challengeWave(this.gTier,this.gWave,GAUNTLET.waves,this.mythicSize)+'/'+this.stageSize;
@@ -1225,8 +1236,9 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
         stats:['用时 '+this.formatTime(this.elapsed)+' · 击破 '+this.kills+' · 总伤害 '+Math.round(this.damageDealt),
           '本局钱币 '+this.legion.food+' · 部曲 '+this.legion.count+' · 战损 '+this.legion.dead,
           debug?'演练场 · 奖励不入库':pending?'奖励写入未完成 · 下次进入时核对':'本局所得　钱币 +'+rw.provisions+' · 残卷 +'+rw.scrolls,
-          '最高连斩 '+best+' 位'+(record?' · 新纪录':'')],
-        details:this.gauntletBuild().filter(group=>group.items.length).map(group=>({label:group.cat,body:group.items.map(i=>i.name+(i.lv?' '+i.lv:'')).join('、')})),
+          modeLabel(key)+'最高连斩 '+best+' 位'+(record?' · 新纪录':'')],
+        details:[...this.gauntletBuild().filter(group=>group.items.length).map(group=>({label:group.cat,body:group.items.map(i=>i.name+(i.lv?' '+i.lv:'')).join('、')})),
+          {label:'历次战绩',body:Object.entries(modeHistory(debug)).map(([k,r])=>(k==='legacy'?'历史未分类':modeLabel(k as typeof key))+' '+r.kills+' 将').join('　')||'尚无记录'}],
         bosses:this.gKills.map(b=>({name:b.name,image:this.textures.getBase64(this.portrait(b))})),
         actions:[{label:'凯旋归营',run:()=>home?.emit('pointerdown')},{label:'再次挑战',run:()=>this.scene.restart()}]});
     }

@@ -19,6 +19,9 @@ import roster from '../coop/roster.json';
 import { buildRecolor } from '../systems/IffOverlay';
 import { ART_V2_FILES } from '../systems/ArtStyle';
 import { FIELD_STARS, MARK_STAR, COMPANY_STARS } from '../data/coopStars';
+import { modeKey, saveModeBest } from '../systems/GauntletHistory';
+import { isChapterTestRun } from '../systems/ChapterProgress';
+import { activeSlot } from '../systems/SaveSlots';
 const networkStars=[...FIELD_STARS,MARK_STAR,...COMPANY_STARS,CINDERS];
 
 type ActorView = { body: Phaser.GameObjects.Image; label: Phaser.GameObjects.Text; tx: number; ty: number; strike: number; walkFacing?: number; walkPhase?: number; walkStride?: number };
@@ -30,6 +33,7 @@ const ATTACK_SHEETS: Readonly<Record<string, string>> = {
 const REWARDS = new Map([...gauntlet.rewards, ...networkStars.map(s=>({...s,name:'将星 · '+s.name})), {id:EMBER.id,name:'火种',detail:'本命命中点燃敌军，每半秒结算一次。'}, { id: 'heal', name: '整备', detail: '回复 45% 最大生命' }].map(reward => [reward.id, reward]));
 
 export class CoopScene extends Phaser.Scene {
+  private recordSlot=0;
   private panel!: HTMLElement;
   private status!: HTMLElement;
   private socket?: WebSocket;
@@ -283,6 +287,7 @@ export class CoopScene extends Phaser.Scene {
       try { message = JSON.parse(event.data) as ServerMessage; } catch { return; }
       window.clearTimeout(this.connectionTimer);
       if (message.type === 'session') {
+        if (!this.resumeSession) this.recordSlot=activeSlot();
         this.resumeSession = { code: message.code, token: message.token, graceMs: message.graceMs };
         this.slot = message.slot; this.retryUntil = 0; this.connectionBlocked = false; this.showConnection('');
       } else if (message.type === 'connection') {
@@ -297,8 +302,18 @@ export class CoopScene extends Phaser.Scene {
         if (this.phase==='draft') this.showBattleControls();
         if (this.phase==='battle') this.timeline.push(message,performance.now());
       }
-      else if (message.type === 'draft') { this.timeline.clear(); this.displayed=undefined; this.renderDraft(message); }
+      else if (message.type === 'draft') {
+        if(message.continuation?.length && message.mythicSize) {
+          void saveModeBest(modeKey(true,message.mythicSize,false),{kills:message.wave,wave:message.wave,ms:(message.seconds??0)*1000},isChapterTestRun(),this.recordSlot)
+            .catch(e=>console.warn('双人晋级战绩保存失败',e));
+        }
+        this.timeline.clear(); this.displayed=undefined; this.renderDraft(message); }
       else if (message.type === 'result') {
+        if(message.mythicSize && message.tier && message.wave!=null) {
+          void saveModeBest(modeKey(true,message.mythicSize,message.tier==='endless'),
+            {kills:message.generals,wave:message.wave,ms:(message.seconds??0)*1000},isChapterTestRun(),this.recordSlot)
+            .catch(e=>console.warn('双人战绩保存失败',e));
+        }
         this.disconnect();
         const title = !message.victory ? '连战败退' : message.reason === 'withdrawn' ? '收兵归营' :
           message.milestones === 3 ? '封神告捷' : '连战告捷';

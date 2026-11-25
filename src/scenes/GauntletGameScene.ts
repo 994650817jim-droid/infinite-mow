@@ -1216,7 +1216,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       const limit=this.mythicSize;
       const progress=[['名将',Math.min(kills,10),10],['鬼将',Math.max(0,Math.min(kills-10,limit)),limit],['神将',Math.max(0,Math.min(kills-10-limit,limit)),limit]];
       const stages=this.gEndless?'无尽 · 已破 '+kills+'阵':progress.map(([label,n,total])=>label+' '+n+'/'+total).join('　');
-      const art=this.textures.exists('epic_hero_'+hero.id)?'assets/epic-home/'+hero.id+'.webp':undefined;
+      const art='assets/epic-home/'+hero.id+'.webp';
       campaignPanel(this,{theme:this.gTier==='ghost'?'ghost':this.gTier==='divine'?'divine':'mortal',
         title:!victory?'沙场败退':this.gMilestones===3?'三界凯旋':'收兵归营',subtitle:hero.name+' · '+stages,portrait:art,
         chapterArt:'assets/epic-home/dongzhuo-'+(IS_DESKTOP?'desktop':'mobile')+'.webp',

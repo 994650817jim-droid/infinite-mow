@@ -13,11 +13,12 @@ import { heroUnlocked } from '../systems/HeroUnlocks';
 import roster from '../coop/roster.json';
 import { buildRecolor } from '../systems/IffOverlay';
 import { ART_V2_FILES } from '../systems/ArtStyle';
+import { FIELD_STARS } from '../data/coopStars';
 
 type ActorView = { body: Phaser.GameObjects.Image; label: Phaser.GameObjects.Text; tx: number; ty: number; strike: number; mythicFacing?: number };
 const TROOPS: Record<string, {name:string;art:{walk:string;attack:string;cell:number}}> = roster.types;
 const BOSS_SHEETS: Record<string, string[]> = gauntlet.bosses;
-const REWARDS = new Map([...gauntlet.rewards, { id: 'heal', name: '整备', detail: '回复 45% 最大生命' }].map(reward => [reward.id, reward]));
+const REWARDS = new Map([...gauntlet.rewards, ...FIELD_STARS.map(s=>({...s,name:'将星 · '+s.name})), { id: 'heal', name: '整备', detail: '回复 45% 最大生命' }].map(reward => [reward.id, reward]));
 
 export class CoopScene extends Phaser.Scene {
   private panel!: HTMLElement;
@@ -250,7 +251,7 @@ export class CoopScene extends Phaser.Scene {
     const socket = new WebSocket(url); this.socket = socket;
     const fail = (text: string, terminal = false) => { if (this.socket === socket) this.connectionFailed(text, terminal); };
     this.connectionTimer = window.setTimeout(() => fail('连接超时，请重试'), Math.min(8000, this.retryUntil ? this.retryUntil - Date.now() : 8000));
-    socket.onopen = () => { if (this.socket === socket) socket.send(JSON.stringify(command.type === 'resume' ? command : { ...command, heroes: this.availableHeroes })); };
+    socket.onopen = () => { if (this.socket === socket) socket.send(JSON.stringify(command.type === 'resume' ? command : { ...command, heroes: this.availableHeroes, starDraft:1 })); };
     socket.onerror = () => fail('无法连接联机服务，请检查网络');
     socket.onclose = () => fail('连接中断，请重试');
     socket.onmessage = event => {
@@ -679,6 +680,11 @@ export class CoopScene extends Phaser.Scene {
     const status = document.createElement('small');
     status.textContent = checkpoint ? '已过十阵' : p.ready ? '已选定' : '选择中';
     row.append(portrait, title, hp, bar, status);
+    if(p.stars?.length) {
+      const stars=document.createElement('small');
+      stars.textContent=p.stars.map(k=>FIELD_STARS.find(s=>s.id===k)?.name).filter(Boolean).join(' · ');
+      row.append(stars);
+    }
     return row;
   }
 

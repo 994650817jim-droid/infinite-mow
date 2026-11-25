@@ -1,6 +1,7 @@
 import { GAUNTLET, GAUNTLET_POOL, endlessBoss, pickBosses } from '../src/data/gauntlet.ts';
 import { challengeBoss, mythicBoss, mythicSequence, mythicHit } from '../src/data/mythicGauntlet.ts';
 import content from '../src/coop/gauntlet.json' with { type: 'json' };
+import {FIELD_STARS, FIELD_STAR_EFFECT} from '../src/data/coopStars.ts';
 
 const pool = GAUNTLET_POOL.filter(boss => Object.hasOwn(content.bosses, boss.id));
 export const TOTAL_WAVES = GAUNTLET.waves;
@@ -147,23 +148,45 @@ export function hits(warning, player) {
 
 const REWARD_LIMIT = { damage: 4, haste: 3, health: 4, speed: 3 };
 
-export function rewardsFor(player) {
+export function rewardsFor(player, wave=1) {
   const available = content.rewards.filter(({ id }) => (player.upgrades[id] ?? 0) < REWARD_LIMIT[id]);
   const choices = [];
   while (available.length && choices.length < 3) {
     choices.push(available.splice(Math.floor(Math.random() * available.length), 1)[0].id);
+  }
+  if (player.stars && (wave%3===0 || choices.length<3)) {
+    const availableStars=FIELD_STARS.filter(star=>!player.stars.includes(star.id));
+    if(availableStars.length) {
+      const star=availableStars[Math.floor(Math.random()*availableStars.length)];
+      if(choices.length===3) choices.pop();
+      choices.push(star.id);
+    }
   }
   if (choices.length < 3 && player.hp < player.maxHp) choices.push('heal');
   return choices;
 }
 
 export function grantReward(player, id) {
+  if(FIELD_STARS.some(s=>s.id===id)) {
+    if(!player.stars || player.stars.includes(id))return;
+    player.stars.push(id);
+    if(id==='strength.NR1') {
+      const ratio=player.hp/player.maxHp;
+      player.maxHp=Math.round(player.maxHp*(1+FIELD_STAR_EFFECT[id].hp));
+      player.hp=Math.round(ratio*player.maxHp);
+    }
+    return;
+  }
   if (id === 'heal') {
     player.hp = Math.min(player.maxHp, player.hp + Math.ceil(player.maxHp * .45));
     return;
   }
   player.upgrades[id] = (player.upgrades[id] ?? 0) + 1;
-  if (id === 'health') { player.maxHp += 15; player.hp += 15; }
+  if (id === 'health') {
+    const base=100+15*player.upgrades.health;
+    player.maxHp=Math.round(base*(player.stars?.includes('strength.NR1')?1+FIELD_STAR_EFFECT['strength.NR1'].hp:1));
+    player.hp=Math.min(player.maxHp,player.hp+15);
+  }
 }
 
 /** Advance only during a live battle. Progress belongs to the fallen player. */

@@ -11,6 +11,7 @@ import world from '../src/coop/arena.json' with { type: 'json' };
 import { bossForWave, bossStats, advanceRescue, grantReward, beginBossWarning, clearBossAttack, resolveBossWarning, updateBossPhase, newGauntlet, nextWave, rewardsFor, TOTAL_WAVES } from './gauntlet.mjs';
 
 import { CHARACTERS } from '../src/data/characters.ts';
+import { FIELD_STAR_EFFECT } from '../src/data/coopStars.ts';
 
 const heroes = new Map(CHARACTERS.map(hero => [hero.id, hero]));
 const attackProfiles = {
@@ -102,7 +103,7 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
   function snapshot(room) {
     broadcast(room, {
       type: 'state', seconds: Math.floor(room.seconds), battleMs: Math.round(room.seconds*1000), kills: room.kills,
-      players: playersIn(room).map(({ slot, hero, x, y, hp, maxHp, rescue, dir, moving, strike }) => ({ slot, hero, x, y, hp, maxHp, rescue, dir, moving, strike })),
+      players: playersIn(room).map(({ slot, hero, x, y, hp, maxHp, rescue, dir, moving, strike, stars }) => ({ slot, hero, x, y, hp, maxHp, rescue, dir, moving, strike, stars })),
       enemies: room.enemies.map(({ id, x, y, hp, maxHp, boss, general, troop, cue, face, speedBuff, enraged }) => ({ id, x, y, hp, maxHp, boss, troop, cue, face, enraged: !!enraged, boosted: speedBuff > 1, general: general && { id: general.id, name: general.name } })),
       shots: (room.shots ?? []).map(({x,y,angle,slow})=>({x,y,angle,net:!!slow})), troopEffects: room.troopEffects ?? [],
       gauntlet: room.run && { wave: room.run.wave, cleared: room.run.cleared, total: TOTAL_WAVES,
@@ -114,14 +115,14 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
   function draft(room, checkpoint = false) {
     room.phase = checkpoint ? 'checkpoint' : 'draft';
     room.idleSince = Date.now();
-    for (const player of room.players.values()) player.choices = checkpoint ? [] : rewardsFor(player);
+    for (const player of room.players.values()) player.choices = checkpoint ? [] : rewardsFor(player,room.run.wave);
     updateDraft(room);
   }
   function updateDraft(room) {
     const ready = playersIn(room).filter(player => !player.choices?.length).length;
     for (const player of room.players.values()) {
       send(player.socket, { type: 'draft', wave: room.run.wave, total: TOTAL_WAVES, general: room.run.history.at(-1).dual ? '河北双雄 · 颜良 / 文丑' : room.run.history.at(-1).name,
-        party: playersIn(room).map(({ slot, hero, hp, maxHp, choices }) => ({ slot, hero, hp, maxHp, ready: !choices?.length })),
+      party: playersIn(room).map(({ slot, hero, hp, maxHp, choices, stars }) => ({ slot, hero, hp, maxHp, ready: !choices?.length, stars })),
         choices: player.choices ?? [], ready, checkpoint: room.phase === 'checkpoint', tier: room.run.tier,
         continuation: room.phase==='checkpoint'?challengeChoices(room.run.tier,room.run.wave,TOTAL_WAVES):[] });
     }
@@ -169,6 +170,7 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
   }
   function hurt(player, damage, now) {
     if (now < player.hurtUntil) return false;
+    if(player.stars?.includes('strength.NR1')) damage*=1-FIELD_STAR_EFFECT['strength.NR1'].taken;
     player.hp = Math.max(0, player.hp - Math.round(damage));
     if (!player.hp) player.moving = false;
     player.hurtUntil = now + 550;
@@ -200,8 +202,14 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
       }
       if (!nearest) continue;
       player.fireIn = attack.interval * .91 ** (player.upgrades.haste ?? 0);
+      let power=3+(player.upgrades.damage??0);
+      if(player.stars?.includes('bridge0.h')) {
+        power*=1+FIELD_STAR_EFFECT['bridge0.h'].weapon;
+        player.fireIn/=1+FIELD_STAR_EFFECT['bridge0.h'].attackSpeed;
+      }
+      if(player.stars?.includes('strength.NR2') && player.hp<player.maxHp*FIELD_STAR_EFFECT['strength.NR2'].below) power*=1+FIELD_STAR_EFFECT['strength.NR2'].damage;
       player.strike = { n: player.strike.n + 1, x: nearest.x, y: nearest.y };
-      troopHit(room, nearest, player, 3 + (player.upgrades.damage ?? 0));
+      troopHit(room, nearest, player, power);
     }
     if(room.run.dual)stepHebei(room.run,live,room.seconds,dt);
     for (const enemy of room.enemies) {
@@ -318,6 +326,7 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
         const slot = room.players.size === 0 ? 0 : 1;
         player = { socket, token: randomBytes(24).toString('hex'), disconnectedAt: null, slot, available, hero: null, x: world.width / 2 + (slot ? 48 : -48), y: world.height / 2, hp: 100, maxHp: 100, rescue: 0, upgrades: {}, dir: 0, moving: false,
           fireIn: 0, dx: 0, dy: 0, inputAt: 0, hurtUntil: 0, strike: { n: 0, x: 0, y: 0 } };
+        if(command.starDraft===1) player.stars=[];
         room.players.set(slot, player);
         session(room, player);
         lobby(room);

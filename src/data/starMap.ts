@@ -1,4 +1,5 @@
 import { STAR_OUTER_NAMES, STAR_OUTER_DESCS, STAR_OUTER_TUNING } from './starOuter';
+import { FIELD_STAR_EFFECT } from './coopStars';
 import { PRIMARY_ATTRIBUTE, type AttributeId } from './attributes';
 import { STAT_ORDER, statSource, type StatSource } from './heroStats';
 
@@ -57,9 +58,9 @@ export const STAR_EFFECT = {
   'intellect.NX1': STAR_OUTER_TUNING, 'intellect.NX2': STAR_OUTER_TUNING,
   'command.NX1': STAR_OUTER_TUNING, 'command.NX2': STAR_OUTER_TUNING,
   /** 铁骨：生命上限 +8%，受到的伤害 −5%。 */
-  'strength.NR1': { hp: .08, taken: .05 },
+  'strength.NR1': FIELD_STAR_EFFECT['strength.NR1'],
   /** 背水：生命低于 40% 时伤害 +15%。 */
-  'strength.NR2': { below: .4, damage: .15 },
+  'strength.NR2': FIELD_STAR_EFFECT['strength.NR2'],
   /** 连击：暴击伤害 +20%。 */
   'agility.NR1': { critDamage: .2 },
   /** 追风：移动中攻速 +8%，拾取范围 +20%。 */
@@ -73,7 +74,7 @@ export const STAR_EFFECT = {
   /** 号令：主将身边的部曲伤害 +12%（进部曲伤害加法桶）。 */
   'command.NR2': { nearAllyDamage: .12 },
   /** 骁锐：武器伤害 +6%，攻速 +6%。 */
-  'bridge0.h': { weapon: .06, attackSpeed: .06 },
+  'bridge0.h': FIELD_STAR_EFFECT['bridge0.h'],
   /** 奇谋：暴击后 3 秒内法术伤害 +12%。 */
   'bridge1.h': { ms: 3000, spell: .12 },
   /** 帷幄：每 1 点智力生效点，部曲伤害 +0.8%（进部曲伤害加法桶）。 */

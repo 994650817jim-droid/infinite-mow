@@ -33,6 +33,7 @@ export interface GauntletState {
   dual?: boolean;
 }
 export interface Fighter {
+  stars?: string[];
   slot: Side;
   hero: CharacterId;
   x: number;
@@ -44,7 +45,7 @@ export interface Fighter {
   moving: boolean;
   strike: { n: number; x: number; y: number };
 }
-export type PartyMember = Pick<Fighter, 'slot' | 'hero' | 'hp' | 'maxHp'> & { ready: boolean };
+export type PartyMember = Pick<Fighter, 'slot' | 'hero' | 'hp' | 'maxHp' | 'stars'> & { ready: boolean };
 export interface TroopCue { kind: string; x: number; y: number; angle: number; range: number; width: number; endsAt: number; spread?: number }
 export interface TroopEffect { kind: string; x: number; y: number; radius: number; until: number }
 export interface Foe { enraged?: boolean; troop?: string; cue?: TroopCue; face?: number; boosted?: boolean; id: number; x: number; y: number; hp: number; maxHp: number; boss: boolean; general?: General }

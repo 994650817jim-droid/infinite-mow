@@ -16,6 +16,7 @@ import type { EnemyDef } from '../data/enemies';
 import { GAUNTLET, GAUNTLET_MOVES, GAUNTLET_POOL, GAUNTLET_TROOPS, type GauntletArc, type GauntletProps, endlessBoss, gauntletReward, pickBosses, readGauntletBest, gauntletPool, GAUNTLET_NAME, waveScale, writeGauntletBest, type GauntletBoss } from '../data/gauntlet';
 import { GAUNTLET_RECRUIT, recruitCost, recruitTier } from '../data/gauntletCards';
 import { TROOPS } from '../data/legion';
+import { campaignPanel } from '../ui/GauntletCampaignPanel';
 import { drawRecruitCard, preloadRecruitPortraits } from '../ui/GauntletRecruitCard';
 import { GAUNTLET_BUILD, RARITY, STAR_CARD_IDS, cardCategory, cardRarity, pickByRarity, rollRarity, starCardPool, type GCategory, type GRarity, type StarCard } from '../data/gauntletCards';
 import { STAR_BY_ID, STAR_REGIONS } from '../data/starMap';
@@ -180,6 +181,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     constructor() { super('GauntletGameScene'); }
     /** 本局：第几阵（1 起）、阶段与进入时刻（关内秒）、十阵名单、当前名将、斩过的名将、是否已通关十阵 / 进了无尽。 */
     gWave = 1; gPhase: 'mow' | 'boss' | 'clear' | 'choice' | 'done' = 'mow'; gAt = 0; gOrder: GauntletBoss[] = []; gCur: GauntletBoss | null = null;
+    private closeGate?:()=>void;
     private checkpointRecordKills = 0;
     gKills: GauntletBoss[] = []; gCleared = false; gEndless = false; private gPool: GauntletBoss[] = [];
     gTier: GauntletRunTier = 'mortal';
@@ -250,6 +252,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       this.registry.remove('campaignTransfer'); this.registry.remove('worldCampaign'); // 无行营 / 无整军：不带部曲、不读征程构筑
       this.registry.set('runConfig', { ...saved, character: saved?.character ?? 'zhaoyun', chapter: 'hulao', westStage: 3, encounter: 'qunxiong' }); // encounter：不建剧情、不记战役进度、不建西凉专属机制（同篇章场景）
       this.gTier = 'mortal'; this.gMilestones = 0;
+      this.closeGate?.();this.closeGate=undefined;
       this.checkpointRecordKills = 0;
       this.gWave = 1; this.gPhase = 'mow'; this.gAt = 0; this.gKills = []; this.gCleared = false; this.gEndless = false; this.gCtrl = null; this.gLootShown = false; this.gFollowers = []; this.gPendingReplace = null; this.gResult = null; this.gPortrait.clear();
       this.gStats = { lootPicks: [], spawned: 0, cleared: 0 };
@@ -1135,9 +1138,19 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       const hint = this.gTier==='mortal'?'鬼门已开 · 挑战'+this.mythicSize+'阵，鬼吕布守关':
         this.gTier==='ghost'?'天门将启 · 挑战'+this.mythicSize+'阵，神刘备守关':'三阶段告捷 · 可结算或进入无尽';
       this.showLoot(tierTitle[this.gTier]+' · 告捷',hint,opts,() => {
+        this.closeGate?.();this.closeGate=undefined;
         if (advance) this.nextWave();
         else this.time.delayedCall(200,() => this.finish(true,'boss'));
       });
+      const next = this.gTier==='mortal'?'ghost':'divine';
+      const earned=gauntletReward(this.gKills.length,false);
+      this.closeGate=campaignPanel(this,{theme:next,title:this.gMilestones===3?'封神告捷':next==='ghost'?'鬼门已开':'天门将启',
+        subtitle:hint,chapterArt:'assets/epic-home/dongzhuo-'+(IS_DESKTOP?'desktop':'mobile')+'.webp',
+        stats:['已破 '+this.gWave+' 阵 · 用时 '+this.formatTime(this.elapsed),
+          '当前兵力 '+this.legion.count+' · 钱币 '+this.legion.food,
+          '基础结算　钱币 '+earned.provisions+' · 残卷 '+earned.scrolls,
+          ...(this.gMilestones<3?['全程尚余 '+(10+this.mythicSize*2-this.gWave)+' 阵']:[])],
+        actions:opts.map((o,i)=>({label:o.name,run:()=>this.chooseUpgrade(i)}))});
     }
     nextWave(): void {
       this.clearGauntletDual();
@@ -1195,6 +1208,21 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       restart?.removeAllListeners('pointerdown').on('pointerdown', () => this.scene.restart());
       // 「再来一局」本模式任何结局都给（基类只在胜利、且允许重打旧关时给；败走才是这个模式最常见的结局）：同一员将直接重开，和主按钮并排
       restart?.setActive(true).setVisible(true); (this.resultPanel.getByName('result-restart-text') as Phaser.GameObjects.Text | null)?.setVisible(true).setText('再来一局'); this.layoutResultButtons?.();
+      const hero = CHARACTERS.find(v=>v.id===this.runConfig.character)!;
+      const limit=this.mythicSize;
+      const progress=[['名将',Math.min(kills,10),10],['鬼将',Math.max(0,Math.min(kills-10,limit)),limit],['神将',Math.max(0,Math.min(kills-10-limit,limit)),limit]];
+      const stages=this.gEndless?'无尽 · 已破 '+kills+'阵':progress.map(([label,n,total])=>label+' '+n+'/'+total).join('　');
+      const art=this.textures.exists('epic_hero_'+hero.id)?'assets/epic-home/'+hero.id+'.webp':undefined;
+      campaignPanel(this,{theme:this.gTier==='ghost'?'ghost':this.gTier==='divine'?'divine':'mortal',
+        title:!victory?'沙场败退':this.gMilestones===3?'三界凯旋':'收兵归营',subtitle:hero.name+' · '+stages,portrait:art,
+        chapterArt:'assets/epic-home/dongzhuo-'+(IS_DESKTOP?'desktop':'mobile')+'.webp',
+        stats:['用时 '+this.formatTime(this.elapsed)+' · 击破 '+this.kills+' · 总伤害 '+Math.round(this.damageDealt),
+          '本局钱币 '+this.legion.food+' · 部曲 '+this.legion.count+' · 战损 '+this.legion.dead,
+          debug?'演练场 · 奖励不入库':'本局所得　钱币 +'+rw.provisions+' · 残卷 +'+rw.scrolls,
+          '最高连斩 '+best+' 位'+(record?' · 新纪录':'')],
+        details:this.gauntletBuild().filter(group=>group.items.length).map(group=>({label:group.cat,body:group.items.map(i=>i.name+(i.lv?' '+i.lv:'')).join('、')})),
+        bosses:this.gKills.map(b=>({name:b.name,image:this.textures.getBase64(this.portrait(b))})),
+        actions:[{label:'凯旋归营',run:()=>home?.emit('pointerdown')},{label:'再次挑战',run:()=>this.scene.restart()}]});
     }
     /** 结算画面（电脑版）：基类画完奖励格以后，底下一行战况换成本模式的、副标题下面排斩将头像（基类可能晚些再画一遍，所以挂在这里）。 */
     private gResult: { kills: number; best: number; record: boolean } | null = null;

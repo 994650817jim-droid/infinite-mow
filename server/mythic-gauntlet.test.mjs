@@ -105,7 +105,16 @@ try{
       if(wave===lastWave){
         a.send({type:'finish',wave});
         equal((await a.until(m=>m.type==='result')).milestones,3);
-        equal((await b.until(m=>m.type==='result')).generals,lastWave);
+        const receipt = await b.until(m=>m.type==='result');
+        equal(receipt.generals,lastWave);
+        equal(receipt.reason,'completed');
+        const guestToken = room.players.get(1).token;
+        a.send({type:'leave'});
+        b.ws.terminate();
+        await delay(120);
+        b = await peer(origin);
+        b.send({type:'resume',code,token:guestToken});
+        equal(await b.until(m=>m.type==='result'), receipt);
         break;
       }
       b.send({type:'challenge',tier:options[0],wave});

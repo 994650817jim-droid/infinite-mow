@@ -280,11 +280,17 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
     if (++room.snapshots % 2 === 0) snapshot(room);
   }
   function finish(room, victory) {
+    if (room.phase === 'finished') return;
     room.phase = 'finished';
     if (room.run) clearBossAttack(room.run);
     room.idleSince = Date.now();
     snapshot(room);
-    broadcast(room, { type: 'result', victory: victory || (room.run?.cleared ?? 0) >= TOTAL_WAVES, kills: room.kills, generals: room.run.cleared, milestones: room.run.milestones });
+    const reason = !victory ? 'defeated' : room.run.milestones === 3 ? 'completed' : 'withdrawn';
+    room.result = { type: 'result', victory, reason, kills: room.kills, generals: room.run.cleared,
+      milestones: room.run.milestones, seconds: Math.floor(room.seconds),
+      party: playersIn(room).map(p => ({ slot: p.slot, hero: p.hero, men: p.company?.units.length ?? 0,
+        lost: p.company?.deaths ?? 0, coins: p.company?.coins ?? 0, stars: [...(p.stars ?? [])] })) };
+    broadcast(room, room.result);
   }
 
   network.on('connection', socket => {
@@ -312,14 +318,20 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
       if (!room && command.type === 'resume') {
         const candidate = typeof command.code === 'string' && rooms.get(command.code);
         const member = candidate && typeof command.token === 'string' && playersIn(candidate).find(p => p.token === command.token);
-        if (!member || member.disconnectedAt == null || now - member.disconnectedAt >= reconnectMs || candidate.phase === 'finished') {
+        if (!member || member.disconnectedAt == null || now - member.disconnectedAt >= reconnectMs) {
           send(socket, { type: 'error', message: '重连已失效，请重新创建房间' }); return;
         }
         room = candidate; player = member; player.socket = socket; player.disconnectedAt = null;
-        session(room, player); restore(room, now); return;
+        session(room, player);
+        if (room.phase === 'finished') send(socket, room.result);
+        else restore(room, now);
+        return;
       }
       if (room && command.type === 'leave') {
-        if (room.phase !== 'lobby' || player.slot === 0) disband(room, 'teammate-left');
+        if (room.phase === 'finished') {
+          room.players.delete(player.slot);
+          if (!room.players.size) rooms.delete(room.code);
+        } else if (room.phase !== 'lobby' || player.slot === 0) disband(room, 'teammate-left');
         else { room.players.delete(player.slot); restore(room, now); }
         room = undefined; socket.close(1000, 'left'); return;
       }
@@ -383,7 +395,7 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
     });
     socket.on('close', () => {
       if (!room || !rooms.has(room.code) || player.socket !== socket) return;
-      if (room.phase === 'finished') { room.players.delete(player.slot); if (!room.players.size) rooms.delete(room.code); return; }
+      if (room.phase === 'finished') { player.disconnectedAt = Date.now(); return; }
       player.disconnectedAt = Date.now(); player.dx = player.dy = 0; player.inputAt = 0; player.moving = false;
       room.pausedAt ??= player.disconnectedAt;
       for (const p of playersIn(room)) { p.dx = p.dy = 0; p.moving = false; }
@@ -411,6 +423,10 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
     const dt = Math.max(0, Math.min(.10, (now - last) / 1000));
     last = now;
     for (const room of rooms.values()) {
+      if (room.phase === 'finished') {
+        if (now - room.idleSince >= reconnectMs) disband(room, 'expired');
+        continue;
+      }
       const absent = missing(room);
       if (absent.length) {
         if (absent.some(p => now - p.disconnectedAt >= reconnectMs)) disband(room, 'reconnect-timeout');

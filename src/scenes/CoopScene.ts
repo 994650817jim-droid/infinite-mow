@@ -295,7 +295,15 @@ export class CoopScene extends Phaser.Scene {
       else if (message.type === 'draft') { this.timeline.clear(); this.displayed=undefined; this.renderDraft(message); }
       else if (message.type === 'result') {
         this.disconnect();
-        this.renderResult(message.milestones===3?'封神告捷':message.milestones===2?'鬼门告捷':message.victory?'凡将十阵告捷':'连战败退', '合力斩将 ' + message.generals + ' 位 · 击破 ' + message.kills + ' 名敌军');
+        const title = !message.victory ? '连战败退' : message.reason === 'withdrawn' ? '收兵归营' :
+          message.milestones === 3 ? '封神告捷' : '连战告捷';
+        const results = ['合力斩将 ' + message.generals + ' 位 · 击破 ' + message.kills + ' 名敌军'];
+        if (message.seconds != null) results.push('用时 ' + Math.floor(message.seconds / 60) + '分' + message.seconds % 60 + '秒');
+        for (const unit of message.party ?? []) {
+          const name = CHARACTERS.find(hero => hero.id === unit.hero)?.name ?? unit.hero;
+          results.push(name + ' · 余部 ' + unit.men + ' · 战损 ' + unit.lost + ' · 钱币 ' + unit.coins);
+        }
+        this.renderResult(title, results.join('　'));
       }
     };
   }

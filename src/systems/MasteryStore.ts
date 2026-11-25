@@ -27,11 +27,16 @@ const int = (v: unknown, max: number) => Number.isSafeInteger(v) ? Math.max(0, M
 const isHeroKey = (k: string) => /^r_\d{1,9}$/.test(k) || /^[a-z]{2,20}$/.test(k);
 
 let memory: MasterySave | null = null;
+let cachedRaw: string | null = null;
 function read(): MasterySave {
-  if (memory) return memory;
+  let raw: string | null = null;
+  try { raw = localStorage.getItem(MASTERY_KEY); } catch { if (memory) return memory; }
+  // Storage events can arrive after a player's next click. Check the actual value before using a cached wallet.
+  if (memory && raw === cachedRaw) return memory;
+  cachedRaw = raw;
   let s: MasterySave = { version: 1, scrolls: 0, merit: 0, temper: {}, xinde: {}, tactics: [...STARTER_TACTICS], respecFree: {}, migrated: false };
   try {
-    const v = JSON.parse(localStorage.getItem(MASTERY_KEY) ?? 'null');
+    const v = JSON.parse(raw ?? 'null');
     if (v && v.version === 1) {
       if(typeof v.gauntletClaim?.id==='string')s.gauntletClaim={id:v.gauntletClaim.id,credited:int(v.gauntletClaim.credited,1e6)};
       s.scrolls = int(v.scrolls, 1e6); s.merit = int(v.merit, 1e7); s.migrated = v.migrated === true;
@@ -45,7 +50,16 @@ function read(): MasterySave {
   if (!s.migrated) { s.migrated = true; s.scrolls += SCROLL.perClearedChapter * Math.max(0, chaptersOpen() - 1); commit(); }
   return s;
 }
-function commit(): void { try { if (memory) localStorage.setItem(MASTERY_KEY, JSON.stringify(memory)); localStorage.setItem('im_slot_touched', String(Date.now())); } catch { /* 存储不可用 */ } }
+function commit(): void {
+  try {
+    if (memory) {
+      const raw = JSON.stringify(memory);
+      localStorage.setItem(MASTERY_KEY, raw);
+      cachedRaw = raw;
+    }
+    localStorage.setItem('im_slot_touched', String(Date.now()));
+  } catch { /* keep in-session progress when storage is unavailable */ }
+}
 export function resetMasteryCache(): void { memory = null; }
 
 export interface Result { ok: boolean; message: string }
@@ -69,7 +83,9 @@ export function creditGauntletScrolls(id:string, amount:number):number {
   if(s.gauntletClaim?.id===id)return s.gauntletClaim.credited;
   const before=s.scrolls, total=Math.min(1e6,before+amount);
   const next={...s,scrolls:total,gauntletClaim:{id,credited:total-before}};
-  localStorage.setItem(MASTERY_KEY,JSON.stringify(next));
+  const raw = JSON.stringify(next);
+  localStorage.setItem(MASTERY_KEY,raw);
+  cachedRaw=raw;
   memory=next;
   return total-before;
 }

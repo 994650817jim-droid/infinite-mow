@@ -221,7 +221,7 @@ import { hotkeySettingsLink } from '../ui/HotkeySettingsUI';
 import { BossPresence } from '../systems/BossPresence';
 import { DAMAGE_LABEL, OUTLINE_LABEL, SCALE_LABEL, SHAKE_LABEL, WIDTH_LABEL, cycle, damageNumbers, outlineMode, outlineWidth, renderScaleSetting, setDamageNumbers, setOutlineMode, setOutlineWidth, setRenderScaleSetting, setShakeLevel, shakeLevel, shakeScale, type DamageNumbers, type OutlineMode, type OutlineWidth, type RenderScaleSetting, type ShakeLevel } from '../systems/BattleSettings';
 import { tutorialReplayLink } from '../ui/TutorialOverlay';
-import { beginBattle, commitBattle, rollbackBattle } from '../systems/BattleSnapshot';
+import { openBattleCheckpoint, commitBattle, rollbackBattle } from '../systems/BattleSnapshot';
 import { reloadGame } from '../systems/SaveSlots';
 import { BOOT_TO_KEY } from '../systems/BattleSnapshot';
 import { BossMoveset } from '../systems/BossMoveset';
@@ -889,6 +889,20 @@ export class GameScene extends Phaser.Scene {
     super(key);
   }
 
+  preload():void {
+    if(this.scene.key==='GauntletGameScene')return;
+    // Treat the rollback checkpoint as a load dependency, so no combat can write progress
+    // while another tab finishes a wallet transaction that started before this battle.
+    const label=this.scene.key;
+    const file=new Phaser.Loader.File(this.load,{type:'campaign-checkpoint',key:'save-checkpoint'});
+    file.load=()=>{
+      openBattleCheckpoint(label,()=>!!file.loader && this.sys.settings.status===Phaser.Scenes.LOADING).then(()=>file.loader?.nextFile(file,true),error=>{
+        console.warn('战役存档保护暂不可用',error);
+        file.loader?.nextFile(file,false);
+      });
+    };
+    this.load.addFile(file);
+  }
   /** 本场开打时是否已有驽马（第一章通关剧情「中山商旅 · 献马」只给还没有马的存档播；老存档已有驽马不补弹）。 */
   protected hadStarterHorse = true;
   /** 游戏实际在用的马厩读写（测试走这里：常开的 dev server 热更新后，测试自己 import 的 ItemStore 可能是另一个模块实例，内存缓存不同步）。 */
@@ -897,8 +911,7 @@ export class GameScene extends Phaser.Scene {
     // 中途退出不算：进关先记下存档，告捷 / 战败才丢掉（systems/BattleSnapshot.ts）
     // Keep ground telegraphs readable even on the first frame of a hit flash.
     this.cameras.main.flashEffect.alpha = 0.20;
-    // 连战成长仅在局内；整档回滚会覆盖另一个标签页已经结算的合法收益。
-    if(this.scene.key!=='GauntletGameScene') beginBattle(this.scene.key);
+    // Ordinary campaigns captured their rollback point during preload.
     stopMenuMusic();
     startCityAmbient(this, k => this.sfx?.play(k), ['amb_wind', 'amb_wind', 'amb_flag'], [9000, 16000]); // 战斗环境声：很稀的风 / 旗声（音效审计第二批）
     this.hadStarterHorse = ownedHorses().some(h => h.id === STARTER_HORSE);
@@ -3977,13 +3990,17 @@ export class GameScene extends Phaser.Scene {
     this.renderRecruit(); this.setMode('rest'); // 同打赢进行营：renderRecruit 只开页面，模式要另外切（战斗冻结、营中闲话）
   }
   /** 行营「率军出征」：整军页 → 开战（本关不变）；打赢后的行营 → 下一关（continueCampaign）。 */
-  protected departRest(): void {
+  private openingRestCheckpoint=false;
+  protected async departRest(): Promise<void> {
     if (!this.preCamp) { this.continueCampaign(); return; }
-    if (!this.resting || this.mode !== 'rest') return;
-    this.saveRestPoint(); // 存档点 = 出征那一刻
+    if (!this.resting || this.mode !== 'rest' || this.openingRestCheckpoint) return;
+    this.openingRestCheckpoint=true;
+    this.saveRestPoint();
+    try {await openBattleCheckpoint(this.scene.key);}
+    finally {this.openingRestCheckpoint=false;}
+    if(!this.sys.isActive() || !this.resting || this.mode!=='rest')return;
     this.preCamp = false; this.resting = false; this.restIntroPlayed = false; if (this.campUI) this.campUI.preBattle = undefined;
     this.setMode('none');
-    commitBattle(); beginBattle(this.scene.key); // 整军里的花费已写进存档点，不随中途退出回滚；从这里起才算「进行中的战斗」
     const after = this.preCampAfter; this.preCampAfter = null; after?.();
   }
   /** 属性点提醒（data/pointsHint.ts）：主将还有几点没加、去哪加；都还加不了返回 null。 */

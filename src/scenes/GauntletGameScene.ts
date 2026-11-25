@@ -70,7 +70,7 @@ import { ART_V2_FILES, isV2Texture, loadBossSheet, loadV2TroopSheets } from '../
 import { isChapterTestRun } from '../systems/ChapterProgress';
 import { activeSlot } from '../systems/SaveSlots';
 import { modeHistory, modeKey, modeLabel, saveModeBest, scoreRun } from '../systems/GauntletHistory';
-import { settleGauntlet } from '../systems/GauntletSettlement';
+import { observeDeferredReward, settleGauntlet } from '../systems/GauntletSettlement';
 import { FollowerSquad, type Follower } from '../systems/FollowerSquad';
 import { GauntletTrack } from '../ui/GauntletTrack';
 import { FOLLOWER_ATTACK_SFX } from '../systems/HeroSfx';
@@ -1202,14 +1202,14 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       super.finish(victory, reason);
       const kills=this.gKills.length, debug=this.debugRun(), key=this.recordKey, runId=this.claimId;
       const score=scoreRun(kills,this.gWave,Math.round(this.elapsed*1000),this.mythicSize,this.gMilestones,this.gEndless);
-      let best=0,record=false,first=false,pending=false,rw={provisions:0,scrolls:0};
+      let best=0,record=false,first=false,pending=false,deferred=false,rw={provisions:0,scrolls:0};
       this.resultPanel.setVisible(false);
       try {
         const receipt=debug ? await saveModeBest(key,score,true,this.claimSlot) :
           await settleGauntlet(runId,kills,this.gCleared,key,score,this.claimSlot);
-        best=receipt.best?.kills??0;
+        best=receipt.best?.kills??modeHistory(debug)[key]?.kills??0;
         record=!!receipt.record || (!this.gEndless && kills>0 && kills===this.checkpointRecordKills && kills===best);
-        if ('provisions' in receipt) {rw=receipt;first=receipt.first;}
+        if ('provisions' in receipt) {rw=receipt;first=receipt.first;deferred=!!receipt.deferred;}
       } catch(error) {pending=true;console.warn('战报写入未完成',error);}
       if(this.claimId!==runId || !this.sys.isActive())return;
       const keep = this.resultTexts.body.text.split('\n').filter(l => /^武将等级|^经验已满|^属性点|^星图/.test(l));
@@ -1252,7 +1252,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
         stats: [['战斗用时', this.formatTime(this.elapsed)], ['击破敌军', this.kills], ['总伤害', Math.round(this.damageDealt)],
           ['本局钱币', this.legion.food], ['现存部曲', this.legion.count], ['部曲战损', this.legion.dead],
           [modeLabel(key)+'纪录', best + ' 位' + (record ? ' · 新纪录' : '')]],
-        reward: {label:'本局所得', value:debug ? '演练场 · 奖励不入库' : pending ? '奖励写入未完成 · 下次进入时核对' : '钱币 +' + rw.provisions + ' · 残卷 +' + rw.scrolls},
+        reward: {label:'本局所得', observe:deferred?show=>observeDeferredReward(runId,this.claimSlot,show):undefined, value:debug ? '演练场 · 奖励不入库' : deferred ? '战报已保存 · 普通战役结束后入账' : pending ? '奖励写入未完成 · 下次进入时核对' : '钱币 +' + rw.provisions + ' · 残卷 +' + rw.scrolls},
         details:[...this.gauntletBuild().filter(group=>group.items.length).map(group=>({label:group.cat,body:group.items.map(i=>i.name+(i.lv?' '+i.lv:'')).join('、')})),
           {label:'历次战绩',body:Object.entries(modeHistory(debug)).map(([k,r])=>(k==='legacy'?'历史未分类':modeLabel(k as typeof key))+' '+r.kills+' 将').join('　')||'尚无记录'}],
         bosses:this.gKills.map(b=>({name:b.name,image:this.textures.getBase64(this.portrait(b))})),

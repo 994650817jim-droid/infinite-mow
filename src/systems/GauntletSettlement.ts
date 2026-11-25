@@ -1,6 +1,7 @@
 import { GAUNTLET, gauntletReward } from '../data/gauntlet';
 import { creditGauntletGrain } from '../world/WorldStore';
 import { creditGauntletScrolls } from './MasteryStore';
+import { BATTLE_SNAPSHOT_KEY, campaignUsesSave } from './BattleSnapshot';
 import { activeSlot } from './SaveSlots';
 import { withGauntletLock } from './GauntletSaveLock';
 import { drainScoreRequests, updateModeBest, type Best, type ModeKey } from './GauntletHistory';
@@ -11,7 +12,7 @@ export const PENDING_PREFIX = 'im_gauntlet_pending:';
 type Payment = { provisions:number; scrolls:number };
 interface Intent { id:string; kills:number; cleared:boolean; mode?:ModeKey; score?:Best }
 interface Claim extends Intent { first:boolean; paid?:Payment }
-type Receipt = Payment & {first:boolean; record?:boolean; best?:Best};
+type Receipt = Payment & {first:boolean; deferred?:boolean; record?:boolean; best?:Best};
 function validate(intent: Intent) {
   if (!intent || !intent.id?.startsWith('gauntlet:') || !Number.isSafeInteger(intent.kills) || intent.kills<0)
     throw new Error('名将战报凭据异常');
@@ -43,9 +44,28 @@ function archive(claim:Claim, ledger:Record<string,Receipt>) {
   }
   localStorage.removeItem(CLAIM_KEY);
 }
+export function observeDeferredReward(id:string,slot:number,show:(value:string)=>void) {
+  const refresh=()=>{
+    if(activeSlot()!==slot)return;
+    try {
+      const r:Receipt|undefined=JSON.parse(localStorage.getItem(LEDGER)??'{}')[id];
+      if(r)show('已入账　钱币 +'+r.provisions+' · 残卷 +'+r.scrolls);
+    } catch { /* Keep the durable pending notice when storage is temporarily unavailable. */ }
+  };
+  function changed(e:StorageEvent) {
+    if(e.key===LEDGER)refresh();
+    // Retreat reloads the owner page. The open report can finish payment itself.
+    if(e.key===BATTLE_SNAPSHOT_KEY && e.newValue===null && activeSlot()===slot)
+      void recoverGauntletSettlement().then(refresh).catch(error=>console.warn('连战战报待入账',error));
+  }
+  window.addEventListener('storage',changed);
+  refresh();
+  return ()=>window.removeEventListener('storage',changed);
+}
 function drain(slot:number, requested?:string) {
   if(slot!==activeSlot())throw new Error('等待战报所属存档位重新打开');
   const ledger:Record<string,Receipt>=JSON.parse(localStorage.getItem(LEDGER)??'{}');
+  if(campaignUsesSave(slot))return requested ? ledger[requested] ?? {provisions:0,scrolls:0,first:false,deferred:true} : undefined;
   const journal=localStorage.getItem(CLAIM_KEY);
   if(journal)archive(JSON.parse(journal),ledger);
   for(const key of pendingKeys(slot)) {
@@ -66,7 +86,7 @@ function drain(slot:number, requested?:string) {
 export async function recoverGauntletSettlement() {
   const slot=activeSlot();
   await withGauntletLock(()=>{
-    if(slot!==activeSlot())return;
+    if(slot!==activeSlot() || campaignUsesSave(slot))return;
     if(hasPendingSettlement())drain(slot);
     drainScoreRequests(slot);
   });

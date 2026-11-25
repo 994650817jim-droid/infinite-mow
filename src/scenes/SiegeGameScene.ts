@@ -89,7 +89,7 @@ export function siegeGameSceneClass(Base: typeof GameScene) {
     /** 池空后仍必刷的兵（目标 / 剧情）：不给经验、不掉落、不记战功。 */
     private unpaid = new Set<number>(); private noLoot = false; private scripted = false; private garrisonText?: Phaser.GameObjects.Text;
     constructor() { super('SiegeGameScene'); }
-    preload() { for (const [key, url] of Object.entries(GUANDU_ATLAS_FILES)) if (!this.textures.exists(key)) loadBossSheet(this.load, key, url); loadMidSiegeArt(this); if (this.registry.get('siegeMode') === 'defense' && defenseV2On()) { preloadDefenseV2Wall(this); preloadDefenseV2Assault(this); } } // 守城 v2 场地图开打前就载好（走查 G；preload 早于 create，this.defense 还没设，按 registry 判断）
+    preload() { super.preload();  for (const [key, url] of Object.entries(GUANDU_ATLAS_FILES)) if (!this.textures.exists(key)) loadBossSheet(this.load, key, url); loadMidSiegeArt(this); if (this.registry.get('siegeMode') === 'defense' && defenseV2On()) { preloadDefenseV2Wall(this); preloadDefenseV2Assault(this); } } // 守城 v2 场地图开打前就载好（走查 G；preload 早于 create，this.defense 还没设，按 registry 判断）
     get gateAlive() { return !!this.gate && this.gate.active && this.gate.spawnId === this.gateLife; }
     create() {
       this.test = isChapterTestRun();

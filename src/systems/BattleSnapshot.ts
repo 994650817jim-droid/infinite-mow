@@ -1,3 +1,5 @@
+import { battlePageOwner } from './BattlePageOwner';
+import { withGauntletLock } from './GauntletSaveLock';
 import { PROGRESS_KEYS, activeSlot } from './SaveSlots';
 
 /**
@@ -8,7 +10,7 @@ import { PROGRESS_KEYS, activeSlot } from './SaveSlots';
  * 战斗中照旧随时写存档（升级、拾取等），回滚时整份换回快照，所以不用逐处改成延迟写入。成就（im_achievements）是全局统计，不在快照里，不回滚。
  */
 export const BATTLE_SNAPSHOT_KEY = 'im_battle_snapshot';
-interface Snapshot { slot: number; at: number; label: string; keys: Record<string, string | null> }
+interface Snapshot { owner?:string; slot: number; at: number; label: string; keys: Record<string, string | null> }
 
 function read(): Snapshot | null {
   try { const v = JSON.parse(localStorage.getItem(BATTLE_SNAPSHOT_KEY) ?? 'null'); return v && typeof v === 'object' && v.keys && typeof v.keys === 'object' ? v as Snapshot : null; } catch { return null; }
@@ -16,10 +18,23 @@ function read(): Snapshot | null {
 /** 进关：记下当前存档（总是覆盖：上一份快照要么已结算丢掉，要么是没进成关的残留，不能拿它当回滚点）。 */
 export function beginBattle(label: string): void {
   const keys: Record<string, string | null> = {};
-  try { for (const k of PROGRESS_KEYS) keys[k] = localStorage.getItem(k); localStorage.setItem(BATTLE_SNAPSHOT_KEY, JSON.stringify({ slot: activeSlot(), at: Date.now(), label, keys } satisfies Snapshot)); } catch { /* 存储不可用：不做回滚保护 */ }
+  try { for (const k of PROGRESS_KEYS) keys[k] = localStorage.getItem(k); localStorage.setItem(BATTLE_SNAPSHOT_KEY, JSON.stringify({ owner:battlePageOwner, slot: activeSlot(), at: Date.now(), label, keys } satisfies Snapshot)); } catch { /* 存储不可用：不做回滚保护 */ }
 }
 /** 告捷 / 战败结算：本场写入生效，丢掉快照。 */
-export function commitBattle(): void { try { localStorage.removeItem(BATTLE_SNAPSHOT_KEY); } catch { /* ignore */ } }
+export function openBattleCheckpoint(label:string,stillNeeded=()=>true):Promise<void> {
+  return withGauntletLock(()=>{if(stillNeeded())beginBattle(label);});
+}
+function releaseCheckpoint():void {
+  localStorage.removeItem(BATTLE_SNAPSHOT_KEY);
+  // Queues live outside the campaign rollback image. A reload can retry this wakeup.
+  void import('./GauntletSettlement').then(m=>m.recoverGauntletSettlement())
+    .catch(error=>console.warn('连战战报待入账',error));
+}
+export function commitBattle(): void { try { releaseCheckpoint(); } catch { /* retry at next boot */ } }
+export function campaignUsesSave(slot:number):boolean {
+  const snapshot=read();
+  return !!snapshot && snapshot.slot===slot && snapshot.label!=='GauntletGameScene';
+}
 export function battleInProgress(): string | null { return read()?.label ?? null; }
 /** 中途退出：把存档换回进关时的样子并丢掉快照；返回是否真的回滚了（调用方随后应重载，丢掉各存档模块的内存缓存）。 */
 /** 中途撤退回滚后要重载页面：撤退前写入 sessionStorage，启动（BootScene）读到后直接进这个场景（一次性）。 */
@@ -29,7 +44,7 @@ export function rollbackBattle(): boolean {
   try {
     // 剧情「已看过」不回滚（关前军情重打不再播）；剧情旗标 im_story_v1 照常回滚
     if (s.slot === activeSlot()) for (const k of PROGRESS_KEYS) { if (k === 'im_story_seen_v1' || !Object.prototype.hasOwnProperty.call(s.keys, k)) continue; /* 旧快照没有新增的进度键时保留原值 */ const v = s.keys[k]; if (v === null || v === undefined) localStorage.removeItem(k); else localStorage.setItem(k, v); }
-    localStorage.removeItem(BATTLE_SNAPSHOT_KEY);
+    releaseCheckpoint();
   } catch { return false; }
   return s.slot === activeSlot();
 }

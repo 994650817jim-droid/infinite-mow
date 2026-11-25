@@ -5,6 +5,7 @@
  * 桌面版的 localStorage 已由 platform/desktop.ts 换成 save.json，所以存档位同样落在 save.json 里（便于 Steam 云存档）。
  */
 import { CHAPTER_CLEAR_KEY } from './ChapterProgress';
+import { withGauntletLock } from './GauntletSaveLock';
 import { BACKUP_KEY, WORLD_KEY, type WorldSave } from '../world/WorldStore';
 import { getCharacter } from '../data/characters';
 import { CHAPTER_TIMELINE, chapterStagesDone, chapterStages, type TimelineProgress } from '../world/ChapterTimeline';
@@ -149,6 +150,38 @@ export function deleteSlot(i: number): void {
   for(let n=localStorage.length-1;n>=0;n--){const k=localStorage.key(n);if(k && (k.startsWith(pendingPrefix)||k.startsWith('im_gauntlet_score_pending:'+i+':')))del(k);}
   if (i === activeSlot()) { for (const k of PROGRESS_KEYS) del(k); }
   else del(slotKey(i));
+}
+
+export class SlotBattleConflict extends Error {}
+function assertSlotIdle(slot:number): void {
+  const raw = localStorage.getItem('im_battle_snapshot');
+  if (raw && JSON.parse(raw)?.slot === slot) {
+    throw new SlotBattleConflict('此存档还有战斗。请先结束战斗，已关闭战斗页时请重新载入。');
+  }
+}
+
+/** Browser entry points share the wallet lock while the active slot's keys are replaced. */
+export function switchSlotSafely(i:number): Promise<boolean> {
+  const expected = activeSlot();
+  return withGauntletLock(() => {
+    recoverSlotTransfer();
+    if (activeSlot() !== expected) return false;
+    if (i !== expected) assertSlotIdle(expected);
+    return switchSlot(i);
+  });
+}
+export function deleteSlotSafely(i:number): Promise<boolean> {
+  const from = activeSlot();
+  const contents = () => i === from ? JSON.stringify(liveData()) : localStorage.getItem(slotKey(i));
+  const expected = contents();
+  return withGauntletLock(() => {
+    recoverSlotTransfer();
+    if (activeSlot() !== from || contents() !== expected) throw new Error('存档已变化，请重新确认删除');
+    const wasActive = from === i;
+    if (wasActive) assertSlotIdle(i);
+    deleteSlot(i);
+    return wasActive;
+  });
 }
 
 /** 切换 / 删除后重新加载：清掉各模块的内存缓存与场景状态。 */

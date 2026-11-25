@@ -10,7 +10,7 @@ export interface CampaignReport {
   portrait?: string;
   stats: Stat[];
   stages?: { label: string; count: number; total: number }[];
-  reward?: { label: string; value: string };
+  reward?: { label: string; value: string; observe?: (show:(value:string)=>void)=>()=>void };
   details?: { label: string; body: string }[];
   bosses?: { name: string; image?: string }[];
   party?: { name: string; portrait?: string; stats: Stat[]; stars: string }[];
@@ -77,10 +77,12 @@ export function campaignPanel(owner: Phaser.Scene, data: CampaignReport): () => 
     }
   }
   figures(body, data.stats);
+  let stopReward: (()=>void) | undefined;
   if (data.reward) {
     const reward = append(body, 'div', '', 'report-reward');
     append(reward, 'span', data.reward.label);
-    append(reward, 'strong', data.reward.value);
+    const value=append(reward, 'strong', data.reward.value);
+    if(data.reward.observe){value.setAttribute('aria-live','polite');stopReward=data.reward.observe(text=>{value.textContent=text;});}
   }
   for (const member of data.party ?? []) {
     const row = append(body, 'section', '', 'report-member');
@@ -107,6 +109,7 @@ export function campaignPanel(owner: Phaser.Scene, data: CampaignReport): () => 
   function close() {
     if (closed) return;
     closed = true;
+    stopReward?.();
     owner.input.enabled = priorInput;
     owner.events.off('shutdown', close);
     dialog.remove();

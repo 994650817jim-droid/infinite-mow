@@ -1,4 +1,5 @@
 import { withGauntletLock } from './GauntletSaveLock';
+import { campaignUsesSave } from './BattleSnapshot';
 import { activeSlot } from './SaveSlots';
 
 export type ModeKey = `${'solo' | 'coop'}-${'standard' | 'extreme'}${'' | '-endless'}`;
@@ -60,6 +61,7 @@ export async function saveModeBest(key: ModeKey, value: Best, test = false, slot
   localStorage.setItem(intent,JSON.stringify({key,value,test} satisfies ScoreRequest));
   return withGauntletLock(() => {
     if (activeSlot() !== slot) throw new Error('战报所属存档位已切换');
+    if(campaignUsesSave(slot))return {best:modeHistory(test)[key]??blank(),record:false};
     const result=updateModeBest(key,value,test);
     localStorage.removeItem(intent);
     return result;

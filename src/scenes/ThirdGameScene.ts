@@ -78,7 +78,7 @@ export function thirdGameSceneClass(Base:typeof GameScene,cfg:ArcSceneConfig=THI
  protected stageGate(stage:number):boolean{return cfg.gate?cfg.gate(stage):arcStagePlayable(cfg.arc as WarlordArc,stage);}
  private get sceneryStage():SceneryStage{return cfg.stages[this.thirdStage-1]?.scenery??this.thirdStage;}
  constructor(){super(cfg.key);}
- preload(){for(const d of cfg.stages)if(!this.textures.exists(cfg.texture(d.id)))loadBossSheet(this.load,cfg.texture(d.id),cfg.sheet(d.id));if(cfg.troopSheets)loadV2TroopSheets(this,cfg.troopSheets);/* 3-1 双首领第二位郭汜（v2 专属图；v1 没有郭汜图，借李傕） */if(cfg.arc==='qunxiong'&&!this.textures.exists('third_guosi'))loadBossSheet(this.load,'third_guosi',cfg.sheet('lijue'));}
+ preload(){ super.preload(); for(const d of cfg.stages)if(!this.textures.exists(cfg.texture(d.id)))loadBossSheet(this.load,cfg.texture(d.id),cfg.sheet(d.id));if(cfg.troopSheets)loadV2TroopSheets(this,cfg.troopSheets);/* 3-1 双首领第二位郭汜（v2 专属图；v1 没有郭汜图，借李傕） */if(cfg.arc==='qunxiong'&&!this.textures.exists('third_guosi'))loadBossSheet(this.load,'third_guosi',cfg.sheet('lijue'));}
  create(){
   this.thirdStage=(this.registry.get(cfg.stageKey)??1)as ThirdStage;this.thirdTest=isChapterTestRun();if(!cfg.stages[this.thirdStage-1]||!this.thirdTest&&!this.stageGate(this.thirdStage)){this.scene.start('WorldMapScene');return;}
   const saved=this.registry.get('runConfig')as RunConfig|undefined,transfer=this.registry.get(cfg.transferKey)as CampaignTransfer|undefined;this.registry.remove(cfg.transferKey);this.registry.remove('campaignTransfer');if(transfer&&transfer.character===saved?.character)this.registry.set('campaignTransfer',transfer);

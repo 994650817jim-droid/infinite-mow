@@ -58,7 +58,7 @@ export function guanduGameSceneClass(Base: typeof GameScene) {
     /** 乌巢（4-3）：三座粮仓全烧 → 劝淳于琼 +15%。 */
     protected parleyFlags(): Record<string, boolean> { return { depotsAllBurned: !!this.depots && this.depots.intact === 0 && (this.depots.burned ?? 0) > 0 }; }
     constructor() { super('GuanduGameScene'); }
-    preload() { for (const [key, url] of Object.entries(GUANDU_ATLAS_FILES)) if (!this.textures.exists(key)) loadBossSheet(this.load, key, url); }
+    preload() { super.preload();  for (const [key, url] of Object.entries(GUANDU_ATLAS_FILES)) if (!this.textures.exists(key)) loadBossSheet(this.load, key, url); }
     create() {
       this.guanduStage = (this.registry.get('guanduStage') ?? 1) as GuanduStage; this.test = isChapterTestRun();
       // 袁军配色贴图须在任何敌兵生成前就绪

@@ -185,7 +185,9 @@ export class Legion {
   }
   rebuildGrid(): void { this.grid.clear(); for (const u of this.units) if (u.active) this.grid.insert(u); }
   /** floor：最少留几点血（首领一招打死数到上限后留 1 血）。 */
-  hurt(u: Ally, raw: number, now: number, source?: { x: number; y: number; normal: boolean }, floor = 0, ignoreHurtGap = false): boolean {
+  onDamageTrace?: (event: {unit:number; life:number; at:number; cause:string; before:number; after:number}) => void;
+  private readonly chargeDeaths = new WeakMap<object, number>();
+  hurt(u: Ally, raw: number, now: number, source?: { x: number; y: number; normal: boolean }, floor = 0, ignoreHurtGap = false, cause = 'ordinary'): boolean {
     if (!u.active || (!ignoreHurtGap && now < u.hurtUntil)) return false;
     const armor = u.def.armor + (u.kind === 'guardian' && u.level === 3 ? 5 : 0);
     let mitigation = Math.min(this.command.incoming(u,now),this.defense?.incoming(u,now)??1,this.awakeningDefense?.incoming(u,now)??1)*(this.fm?.taken(u)??1)*(this.hurtMul?.(u,source)??1)*this.player.growth.allyNearTakenFactor(u.x-this.player.x,u.y-this.player.y); // 末项：星图「身先士卒」（开关关着恒为 1）
@@ -198,7 +200,9 @@ export class Legion {
     mitigation*=1-CAMP_TRAINING.armor.perLevel*this.training.armor;
     let dmg = Math.max(1, Math.round(Math.max(1, raw - armor) * mitigation));
     if (u.shield > 0 && now < u.shieldUntil) { const a = Math.min(u.shield, dmg); u.shield -= a; dmg -= a; } // 太史慈突围护盾先扣
+    const before = u.hp;
     u.hp = Math.max(Math.min(floor, u.hp), u.hp - dmg);
+    this.onDamageTrace?.({unit:u.id, life:u.lifeId, at:now, cause, before, after:u.hp});
     u.hurtUntil = now + 350;
     this.onHurt?.(u, now);
     this.defense?.onAllyHurt(u,now);this.awakeningDefense?.onAllyHurt(u,now);
@@ -226,7 +230,7 @@ export class Legion {
   hurtFromBoss(u: Ally, raw: number, now: number, source?: { x: number; y: number; normal: boolean }): boolean {
     if (!u.active || now < u.bossImmuneUntil) return false;
     if (now !== this.bossCastAt) { this.bossCastAt = now; this.bossCastKills = 0; }
-    const ok = this.hurt(u, raw * BOSS_VS_ALLY.mul * this.player.growth.allyBossTakenMultiplier(), now, source, this.bossCastKills >= BOSS_VS_ALLY.killCapPerCast ? 1 : 0);
+    const ok = this.hurt(u, raw * BOSS_VS_ALLY.mul * this.player.growth.allyBossTakenMultiplier(), now, source, this.bossCastKills >= BOSS_VS_ALLY.killCapPerCast ? 1 : 0, false, source?.normal ? 'boss-contact' : 'boss-skill');
     if (ok) { u.bossImmuneUntil = now + BOSS_VS_ALLY.immuneMs; if (!u.active) this.bossCastKills++; }
     return ok;
   }
@@ -236,12 +240,12 @@ export class Legion {
    * 一次冲锋（castKey 相同）最多打死 BOSS_VS_ALLY.killCapPerCast 个，其余留 1 血；之后 immuneMs 内不再吃首领伤害。返回是否命中。
    * 不看首领免伤（bossImmuneUntil）：冲锋前一帧首领近身碰到的兵会有 0.5 秒首领免伤，原来冲锋那一下就被吞掉；冲锋本身每兵每次只判一次，叠不起来。
    */
-  hurtByCharge(u: Ally, now: number, castKey: number): boolean {
+  hurtByCharge(u: Ally, now: number, castKey: object): boolean {
     if (!u.active) return false;
-    if (castKey !== this.bossCastAt) { this.bossCastAt = castKey; this.bossCastKills = 0; }
+    const kills = this.chargeDeaths.get(castKey) ?? 0;
     const armor = u.def.armor + (u.kind === 'guardian' && u.level === 3 ? 5 : 0);
-    const ok = this.hurt(u, u.maxHp * BOSS_CHARGE.hpFrac + armor, now, undefined, this.bossCastKills >= BOSS_VS_ALLY.killCapPerCast ? 1 : 0, true);
-    if (ok) { u.bossImmuneUntil = now + BOSS_VS_ALLY.immuneMs; if (!u.active) this.bossCastKills++; }
+    const ok = this.hurt(u, u.maxHp * BOSS_CHARGE.hpFrac + armor, now, undefined, kills >= BOSS_VS_ALLY.killCapPerCast ? 1 : 0, true, 'boss-charge');
+    if (ok) { u.bossImmuneUntil = now + BOSS_VS_ALLY.immuneMs; if (!u.active) this.chargeDeaths.set(castKey, kills + 1); }
     return ok;
   }
   /** 范围伤害：目前只有首领招式调用（张角雷、华雄、吕布、徐荣），按首领倍率结算。 */

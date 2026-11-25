@@ -18,6 +18,7 @@ try {
   await ev(s => { s.player.damageImmune = true; s.spawnTimer = s.eliteTimer = 1e9; for (const e of s.enemies) if (e.active && !e.isSupplySlot) e.deactivate(); s.spawnBoss(); });
   for (let i = 0; i < 40 && !(await ev(s => !!s.moveset && !!s.boss?.active)); i++) await p.waitForTimeout(150);
   // 一次冲锋：士兵排在首领与主将之间的冲锋道上，起手期间钉住位置；setup(u, i) 设每个兵的初始状态
+  p.on('console', msg => { if (msg.text().startsWith('CHARGE_SOURCES')) console.log(msg.text()); });
   const charge = (n, setup) => p.evaluate(async ([S0, n, setup]) => {
     const s = eval(S0), pl = s.player, bo = s.boss, mv = s.moveset, prep = eval('(' + setup + ')');
     const calm = () => { s.spawnTimer = s.eliteTimer = 1e9; if (s.mode === 'levelup' || s.mode === 'recruit') s.__DEV_ACTIONS?.closePopup?.(); };
@@ -31,12 +32,12 @@ try {
     for (const e of s.enemies) if (e.active && e !== bo && !e.isSupplySlot) e.deactivate();
     pin(); us.forEach((u, i) => { u.bossImmuneUntil = 0; prep(u, i, s.combatNow); });
     for (let t = 0; t < 40 && s.mode !== 'none'; t++) { calm(); await new Promise(r => setTimeout(r, 50)); }
-    const hits0 = mv.metrics.troopHits; mv.debug.force(ci, s.combatNow);
+    const damage = []; s.legion.onDamageTrace = event => damage.push(event); const hits0 = mv.metrics.troopHits; mv.debug.force(ci, s.combatNow);
     for (let t = 0; t < 80 && !mv.dash; t++) { calm(); pin(); us.forEach((u, i) => { u.bossImmuneUntil = 0; prep(u, i, s.combatNow); }); /* 起手期间首领近身碰到的不算（会触发 0.5 秒首领免伤，冲锋就跳过它） */ bo.sprite.x = pl.x + 320; bo.sprite.y = pl.y; await new Promise(r => setTimeout(r, 30)); }
     const y0 = us.map(u => u.y), started = !!mv.dash;
     for (let t = 0; t < 80 && mv.dash; t++) { calm(); us.forEach((u, i) => { if (u.active && !mv.dash?.hitTroops.has(u)) u.setPosition(pl.x + 95 + (i % 6) * 28, pl.y + (i < 6 ? 0 : 14)); }); await new Promise(r => setTimeout(r, 15)); } /* 还没被撞的兵钉在冲锋道上（不然 AI 会走开） */
     await new Promise(r => setTimeout(r, 200));
-    return { ci, started, hits: mv.metrics.troopHits - hits0, loss: us.map(u => Math.round((1 - Math.max(0, u.active ? u.hp : 0) / u.maxHp) * 100)), dead: us.filter(u => !u.active).length, oneHp: us.filter(u => u.active && u.hp === 1).length, pushed: us.filter((u, i) => u.active && Math.abs(u.y - y0[i]) >= 10).length };
+    s.legion.onDamageTrace = undefined; console.info("CHARGE_SOURCES", JSON.stringify(damage)); return { ci, started, damage, hits: mv.metrics.troopHits - hits0, loss: us.map(u => Math.round((1 - Math.max(0, u.active ? u.hp : 0) / u.maxHp) * 100)), dead: us.filter(u => !u.active).length, oneHp: us.filter(u => u.active && u.hp === 1).length, pushed: us.filter((u, i) => u.active && Math.abs(u.y - y0[i]) >= 10).length };
   }, [S, n, String(setup)]);
   // ① 满血
   const a = await charge(6, (u) => { u.hp = u.maxHp; });

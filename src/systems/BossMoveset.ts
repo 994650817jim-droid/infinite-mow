@@ -229,7 +229,7 @@ export class BossMoveset extends ArcBossV2<string> {
     // 冲过部曲：每名士兵每次冲锋判定一次（Legion.hurtByCharge：约半管血、按当前时间结算、不吃士兵自身受击间隔；「一次冲锋最多打死 3 个」按冲锋起点算），并往冲锋道两侧推开一点
     for (const u of this.h.army.units) if (u.active && !d.hitTroops.has(u) && Math.hypot(u.x - b.x, u.y - b.y) <= 46 + u.radius) {
       d.hitTroops.add(u);
-      if (this.h.army.hurtByCharge(u, now, d.t0)) { this.metrics.troopHits++; if (u.active) { const side = (u.x - b.x) * -d.ay + (u.y - b.y) * d.ax >= 0 ? 1 : -1; u.setPosition(u.x - d.ay * side * BOSS_CHARGE.knock + d.ax * 8, u.y + d.ax * side * BOSS_CHARGE.knock + d.ay * 8); } }
+      if (this.h.army.hurtByCharge(u, now, d.hitTroops)) { this.metrics.troopHits++; if (u.active) { const side = (u.x - b.x) * -d.ay + (u.y - b.y) * d.ax >= 0 ? 1 : -1; u.setPosition(u.x - d.ay * side * BOSS_CHARGE.knock + d.ax * 8, u.y + d.ax * side * BOSS_CHARGE.knock + d.ay * 8); } }
     }
     if (this.theme && now >= this.trailAt) { this.trailAt = now + 90; playThemeFx(this.h.scene, this.theme, { kind: 'puff', x: b.x - d.ax * 26, y: b.y - d.ay * 26 + 4, size: 90 }, { ms: 360, alpha: .75 }); }
     if (m.fire && now >= d.fireAt) { d.fireAt = now + 120; this.add({ kind: 'circle', x: b.x, y: b.y, r: 40, fx: 'fire' }, now, now + 380, m.dmg * .5); }

@@ -35,6 +35,8 @@ const quiet = (p, S) => p.evaluate(S0 => { const s = eval(S0); s.spawnTimer = s.
   await p.evaluate(G0 => { const s = eval(G0); for (const camp of [...s.objective.standing]) { camp.hp = 1; s.hitEnemy(camp, 10, s.combatNow, 'melee', false, false); } }, G);
   await p.waitForFunction(G0 => eval(G0).dzLubu?.phase === 'wall', G, {timeout:12000});
   sp.joint = await p.evaluate(G0 => eval(G0).dzLubu.snapshot(), G);
+  await p.waitForFunction(G0=>eval(G0).dzLubu?.dongzhuo.attackSheet === 'dongzhuo_attack',G,{timeout:10000});
+  [sp.sheet,sp.atk] = await p.evaluate(G0=>{const b=eval(G0).dzLubu.dongzhuo;return [b.walkSheet,b.attackSheet];},G);
   ck(`[${layout}] 董卓 · 吕布同时出阵：董卓在城头刀枪不入，吕布在城下`, sp.ctrl && sp.joint?.phase === 'wall' && sp.joint.dzInv && sp.joint.lubu?.active, sp);
   ck(`[${layout}] 董卓用正式图（行走 + 纵火号令动作）`, sp.sheet === 'dongzhuo_walk' && sp.atk === 'dongzhuo_attack', sp);
   const fire = await p.evaluate(async G0 => { const s = eval(G0), dz = s.xiliang.dongzhuo; dz.nextFire = s.combatNow; await new Promise(r => setTimeout(r, 400)); const n = dz.state.fires; const hp0 = s.player.hp; s.player.invulnUntil = 0; await new Promise(r => setTimeout(r, 2200)); return { n, hp0, hp1: s.player.hp }; }, G);

@@ -37,9 +37,9 @@ export class DongzhuoBoss {
   /** 正式图（董卓行走 / 攻击图）载好就换掉占位造型；还没载好（首领出场很早，如过场预览）就每帧再试。 */
   private skinned = false;
   private trySkin(): void {
-    if (this.skinned || !troopArtReady(this.h.scene, 'dongzhuo_walk') || !this.boss.active) return;
+    if (this.skinned || !troopArtReady(this.h.scene, 'dongzhuo_walk') || !troopArtReady(this.h.scene, 'dongzhuo_attack') || !this.boss.active) return;
     this.skinned = true; const boss = this.boss;
-    boss.reskin({...boss.def, texture: 'dongzhuo_walk', walkVisual: {texture: 'dongzhuo_walk', scale: D.artScale, groundY: D.artGroundY, matched: true}, attackVisual: troopArtReady(this.h.scene, 'dongzhuo_attack') ? 'dongzhuo_attack' : undefined, tint: undefined});
+    boss.reskin({...boss.def, texture: 'dongzhuo_walk', walkVisual: {texture: 'dongzhuo_walk', scale: D.artScale, groundY: D.artGroundY, matched: true}, attackVisual: 'dongzhuo_attack', tint: undefined});
   }
   /** 在 (x,y) 播一段主效果（6 帧一遍）；size = 显示边长（世界像素）。 */
   private fx(kind: keyof typeof DZ_FX.rows, x: number, y: number, size: number): void {

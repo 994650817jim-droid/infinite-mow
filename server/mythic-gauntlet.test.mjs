@@ -38,7 +38,7 @@ try{
   server.http.listen(0,'127.0.0.1');await once(server.http,'listening');
   const origin='http://127.0.0.1:'+server.http.address().port;
   const a=await peer(origin);let b=await peer(origin);
-  a.send({type:'create',heroes:['zhaoyun']});
+  a.send({type:'create',extreme:true,heroes:['zhaoyun']});
   const {code}=await a.until(m=>m.type==='lobby');
   b.send({type:'join',code,heroes:['guanyu']});
   await b.until(m=>m.type==='lobby'&&m.count===2);

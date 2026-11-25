@@ -6,7 +6,7 @@ import { tallyRoster } from '../systems/RosterMix';
 import type { IffUnit } from '../systems/IffOverlay';
 import { loadSurvivorBossFx, updateSurvivorBossFx, clearSurvivorBossFx } from '../systems/SurvivorBossFx';
 import Phaser from 'phaser';
-import { DIVINE_GENERALS, GHOST_GENERALS, challengeBoss, challengeChoices, challengeWave, mythicArtKey, mythicBoss, tierTitle, type GauntletRunTier } from '../data/mythicGauntlet';
+import { mythicRoster, DIVINE_GENERALS, GHOST_GENERALS, challengeBoss, challengeChoices, challengeWave, mythicArtKey, mythicBoss, tierTitle, type GauntletRunTier } from '../data/mythicGauntlet';
 import { preloadMythic, prepareMythicActions } from '../systems/MythicArt';
 import { MythicBossController } from '../systems/MythicBossController';
 import { GameScene } from './GameScene';
@@ -182,11 +182,14 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     gWave = 1; gPhase: 'mow' | 'boss' | 'clear' | 'choice' | 'done' = 'mow'; gAt = 0; gOrder: GauntletBoss[] = []; gCur: GauntletBoss | null = null;
     gKills: GauntletBoss[] = []; gCleared = false; gEndless = false; private gPool: GauntletBoss[] = [];
     gTier: GauntletRunTier = 'mortal';
+    private roster!: ReturnType<typeof mythicRoster>;
+    private get mythicSize() { return this.roster.ghost.length; }
+    private get stageSize() { return this.gTier==='mortal'||this.gTier==='endless' ? GAUNTLET.waves : this.mythicSize; }
     gMilestones = 0;
     private get difficultyWave(): number {
-      if (this.gTier==='ghost') return 10+Math.ceil((this.gWave-10)/5);
-      if (this.gTier==='divine') return 12+Math.ceil((this.gWave-20)/5);
-      if (this.gTier==='endless'&&this.gMilestones>1) return this.gWave-8*(this.gMilestones-1);
+      if (this.gTier==='ghost') return 10+Math.ceil((this.gWave-10)*2/this.mythicSize);
+      if (this.gTier==='divine') return 12+Math.ceil((this.gWave-10-this.mythicSize)*2/this.mythicSize);
+      if (this.gTier==='endless'&&this.gMilestones>1) return this.gWave-(this.mythicSize-2)*(this.gMilestones-1);
       return this.gWave;
     }
     private get mowSeconds(): number { return this.gTier==='ghost'||this.gTier==='divine' ? 8 : GAUNTLET.mowSec; }
@@ -251,6 +254,8 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       const test = isChapterTestRun();
       const heroName = CHARACTERS.find(c => c.id === (saved?.character ?? 'zhaoyun'))?.name, pool = gauntletPool(); void test; // 名将池全开（11-22 一开始就能玩）
       this.gPool = pool.filter(b => b.name !== heroName).length ? pool.filter(b => b.name !== heroName) : pool; // 本局主将同名的名将不出（主将黄忠 / 孟获 / 祝融……）
+      const routeQuery = new URLSearchParams(location.search);
+      this.roster = mythicRoster(routeQuery.get('challenge')==='extreme' || (test && routeQuery.has('mythic')));
       this.gOrder = pickBosses(this.gPool);
       // 从 0 开局 + 卡池全开（基类 create 里按 mechOpen 建系统、读卡池上限，所以先开）；各章兵种换色图先备好
       this.gGear = {}; this.gCharms = []; this.gHorse = undefined; this.gRecruitBtn = null; this.gRecruitCardState = ''; this.gRecruits = { times: 0, men: 0 }; this.gResultTab = 'kills'; // 本局兵装 / 信物 / 坐骑：从 0 开局，空
@@ -295,7 +300,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     }
     protected phaseEligible() { return false; }
     protected lootBlocked() { return true; }
-    protected victoryLabel() { return this.gEndless ? '无尽止步' : this.gMilestones ? [ '', '凡将十阵告捷', '鬼将十阵告捷', '神将十阵告捷' ][this.gMilestones] : '连战结算'; }
+    protected victoryLabel() { return this.gEndless ? '无尽止步' : this.gMilestones ? [ '', '凡将十阵告捷', '鬼门告捷', '封神告捷' ][this.gMilestones] : '连战结算'; }
 
     // ———— 从 0 开局（用户 11-21「名将挑战是从 0 开始 build 起来」「全新从 0 开始的不继承主剧情的 build」）————
     // 主将 1 级、加点 0；不带星图 / 兵装 / 信物 / 坐骑 / 武将谱（本命淬炼、战法心得）/ 城建 / 部曲；专属兵器与招牌被动照有（武将自带）。
@@ -668,7 +673,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       else if (this.gPhase === 'clear') {
         if (this.gQiyuPending) this.openQiyu();
         else if (!this.gLootShown && this.waveT >= 1.8) { this.gLootShown = true; this.openLoot(); }
-        else if (this.gLootShown && this.waveT >= GAUNTLET.clearSec) { if (challengeChoices(this.gTier,this.gWave,GAUNTLET.waves).length) this.openClearChoice(); else this.nextWave(); }
+        else if (this.gLootShown && this.waveT >= GAUNTLET.clearSec) { if (challengeChoices(this.gTier,this.gWave,GAUNTLET.waves,this.mythicSize).length) this.openClearChoice(); else this.nextWave(); }
       }
     }
     /** 开发构建：左上的 DEV 徽标会盖住进度条左端——本模式下挪到左下（兵力 / 增益栏下面、FPS 行上面），离开场景放回原处。正式版没有这个徽标。 */
@@ -682,15 +687,15 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     /** 进度条线下的小字：第 N/10 阵 · 距名将登场 mm:ss / 名将名字 / 已斩；无尽写「无尽 · 第 N 阵」。 */
     private waveLine(): string {
       const n = this.gEndless ? `无尽 · 第 ${this.gWave} 阵` :
-        `${tierTitle[this.gTier]} · ${challengeWave(this.gTier,this.gWave,GAUNTLET.waves)}/${GAUNTLET.waves}`;
+        `${tierTitle[this.gTier]} · ${challengeWave(this.gTier,this.gWave,GAUNTLET.waves,this.mythicSize)}/${this.stageSize}`;
       if (this.gPhase === 'mow') { const left = Math.max(0, Math.ceil(this.mowSeconds - this.waveT)); return `${n} · 距名将登场 ${String(Math.floor(left / 60)).padStart(2, '0')}:${String(left % 60).padStart(2, '0')}`; }
-      if (this.gPhase === 'boss') return `${n} · ${challengeChoices(this.gTier,this.gWave,GAUNTLET.waves).length ? '守关 · ' : ''}${this.gCur?.dual?'河北双雄 · 颜良 / 文丑':this.gCur?.name ?? ''}`;
+      if (this.gPhase === 'boss') return `${n} · ${challengeChoices(this.gTier,this.gWave,GAUNTLET.waves,this.mythicSize).length ? '守关 · ' : ''}${this.gCur?.dual?'河北双雄 · 颜良 / 文丑':this.gCur?.name ?? ''}`;
       return `${n} · 已斩 ${this.gKills[this.gKills.length - 1]?.name ?? ''}`;
     }
     /** 十阵进度条：割草时标按时间从上一节点匀速走向这一阵的节点（走到头 = 名将登场），名将在场 / 斩将后停在节点。 */
     private updateTrack(): void {
       const t = this.gTrack; if (!t) return;
-      const W = GAUNTLET.waves, local = ((this.gWave - 1) % W) + 1;
+      const W = this.stageSize, local = ((this.gWave - 1) % W) + 1;
       const pos = this.gPhase === 'mow' ? (local - 1 + Math.min(1, this.waveT / this.mowSeconds)) / W : local / W;
       t.update(pos, this.gPhase === 'boss' && !!this.boss?.active, this.waveLine());
       // 显隐自己每帧定（不跟着计时器：计时器在名将登场时被藏，跟着它会一起藏住）；名将登场的水墨横幅期间藏计时与小字，顶部只留横幅
@@ -728,7 +733,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     }
     /** 这一阵的名将：十阵名单里的；无尽时现抽一位（全池循环）并记进名单。 */
     private waveBoss(): GauntletBoss {
-      const challenge = challengeBoss(this.gTier,this.gWave,GAUNTLET.waves);
+      const challenge = challengeBoss(this.gTier,this.gWave,GAUNTLET.waves,this.roster);
       if (challenge) return challenge;
       let b = this.gOrder[this.gWave - 1];
       if (!b) { b = endlessBoss(this.gPool, this.gKills[this.gKills.length - 1] ?? null, Math.random, this.gKills); this.gOrder[this.gWave - 1] = b; }
@@ -782,7 +787,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       this.spawnProps(b, boss, now); this.spawnEscort(b, boss, now);
       // 亲兵：围在名将身边（他自己那一章的兵，强度按本阵）
       let k = 0; for (const [kind, n] of GAUNTLET.guards) for (let i = 0; i < n; i++, k++) { const a = k / 4 * Math.PI * 2; this.spawnEnemy(kind, boss.x + Math.cos(a) * 70, boss.y + Math.sin(a) * 50, 1, true, this.guard(kind)); }
-      const last = challengeChoices(this.gTier,this.gWave,GAUNTLET.waves).length>0;
+      const last = challengeChoices(this.gTier,this.gWave,GAUNTLET.waves,this.mythicSize).length>0;
       this.gTrack?.bossUp(this.gWave, this.head(b)); void last;
       // 名将登场只留基类的水墨横幅（称号 + 名字），约 2.7 秒内顶部不放别的横幅、计时与进度条小字先藏（11-21 验收：顶部挤成一团）；「杂兵减半」不再提示
     }
@@ -844,10 +849,10 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       const b = this.gCur; if (!b || this.gPhase !== 'boss') return;
       this.gTrack?.bossDown(this.gWave); this.clearProps(true); this.escortLeave();
       this.gKills.push(b); this.gPhase = 'clear'; this.gAt = this.elapsed; this.gLootShown = false; this.traits?.clear();
-      const checkpoint = challengeChoices(this.gTier,this.gWave,GAUNTLET.waves).length > 0;
+      const checkpoint = challengeChoices(this.gTier,this.gWave,GAUNTLET.waves,this.mythicSize).length > 0;
       if (checkpoint) {
         this.gCleared = true;
-        this.gMilestones = this.gWave/GAUNTLET.waves;
+        this.gMilestones = this.gTier==='mortal'?1:this.gTier==='ghost'?2:3;
       }
       // 清场：场上的杂兵退散（淡出，不给经验 / 掉落）；地上的经验珠留着捡
       for (const e of this.enemies) if (e.active && !e.isSupplySlot && e.kind !== 'boss') { this.gStats.cleared++; if(e.def.trait)e.stunUntil=Math.max(e.stunUntil,this.combatNow+1200); const sp = e.sprite, life = e.spawnId; this.tweens.add({ targets: sp, alpha: 0, duration: 600, onComplete: () => { if (e.active && e.spawnId === life) { e.deactivate(); sp.setAlpha(1); } } }); }
@@ -1109,7 +1114,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       this.gFollowers = this.gFollowers.filter(x => x.f !== f);
     }
     private openClearChoice(): void {
-      const choices = challengeChoices(this.gTier,this.gWave,GAUNTLET.waves);
+      const choices = challengeChoices(this.gTier,this.gWave,GAUNTLET.waves,this.mythicSize);
       if (!choices.length) return;
       this.gPhase = 'choice';
       writeGauntletBest(this.gKills.length,this.gWave,Math.round(this.elapsed*1000),isChapterTestRun());
@@ -1124,8 +1129,8 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       }));
       opts.push({id:'gauntlet_settle',name:'收兵 · 结算',desc:'按本局斩将数领奖',kind:'foundation',
         categoryLabel:tierTitle[this.gTier],scope:'once',icon:'growth_icon_pickup',apply:() => { this.gPhase='done'; }});
-      const hint = this.gTier==='mortal'?'鬼门将开 · 是否挑战鬼神名将？':
-        this.gTier==='ghost'?'鬼门已破 · 是否挑战神将？':'三十阵告捷 · 可结算或进入无尽';
+      const hint = this.gTier==='mortal'?'鬼门已开 · 挑战'+this.mythicSize+'阵，鬼吕布守关':
+        this.gTier==='ghost'?'天门将启 · 挑战'+this.mythicSize+'阵，神刘备守关':'三阶段告捷 · 可结算或进入无尽';
       this.showLoot(tierTitle[this.gTier]+' · 告捷',hint,opts,() => {
         if (advance) this.nextWave();
         else this.time.delayedCall(200,() => this.finish(true,'boss'));
@@ -1139,12 +1144,17 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       // 第一版漏了，第 2 阵起割草时主将一直无敌、新刷的兵全往外跑（11-21 从 0 开局实打发现）
       this.bossKilled = false; for (const e of this.enemies) e.routUntil = 0; // 清场时记的溃退时刻别带进新一阵（还没淡出完的）
       this.refreshSoftLevel(); // 无尽：软上限跟着阵数抬
-      this.gWave++; this.gTrack?.setWave(this.gWave, !this.gEndless); this.gPhase = 'mow'; this.gAt = this.elapsed; this.gLootShown = false; this.gEliteAt = GAUNTLET.eliteFirst; this.spawnTimer = .5;
+      this.gWave++;
+      if (this.gWave===GAUNTLET.waves+1 || (this.gTier==='endless' && this.gPhase==='choice')) {
+        this.gTrack?.destroy();
+        this.gTrack = new GauntletTrack(this,this.stageSize,'hud_medal2_'+this.runConfig.character,SEAL_KEY);
+      }
+      this.gTrack?.setWave(this.gWave, !this.gEndless); this.gPhase = 'mow'; this.gAt = this.elapsed; this.gLootShown = false; this.gEliteAt = GAUNTLET.eliteFirst; this.spawnTimer = .5;
       const upcoming=this.waveBoss();
       this.chapter = this.makeChapter(upcoming);
       prepareMythicActions(this,upcoming.id);
       if (this.gTier==='ghost'||this.gTier==='divine') {
-        this.showWaveBanner(tierTitle[this.gTier]+' · 第 '+challengeWave(this.gTier,this.gWave,GAUNTLET.waves)+' 阵',false,
+        this.showWaveBanner(tierTitle[this.gTier]+' · 第 '+challengeWave(this.gTier,this.gWave,GAUNTLET.waves,this.mythicSize)+' 阵',false,
           this.waveBoss().name+' · '+this.mowSeconds+' 秒后登场');
         return;
       }
@@ -1163,8 +1173,8 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       const rw = gauntletReward(kills, first); if (!debug) { if (rw.provisions) addProvisions(rw.provisions); if (rw.scrolls) addScrolls(rw.scrolls); }
       const keep = this.resultTexts.body.text.split('\n').filter(l => /^武将等级|^经验已满|^属性点|^星图/.test(l));
       const reached = this.gEndless ? `第 ${this.gWave} 阵（无尽）` :
-        tierTitle[this.gTier]+' · '+challengeWave(this.gTier,this.gWave,GAUNTLET.waves)+'/'+GAUNTLET.waves;
-      const cleared = this.gMilestones===3?'凡、鬼、神三十阵通关':this.gMilestones===2?'已破凡将、鬼将十阵':'凡将十阵通关';
+        tierTitle[this.gTier]+' · '+challengeWave(this.gTier,this.gWave,GAUNTLET.waves,this.mythicSize)+'/'+this.stageSize;
+      const cleared = this.gMilestones===3?'凡、鬼、神三阶段通关':this.gMilestones===2?'已破人间、幽冥两关':'凡将十阵通关';
       this.resultTexts.subtitle.setText(this.gCleared ? `${cleared} · 斩将 ${kills}` : `止步第 ${this.gWave} 阵 · 斩将 ${kills}`);
       // 正文（逻辑 / 测试读；电脑版结算画面按它画奖励格：「永久奖励 钱币 +N」「武学残卷 +N」「武将等级 …」）
       this.resultTexts.body.setText([

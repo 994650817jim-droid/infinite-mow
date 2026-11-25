@@ -173,7 +173,7 @@ export class CoopScene extends Phaser.Scene {
     portrait.alt = '';
     portrait.src = 'assets/ink-scroll/lvbu.webp';
     modes.append(portrait, name, detail);
-    const host = this.button('创建房间', () => this.connect({ type: 'create', mode: 'gauntlet' }));
+    const host = this.button('创建房间', () => this.connect({ type: 'create', mode: 'gauntlet', extreme:new URLSearchParams(location.search).get('challenge')==='extreme' }));
     host.classList.add('coop-primary');
     hostSection.append(hostTitle, modes, host);
 
@@ -230,7 +230,7 @@ export class CoopScene extends Phaser.Scene {
     socket?.close();
   }
 
-  private connect(command: { type: 'create'; mode: CoopMode } | { type: 'join'; code: string }): void {
+  private connect(command: { type: 'create'; mode: CoopMode; extreme?:boolean } | { type: 'join'; code: string }): void {
     this.disconnect();
     this.availableHeroes = CHARACTERS.filter(hero => heroUnlocked(hero.id, false)).map(hero => hero.id);
     this.status.textContent = '正在连接…';
@@ -262,7 +262,7 @@ export class CoopScene extends Phaser.Scene {
     else this.renderSetup(message);
   }
 
-  private openSocket(command: { type: 'create'; mode: CoopMode } | { type: 'join'; code: string } | { type: 'resume'; code: string; token: string }): void {
+  private openSocket(command: { type: 'create'; mode: CoopMode; extreme?:boolean } | { type: 'join'; code: string } | { type: 'resume'; code: string; token: string }): void {
     const url = coopSocketUrl();
     if (!url) { this.connectionFailed('联机服务未配置', true); return; }
     if (this.retryUntil && Date.now() >= this.retryUntil) { this.connectionFailed('重连超时，请重新创建房间', true); return; }
@@ -295,7 +295,7 @@ export class CoopScene extends Phaser.Scene {
       else if (message.type === 'draft') { this.timeline.clear(); this.displayed=undefined; this.renderDraft(message); }
       else if (message.type === 'result') {
         this.disconnect();
-        this.renderResult(message.milestones===3?'神将十阵告捷':message.milestones===2?'鬼将十阵告捷':message.victory?'凡将十阵告捷':'连战败退', '合力斩将 ' + message.generals + ' 位 · 击破 ' + message.kills + ' 名敌军');
+        this.renderResult(message.milestones===3?'封神告捷':message.milestones===2?'鬼门告捷':message.victory?'凡将十阵告捷':'连战败退', '合力斩将 ' + message.generals + ' 位 · 击破 ' + message.kills + ' 名敌军');
       }
     };
   }
@@ -525,7 +525,7 @@ export class CoopScene extends Phaser.Scene {
       const cue = run.warning?.name ?? (run.general ? (run.dual?'河北双雄':run.general.name) + '在阵' : run.remaining === 0 ? '本阵已平定' : `名将 ${run.remaining} 秒后登场`);
       const tier = run.tier ?? (run.wave>run.total?'endless':'mortal');
       const wave = tier==='endless'?`无尽 · 第 ${run.wave} 阵`:
-        `${tierTitle[tier]} · ${challengeWave(tier,run.wave,run.total)}/${run.total}`;
+        `${tierTitle[tier]} · ${challengeWave(tier,run.wave,run.total,run.mythicSize)}/${tier==='mortal'?run.total:(run.mythicSize??run.total)}`;
       const lines = [wave + ' · 已破 ' + run.cleared + ' 阵', cue];
       if (self && partner && (!self.hp || !partner.hp)) {
         const fallen = self.hp ? partner : self;
@@ -727,7 +727,7 @@ export class CoopScene extends Phaser.Scene {
     this.stick?.setEnabled(false);
     const tier = message.tier??'mortal';
     const card = this.card(message.checkpoint ? (tier==='mortal'?'鬼门已开':tier==='ghost'?'天门将启':'封神告捷') : '斩将强化',
-      `第 ${challengeWave(tier,message.wave,message.total)} 阵 · 已击败${message.general}`);
+      `第 ${challengeWave(tier,message.wave,message.total,message.mythicSize)} 阵 · 已击败${message.general}`);
     if (this.mythicSignature) clearMythicSignature(this.mythicSignature);
     this.panel.classList.add('coop-draft');
     const party = document.createElement('div');
@@ -749,7 +749,7 @@ export class CoopScene extends Phaser.Scene {
         mine ? '已确认，等待战友' : other ? '战友已选择，请确认去向' : '两人选择相同后继续，一人收兵即可结算';
       {
         for (const choice of message.continuation??['endless']) {
-          const label = choice==='ghost'?'挑战鬼将十阵':choice==='divine'?'挑战神将十阵':'进入无尽';
+          const label = choice==='ghost'?'挑战鬼将 · '+(message.mythicSize??10)+'阵':choice==='divine'?'挑战神将 · '+(message.mythicSize??10)+'阵':'进入无尽';
           const proceed=this.button(label,() => this.send(choice==='endless'?{type:'endless',wave:message.wave}:{type:'challenge',tier:choice,wave:message.wave}));
           if(choice!=='endless') proceed.classList.add('coop-primary');
           proceed.disabled = choice === mine;

@@ -2,15 +2,15 @@ import {EMBER,CINDERS} from '../src/rules/burning.ts';
 import {refreshRetinueHp} from './coop-retinue.mjs';
 import {canDraftMark} from './coop-marks.mjs';
 import { GAUNTLET, GAUNTLET_POOL, endlessBoss, pickBosses } from '../src/data/gauntlet.ts';
-import { challengeBoss, mythicBoss, mythicSequence, mythicHit } from '../src/data/mythicGauntlet.ts';
+import { mythicRoster, challengeBoss, mythicBoss, mythicSequence, mythicHit } from '../src/data/mythicGauntlet.ts';
 import content from '../src/coop/gauntlet.json' with { type: 'json' };
 import {FIELD_STARS, MARK_STAR, COMPANY_STARS, ironHpBonus} from '../src/data/coopStars.ts';
 
 const pool = GAUNTLET_POOL.filter(boss => Object.hasOwn(content.bosses, boss.id));
 export const TOTAL_WAVES = GAUNTLET.waves;
 
-export function newGauntlet(warmup = 26) {
-  return { wave: 1, cleared: 0, tier: 'mortal', milestones: 0, mythicQueue: [], stage: 'field', started: 0, warmup, lineup: pickBosses(pool), history: [], boss: null, warning: null, attackAt: 0, followup: null };
+export function newGauntlet(warmup = 26, extreme = false) {
+  return { roster: mythicRoster(extreme), wave: 1, cleared: 0, tier: 'mortal', milestones: 0, mythicQueue: [], stage: 'field', started: 0, warmup, lineup: pickBosses(pool), history: [], boss: null, warning: null, attackAt: 0, followup: null };
 }
 
 export function nextWave(room) {
@@ -24,17 +24,17 @@ export function nextWave(room) {
 }
 
 export function bossForWave(run) {
-  return challengeBoss(run.tier,run.wave,TOTAL_WAVES) ?? run.lineup[run.wave - 1] ?? endlessBoss(pool, run.history.at(-1) ?? null, Math.random, run.history);
+  return challengeBoss(run.tier,run.wave,TOTAL_WAVES,run.roster) ?? run.lineup[run.wave - 1] ?? endlessBoss(pool, run.history.at(-1) ?? null, Math.random, run.history);
 }
 
 // Co-op durability only: let existing warnings resolve over several attack cycles.
 export const COOP_BOSS_BALANCE = Object.freeze({ phase2Power: 1.15, powerCap: 36, phase2Gap: .9, followupPower: .7, followupDelay: .45, recover: 1.5 });
 
-export function bossStats(wave, id) {
+export function bossStats(wave, id, mythicSize = 10) {
   const mythic = mythicBoss(id);
   if (mythic) {
     const divine = mythic.tierName === 'divine';
-    const local = Math.max(1,Math.min(10,wave-(divine?20:10)));
+    const local = Math.max(1,Math.min(10,Math.ceil((wave-(divine?10+mythicSize:10))*10/mythicSize)));
     return { hp:(divine?770:690)+local*8, touch:divine?20:18, power:divine?34:31 };
   }
   const hpMul = id === 'zhangxiu' && wave >= 2 ? 1.1 : 1;

@@ -82,12 +82,12 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
       send(player.socket, { type: 'lobby', code: room.code, slot: player.slot, count: room.players.size, mode: room.mode, picks });
     }
   }
-  function createRoom(now) {
+  function createRoom(now, extreme) {
     if (rooms.size >= MAX_ROOMS) return null;
     let code;
     do { code = Array.from({ length: 6 }, () => alphabet[randomInt(alphabet.length)]).join(''); }
     while (rooms.has(code));
-    const room = { code, created: now, mode: 'gauntlet', run: newGauntlet(gauntletWarmup), players: new Map(), phase: 'lobby', enemies: [], seconds: 0, kills: 0, nextEnemyId: 0, spawnIn: 0, snapshots: 0 };
+    const room = { code, created: now, mode: 'gauntlet', run: newGauntlet(gauntletWarmup,extreme), players: new Map(), phase: 'lobby', enemies: [], seconds: 0, kills: 0, nextEnemyId: 0, spawnIn: 0, snapshots: 0 };
     // Trusted server/test configuration only; clients cannot choose encounters.
     if(gauntletLineup?.length){const ids=gauntletLineup.map(id=>GAUNTLET_POOL.find(b=>b.id===id));if(ids.every(Boolean))room.run.lineup=ids;}
     rooms.set(code, room);
@@ -97,7 +97,7 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
     const edge = randomInt(4);
     const x = edge === 0 ? 24 : edge === 1 ? world.width - 24 : randomInt(24, world.width - 24);
     const y = edge === 2 ? 24 : edge === 3 ? world.height - 24 : randomInt(24, world.height - 24);
-    const hp = general ? bossStats(room.run.wave, general.id).hp : boss ? 64 : 4 + Math.min(3, Math.floor(((room.run?.wave ?? 1) - 1) / 4));
+    const hp = general ? bossStats(room.run.wave, general.id, room.run.roster.ghost.length).hp : boss ? 64 : 4 + Math.min(3, Math.floor(((room.run?.wave ?? 1) - 1) / 4));
     const enemy = { id: ++room.nextEnemyId, x, y, hp, maxHp: hp, boss, general, hitIn: 0 };
     if (troop) initTroop(enemy, troop, room.seconds);
     room.enemies.push(enemy);
@@ -112,7 +112,7 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
       burning:fireWire(room),retainers:companyWire(room),
       spellMarks: visibleSpellMarks(room),
       shots: (room.shots ?? []).map(({x,y,angle,slow})=>({x,y,angle,net:!!slow})), troopEffects: room.troopEffects ?? [],
-      gauntlet: room.run && { wave: room.run.wave, cleared: room.run.cleared, total: TOTAL_WAVES,
+      gauntlet: room.run && { wave: room.run.wave, cleared: room.run.cleared, total: TOTAL_WAVES, mythicSize: room.run.roster.ghost.length,
         tier: room.run.tier, milestones: room.run.milestones, remaining: room.run.stage === 'field' ? Math.max(0, Math.ceil(waveWarmup(room.run) - room.seconds + room.run.started)) : 0,
         general: room.run.boss && { id: room.run.boss.general.id, name: room.run.boss.general.name },
         upcoming: { id: room.run.upcoming.id, name: room.run.upcoming.name }, warning: room.run.warning, warnings: dualWarnings(room.run), dual: !!room.run.dual },
@@ -128,10 +128,10 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
   function updateDraft(room) {
     const ready = playersIn(room).filter(player => !player.choices?.length).length;
     for (const player of room.players.values()) {
-      send(player.socket, { type: 'draft', wave: room.run.wave, total: TOTAL_WAVES, general: room.run.history.at(-1).dual ? '河北双雄 · 颜良 / 文丑' : room.run.history.at(-1).name,
+      send(player.socket, { type: 'draft', wave: room.run.wave, total: TOTAL_WAVES, mythicSize: room.run.roster.ghost.length, general: room.run.history.at(-1).dual ? '河北双雄 · 颜良 / 文丑' : room.run.history.at(-1).name,
       party: playersIn(room).map(({ slot, hero, hp, maxHp, choices, stars, upgrades }) => ({ slot, hero, hp, maxHp, ember:upgrades.ember, ready: !choices?.length, company:companyStatus(room.players.get(slot),room.run.wave), stars })),
         votes: room.votes, choices: player.choices ?? [], ready, checkpoint: room.phase === 'checkpoint', tier: room.run.tier,
-        continuation: room.phase==='checkpoint'?challengeChoices(room.run.tier,room.run.wave,TOTAL_WAVES):[] });
+        continuation: room.phase==='checkpoint'?challengeChoices(room.run.tier,room.run.wave,TOTAL_WAVES,room.run.roster.ghost.length):[] });
     }
     if (room.phase === 'draft' && !missing(room).length && ready === room.players.size) beginNextWave(room);
   }
@@ -167,8 +167,8 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
       player.hp = Math.min(player.maxHp, player.hp + Math.ceil(player.maxHp * .35));
       player.moving = false;
     }
-    const checkpoint=challengeChoices(run.tier,run.wave,TOTAL_WAVES).length>0;
-    if(checkpoint) run.milestones=run.wave/TOTAL_WAVES;
+    const checkpoint=challengeChoices(run.tier,run.wave,TOTAL_WAVES,run.roster.ghost.length).length>0;
+    if(checkpoint) run.milestones=run.tier==='mortal'?1:run.tier==='ghost'?2:3;
     snapshot(room);
     draft(room,checkpoint);
   }
@@ -331,7 +331,7 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
           return;
         }
         const candidate = command.type === 'create'
-          ? createRoom(now)
+          ? createRoom(now, command.extreme === true)
           : typeof command.code === 'string' && /^[A-Z2-9]{6}$/.test(command.code) && rooms.get(command.code);
         if (!candidate || candidate.phase !== 'lobby' || candidate.players.size >= 2) {
           send(socket, { type: 'error', message: command.type === 'create' ? '服务器房间已满' : '房间不存在、已满或已开战' });
@@ -366,7 +366,7 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
           finish(room, true);
         } else {
           const choice = command.type === 'endless' ? 'endless' : command.type === 'challenge' ? command.tier : null;
-          if (!challengeChoices(room.run.tier,room.run.wave,TOTAL_WAVES).includes(choice)) return;
+          if (!challengeChoices(room.run.tier,room.run.wave,TOTAL_WAVES,room.run.roster.ghost.length).includes(choice)) return;
           if (room.votes[player.slot] === choice) return;
           room.votes[player.slot] = choice;
           if (room.votes.every(vote => vote === choice)) {

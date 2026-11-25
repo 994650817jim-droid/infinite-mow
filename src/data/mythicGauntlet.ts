@@ -106,23 +106,37 @@ export const DIVINE_GENERALS: readonly MythicBoss[] = [
 
 const all = [...GHOST_GENERALS, ...DIVINE_GENERALS];
 export function mythicBoss(id: string): MythicBoss | undefined { return all.find(b => b.id === id); }
-export const tierTitle: Record<GauntletRunTier,string> = {mortal:'凡将十阵',ghost:'鬼将十阵',divine:'神将十阵',endless:'无尽'};
+export const tierTitle: Record<GauntletRunTier,string> = {mortal:'凡将十阵',ghost:'幽冥鬼将',divine:'天界神将',endless:'无尽'};
 
-export function challengeChoices(tier: GauntletRunTier, wave: number, size: number): ChallengeChoice[] {
-  if (tier === 'endless' || wave !== (tier === 'mortal' ? size : tier === 'ghost' ? size * 2 : size * 3)) return [];
+/** A roster is drawn once per battle. Legacy 30-wave runs retain catalog order. */
+export function mythicRoster(extreme = false, random = Math.random) {
+  function tier(pool: MythicBoss[], gateId: string) {
+    if (extreme) return pool.slice();
+    const options = pool.filter(b => b.id !== gateId);
+    for (let i=0; i<4; i++) {
+      const j=i+Math.floor(random()*(options.length-i));
+      [options[i],options[j]]=[options[j],options[i]];
+    }
+    return [...options.slice(0,4),pool.find(b=>b.id===gateId)!];
+  }
+  return {ghost:tier(GHOST_GENERALS,'ghost_lubu'), divine:tier(DIVINE_GENERALS,'divine_liubei')};
+}
+
+export function challengeChoices(tier: GauntletRunTier, wave: number, size: number, mythicSize = size): ChallengeChoice[] {
+  if (tier === 'endless' || wave !== (tier === 'mortal' ? size : tier === 'ghost' ? size + mythicSize : size + mythicSize * 2)) return [];
   if (tier === 'mortal') return ['ghost','endless'];
   if (tier === 'ghost') return ['divine','endless'];
   return ['endless'];
 }
 
-export function challengeBoss(tier: GauntletRunTier, wave: number, size: number): MythicBoss | undefined {
-  if (tier === 'ghost') return GHOST_GENERALS[wave-size-1];
-  if (tier === 'divine') return DIVINE_GENERALS[wave-size*2-1];
+export function challengeBoss(tier: GauntletRunTier, wave: number, size: number, roster?: ReturnType<typeof mythicRoster>): MythicBoss | undefined {
+  if (tier === 'ghost') return (roster?.ghost ?? GHOST_GENERALS)[wave-size-1];
+  if (tier === 'divine') return (roster?.divine ?? DIVINE_GENERALS)[wave-size-(roster?.ghost.length ?? size)-1];
   return undefined;
 }
 
-export function challengeWave(tier: GauntletRunTier, wave: number, size: number): number {
-  return wave - (tier === 'ghost' ? size : tier === 'divine' ? size*2 : 0);
+export function challengeWave(tier: GauntletRunTier, wave: number, size: number, mythicSize = size): number {
+  return wave - (tier === 'ghost' ? size : tier === 'divine' ? size+mythicSize : 0);
 }
 
 /** Lock both origin and aim for the complete sequence. Each strike has its own warning. */

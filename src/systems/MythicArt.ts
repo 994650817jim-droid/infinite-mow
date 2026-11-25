@@ -158,7 +158,7 @@ export function paintMythicSignature(sprite: Phaser.GameObjects.Image, id: strin
         // The baked fan pivots at (42,128). Its outer ellipse maps to the attack radius.
         sprite.setTexture(sweepKey, frame).setVisible(true).setOrigin(42 / 256, .5)
           .setPosition(w.x, w.y)
-          .setDisplaySize(w.radius * 256 / 174, w.radius * 256 / 139).setRotation(w.angle).setAlpha(Math.min(1, (.32-age)/.045)).setDepth(75);
+          .setDisplaySize(w.radius * 256 / 174, w.radius * 256 / 174).setRotation(w.angle).setAlpha(Math.min(1, (.32-age)/.045)).setDepth(75);
       }
       return;
     }
@@ -169,7 +169,7 @@ export function paintMythicSignature(sprite: Phaser.GameObjects.Image, id: strin
   }
   if (boss.art !== 'animated') return;
   if (!w?.resolved) {
-    if (boss.tierName==='divine'&&owner) sprite.setTexture(key,2).setVisible(true).setOrigin(.5)
+    if (w && boss.tierName==='divine'&&owner) sprite.setTexture(key,2).setVisible(true).setOrigin(.5)
       .setPosition(owner.x,owner.y-96).setDisplaySize(120,120).setRotation(0).setAlpha(.65).setDepth(10);
     return;
   }
@@ -180,9 +180,15 @@ export function paintMythicSignature(sprite: Phaser.GameObjects.Image, id: strin
   const frame=age<.065?1:age<.22?2:3;
   const alpha=age<.23 ? 1 : Math.max(0,1-(age-.23)/.09);
   if(visual==='seal'){
-    const anchor=owner??w;
-    sprite.setTexture(key,age<.11?2:3).setVisible(true).setOrigin(.5)
-      .setPosition(anchor.x,anchor.y-96).setDisplaySize(132,132).setDepth(10).setRotation(0).setAlpha(alpha);
+    // Place the seals on the damaging annulus, leaving its safe centre readable.
+    const inner = w.innerRadius ?? 0, reach = (inner + w.radius) / 2;
+    const size = (w.radius - inner) * .85;
+    for (let i = 0; i < 4; i++) {
+      const a = w.angle + i * Math.PI / 2;
+      mythicLaneSprite(sprite,key,i).setTexture(key,age<.11?2:3).setVisible(true).setOrigin(.5)
+        .setPosition(w.x+Math.cos(a)*reach,w.y+Math.sin(a)*reach).setDisplaySize(size,size)
+        .setDepth(75).setRotation(0).setAlpha(alpha);
+    }
     return;
   }
   const isDragon=visual==='dragon';

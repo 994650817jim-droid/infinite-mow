@@ -1497,7 +1497,7 @@ export class GameScene extends Phaser.Scene {
     this.updateBossRage(dt);
     this.holdVictory(); // 末位首领倒下后：主将无敌、残兵溃退，直到捡宝箱结算
     // 鸣金让道撤完：撤走的兵经验折半一次性给，出「敌军溃退」
-    { const c = this.bossClearPending; if (c && this.combatNow >= c.at && !this.over) { this.bossClearPending = null; const gained = c.xp > 0 ? this.player.gainXp(this.player.growth.scaleXp(c.xp, this.heroXpRate())) : 0; if (gained > 0) this.onHeroLevelUp(gained); this.showWaveBanner('敌军溃退', false, `${c.n} 名残兵撤走`); /* 不写「经验 +N」（用户「关于拿到钱和军功」不需要字） */ } }
+    { const c = this.bossClearPending; if (c && this.combatNow >= c.at && !this.over) { this.bossClearPending = null; const gained = c.xp > 0 ? this.player.gainXp(this.player.growth.scaleXp(c.xp, this.heroXpRate())) : 0; if (gained > 0) this.onHeroLevelUp(gained); this.showWaveBanner('敌军让阵', false, `${c.n} 名杂兵撤离`); /* 不写「经验 +N」（用户「关于拿到钱和军功」不需要字） */ } }
     if (this.over) return;
     this.rebuildGrid();
     this.separateEnemies();

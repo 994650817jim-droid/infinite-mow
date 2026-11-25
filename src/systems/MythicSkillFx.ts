@@ -34,7 +34,8 @@ export function paintMythicRelease(
 ): void {
   if (age < 0 || age >= .32) return;
   const phase = age < .075 ? 0 : age < .21 ? 1 : 2;
-  const frame = phase + (w.kind === 'line' ? 3 : 0);
+  // The first row is the original silhouette. The second row is a tall impact variant.
+  const frame = phase + (w.kind === 'line' ? 0 : 3);
   const alpha = age < .23 ? 1 : 1 - (age - .23) / .09;
   const { x, y, radius, angle } = w;
 
@@ -48,13 +49,14 @@ export function paintMythicRelease(
   }
 
   if (w.kind === 'line') {
-    const width = radius * .83;
-    const height = Math.min(width * .66, (w.halfWidth ?? 25) * 2);
+    // Preserve the authored pixels. The ground stroke still shows the full damage lane.
+    const filledHeight = key.includes('zhaoyun') ? .44 : .82;
+    const size = Math.min(radius * .68, (w.halfWidth ?? 25) * 2 / filledHeight);
     const reach = radius * (.45 + .12 * age / .32);
     const count = w.lanes ?? 1;
     for (let i = 0; i < count; i++) {
       const heading = angle + (i - (count - 1) / 2) * (w.spread ?? 0);
-      stamp(i, heading, reach, width, height, heading);
+      stamp(i, heading, reach, size, size, heading);
     }
   } else if (w.kind === 'ring') {
     const inner = w.innerRadius ?? 0;

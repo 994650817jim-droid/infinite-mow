@@ -1154,13 +1154,20 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       const next = this.gTier==='mortal'?'ghost':'divine';
       const earned=gauntletReward(this.gKills.length,false);
       this.levelPanel.setVisible(false);
-      this.closeGate=campaignPanel(this,{theme:next,title:this.gMilestones===3?'封神告捷':next==='ghost'?'鬼门已开':'天门将启',
-        subtitle:hint,chapterArt:'assets/epic-home/dongzhuo-'+(IS_DESKTOP?'desktop':'mobile')+'.webp',
-        stats:['已破 '+this.gWave+' 阵 · 用时 '+this.formatTime(this.elapsed),
-          '当前兵力 '+this.legion.count+' · 钱币 '+this.legion.food,
-          '基础结算　钱币 '+earned.provisions+' · 残卷 '+earned.scrolls,
-          ...(this.gMilestones<3?['全程尚余 '+(10+this.mythicSize*2-this.gWave)+' 阵']:[])],
-        actions:opts.map((o,i)=>({label:o.name,run:()=>this.chooseUpgrade(i)}))});
+      const finalGate = this.gMilestones === 3;
+      const hero = CHARACTERS.find(h => h.id === this.runConfig.character)!;
+      this.closeGate = campaignPanel(this, {
+        theme: next,
+        title: finalGate ? '封神告捷' : next === 'ghost' ? '鬼门已开' : '天门将启',
+        caption: (this.mythicSize === 10 ? '极限三十阵' : '标准二十阵') + ' · ' + tierTitle[this.gTier],
+        subtitle: finalGate ? '三关尽破，可收兵或再战无尽' : '再战 ' + this.mythicSize + ' 阵 · ' + (next === 'ghost' ? '鬼吕布' : '神刘备') + '守关',
+        chapterArt: next === 'ghost' ? 'assets/epic-home/dongzhuo-desktop.webp' : 'assets/ending/ending_unify.webp',
+        portrait: 'assets/epic-home/' + (finalGate ? hero.id : next === 'ghost' ? 'lvbu' : 'liubei') + '.webp',
+        stats: [['已破阵数', this.gWave], ['全程余阵', 10 + this.mythicSize * 2 - this.gWave],
+          ['战斗用时', this.formatTime(this.elapsed)], ['当前兵力', this.legion.count], ['本局钱币', this.legion.food]],
+        reward: {label:'基础结算', value:'钱币 ' + earned.provisions + ' · 残卷 ' + earned.scrolls},
+        actions: opts.map((o,i) => ({label:o.name, run:() => this.chooseUpgrade(i)})),
+      });
     }
     nextWave(): void {
       this.clearGauntletDual();
@@ -1226,17 +1233,26 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       restart?.setActive(true).setVisible(true); (this.resultPanel.getByName('result-restart-text') as Phaser.GameObjects.Text | null)?.setVisible(true).setText('再来一局'); this.layoutResultButtons?.();
       const hero = CHARACTERS.find(v=>v.id===this.runConfig.character)!;
       const limit=this.mythicSize;
-      const progress=[['名将',Math.min(kills,10),10],['鬼将',Math.max(0,Math.min(kills-10,limit)),limit],['神将',Math.max(0,Math.min(kills-10-limit,limit)),limit]];
-      const stages=this.gEndless?'无尽 · 已破 '+kills+'阵':progress.map(([label,n,total])=>label+' '+n+'/'+total).join('　');
-      const art='assets/epic-home/'+hero.id+'.webp';
+      const stages = [
+        {label:'凡将', count:Math.min(kills,10), total:10},
+        {label:'鬼将', count:Math.max(0,Math.min(kills-10,limit)), total:limit},
+        {label:'神将', count:Math.max(0,Math.min(kills-10-limit,limit)), total:limit},
+      ];
+      const completed = this.gMilestones === 3;
+      const outcome = !victory ? '止步第 ' + this.gWave + ' 阵' : this.gEndless ? '无尽 · 已破 ' + kills + ' 阵' : '已破 ' + kills + ' 阵';
       this.resultPanel.setVisible(false);
-      campaignPanel(this,{theme:this.gTier==='ghost'?'ghost':this.gTier==='divine'?'divine':'mortal',
-        title:!victory?'沙场败退':this.gMilestones===3?'三界凯旋':'收兵归营',subtitle:hero.name+' · '+stages,portrait:art,
-        chapterArt:'assets/epic-home/dongzhuo-'+(IS_DESKTOP?'desktop':'mobile')+'.webp',
-        stats:['用时 '+this.formatTime(this.elapsed)+' · 击破 '+this.kills+' · 总伤害 '+Math.round(this.damageDealt),
-          '本局钱币 '+this.legion.food+' · 部曲 '+this.legion.count+' · 战损 '+this.legion.dead,
-          debug?'演练场 · 奖励不入库':pending?'奖励写入未完成 · 下次进入时核对':'本局所得　钱币 +'+rw.provisions+' · 残卷 +'+rw.scrolls,
-          modeLabel(key)+'最高连斩 '+best+' 位'+(record?' · 新纪录':'')],
+      campaignPanel(this, {
+        theme: !victory ? 'defeat' : completed ? 'divine' : this.gTier === 'ghost' ? 'ghost' : 'mortal',
+        title: !victory ? '沙场败退' : completed ? '三界凯旋' : '收兵归营',
+        caption: (limit === 10 ? '极限三十阵' : '标准二十阵') + ' · 战报',
+        subtitle: hero.name + ' · ' + outcome,
+        portrait: 'assets/epic-home/' + hero.id + '.webp',
+        chapterArt: completed && victory ? 'assets/ending/ending_unify.webp' : 'assets/ending/ending_three.webp',
+        stages,
+        stats: [['战斗用时', this.formatTime(this.elapsed)], ['击破敌军', this.kills], ['总伤害', Math.round(this.damageDealt)],
+          ['本局钱币', this.legion.food], ['现存部曲', this.legion.count], ['部曲战损', this.legion.dead],
+          [modeLabel(key)+'纪录', best + ' 位' + (record ? ' · 新纪录' : '')]],
+        reward: {label:'本局所得', value:debug ? '演练场 · 奖励不入库' : pending ? '奖励写入未完成 · 下次进入时核对' : '钱币 +' + rw.provisions + ' · 残卷 +' + rw.scrolls},
         details:[...this.gauntletBuild().filter(group=>group.items.length).map(group=>({label:group.cat,body:group.items.map(i=>i.name+(i.lv?' '+i.lv:'')).join('、')})),
           {label:'历次战绩',body:Object.entries(modeHistory(debug)).map(([k,r])=>(k==='legacy'?'历史未分类':modeLabel(k as typeof key))+' '+r.kills+' 将').join('　')||'尚无记录'}],
         bosses:this.gKills.map(b=>({name:b.name,image:this.textures.getBase64(this.portrait(b))})),

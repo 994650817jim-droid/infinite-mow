@@ -6,6 +6,7 @@ import Phaser from 'phaser';
 import { SnapshotTimeline, type BattleSnapshot } from '../coop/SnapshotTimeline';
 import { GAME_WIDTH, GAME_HEIGHT, IS_DESKTOP } from '../config';
 import { Joystick } from '../ui/Joystick';
+import { campaignHeader, campaignPanel, type CampaignReport } from '../ui/GauntletCampaignPanel';
 import { coopSocketUrl, type Fighter, type Foe, type ServerMessage, type Side, type CoopMode, type BossWarning, type PartyMember } from '../coop/protocol';
 import world from '../coop/arena.json';
 import gauntlet from '../coop/gauntlet.json';
@@ -317,21 +318,7 @@ export class CoopScene extends Phaser.Scene {
         this.disconnect();
         const title = !message.victory ? '连战败退' : message.reason === 'withdrawn' ? '收兵归营' :
           message.milestones === 3 ? '封神告捷' : '连战告捷';
-        const results = ['合力斩将 ' + message.generals + ' 位 · 击破 ' + message.kills + ' 名敌军'];
-        if (message.seconds != null) results.push('用时 ' + Math.floor(message.seconds / 60) + '分' + message.seconds % 60 + '秒');
-        for (const unit of message.party ?? []) {
-          const name = CHARACTERS.find(hero => hero.id === unit.hero)?.name ?? unit.hero;
-          if(unit.damage!=null)results.push(name+' · 伤害 '+unit.damage+' · 击破 '+unit.defeats+' · 救援 '+unit.revives+'次');
-          if(unit.stars.length)results.push(unit.stars.map(k=>networkStars.find(s=>s.id===k)?.name??k).join('、'));
-          results.push(name + ' · 余部 ' + unit.men + ' · 战损 ' + unit.lost + ' · 钱币 ' + unit.coins);
-        }
-        this.renderResult(title, results.join('　'));
-        const panel=this.panel.lastElementChild;
-        if(panel && message.bosses?.length) {
-          const details=document.createElement('details'),summary=document.createElement('summary'),names=document.createElement('p');
-          summary.textContent='已击败名将 · '+message.bosses.length;
-          names.textContent=message.bosses.join('、');details.append(summary,names);panel.append(details);
-        }
+        this.renderResult(title, '', message);
       }
     };
   }
@@ -779,6 +766,18 @@ export class CoopScene extends Phaser.Scene {
     for (const member of members) party.append(this.partyMember(member, message.checkpoint));
     card.insertBefore(party, this.status);
     if (message.checkpoint) {
+      const ghost = tier === 'mortal';
+      const header = card.querySelector('header')!;
+      card.classList.add('campaign-gate', ghost ? 'ghost' : 'divine');
+      campaignHeader(header, {
+        title:header.querySelector('h1')!.textContent!,
+        subtitle:header.querySelector('p')!.textContent!,
+        caption:'双人连战 · ' + ((message.mythicSize ?? 10) === 5 ? '标准二十阵' : '极限三十阵'),
+        chapterArt:ghost ? 'assets/epic-home/dongzhuo-desktop.webp' : 'assets/ending/ending_unify.webp',
+        portrait:tier === 'divine' ? undefined : 'assets/epic-home/' + (ghost ? 'lvbu' : 'liubei') + '.webp',
+      }, 'h1');
+      const actions = document.createElement('footer');
+      card.append(actions);
       const votes = message.votes ?? [];
       const mine = votes[this.slot], other = votes[1-this.slot];
       this.status.textContent = mine && other && mine!==other ? '两人选择不同，可改选或收兵结算' :
@@ -789,9 +788,9 @@ export class CoopScene extends Phaser.Scene {
           const proceed=this.button(label,() => this.send(choice==='endless'?{type:'endless',wave:message.wave}:{type:'challenge',tier:choice,wave:message.wave}));
           if(choice!=='endless') proceed.classList.add('coop-primary');
           proceed.disabled = choice === mine;
-          card.append(proceed);
+          actions.append(proceed);
         }
-        card.append(this.button('结束并结算',() => this.send({type:'finish',wave:message.wave})));
+        actions.append(this.button('结束并结算',() => this.send({type:'finish',wave:message.wave})));
       }
     } else {
       this.status.textContent = message.choices.length ? '选择本阵奖励，两人选定后进入下一阵' : `已就绪 ${message.ready}/2 · 等待队友`;
@@ -874,12 +873,38 @@ export class CoopScene extends Phaser.Scene {
     }
   }
 
-  private renderResult(title: string, message: string): void {
+  private renderResult(title: string, message: string, battle?: Extract<ServerMessage, {type:'result'}>): void {
     clearSurvivorBossFx(this);
     if(this.warning) clearMythicWarning(this.warning);
     if (this.mythicSignature) clearMythicSignature(this.mythicSignature);
     this.phase = 'result';
     this.stick?.setEnabled(false);
+    if (battle) {
+      this.panel.replaceChildren();
+      this.panel.className = 'coop-layer coop-during-battle';
+      const stats: CampaignReport['stats'] = [['合力斩将', battle.generals], ['击破敌军', battle.kills]];
+      if (battle.seconds != null) stats.push(['战斗用时', Math.floor(battle.seconds / 60) + '分' + battle.seconds % 60 + '秒']);
+      campaignPanel(this, {
+        title, caption:'双人连战 · 战报', subtitle:'两军合战 · 个人战绩',
+        theme:battle.victory ? 'divine' : 'defeat',
+        chapterArt:battle.victory ? 'assets/ending/ending_unify.webp' : 'assets/ending/ending_three.webp',
+        stats,
+        party:(battle.party ?? []).map(unit => {
+          const hero = CHARACTERS.find(h => h.id === unit.hero);
+          const figures: CampaignReport['stats'] = [];
+          if (unit.damage != null) figures.push(['有效伤害',unit.damage]);
+          if (unit.defeats != null) figures.push(['击破',unit.defeats]);
+          if (unit.revives != null) figures.push(['救援',unit.revives]);
+          figures.push(['余部',unit.men], ['战损',unit.lost], ['钱币',unit.coins]);
+          return {name:(unit.slot + 1) + 'P · ' + (hero?.name ?? unit.hero),
+            portrait:hero && 'assets/ink-scroll/' + hero.id + '.webp', stats:figures,
+            stars:unit.stars.map(k => networkStars.find(s => s.id === k)?.name ?? k).join('、')};
+        }),
+        bosses:battle.bosses?.map(name => ({name})),
+        actions:[{label:'凯旋归营',run:() => this.back()}, {label:'再次挑战 · 组队',run:() => this.renderSetup()}],
+      });
+      return;
+    }
     const card = this.card(title, message);
     card.append(this.button('凯旋归营', () => this.back()),this.button('再次挑战 · 组队',()=>this.renderSetup()));
   }

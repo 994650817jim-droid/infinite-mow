@@ -10,6 +10,7 @@ export interface BossWarning {
   mythic?: MythicTier; face?: number; startsAt?: number; power?: number;
   action?: MythicWarning['action'];
   wei?: MythicWarning['wei'];
+  wind?: MythicWarning['wind'];
   halberd?: MythicWarning['halberd']; charge?: boolean; transit?: MythicWarning['transit'];
   fx?: 'thunder' | 'quake' | 'spear' | 'arrow';
   endsAt: number;

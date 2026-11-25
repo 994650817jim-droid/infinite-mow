@@ -3,6 +3,7 @@ import {GAUNTLET} from '../src/data/gauntlet.ts';
 import {GAUNTLET_RECRUIT,recruitCost,recruitTier} from '../src/data/gauntletRecruit.ts';
 import {TROOPS,LEGION,BOSS_VS_TROOPS,BOSS_VS_ALLY} from '../src/data/legion.ts';
 import {allyHp,allyAttack,retinueStarHp,retinueBossTaken,nearOrderBonus} from '../src/rules/retinue.ts';
+import {windExit} from '../src/data/divineZhouyu.ts';
 import {halberdExit} from '../src/data/ghostLubu.ts';
 import {troopHit,TYPES} from './coop-roster.mjs';
 import arena from '../src/coop/arena.json' with {type:'json'};
@@ -66,6 +67,10 @@ export function updateRetinue(room,dt){
       const def=TROOPS[u.kind],sortie=c.order==='sortie'&&p.hp>0;
       const fx=p.x+((i%4)-1.5)*26,fy=p.y+30+Math.floor(i/4)*24;
       const wei=room.run.warning;
+      if(wei?.wind){
+        const exit=windExit(wei,u,room.seconds,(_,to)=>to.x>=16 && to.y>=16 && to.x<=arena.width-16 && to.y<=arena.height-16);
+        if(exit){advance(u,exit.x,exit.y,def.speed,dt);continue;}
+      }
       if(wei?.wei?.stance==='bow'){
         const exit=weiBowExit(wei,u,(_,to)=>to.x>=16 && to.y>=16 && to.x<=arena.width-16 && to.y<=arena.height-16);
         if(exit){advance(u,exit.x,exit.y,def.speed,dt);continue;}

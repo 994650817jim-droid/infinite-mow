@@ -2,6 +2,7 @@ import {EMBER,CINDERS} from '../src/rules/burning.ts';
 import {refreshRetinueHp} from './coop-retinue.mjs';
 import {canDraftMark} from './coop-marks.mjs';
 import { GAUNTLET, GAUNTLET_POOL, endlessBoss, pickBosses } from '../src/data/gauntlet.ts';
+import {windBand,windContact} from '../src/data/divineZhouyu.ts';
 import {lockHalberdCharge} from '../src/data/ghostLubu.ts';
 import { mythicRoster, challengeBoss, mythicBoss, mythicSequence, mythicHit, mythicTransit } from '../src/data/mythicGauntlet.ts';
 import arena from '../src/coop/arena.json' with {type:'json'};
@@ -73,7 +74,7 @@ export function beginBossWarning(run, target, time, followup = false, nextPatter
   if (mythic) {
     if (run.mythicQueue?.length) return false;
     const sequence = mythicSequence(mythic,b,target,b.attacks??0,phase2,time,
-      mythic.id==='divine_caocao'?(a,b)=>arenaClear(a,a) && arenaClear(a,b):arenaClear);
+      (mythic.id==='divine_caocao'||mythic.id==='divine_zhouyu')?(a,b)=>arenaClear(a,a) && arenaClear(a,b):arenaClear);
     for(const w of sequence)if(w.charge)w.targetSlot=target.slot;
     b.attacks=(b.attacks??0)+1;
     const power=bossStats(run.wave,mythic.id,run.roster?.ghost.length).power*(phase2?1.1:1);
@@ -107,6 +108,9 @@ export function resolveBossWarning(run, players, time, onHit) {
     if(queue[0]?.resolved&&time>=(queue[0].charge?queue[0].halberd.recoverUntil:queue[0].endsAt+.32)) queue.shift();
     const warning=queue[0];
     run.warning=warning&&time>=warning.startsAt?warning:null;
+    if(run.warning?.wind && windBand(warning,time)){
+      for(const unit of players)if(unit.hp>0)windContact(warning,unit,time,0,()=>onHit(unit,warning.power));
+    }
     if(run.warning?.charge){
       const target=players.find(p=>p.owner===undefined&&p.slot===warning.targetSlot&&p.hp>0) ??
         players.find(p=>p.owner===undefined&&p.hp>0);

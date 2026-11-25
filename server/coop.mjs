@@ -179,7 +179,9 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
     for(const p of party)if(p.company)targets.push(...p.company.units);
     const hit=(target,damage)=>{
       if(target.owner===undefined)return hurt(target,damage,now);
-      if(strikeRetainer(room,target,damage*BOSS_VS_TROOPS.skillMul,true,fallen>=BOSS_VS_ALLY.killCapPerCast?1:0)&&target.hp===0)fallen++;
+      const applied=strikeRetainer(room,target,damage*BOSS_VS_TROOPS.skillMul,true,fallen>=BOSS_VS_ALLY.killCapPerCast?1:0);
+      if(applied && target.hp===0)fallen++;
+      return applied;
     };
     if(room.run?.dual)resolveHebei(room.run,targets,room.seconds,hit);
     else if(room.run)resolveBossWarning(room.run,targets,room.seconds,hit);

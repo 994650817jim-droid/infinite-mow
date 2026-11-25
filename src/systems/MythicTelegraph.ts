@@ -1,3 +1,4 @@
+import {drawZhouyuWind} from './ZhouyuWindArt';
 import type Phaser from 'phaser';
 import {drawWeiRanks,hideWeiRanks} from './WeiFormationArt';
 import {weiPoint} from '../data/divineCaocao';
@@ -231,6 +232,7 @@ function drawSpirit(g:Phaser.GameObjects.Graphics,w:MythicWarning,now:number) {
     .setTint(ink).setDepth(g.depth+1).setAlpha(w.resolved?.84:.54).setVisible(true);
 }
 export function drawMythicWarning(g: Phaser.GameObjects.Graphics,w: MythicWarning,id: string,now: number): void {
+  if(w.wind){drawZhouyuWind(g,w,now);return;}
   if(w.wei){
     drawWeiRanks(g,w,now);
     if(w.wei.stance==='bow')for(const side of w.wei.lanes){

@@ -77,7 +77,7 @@ await p.screenshot({ path: `${OUT}/1-perch.png` });
 // 用户「从后方会有我方小兵去一路打过去会去摧毁营寨」：义军小队从后方出发、走到营寨、把营寨打掉血
 { const sq = await ev(s => { const z = s.allyPush; if (!z) return null; const camps = s.objective.standing, c = camps[camps.length - 1]; s.player.sprite.setPosition(c.x + 40, c.y + 260); const q = z.spawn(); window.__pc = q?.target; window.__pc0 = q?.target?.hp; return q ? { n: q.members.length, from: [Math.round(q.from.x), Math.round(q.from.y)], to: [Math.round(q.target.x), Math.round(q.target.y)], hp0: Math.round(q.target.hp) } : null; });
   await wait(1200); await p.screenshot({ path: `${OUT}/7-push-march.png` });
-  let pr = null; for (let i = 0; i < 30; i++) { pr = await ev(s => ({ ...s.allyPush.stats, hp: Math.round(window.__pc.hp), active: window.__pc.active, alive: s.allyPush.alive })); if (pr.campDamage > 0 && i > 12) break; await wait(500); }
+  let pr = null; for (let i = 0; i < 80; i++) { pr = await ev(s => ({ ...s.allyPush.stats, squadHit: s.allyPush.campHitAt.has(window.__pc), hp: Math.round(window.__pc.hp), active: window.__pc.active, alive: s.allyPush.alive })); if (pr.squadHit && (pr.hp < sq.hp0 || !pr.active)) break; await wait(500); }
   await p.screenshot({ path: `${OUT}/8-push-camp.png` });
   // 舆图：攻势途中展开——碧色行军箭头、义军碧点、营寨血条（挨打的闪）、树林、城墙
   await ev(s => { s.allyPush.spawn(); s.battleMap?.toggleBig(); }); await wait(1300);
@@ -85,7 +85,7 @@ await p.screenshot({ path: `${OUT}/1-perch.png` });
   const md = await ev(s => ({ ...s.battleMap.stats.detail, state: s.battleMap.stats.state, hit: [...s.allyPush.campHitAt.keys()].length }));
   await ev(s => s.battleMap.toggleBig()); await wait(700);
   ck('② 舆图细节：营寨（血条）、友军行军线 / 小队、树林、城墙都画在图上', md.state === 'open' && md.camps >= 1 && md.pushes >= 1 && md.trees > 0, md);
-  ck('② 友军攻势：义军小队从后方出发、走到营寨、营寨掉血', !!sq && sq.from[1] > sq.to[1] && pr.campHits > 0 && pr.campDamage > 0 && (pr.hp < sq.hp0 || !pr.active), { sq, pr }); }
+  ck('② 友军攻势：义军小队从后方出发、走到营寨、营寨掉血', !!sq && sq.from[1] > sq.to[1] && pr.squadHit && pr.campHits > 0 && pr.campDamage > 0 && (pr.hp < sq.hp0 || !pr.active), { sq, pr }); }
 await ev(s => { s.allyPush?.clear(); }); // 后面的流程（刷兵 60 秒、逐座拆营寨）不要友军插手
 // 用户「还是有很多小兵穿过城墙，城墙那一侧不需要生成小兵」：照常刷兵 60 秒（主将站城下、满血），全程抽查没有敌兵在城墙线以北
 { const north = [], spawnedNorth = []; let peak = 0;

@@ -10,7 +10,7 @@ import { mythicRoster, DIVINE_GENERALS, GHOST_GENERALS, challengeBoss, challenge
 import { preloadMythic, prepareMythicActions } from '../systems/MythicArt';
 import { MythicBossController } from '../systems/MythicBossController';
 import { GameScene } from './GameScene';
-import { BALANCE, DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, actorDepth } from '../config';
+import { BALANCE, DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, IS_DESKTOP, actorDepth } from '../config';
 import { getBattleChapter, getChapter, type ChapterDef } from '../data/chapters';
 import type { EnemyDef } from '../data/enemies';
 import { GAUNTLET, GAUNTLET_MOVES, GAUNTLET_POOL, GAUNTLET_TROOPS, type GauntletArc, type GauntletProps, endlessBoss, gauntletReward, pickBosses, readGauntletBest, gauntletPool, GAUNTLET_NAME, waveScale, writeGauntletBest, type GauntletBoss } from '../data/gauntlet';
@@ -261,7 +261,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       const heroName = CHARACTERS.find(c => c.id === (saved?.character ?? 'zhaoyun'))?.name, pool = gauntletPool(); void test; // 名将池全开（11-22 一开始就能玩）
       this.gPool = pool.filter(b => b.name !== heroName).length ? pool.filter(b => b.name !== heroName) : pool; // 本局主将同名的名将不出（主将黄忠 / 孟获 / 祝融……）
       const routeQuery = new URLSearchParams(location.search);
-      this.roster = mythicRoster(routeQuery.get('challenge')==='extreme' || (test && routeQuery.has('mythic')));
+      this.roster = mythicRoster((this.registry.get('gauntletExtreme') ?? (routeQuery.get('challenge')==='extreme')) || (test && routeQuery.has('mythic')));
       this.gOrder = pickBosses(this.gPool);
       // 从 0 开局 + 卡池全开（基类 create 里按 mechOpen 建系统、读卡池上限，所以先开）；各章兵种换色图先备好
       this.gGear = {}; this.gCharms = []; this.gHorse = undefined; this.gRecruitBtn = null; this.gRecruitCardState = ''; this.gRecruits = { times: 0, men: 0 }; this.gResultTab = 'kills'; // 本局兵装 / 信物 / 坐骑：从 0 开局，空

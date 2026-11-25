@@ -19,7 +19,7 @@ const PER=4;
  * 选项（默认 = 战役选将，行为不变）：free = 不看主将规则（名将连战这类不继承战役的模式：已归附 + 开局就有的武将都能选，不弹「定为主将」）；
  * title / okLabel / note = 大标题、确认按钮、标题下那行说明；name = 根容器名。
  */
-export interface HeroPickerOpts{title?:string;okLabel?:string;free?:boolean;note?:string;name?:string}
+export interface HeroPickerOpts{route?:{label:()=>string;toggle:()=>void};title?:string;okLabel?:string;free?:boolean;note?:string;name?:string}
 export class HomeHeroPicker{
  readonly root:Phaser.GameObjects.Container;private candidate=0;private page=0;private cards:HeroWarCard[]=[];
  /** 显示顺序（CHARACTERS 下标）：已来投的在前、没来投的在后（2026-11-19 武将解锁，systems/HeroUnlocks）。 */
@@ -33,7 +33,14 @@ export class HomeHeroPicker{
  const text=(x:number,y:number,value:string,size:number)=>s.add.text(x,y,value,{fontFamily:HEADING_FONT,fontSize:size+'px',color:'#e6c88e',resolution:2}).setOrigin(.5);
  const pad=D?0:Math.max(0,Math.round((H-960)/2));
  if(D)this.root.add(s.add.text(W/2,32,opts.title??'择 一 良 将',{fontFamily:TITLE_FONT,fontSize:'36px',color:GOLD,resolution:2}).setOrigin(.5).setLetterSpacing(6).setShadow(0,3,'#130a05',2,true,true).setName('hero-picker-title'));
- else{this.root.add(text(W/2,57+pad,opts.title??'点将 · 义军将录',29));this.root.add(text(W/2,99+pad,opts.note??'择一良将，匡扶汉室',13));}
+ else{this.root.add(text(W/2,57+pad,opts.title??'点将 · 义军将录',29));if(!opts.route)this.root.add(text(W/2,99+pad,opts.note??'择一良将，匡扶汉室',13));}
+ if(opts.route){
+   const route=opts.route;
+   const mode=text(D?W-128:W/2,D?38:99+pad,route.label(),D?15:18).setPadding(9,8)
+     .setName('challenge-route').setInteractive({useHandCursor:true});
+   mode.on('pointerdown',()=>{route.toggle();mode.setText(route.label());});
+   this.root.add(mode);
+ }
  this.order=CHARACTERS.map((c,i)=>({i,u:heroUnlocked(c.id)})).sort((a,b)=>Number(b.u)-Number(a.u)||a.i-b.i).map(o=>o.i);
  CHARACTERS.forEach((_c,i)=>{const c=CHARACTERS[this.order[i]];const k=i%PER,w=D?198:216,h=330,x=D?W/2+(k-2)*214+8:46+k%2*232,y=D?88+Math.abs(k-1.5)*8:137+pad+Math.floor(k/2)*352;
   const card=new HeroWarCard(s,x,y,w,h);card.root.setData('baseY',y);card.hit.setName('pick-'+c.id).on('pointerdown',()=>{this.candidate=i;this.refreshArt();});card.root.setName('pick-'+c.id).on('pointerdown',()=>{this.candidate=i;this.refreshArt();});{const lt=s.add.text(w/2,h*.56,'',{fontFamily:HEADING_FONT,fontSize:(D?15:15)+'px',color:'#f3e0b8',resolution:2,align:'center',wordWrap:{width:w-36,useAdvancedWrap:true}}).setOrigin(.5).setStroke(STROKE,4).setBackgroundColor('rgba(18,9,4,0.72)').setPadding(10,6).setName('pick-lock-'+c.id).setVisible(false);card.root.add(lt);this.lockTexts.push(lt);}this.root.add(card.root);this.cards.push(card);

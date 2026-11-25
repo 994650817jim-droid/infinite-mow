@@ -173,9 +173,14 @@ export class CoopScene extends Phaser.Scene {
     portrait.alt = '';
     portrait.src = 'assets/ink-scroll/lvbu.webp';
     modes.append(portrait, name, detail);
-    const host = this.button('创建房间', () => this.connect({ type: 'create', mode: 'gauntlet', extreme:new URLSearchParams(location.search).get('challenge')==='extreme' }));
+    let extreme=new URLSearchParams(location.search).get('challenge')==='extreme';
+    const route=this.button(extreme?'极限三十阵':'标准二十阵',()=>{
+      extreme=!extreme;route.textContent=extreme?'极限三十阵':'标准二十阵';route.setAttribute('aria-pressed',String(extreme));
+    });
+    route.title='切换挑战阵数';route.setAttribute('aria-pressed',String(extreme));
+    const host = this.button('创建房间', () => this.connect({ type: 'create', mode: 'gauntlet', extreme }));
     host.classList.add('coop-primary');
-    hostSection.append(hostTitle, modes, host);
+    hostSection.append(hostTitle, modes, route, host);
 
     const guestSection = document.createElement('section');
     const guestTitle = document.createElement('h2');

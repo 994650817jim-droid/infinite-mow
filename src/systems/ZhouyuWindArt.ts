@@ -4,17 +4,18 @@ import {windBand,windPoint} from '../data/divineZhouyu';
 
 export function drawZhouyuWind(g:Phaser.GameObjects.Graphics,w:MythicWarning,now:number){
   const field=w.wind!;
-  const flag=windPoint(w,5,-(field.width+13));
   const dx=Math.cos(w.angle),dy=Math.sin(w.angle),wave=Math.sin(now*7)*2.4;
-  const top={x:flag.x,y:flag.y-40};
+  // Place the pole on the viewer-facing shoulder so the tall boss sprite cannot cover its cloth.
+  const flag=windPoint(w,17,(dx>=0?1:-1)*(field.width+30));
+  const top={x:flag.x,y:flag.y-46};
   g.lineStyle(4,0x33231d,.93).lineBetween(flag.x,flag.y,top.x,top.y-3);
   g.lineStyle(1.6,0xead19a,1).lineBetween(flag.x-1,flag.y,top.x-1,top.y-4);
   if(field.calm){
     g.fillStyle(0x776556,.74).fillTriangle(top.x+1,top.y,top.x+6,top.y+7,top.x+1,top.y+20);
     return;
   }
-  const tip={x:top.x+dx*30-dy*7,y:top.y+dy*18+wave};
-  const belly={x:top.x+dx*19+dy*(3+wave),y:top.y+dy*9+wave+12};
+  const tip={x:top.x+dx*37-dy*8,y:top.y+dy*18+wave};
+  const belly={x:top.x+dx*24+dy*(3+wave),y:top.y+dy*9+wave+12};
   g.fillStyle(0xac382b,.97).fillTriangle(top.x,top.y,tip.x,tip.y,belly.x,belly.y)
     .fillTriangle(top.x,top.y,belly.x,belly.y,top.x,top.y+11);
   g.lineStyle(2,0xffdd94,.95).lineBetween(top.x,top.y,tip.x,tip.y);

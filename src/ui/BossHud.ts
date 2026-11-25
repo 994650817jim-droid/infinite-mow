@@ -83,7 +83,7 @@ export class BossHud {
     const tex = this.fallbackTex.get(id), key = 'bosshud_medal_fb_' + id, s = this.scene; if (!tex || !s.textures.exists(tex)) return null;
     if (s.textures.exists(key)) return key;
     const T = s.textures.get(tex), names = T.getFrameNames(), fr = T.get(names.includes('0') ? '0' : names[0] ?? '__BASE'), img = fr.source.image as HTMLImageElement | HTMLCanvasElement;
-    const S = 128, c = document.createElement('canvas'); c.width = c.height = S; const ctx = c.getContext('2d')!; ctx.save(); ctx.beginPath(); ctx.arc(S / 2, S / 2, S / 2, 0, Math.PI * 2); ctx.clip();
+    const S = 128, c = document.createElement('canvas'); c.width = c.height = S; const ctx = c.getContext('2d', { willReadFrequently: true })!; ctx.save(); ctx.beginPath(); ctx.arc(S / 2, S / 2, S / 2, 0, Math.PI * 2); ctx.clip();
     const bg = ctx.createRadialGradient(S * .5, S * .42, S * .05, S * .5, S * .5, S * .62); bg.addColorStop(0, '#5a4630'); bg.addColorStop(.55, '#2a1c10'); bg.addColorStop(1, '#0b0705'); ctx.fillStyle = bg; ctx.fillRect(0, 0, S, S);
     // 行走图一格里人物大约占中间六成、头在上方 15–40%：取格宽 44% 的正方形，从格高 10% 处起
     const side = Math.min(fr.cutWidth * .44, fr.cutHeight * .44), sx = fr.cutX + fr.cutWidth * .5 - side / 2, sy = fr.cutY + fr.cutHeight * .1;
@@ -106,7 +106,7 @@ export class BossHud {
       return null;
     }
     const img = s.textures.get(src).getSourceImage() as HTMLImageElement, S = 128, c = document.createElement('canvas'); c.width = c.height = S;
-    const ctx = c.getContext('2d')!; ctx.save(); ctx.beginPath(); ctx.arc(S / 2, S / 2, S / 2, 0, Math.PI * 2); ctx.clip();
+    const ctx = c.getContext('2d', { willReadFrequently: true })!; ctx.save(); ctx.beginPath(); ctx.arc(S / 2, S / 2, S / 2, 0, Math.PI * 2); ctx.clip();
     const bg = ctx.createRadialGradient(S * .5, S * .42, S * .05, S * .5, S * .5, S * .62); bg.addColorStop(0, '#5a4630'); bg.addColorStop(.55, '#2a1c10'); bg.addColorStop(1, '#0b0705');
     ctx.fillStyle = bg; ctx.fillRect(0, 0, S, S);
     // 水墨立绘：头在上方中间；取宽 46% 的正方形、顶上留一点

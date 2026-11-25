@@ -1,3 +1,7 @@
+import { queueTreeArt } from '../systems/Terrain';
+import { queueMapScrollArt } from '../ui/BattleMap';
+import { HEAL_SPOT_ART } from '../data/battleHeal';
+import { SIGIL_KEY } from '../systems/FormationFx';
 import { preloadMythicNameplates } from '../ui/MythicBossNameplate';
 import { survivorBossHp, survivorBossProfile } from '../data/survivorBossBalance';
 import { GAUNTLET_ROSTER_IDS, pickGauntletRoster } from '../data/gauntletRoster';
@@ -211,6 +215,16 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     gStats = { lootPicks: [] as string[], spawned: 0, cleared: 0 };
 
     preload() {
+      queueTreeArt(this, true);
+      if (IS_DESKTOP) queueMapScrollArt(this);
+      const water = HEAL_SPOT_ART.water;
+      if (!this.textures.exists(water.key)) this.load.spritesheet(water.key, water.file, { frameWidth: water.cell, frameHeight: water.cell });
+      if (!this.textures.exists(SIGIL_KEY)) this.load.spritesheet(SIGIL_KEY, 'assets/formation/sigils.webp', { frameWidth: 512, frameHeight: 512 });
+      // Only these bag icons appear in the HUD or camp button. The inventory loads its own full-size panels when opened.
+      for (const name of ['bundle', 'tab_icon_all']) {
+        if (!this.textures.exists('bag_' + name)) this.load.image('bag_' + name, 'assets/bag/' + name + '.webp');
+      }
+      ensureTroopArt(this, ['dongzhuo_walk', 'dongzhuo_attack'], false);
       preloadRecruitPortraits(this, GAUNTLET_RECRUIT.tiers.flatMap(t => t.kinds));
       loadSurvivorBossFx(this);
       (Base.prototype as unknown as { preload?: () => void }).preload?.call(this); // 基类（开发构建的 DevGameScene）有 preload 就先跑
@@ -295,7 +309,6 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       this.moveDevBadge();
       this.gTrack?.destroy(); this.gTrack = new GauntletTrack(this, GAUNTLET.waves, 'hud_medal2_' + this.runConfig.character, SEAL_KEY); this.gTrack.setWave(this.gWave, true);
       this.gStrikes = new Strikes({ scene: this, player: this.player, army: this.legion, now: () => this.combatNow }); // 地面落点打击（手绘预警圈 → 命中序列帧）：郝昭箭楼、司马懿
-      if (this.gPool.some(b => b.id === 'dongzhuo')) ensureTroopArt(this, ['dongzhuo_walk', 'dongzhuo_attack']); // 董卓行走 / 攻击图（同 2-3，按需载入）
       this.events.once('shutdown', () => { this.gCtrl?.clear(); this.gCtrl = null; this.gTrack?.destroy(); this.gTrack = null; this.clearProps(); this.clearEscort(); this.clearHill(); this.clearBand(); this.gStrikes?.clear(); this.gStrikes = null; });
     }
     /** 自定关：不进战役关卡逻辑（剧情、进度、段落、招降都按自定关跳过）。 */

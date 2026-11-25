@@ -155,7 +155,18 @@ export function warmIffTextures(game: Phaser.Game): void {
   }
   if (warmTimer) clearTimeout(warmTimer);
   const idle = (fn: () => void): void => { const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback; if (ric) ric(fn, { timeout: 1500 }); else warmTimer = window.setTimeout(fn, 30); };
-  const next = (): void => { const job = jobs.shift(); if (!job) return; try { job(); } catch { /* 单张失败不影响其他 */ } idle(next); };
+  const next = (): void => {
+    const gauntlet = game.scene.keys.GauntletGameScene;
+    if (gauntlet?.sys.isActive()) {
+      // This mode uses its own uniform enemy tint. Build visible units on demand and resume campaign prewarming after leaving.
+      gauntlet.events.once('shutdown', () => idle(next));
+      return;
+    }
+    const job = jobs.shift();
+    if (!job) return;
+    try { job(); } catch { /* 单张失败不影响其他 */ }
+    idle(next);
+  };
   idle(next);
 }
 

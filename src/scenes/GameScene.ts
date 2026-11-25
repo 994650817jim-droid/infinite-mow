@@ -5478,7 +5478,8 @@ export class GameScene extends Phaser.Scene {
     attrClose.setName('attributes-close').on('pointerdown',()=>this.setMode(this.attributeReturn));
     attrClose.setStyle({fontFamily:HEADING_FONT,fontSize:'18px'});const attrCloseSkin=(d?inkSkin(this,attrClose,()=>({w:220,h:44}),{primary:true}):null)??lqSkin(this,attrClose,attrClose,()=>({w:220,h:44}),{tone:'cinnabar'});
     this.attributePanel.add([attrCloseSkin.gfx,attrClose]);
-    this.renderAttributePanel();
+    if (starMapOn()) this.attributePauseText.setText(`星图 · ${this.player.growth.unallocated}`);
+    else this.renderAttributePanel();
 
     this.recruitViews = [];
     this.recruitPanel = this.add.container(0, 0).setScrollFactor(0).setDepth(DEPTH.overlay).setVisible(false);
@@ -5583,7 +5584,7 @@ export class GameScene extends Phaser.Scene {
     fixInput(this.levelPanel);
     fixInput(this.pausePanel);
     fixInput(this.resultPanel);
-    if (IS_DESKTOP) this.time.delayedCall(4000, () => { if (this.sys?.isActive()) loadBagArt(this, () => {}); });
+    if (IS_DESKTOP && this.scene.key !== 'GauntletGameScene') this.time.delayedCall(4000, () => { if (this.sys?.isActive()) loadBagArt(this, () => {}); });
     fixInput(this.recruitPanel);
     fixInput(this.attributePanel);
   }

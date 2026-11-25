@@ -25,7 +25,7 @@ function nameFrames(scene: Phaser.Scene, key: string): void {
   DIRS.forEach((dir, row) => { for (let col = 0; col < 4; col++) if (!t.has(`${dir}_${col}`)) t.add(`${dir}_${col}`, 0, col * n, row * n, n, n); });
 }
 /** 确保这些图已加载（已有则直接命名帧）；返回是否全部就绪。 */
-export function ensureTroopArt(scene: Phaser.Scene, keys: readonly string[]): boolean {
+export function ensureTroopArt(scene: Phaser.Scene, keys: readonly string[], startLoader = true): boolean {
   const missing = keys.filter(k => !scene.textures.exists(k) && TROOP_ART[k]);
   for (const k of keys) if (scene.textures.exists(k)) nameFrames(scene, k);
   if (!missing.length) return true;
@@ -34,7 +34,7 @@ export function ensureTroopArt(scene: Phaser.Scene, keys: readonly string[]): bo
     else scene.load.spritesheet(k, TROOP_ART[k], {frameWidth: cellOf(k), frameHeight: cellOf(k)});
   }
   scene.load.once(Phaser.Loader.Events.COMPLETE, () => { for (const k of missing) if (scene.textures.exists(k)) nameFrames(scene, k); });
-  if (!scene.load.isLoading()) scene.load.start();
+  if (startLoader && !scene.load.isLoading()) scene.load.start();
   return false;
 }
 export function troopArtReady(scene: Phaser.Scene, key: string): boolean { return scene.textures.exists(key) && scene.textures.get(key).has('down_0'); }

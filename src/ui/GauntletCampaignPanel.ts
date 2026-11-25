@@ -138,7 +138,7 @@ function reportTabs(body: HTMLElement, data: CampaignReport) {
 
 export function campaignHeader(header: HTMLElement, data: Pick<CampaignReport,'chapterArt'|'portrait'|'caption'|'title'|'subtitle'>, level:'h1'|'h2') {
   header.replaceChildren();
-  header.style.setProperty('--chapter-art', 'url("' + data.chapterArt + '")');
+  header.style.setProperty('--chapter-art', 'url("' + new URL(data.chapterArt, document.baseURI).href + '")');
   if (data.portrait) portrait(header, data.portrait, 'commander');
   append(header, 'div', data.caption, 'report-caption');
   const title = append(header, level, data.title);

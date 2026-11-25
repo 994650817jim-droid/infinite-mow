@@ -123,6 +123,9 @@ for (const [layout, viewport] of Object.entries(LAYOUTS)) for (const [hero, h] o
     // 5) Lv5 铁索连舟：绕一圈（半径 90）让铁索首尾相接 → 圈内整片地火（灼伤 + 减速 40%），3 秒后整圈齐爆
     const loop = await p.evaluate(async ([G0, W, MK]) => {
       const s = eval(G0), pl = s.player, walk = eval(W), mk = eval(MK), cx = pl.x, cy = pl.y; pl.weapons[0].level = 5;
+      // Lv5 opens the mandatory specialization panel on the next live frame.
+      await new Promise(resolve=>s.events.once('postupdate',resolve));
+      if(s.mode==='branch'&&!s.chooseBranch(0))throw Error('weapon specialization could not be selected');
       for (const o of s.children.list.filter(o => o.name === 'pangtong-mine' && o.active)) o.setVisible(false);
       const center = mk(cx, cy); center.def = { ...center.def, speed: 0 };
       let seen = false, inside = { slow: 1, hurt: 0 }; const hp0 = center.hp;
@@ -166,8 +169,14 @@ for (const [layout, viewport] of Object.entries(LAYOUTS)) for (const [hero, h] o
 for (const [layout, viewport] of Object.entries(LAYOUTS)) {
   const p = await b.newPage({ viewport }); watch(p, 'picker-' + layout);
   await p.goto(base + `?layout=${layout}`); await p.waitForFunction(() => window.__game?.scene.isActive('MenuScene'), null, { timeout: 30000 }); await sleep(600);
-  for (const [id, idx] of [['weiyan', 6], ['pangtong', 8]]) {
-    const c = await p.evaluate(async i => { const hp = window.__game.scene.getScene('MenuScene').heroPicker; hp.open(i); await new Promise(r => setTimeout(r, 400)); const card = hp.cards[i]; return { weapon: card.weapon.text, skills: card.skills.text }; }, idx);
+  for (const id of ['weiyan', 'pangtong']) {
+    const c = await p.evaluate(async id => {
+      const {CHARACTERS}=await import('/src/data/characters.ts');
+      (await import('/src/systems/HeroUnlocks.ts')).setUnlockAll(true);
+      const hp=window.__game.scene.getScene('MenuScene').heroPicker;
+      hp.open(CHARACTERS.findIndex(c=>c.id===id));
+      const card=hp.cards[hp.candidate];return {weapon:card.weapon.text,skills:card.skills.text};
+    }, id);
     const want = id === 'weiyan' ? ['镇北环首刀', '开山', '孤军深入'] : ['凤雏连环令', '伏雷', '连营'];
     ck(`选将(${layout})：${HEROES[id].name}卡显示 ${want.join(' / ')}`, c.weapon.includes(want[0]) && c.skills.includes(want[1]) && c.skills.includes(want[2]), c);
     await p.screenshot({ path: `${out}/picker-${id}-${layout}.png` });

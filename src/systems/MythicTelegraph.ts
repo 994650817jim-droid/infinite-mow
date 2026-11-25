@@ -19,6 +19,7 @@ export function preloadMythicTelegraph(scene: Phaser.Scene): void {
 }
 
 export function clearMythicWarning(graphics: Phaser.GameObjects.Graphics): void {
+  spiritActors.get(graphics)?.setVisible(false);
   warningAccents.get(graphics)?.clear();
   graphics.clear();
   const art = fieldArt.get(graphics);
@@ -204,8 +205,31 @@ function edgeNotches(g: Phaser.GameObjects.Graphics, w: GroundWarning, color: nu
   }
 }
 
+const spiritActors = new WeakMap<Phaser.GameObjects.Graphics,Phaser.GameObjects.Image>();
+function drawSpirit(g:Phaser.GameObjects.Graphics,w:MythicWarning,now:number) {
+  if(!w.spirit)return;
+  const blade=w.spirit==='guanyu', ink=blade?0xa4dfc5:0xecc38b;
+  if(w.nextFlag)g.lineStyle(2,0x786656,.78).lineBetween(w.nextFlag.x,w.nextFlag.y,w.nextFlag.x,w.nextFlag.y-18);
+  g.lineStyle(2,ink,.9).lineBetween(w.x,w.y,w.x,w.y-30);
+  g.fillStyle(ink,.85).fillTriangle(w.x,w.y-30,w.x+14,w.y-27,w.x,w.y-20);
+  const key='mythic_divine_'+w.spirit+'_walk';
+  if(!g.scene.textures.exists(key))return;
+  let actor=spiritActors.get(g);
+  if(!actor){
+    actor=g.scene.add.image(0,0,key);
+    spiritActors.set(g,actor);
+    const owned=actor;
+    g.once('destroy',()=>owned.destroy());
+  }
+  const dx=Math.cos(w.face),dy=Math.sin(w.face);
+  const row=Math.abs(dx)>Math.abs(dy)?(dx<0?1:2):(dy<0?3:0);
+  const step=Math.min(3,Math.floor(Math.max(0,now-w.startsAt)*4));
+  actor.setTexture(key,row*4+step).setOrigin(.5,.8).setDisplaySize(85,85).setPosition(w.x,w.y)
+    .setTint(ink).setDepth(g.depth+1).setAlpha(w.resolved?.84:.54).setVisible(true);
+}
 export function drawMythicWarning(g: Phaser.GameObjects.Graphics,w: MythicWarning,id: string,now: number): void {
   const progress=Math.max(0,Math.min(1,(now-w.startsAt)/Math.max(.01,w.endsAt-w.startsAt)));
+  drawSpirit(g,w,now);
   const field=w.constellation;
   if (field) {
     if (w.closing && field.broken) return;

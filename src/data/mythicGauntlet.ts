@@ -28,6 +28,8 @@ export type BladeScar = Point & {
 };
 
 export interface MythicWarning extends Point {
+  spirit?: 'guanyu' | 'zhangfei';
+  nextFlag?: Point;
   constellation?: StarField;
   closing?: boolean;
   transit?: { start: number; to: Point; cast: number; harmless: boolean };
@@ -223,6 +225,29 @@ export function mythicTransit(w: MythicWarning, now: number): Point | undefined 
 }
 
 export function mythicSequence(boss: MythicBoss, origin: Point, target: Point, cast: number, phase2: boolean, now: number, clear: CanTravel = () => true) {
+  if (boss.id === 'divine_liubei') {
+    const face=Math.atan2(target.y-origin.y,target.x-origin.x);
+    const flag=(side:number):Point=>({x:origin.x-Math.sin(face)*side,y:origin.y+Math.cos(face)*side});
+    let left=flag(-42),right=flag(42);
+    if(!clear(origin,left))left={x:origin.x,y:origin.y};
+    if(!clear(origin,right))right={x:origin.x,y:origin.y};
+    const spirits: ('guanyu'|'zhangfei')[]=cast%2===0?['guanyu','zhangfei']:['zhangfei','guanyu'];
+    const warnings:MythicWarning[]=[];
+    let start=now;
+    for(const spirit of spirits.slice(0,phase2?2:1)) {
+      const blade=spirit==='guanyu', at=blade?left:right;
+      // A blocked second flag waits until another cast. The first spirit always has its own release.
+      if(warnings.length && !clear(left,right))break;
+      const angle=Math.atan2(target.y-at.y,target.x-at.x);
+      const w:MythicWarning={...at,spirit,name:blade?'桃园英魂 · 关羽横刀':'桃园英魂 · 张飞震吼',
+        kind:blade?'sweep':'ring',radius:blade?154:174,innerRadius:blade?undefined:79,
+        angle,face:angle,startsAt:start,endsAt:start+(warnings.length?1.3:1.05),resolved:false,
+        power:blade?1:.82,visual:blade?'blade':'seal',action:'cast',mythic:'divine'};
+      if(warnings.length)warnings[0].nextFlag=at;
+      warnings.push(w);start=w.endsAt+.43;
+    }
+    return warnings;
+  }
   if (boss.id === 'divine_zhugeliang') return sevenStars(origin,target,cast,phase2,now,clear);
   if (boss.id === 'divine_zhaoyun') return spearRoute(origin,target,cast,phase2,now,clear);
   const face = Math.atan2(target.y-origin.y,target.x-origin.x);

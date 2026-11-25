@@ -165,13 +165,18 @@ try {
   if (want('double')) {
     const ev = await recruitablePair();
     await ev(s => s.dual.comboNow(s.combatNow + 1e9)); await roll(ev, .01);
+    await ev(s=>{
+      s.__pairNotices=[];
+      const sample=()=>{const n=s.children.getByName('combat-notice');if(n?.visible){const t=n.list.filter(o=>o.type==='Text').map(o=>o.text).join(' ');if(t.includes('同归麾下'))s.__pairNotices.push(t);}};
+      s.events.on('postupdate',sample);s.events.once('shutdown',()=>s.events.off('postupdate',sample));
+    });
     const g0 = await p.evaluate(async () => (await import('/src/world/WorldStore.ts')).loadWorld().provisions);
     await finish(ev, 'lijue', 'persuade'); await p.waitForTimeout(1800);
     await ev(s => { const x = s.dual.entries[1]; x.invulnUntil = 0; x.enemy.invulnerable = false; });
     await finish(ev, 'zhangxiu', 'persuade'); await p.waitForTimeout(100);
     const tx = await texts(ev); await p.screenshot({ path: `${OUT}/double-surrender-1280x720.png` });
     const r = await ev(s => ({ chests: s.bossChests.length, killed: s.bossKilled })), g1 = await p.evaluate(async () => (await import('/src/world/WorldStore.ts')).loadWorld().provisions), f = await flags();
-    const notice = await ev(s => s.children.list.filter(o => o.name === 'combat-notice').flatMap(o => o.list.filter(c => c.type === 'Text').map(c => c.text)));
+    const notice = await ev(s => s.__pairNotices);
     ck('双降：横幅「河北双雄 · 同归麾下」、不掉宝箱、算击败首领', (tx.some(t => t.includes('同归麾下')) || notice.some(t => t.includes('同归麾下'))) && r.chests === 0 && r.killed, { r, tx: tx.filter(t => t.includes('麾下')) });
     ck('双降：钱币 +100（另加各自首次劝降 +60）', g1 - g0 === 100 + 60 + 60, { g0, g1 });
     ck('剧情旗标 pair_fixture_outcome = 双降（pp）', f.pair_fixture_outcome === 'pp', f.pair_fixture_outcome);

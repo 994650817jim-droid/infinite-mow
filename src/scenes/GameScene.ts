@@ -385,7 +385,7 @@ export class GameScene extends Phaser.Scene {
       trail:(()=>{const last=new Map<number,number>();return (id:number,ratio:number)=>{const rn=performance.now(),dt=Math.min(.25,(rn-(last.get(id)??rn))/1000);last.set(id,rn);this.bossStagger.track(id,ratio);return this.bossStagger.trailRatio(ratio,rn,dt);};})(),
       live:()=>surrenderLive(),setFlag:(k,v)=>setStoryFlag(k,v),
       hurt:(e,dmg)=>{this.hitEnemy(e,dmg,this.combatNow,'melee',true,false);},
-      doubleSurrender:g=>{if(surrenderLive())gainProvisions(DUAL.doubleProvisions);this.showWaveBanner(g+' · 同归麾下',false,'双双归降');this.sfx.play('gong');},
+      doubleSurrender:g=>{if(surrenderLive())gainProvisions(DUAL.doubleProvisions);this.showWaveBanner(g+' · 同归麾下',false,'双双归降');this.children.getByName('combat-notice')?.setData('surrenderOutcome',true);this.sfx.play('gong');},
       spawn:(k,x,y)=>this.spawnEnemy(k,x,y,1,true)},plan,now);
     const mk=(e:Enemy,key:string|null)=>{const ref:{x?:ReturnType<DualBoss['entryOf']>}={};const p=this.makeParley(()=>ref.x&&!ref.x.done&&e.active?e:null,surrenderDef(key),{partner:()=>ref.x?d.partnerOdds(ref.x):undefined});return {p,ref};};
     {const {p,ref}=mk(first.enemy,first.key);ref.x=d.add({id:first.id,name:first.name,enemy:first.enemy,ctrl:first.ctrl,parley:p,mount:first.mount??null,ownKit:first.ownKit},now);}
@@ -3777,6 +3777,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   protected showWaveBanner(text: string, danger = false, captionText?: string): void {
+    if (!danger && this.children.getByName('combat-notice')?.getData('surrenderOutcome')) return;
     this.sfx?.play(danger ? 'gong' : 'waveDrum');
     // Keep one notice at a time; no opaque panel over the battlefield.
     for (const notice of this.children.list.filter(o => o.name === 'combat-notice')) {

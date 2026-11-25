@@ -36,7 +36,13 @@ export function campaignPanel(owner:Phaser.Scene, data:CampaignPanel):()=>void {
   }
   for(const d of data.details??[]){const item=add('details','',story);add('summary',d.label,item);add('p',d.body,item);}
   const foot=add('footer','');
+  const priorInput=owner.input.enabled;
+  owner.input.enabled=false;
+  let closed=false;
   function close(){
+    if(closed)return;
+    closed=true;
+    owner.input.enabled=priorInput;
     owner.events.off('shutdown',close);dialog.remove();
   }
   for(const action of data.actions){
@@ -44,7 +50,8 @@ export function campaignPanel(owner:Phaser.Scene, data:CampaignPanel):()=>void {
     btn.type='button';btn.addEventListener('click',()=>{if(dialog.isConnected){close();action.run();}});
   }
   dialog.addEventListener('cancel',e=>e.preventDefault());
-  dialog.addEventListener('keydown',e=>e.stopPropagation());
+  for(const type of ['pointerdown','pointerup','mousedown','mouseup','touchstart','touchend','keydown','keyup'])
+    dialog.addEventListener(type,e=>e.stopPropagation());
   dialog.append(sheet);document.body.append(dialog);dialog.showModal();
   owner.events.once('shutdown',close);
   return close;

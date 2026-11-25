@@ -108,7 +108,10 @@ try {
       await boot.reload({waitUntil:'domcontentloaded'});
       await boot.waitForFunction(()=>window.loadedGameWith==='live-campaign');
       assert.ok(await boot.evaluate(()=>localStorage.getItem('im_battle_snapshot')));
-      assert.equal(await b.evaluate(()=>S.switchSlotSafely(1).then(()=>true,()=>false)),false);
+      // Changing another tab's view now leaves the live campaign and its original keys in place.
+      assert.equal(await b.evaluate(()=>S.switchSlotSafely(1)),true);
+      assert.equal(await a.evaluate(()=>S.activeSlot()),0);
+      assert.equal(await a.evaluate(()=>localStorage.getItem('im_last_hero')),'live-campaign');
       await a.close();
       await boot.reload({waitUntil:'domcontentloaded'});
       await boot.waitForFunction(()=>window.loadedGameWith==='before-campaign');

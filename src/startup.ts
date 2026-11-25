@@ -4,6 +4,8 @@ import './platform/desktop';
 import { recoverBeforeBoot } from './systems/BattleSnapshotBoot';
 
 async function recoverSave() {
+  try { localStorage.getItem('im_battle_snapshot'); } catch { return; }
+  (await import('./systems/SaveSlots')).installSlotView();
   await recoverBeforeBoot();
   // Direct battle entry can bypass the menu that normally retries interrupted receipts.
   let pending=false;

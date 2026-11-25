@@ -30,7 +30,11 @@ try {
    if(ending==='reload'){await a.reload();}
    await a.evaluate(async ending=>{
      const s=await import('/src/systems/BattleSnapshot.ts');
-     if(ending==='victory'||ending==='client-closed')s.commitBattle();else if(!s.rollbackBattle())throw Error('missing rollback');
+     if(ending==='reload'){
+       await (await import('/src/systems/BattleSnapshotBoot.ts')).recoverBeforeBoot();
+       assertNoSnapshot();
+     }else if(ending==='victory'||ending==='client-closed')s.commitBattle();else if(!s.rollbackBattle())throw Error('missing rollback');
+     function assertNoSnapshot(){if(s.battleInProgress()!==null)throw Error('abandoned snapshot still present');}
    },ending);
    await a.waitForFunction(({id})=>JSON.parse(localStorage.getItem('im_gauntlet_paid_v2')??'{}')[id],{id},{timeout:20000,polling:50});console.log(ending,'paid');
    const after=await wallet(a);

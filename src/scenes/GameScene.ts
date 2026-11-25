@@ -221,7 +221,7 @@ import { hotkeySettingsLink } from '../ui/HotkeySettingsUI';
 import { BossPresence } from '../systems/BossPresence';
 import { DAMAGE_LABEL, OUTLINE_LABEL, SCALE_LABEL, SHAKE_LABEL, WIDTH_LABEL, cycle, damageNumbers, outlineMode, outlineWidth, renderScaleSetting, setDamageNumbers, setOutlineMode, setOutlineWidth, setRenderScaleSetting, setShakeLevel, shakeLevel, shakeScale, type DamageNumbers, type OutlineMode, type OutlineWidth, type RenderScaleSetting, type ShakeLevel } from '../systems/BattleSettings';
 import { tutorialReplayLink } from '../ui/TutorialOverlay';
-import { openBattleCheckpoint, commitBattle, rollbackBattle } from '../systems/BattleSnapshot';
+import { openBattleCheckpoint, commitBattle, rollbackBattle, releaseCampWriter } from '../systems/BattleSnapshot';
 import { reloadGame } from '../systems/SaveSlots';
 import { BOOT_TO_KEY } from '../systems/BattleSnapshot';
 import { BossMoveset } from '../systems/BossMoveset';
@@ -897,8 +897,11 @@ export class GameScene extends Phaser.Scene {
     const file=new Phaser.Loader.File(this.load,{type:'campaign-checkpoint',key:'save-checkpoint'});
     file.load=()=>{
       openBattleCheckpoint(label,()=>!!file.loader && this.sys.settings.status===Phaser.Scenes.LOADING).then(()=>file.loader?.nextFile(file,true),error=>{
-        console.warn('战役存档保护暂不可用',error);
-        file.loader?.nextFile(file,false);
+        if(!file.loader || this.sys.settings.status!==Phaser.Scenes.LOADING)return;
+        // Stop the loader before Phaser can call a specialized chapter's create().
+        this.scene.manager.stop(label);
+        this.scene.manager.start('MenuScene');
+        void import('../ui/CampaignOccupiedNotice').then(m=>m.showCampaignNotice(error));
       });
     };
     this.load.addFile(file);
@@ -911,7 +914,10 @@ export class GameScene extends Phaser.Scene {
     // 中途退出不算：进关先记下存档，告捷 / 战败才丢掉（systems/BattleSnapshot.ts）
     // Keep ground telegraphs readable even on the first frame of a hit flash.
     this.cameras.main.flashEffect.alpha = 0.20;
-    // Ordinary campaigns captured their rollback point during preload.
+    // Transferring the army continues the same writer into the next scene's preload.
+    if(this.scene.key!=='GauntletGameScene')this.events.once('shutdown',()=>{
+      releaseCampWriter(this.registry.has('campaignTransfer'));
+    });
     stopMenuMusic();
     startCityAmbient(this, k => this.sfx?.play(k), ['amb_wind', 'amb_wind', 'amb_flag'], [9000, 16000]); // 战斗环境声：很稀的风 / 旗声（音效审计第二批）
     this.hadStarterHorse = ownedHorses().some(h => h.id === STARTER_HORSE);
@@ -3534,7 +3540,7 @@ export class GameScene extends Phaser.Scene {
     // 告捷：按进度补查武将来投（第一章通关诸葛亮、白门楼 / 三英战吕布貂蝉……），揭幕压在结算上面
     if (mode === 'result' && this.victory) window.setTimeout(() => { if (this.scene.isActive() && this.mode === 'result') checkHeroJoins(this); }, 700);
     if (mode === 'rest') this.sweepCoins(); // 进行营前把地上的钱币收走（行营里要花）
-    if (mode === 'rest') commitBattle(); // 关卡告捷进行营：本场所得生效
+    if (mode === 'rest') commitBattle(true); // 关卡告捷进行营：本场所得生效
     if (mode === 'rest' && !this.restIntroPlayed) { this.restIntroPlayed = true; this.playRestIntro(); }
     if (mode === 'rest') this.pointsGuide(); // 属性点：第一次能加时引导一次
   }
@@ -4884,7 +4890,7 @@ export class GameScene extends Phaser.Scene {
     this.sweepCoins(); // 地上没捡的钱币先入账（结算、战报按入账后的数）
     this.over = true;
     if (victory) this.fortunes?.farewell(); // 机缘降将：本关结束告别一句
-    if(this.scene.key!=='GauntletGameScene') commitBattle(); // 告捷（战报）与战败都按现行规则结算，本场写入生效
+    if(this.scene.key!=='GauntletGameScene') commitBattle(true); // 告捷（战报）与战败都按现行规则结算，本场写入生效
     this.player.passive.stop();
     // 动作层：胜利举兵器 / 战败倒地（有素材的武将才播放，播完定格）
     this.player.playAction(victory ? 'win' : 'die', 'down');

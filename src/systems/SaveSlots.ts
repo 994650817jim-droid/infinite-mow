@@ -4,6 +4,7 @@
  * 音量、布局、渲染倍率等设置是全局的，不随存档位切换。
  * 桌面版的 localStorage 已由 platform/desktop.ts 换成 save.json，所以存档位同样落在 save.json 里（便于 Steam 云存档）。
  */
+import { clearIsolatedSlot, installSlotStorage, isolatedData, isolatedSlot, openIsolatedSlot, pageRetired, rawSave, selectSlotView, viewedSlot, writerKey } from './SlotLocalView';
 import { CHAPTER_CLEAR_KEY } from './ChapterProgress';
 import { withGauntletLock } from './GauntletSaveLock';
 import { BACKUP_KEY, WORLD_KEY, type WorldSave } from '../world/WorldStore';
@@ -17,6 +18,8 @@ const META_KEY = 'im_save_slots';
 const slotKey = (i: number): string => `im_slot_${i}`;
 /** 属于“一个存档”的键；其余 im_ 键（音量、布局等）是全局设置。 */
 export const PROGRESS_KEYS = [WORLD_KEY, BACKUP_KEY, CHAPTER_CLEAR_KEY, 'im_last_hero', SLOT_TOUCH_KEY, 'im_items_v1', 'im_items_v2', 'im_roster_v1', 'im_heroes_v1', 'im_mastery_v1', 'im_campaign_v1', 'im_story_v1', 'im_story_seen_v1', 'im_side_routes_v1', 'im_merchant_v1', 'im_gauntlet_claim_v1', 'im_gauntlet_paid_v2', 'im_gauntlet_modes_v1', 'im_gauntlet_modes_v1_test'];
+
+export function installSlotView():void { installSlotStorage(PROGRESS_KEYS); }
 
 export interface SlotSummary {
   index: number;
@@ -35,6 +38,7 @@ const set = (k: string, v: string): void => { try { localStorage.setItem(k, v); 
 const del = (k: string): void => { try { localStorage.removeItem(k); } catch { /* 存储不可用 */ } };
 
 export function activeSlot(): number {
+  const view=viewedSlot();if(view!==null)return view;
   try { const m = JSON.parse(get(META_KEY) ?? '{}') as { active?: number }; return Number.isInteger(m.active) && m.active! >= 0 && m.active! < SLOT_COUNT ? m.active! : 0; } catch { return 0; }
 }
 const TRANSFER_KEY = 'im_slot_transfer';
@@ -62,7 +66,7 @@ function readActiveStrict(): number {
 /** Recover an interrupted switch before any progress is cached. The active pointer is the commit point. */
 export function recoverSlotTransfer(): void {
   const raw=localStorage.getItem(TRANSFER_KEY);
-  if(raw===null) return;
+  if(raw===null || viewedSlot()!==null) return;
   const {from,to}=JSON.parse(raw);
   const active=readActiveStrict();
   if(!validSlot(from)||!validSlot(to)||from===to||(active!==from&&active!==to)) throw new Error('存档切换记录损坏');
@@ -85,6 +89,12 @@ function liveData(): Record<string, string> {
 }
 function slotData(i: number): Record<string, string> | null {
   if (i === activeSlot()) return liveData();
+  if(isolatedSlot(i))return isolatedData(i,PROGRESS_KEYS);
+  if(viewedSlot()!==null && i===readActiveStrict()){
+    const result:Record<string,string>={};
+    for(const k of PROGRESS_KEYS){const value=rawSave().getItem(k);if(value!==null)result[k]=value;}
+    return result;
+  }
   try { const d = JSON.parse(get(slotKey(i)) ?? 'null') as Record<string, string> | null; return d && typeof d === 'object' ? d : null; } catch { return null; }
 }
 function isEmpty(d: Record<string, string> | null): boolean {
@@ -124,7 +134,7 @@ export function listSlots(): SlotSummary[] { return Array.from({ length: SLOT_CO
 
 /** 切换到存档位 i（空位即开始新征途）。调用后需要重新加载游戏。 */
 export function switchSlot(i: number): boolean {
-  if(!validSlot(i)) return false;
+  if(pageRetired() || !validSlot(i)) return false;
   try {
     recoverSlotTransfer();
     const from=readActiveStrict();
@@ -145,17 +155,18 @@ export function switchSlot(i: number): boolean {
 
 /** 删除存档位 i（当前存档位则清空当前进度）。调用当前存档位后需要重新加载游戏。 */
 export function deleteSlot(i: number): void {
-  if (!validSlot(i)) return;
+  if (pageRetired() || !validSlot(i)) return;
   const pendingPrefix='im_gauntlet_pending:'+i+':';
   for(let n=localStorage.length-1;n>=0;n--){const k=localStorage.key(n);if(k && (k.startsWith(pendingPrefix)||k.startsWith('im_gauntlet_score_pending:'+i+':')))del(k);}
-  if (i === activeSlot()) { for (const k of PROGRESS_KEYS) del(k); }
+  if(isolatedSlot(i)){clearIsolatedSlot(i,PROGRESS_KEYS);del(slotKey(i));}
+  else if(i===readActiveStrict()){for(const k of PROGRESS_KEYS)rawSave().removeItem(k);}
   else del(slotKey(i));
 }
 
 export class SlotBattleConflict extends Error {}
 function assertSlotIdle(slot:number): void {
-  const raw = localStorage.getItem('im_battle_snapshot');
-  if (raw && JSON.parse(raw)?.slot === slot) {
+  const raw = rawSave().getItem('im_battle_snapshot');
+  if (rawSave().getItem(writerKey(slot)) || (raw && JSON.parse(raw)?.slot === slot)) {
     throw new SlotBattleConflict('此存档还有战斗。请先结束战斗，已关闭战斗页时请重新载入。');
   }
 }
@@ -165,20 +176,30 @@ export function switchSlotSafely(i:number): Promise<boolean> {
   const expected = activeSlot();
   return withGauntletLock(() => {
     recoverSlotTransfer();
-    if (activeSlot() !== expected) return false;
-    if (i !== expected) assertSlotIdle(expected);
+    if (pageRetired() || activeSlot() !== expected) return false;
+    if(!validSlot(i))return false;
+    if(i===expected)return true;
+    const base=readActiveStrict();
+    const snapshot=rawSave().getItem('im_battle_snapshot');
+    if(viewedSlot()!==null || isolatedSlot(i) || rawSave().getItem(writerKey(base)) || (snapshot && JSON.parse(snapshot)?.slot===base)){
+      // Leave the owner's live keys where they are. The selecting tab reloads onto
+      // private-per-slot keys which remain shared with other tabs viewing *that* slot.
+      if(i!==base)openIsolatedSlot(i,readStoredSlot(i),PROGRESS_KEYS);
+      selectSlotView(i===base?null:i);
+      return true;
+    }
     return switchSlot(i);
   });
 }
 export function deleteSlotSafely(i:number): Promise<boolean> {
   const from = activeSlot();
-  const contents = () => i === from ? JSON.stringify(liveData()) : localStorage.getItem(slotKey(i));
+  const contents = () => JSON.stringify(slotData(i));
   const expected = contents();
   return withGauntletLock(() => {
     recoverSlotTransfer();
-    if (activeSlot() !== from || contents() !== expected) throw new Error('存档已变化，请重新确认删除');
+    if (pageRetired() || activeSlot() !== from || contents() !== expected) throw new Error('存档已变化，请重新确认删除');
     const wasActive = from === i;
-    if (wasActive) assertSlotIdle(i);
+    assertSlotIdle(i);
     deleteSlot(i);
     return wasActive;
   });

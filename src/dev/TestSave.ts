@@ -45,6 +45,10 @@ if (import.meta.env.DEV && testSaveActive()) {
   /** 读测试视图：测试键优先；正式值自分叉后变过就丢掉测试副本。 */
   const read = (key: string): string | null => {
     const v = raw.get.call(ls, PFX + key), realNow = raw.get.call(ls, key);
+    // A sandbox copies progression, while its campaign lease and rollback image belong to its own run.
+    if (key === 'im_battle_snapshot' || key.startsWith('im_campaign_writer:') || /^im_parallel_data:\d+:im_battle_snapshot$/.test(key)) {
+      return v === TOMB ? null : v;
+    }
     if (v !== null) {
       const base = raw.get.call(ls, BASE + key);
       if (!TRIAL && base !== null && base !== (realNow ?? NONE)) { // 试验存档不跟随正式存档

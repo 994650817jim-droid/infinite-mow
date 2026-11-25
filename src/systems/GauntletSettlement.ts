@@ -1,3 +1,4 @@
+import { eventSaveKey } from './SlotLocalView';
 import { GAUNTLET, gauntletReward } from '../data/gauntlet';
 import { creditGauntletGrain } from '../world/WorldStore';
 import { creditGauntletScrolls } from './MasteryStore';
@@ -53,9 +54,9 @@ export function observeDeferredReward(id:string,slot:number,show:(value:string)=
     } catch { /* Keep the durable pending notice when storage is temporarily unavailable. */ }
   };
   function changed(e:StorageEvent) {
-    if(e.key===LEDGER)refresh();
+    if(eventSaveKey(e.key)===LEDGER)refresh();
     // Retreat reloads the owner page. The open report can finish payment itself.
-    if(e.key===BATTLE_SNAPSHOT_KEY && e.newValue===null && activeSlot()===slot)
+    if(eventSaveKey(e.key)===BATTLE_SNAPSHOT_KEY && e.newValue===null && activeSlot()===slot)
       void recoverGauntletSettlement().then(refresh).catch(error=>console.warn('连战战报待入账',error));
   }
   window.addEventListener('storage',changed);

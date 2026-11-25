@@ -1,0 +1,1298 @@
+{
+  "originalSHA256": "4f71ac39d86becf43db61b1c0dd8529f42be76aa24db257fa5372f6499284a77",
+  "terminal": "completed",
+  "randomLineup": [
+    "zhangxiu",
+    "zhangliang",
+    "guosi",
+    "hanxuan",
+    "yanliang",
+    "zhaofan",
+    "xiahouyuan",
+    "dongzhuo",
+    "pangde",
+    "luxun"
+  ],
+  "transitions": [
+    {
+      "wave": 1,
+      "phase": "mow",
+      "time": 0.37,
+      "tier": "mortal",
+      "boss": null,
+      "army": 0,
+      "recruits": 0,
+      "fallen": 0
+    },
+    {
+      "wave": 1,
+      "phase": "boss",
+      "time": 55.01,
+      "tier": "mortal",
+      "boss": "张绣",
+      "army": 0,
+      "recruits": 0,
+      "fallen": 0
+    },
+    {
+      "wave": 1,
+      "phase": "clear",
+      "time": 79.19,
+      "tier": "mortal",
+      "boss": "张绣",
+      "army": 0,
+      "recruits": 0,
+      "fallen": 0
+    },
+    {
+      "wave": 2,
+      "phase": "mow",
+      "time": 89.19,
+      "tier": "mortal",
+      "boss": "张绣",
+      "army": 9,
+      "recruits": 9,
+      "fallen": 0
+    },
+    {
+      "wave": 2,
+      "phase": "boss",
+      "time": 144.21,
+      "tier": "mortal",
+      "boss": "张梁",
+      "army": 9,
+      "recruits": 9,
+      "fallen": 0
+    },
+    {
+      "wave": 2,
+      "phase": "clear",
+      "time": 165.15,
+      "tier": "mortal",
+      "boss": "张梁",
+      "army": 0,
+      "recruits": 9,
+      "fallen": 9
+    },
+    {
+      "wave": 3,
+      "phase": "mow",
+      "time": 175.23,
+      "tier": "mortal",
+      "boss": "张梁",
+      "army": 9,
+      "recruits": 18,
+      "fallen": 9
+    },
+    {
+      "wave": 3,
+      "phase": "boss",
+      "time": 230.16,
+      "tier": "mortal",
+      "boss": "郭汜",
+      "army": 9,
+      "recruits": 18,
+      "fallen": 9
+    },
+    {
+      "wave": 3,
+      "phase": "clear",
+      "time": 243.34,
+      "tier": "mortal",
+      "boss": "郭汜",
+      "army": 5,
+      "recruits": 18,
+      "fallen": 13
+    },
+    {
+      "wave": 4,
+      "phase": "mow",
+      "time": 253.36,
+      "tier": "mortal",
+      "boss": "郭汜",
+      "army": 13,
+      "recruits": 27,
+      "fallen": 14
+    },
+    {
+      "wave": 4,
+      "phase": "boss",
+      "time": 308.36,
+      "tier": "mortal",
+      "boss": "韩玄",
+      "army": 7,
+      "recruits": 27,
+      "fallen": 20
+    },
+    {
+      "wave": 4,
+      "phase": "clear",
+      "time": 351.76,
+      "tier": "mortal",
+      "boss": "韩玄",
+      "army": 0,
+      "recruits": 27,
+      "fallen": 27
+    },
+    {
+      "wave": 5,
+      "phase": "mow",
+      "time": 361.84,
+      "tier": "mortal",
+      "boss": "韩玄",
+      "army": 18,
+      "recruits": 45,
+      "fallen": 27
+    },
+    {
+      "wave": 5,
+      "phase": "boss",
+      "time": 416.79,
+      "tier": "mortal",
+      "boss": "颜良",
+      "army": 18,
+      "recruits": 45,
+      "fallen": 27
+    },
+    {
+      "wave": 5,
+      "phase": "clear",
+      "time": 437.69,
+      "tier": "mortal",
+      "boss": "颜良",
+      "army": 7,
+      "recruits": 45,
+      "fallen": 38
+    },
+    {
+      "wave": 6,
+      "phase": "mow",
+      "time": 447.7,
+      "tier": "mortal",
+      "boss": "颜良",
+      "army": 25,
+      "recruits": 63,
+      "fallen": 38
+    },
+    {
+      "wave": 6,
+      "phase": "boss",
+      "time": 502.73,
+      "tier": "mortal",
+      "boss": "赵范",
+      "army": 12,
+      "recruits": 63,
+      "fallen": 51
+    },
+    {
+      "wave": 6,
+      "phase": "clear",
+      "time": 529.07,
+      "tier": "mortal",
+      "boss": "赵范",
+      "army": 6,
+      "recruits": 63,
+      "fallen": 57
+    },
+    {
+      "wave": 7,
+      "phase": "mow",
+      "time": 539.12,
+      "tier": "mortal",
+      "boss": "赵范",
+      "army": 21,
+      "recruits": 78,
+      "fallen": 57
+    },
+    {
+      "wave": 7,
+      "phase": "boss",
+      "time": 594.12,
+      "tier": "mortal",
+      "boss": "夏侯渊",
+      "army": 7,
+      "recruits": 78,
+      "fallen": 71
+    },
+    {
+      "wave": 7,
+      "phase": "clear",
+      "time": 619.73,
+      "tier": "mortal",
+      "boss": "夏侯渊",
+      "army": 3,
+      "recruits": 78,
+      "fallen": 75
+    },
+    {
+      "wave": 8,
+      "phase": "mow",
+      "time": 629.74,
+      "tier": "mortal",
+      "boss": "夏侯渊",
+      "army": 21,
+      "recruits": 96,
+      "fallen": 75
+    },
+    {
+      "wave": 8,
+      "phase": "boss",
+      "time": 684.77,
+      "tier": "mortal",
+      "boss": "董卓",
+      "army": 16,
+      "recruits": 96,
+      "fallen": 80
+    },
+    {
+      "wave": 8,
+      "phase": "clear",
+      "time": 710.53,
+      "tier": "mortal",
+      "boss": "董卓",
+      "army": 9,
+      "recruits": 96,
+      "fallen": 87
+    },
+    {
+      "wave": 9,
+      "phase": "mow",
+      "time": 720.57,
+      "tier": "mortal",
+      "boss": "董卓",
+      "army": 27,
+      "recruits": 114,
+      "fallen": 87
+    },
+    {
+      "wave": 9,
+      "phase": "boss",
+      "time": 775.54,
+      "tier": "mortal",
+      "boss": "庞德",
+      "army": 24,
+      "recruits": 114,
+      "fallen": 90
+    },
+    {
+      "wave": 9,
+      "phase": "clear",
+      "time": 797.49,
+      "tier": "mortal",
+      "boss": "庞德",
+      "army": 10,
+      "recruits": 114,
+      "fallen": 104
+    },
+    {
+      "wave": 10,
+      "phase": "mow",
+      "time": 807.49,
+      "tier": "mortal",
+      "boss": "庞德",
+      "army": 25,
+      "recruits": 129,
+      "fallen": 104
+    },
+    {
+      "wave": 10,
+      "phase": "boss",
+      "time": 862.5,
+      "tier": "mortal",
+      "boss": "陆逊",
+      "army": 17,
+      "recruits": 129,
+      "fallen": 112
+    },
+    {
+      "wave": 10,
+      "phase": "clear",
+      "time": 895.1,
+      "tier": "mortal",
+      "boss": "陆逊",
+      "army": 3,
+      "recruits": 129,
+      "fallen": 126
+    },
+    {
+      "wave": 10,
+      "phase": "choice",
+      "time": 905.11,
+      "tier": "mortal",
+      "boss": "陆逊",
+      "army": 18,
+      "recruits": 144,
+      "fallen": 126
+    },
+    {
+      "wave": 11,
+      "phase": "mow",
+      "time": 905.13,
+      "tier": "ghost",
+      "boss": "陆逊",
+      "army": 18,
+      "recruits": 144,
+      "fallen": 126
+    },
+    {
+      "wave": 11,
+      "phase": "boss",
+      "time": 913.13,
+      "tier": "ghost",
+      "boss": "鬼张绣",
+      "army": 18,
+      "recruits": 144,
+      "fallen": 126
+    },
+    {
+      "wave": 11,
+      "phase": "clear",
+      "time": 942.86,
+      "tier": "ghost",
+      "boss": "鬼张绣",
+      "army": 0,
+      "recruits": 144,
+      "fallen": 144
+    },
+    {
+      "wave": 12,
+      "phase": "mow",
+      "time": 952.87,
+      "tier": "ghost",
+      "boss": "鬼张绣",
+      "army": 3,
+      "recruits": 147,
+      "fallen": 144
+    },
+    {
+      "wave": 12,
+      "phase": "boss",
+      "time": 960.88,
+      "tier": "ghost",
+      "boss": "鬼典韦",
+      "army": 3,
+      "recruits": 147,
+      "fallen": 144
+    },
+    {
+      "wave": 12,
+      "phase": "clear",
+      "time": 987.75,
+      "tier": "ghost",
+      "boss": "鬼典韦",
+      "army": 0,
+      "recruits": 147,
+      "fallen": 147
+    },
+    {
+      "wave": 13,
+      "phase": "mow",
+      "time": 997.81,
+      "tier": "ghost",
+      "boss": "鬼典韦",
+      "army": 6,
+      "recruits": 153,
+      "fallen": 147
+    },
+    {
+      "wave": 13,
+      "phase": "boss",
+      "time": 1005.74,
+      "tier": "ghost",
+      "boss": "鬼颜良",
+      "army": 6,
+      "recruits": 153,
+      "fallen": 147
+    },
+    {
+      "wave": 13,
+      "phase": "clear",
+      "time": 1040.63,
+      "tier": "ghost",
+      "boss": "鬼颜良",
+      "army": 0,
+      "recruits": 153,
+      "fallen": 153
+    },
+    {
+      "wave": 14,
+      "phase": "mow",
+      "time": 1050.65,
+      "tier": "ghost",
+      "boss": "鬼颜良",
+      "army": 3,
+      "recruits": 156,
+      "fallen": 153
+    },
+    {
+      "wave": 14,
+      "phase": "boss",
+      "time": 1058.67,
+      "tier": "ghost",
+      "boss": "鬼黄忠",
+      "army": 3,
+      "recruits": 156,
+      "fallen": 153
+    },
+    {
+      "wave": 14,
+      "phase": "clear",
+      "time": 1087.25,
+      "tier": "ghost",
+      "boss": "鬼黄忠",
+      "army": 0,
+      "recruits": 156,
+      "fallen": 156
+    },
+    {
+      "wave": 15,
+      "phase": "mow",
+      "time": 1097.36,
+      "tier": "ghost",
+      "boss": "鬼黄忠",
+      "army": 3,
+      "recruits": 159,
+      "fallen": 156
+    },
+    {
+      "wave": 15,
+      "phase": "boss",
+      "time": 1105.29,
+      "tier": "ghost",
+      "boss": "鬼吕布",
+      "army": 3,
+      "recruits": 159,
+      "fallen": 156
+    },
+    {
+      "wave": 15,
+      "phase": "clear",
+      "time": 1130.99,
+      "tier": "ghost",
+      "boss": "鬼吕布",
+      "army": 2,
+      "recruits": 159,
+      "fallen": 157
+    },
+    {
+      "time": 1140.99,
+      "wave": 15,
+      "tier": "ghost",
+      "phase": "choice",
+      "boss": "鬼吕布",
+      "bossHp": null,
+      "hp": 500,
+      "maxHp": 500,
+      "level": 25,
+      "xp": 1058,
+      "armor": 0,
+      "speed": 257.13,
+      "damage": 1178559,
+      "kills": 5887,
+      "hero": "zhangfei",
+      "weapon": [
+        [
+          "dangyang_roar",
+          5,
+          "zf_duanqiao"
+        ]
+      ],
+      "stars": [
+        "strength.T1",
+        "strength.T2",
+        "strength.L1",
+        "strength.L2",
+        "strength.NL1",
+        "strength.L3",
+        "strength.NL2",
+        "strength.R1",
+        "strength.R2",
+        "strength.NR1",
+        "strength.R3",
+        "strength.NR2",
+        "strength.C1",
+        "strength.NC",
+        "strength.C2",
+        "strength.C3",
+        "strength.K",
+        "bridge0.a",
+        "bridge0.h",
+        "bridge3.b",
+        "bridge3.h",
+        "strength.O1",
+        "strength.NX1",
+        "strength.O2",
+        "agility.NR2"
+      ],
+      "attributes": {
+        "strength": 15,
+        "agility": 0,
+        "intellect": 0,
+        "command": 0
+      },
+      "army": 5,
+      "fallen": 157,
+      "food": 128,
+      "recruits": 162,
+      "followers": 3,
+      "position": [
+        156.15,
+        527.89
+      ],
+      "cleared": 15,
+      "milestones": 2,
+      "revivalUsed": false,
+      "gameOver": false,
+      "alive": true,
+      "mode": "bossloot",
+      "timescale": 1
+    },
+    {
+      "wave": 16,
+      "phase": "mow",
+      "time": 1141.06,
+      "tier": "divine",
+      "boss": "鬼吕布",
+      "army": 5,
+      "recruits": 162,
+      "fallen": 157
+    },
+    {
+      "wave": 16,
+      "phase": "boss",
+      "time": 1148.99,
+      "tier": "divine",
+      "boss": "神赵云",
+      "army": 5,
+      "recruits": 162,
+      "fallen": 157
+    },
+    {
+      "wave": 16,
+      "phase": "clear",
+      "time": 1176.72,
+      "tier": "divine",
+      "boss": "神赵云",
+      "army": 0,
+      "recruits": 162,
+      "fallen": 162
+    },
+    {
+      "wave": 17,
+      "phase": "mow",
+      "time": 1186.74,
+      "tier": "divine",
+      "boss": "神赵云",
+      "army": 3,
+      "recruits": 165,
+      "fallen": 162
+    },
+    {
+      "wave": 17,
+      "phase": "boss",
+      "time": 1194.75,
+      "tier": "divine",
+      "boss": "神张飞",
+      "army": 3,
+      "recruits": 165,
+      "fallen": 162
+    },
+    {
+      "wave": 17,
+      "phase": "clear",
+      "time": 1223.4,
+      "tier": "divine",
+      "boss": "神张飞",
+      "army": 0,
+      "recruits": 165,
+      "fallen": 165
+    },
+    {
+      "wave": 18,
+      "phase": "mow",
+      "time": 1233.49,
+      "tier": "divine",
+      "boss": "神张飞",
+      "army": 3,
+      "recruits": 168,
+      "fallen": 165
+    },
+    {
+      "wave": 18,
+      "phase": "boss",
+      "time": 1241.44,
+      "tier": "divine",
+      "boss": "神孙权",
+      "army": 3,
+      "recruits": 168,
+      "fallen": 165
+    },
+    {
+      "wave": 18,
+      "phase": "clear",
+      "time": 1269.36,
+      "tier": "divine",
+      "boss": "神孙权",
+      "army": 0,
+      "recruits": 168,
+      "fallen": 168
+    },
+    {
+      "wave": 19,
+      "phase": "mow",
+      "time": 1279.36,
+      "tier": "divine",
+      "boss": "神孙权",
+      "army": 3,
+      "recruits": 171,
+      "fallen": 168
+    },
+    {
+      "wave": 19,
+      "phase": "boss",
+      "time": 1287.38,
+      "tier": "divine",
+      "boss": "神诸葛亮",
+      "army": 3,
+      "recruits": 171,
+      "fallen": 168
+    },
+    {
+      "wave": 19,
+      "phase": "clear",
+      "time": 1317.12,
+      "tier": "divine",
+      "boss": "神诸葛亮",
+      "army": 0,
+      "recruits": 171,
+      "fallen": 171
+    },
+    {
+      "wave": 20,
+      "phase": "mow",
+      "time": 1327.15,
+      "tier": "divine",
+      "boss": "神诸葛亮",
+      "army": 3,
+      "recruits": 174,
+      "fallen": 171
+    },
+    {
+      "wave": 20,
+      "phase": "boss",
+      "time": 1335.12,
+      "tier": "divine",
+      "boss": "神刘备",
+      "army": 3,
+      "recruits": 174,
+      "fallen": 171
+    },
+    {
+      "wave": 20,
+      "phase": "clear",
+      "time": 1358.54,
+      "tier": "divine",
+      "boss": "神刘备",
+      "army": 3,
+      "recruits": 174,
+      "fallen": 171
+    },
+    {
+      "wave": 20,
+      "phase": "choice",
+      "time": 1368.52,
+      "tier": "divine",
+      "boss": "神刘备",
+      "army": 6,
+      "recruits": 177,
+      "fallen": 171
+    },
+    {
+      "wave": 20,
+      "phase": "done",
+      "time": 1368.63,
+      "tier": "divine",
+      "boss": "神刘备",
+      "army": 6,
+      "recruits": 177,
+      "fallen": 171
+    }
+  ],
+  "current": {
+    "wave": 20,
+    "phase": "done",
+    "time": 1368.72,
+    "army": 6,
+    "recruits": 177,
+    "fallen": 171
+  },
+  "picks": [
+    {
+      "wave": 1,
+      "choice": "signature_weapon_dangyang_roar",
+      "name": "丈八蛇矛 · Lv.1→2"
+    },
+    {
+      "wave": 1,
+      "choice": "martial_dahe_1",
+      "name": "大喝 · Lv.1"
+    },
+    {
+      "wave": 1,
+      "choice": "gamble_beiwei",
+      "name": "赌命 · 背嵬"
+    },
+    {
+      "wave": 1,
+      "choice": "gauntlet_charm_mwvzdp9i-3-9odm",
+      "name": "信物 · 磨刀石"
+    },
+    {
+      "wave": 1,
+      "choice": "martial_dahe_2",
+      "name": "大喝 · Lv.2"
+    },
+    {
+      "wave": 1,
+      "choice": "signature_weapon_dangyang_roar",
+      "name": "丈八蛇矛 · Lv.2→3"
+    },
+    {
+      "wave": 1,
+      "choice": "gauntlet_follow",
+      "name": "收为副将 · 张绣"
+    },
+    {
+      "wave": 2,
+      "choice": "tactic_momentum",
+      "name": "乘胜 · Lv.1"
+    },
+    {
+      "wave": 2,
+      "choice": "jinnang_drum",
+      "name": "锦囊 · 擂鼓"
+    },
+    {
+      "wave": 2,
+      "choice": "signature_weapon_dangyang_roar",
+      "name": "丈八蛇矛 · Lv.3→4"
+    },
+    {
+      "wave": 2,
+      "choice": "gauntlet_follow",
+      "name": "收为副将 · 张梁"
+    },
+    {
+      "wave": 2,
+      "choice": "signature_weapon_dangyang_roar",
+      "name": "丈八蛇矛 · Lv.4→5"
+    },
+    {
+      "wave": 3,
+      "choice": "martial_wanrendi_1",
+      "name": "万人敌 · Lv.1"
+    },
+    {
+      "wave": 3,
+      "choice": "gauntlet_follow",
+      "name": "收为副将 · 郭汜"
+    },
+    {
+      "wave": 3,
+      "choice": "gauntlet_horse_jueying",
+      "name": "坐骑 · 绝影 ★"
+    },
+    {
+      "wave": 3,
+      "choice": "martial_wanrendi_2",
+      "name": "万人敌 · Lv.2"
+    },
+    {
+      "wave": 4,
+      "choice": "weapon_over_6",
+      "name": "丈八蛇矛 · Lv.6"
+    },
+    {
+      "wave": 4,
+      "choice": "new_f_fire",
+      "name": "火攻之机"
+    },
+    {
+      "wave": 4,
+      "choice": "gauntlet_star_strength.NX1",
+      "name": "将星 · 定锋"
+    },
+    {
+      "wave": 4,
+      "choice": "tactic_swift",
+      "name": "疾行印 · Lv.1"
+    },
+    {
+      "wave": 5,
+      "choice": "bounty_elites",
+      "name": "悬赏 · 破锐"
+    },
+    {
+      "wave": 5,
+      "choice": "gauntlet_gear_mwvzmrfj-a-3sq0",
+      "name": "兵装 · 铁胄"
+    },
+    {
+      "wave": 5,
+      "choice": "tactic_momentum",
+      "name": "乘胜 · Lv.2"
+    },
+    {
+      "wave": 6,
+      "choice": "gauntlet_gear_mwvzp1gw-b-52oy",
+      "name": "兵装 · 猎靴"
+    },
+    {
+      "wave": 6,
+      "choice": "gauntlet_qiyu_weapon",
+      "name": "丈八蛇矛 · 连升两级"
+    },
+    {
+      "wave": 6,
+      "choice": "martial_wanrendi_3",
+      "name": "万人敌 · Lv.3"
+    },
+    {
+      "wave": 7,
+      "choice": "gauntlet_charm_mwvzr341-e-110",
+      "name": "信物 · 人公将印"
+    },
+    {
+      "wave": 8,
+      "choice": "gauntlet_gear_mwvzs89h-f-gygl",
+      "name": "兵装 · 札甲"
+    },
+    {
+      "wave": 8,
+      "choice": "gauntlet_star_command.NR1",
+      "name": "将星 · 严阵"
+    },
+    {
+      "wave": 9,
+      "choice": "gauntlet_charm_mwvzv6on-g-f0c0",
+      "name": "信物 · 点将符"
+    },
+    {
+      "wave": 9,
+      "choice": "gauntlet_star_command.K",
+      "name": "主星 · 三军统帅"
+    },
+    {
+      "wave": 10,
+      "choice": "tactic_swift",
+      "name": "疾行印 · Lv.2"
+    },
+    {
+      "wave": 10,
+      "choice": "gauntlet_gear_mwvzxdig-j-6b1p",
+      "name": "兵装 · 皮甲"
+    },
+    {
+      "wave": 10,
+      "choice": "gauntlet_ghost",
+      "name": "挑战鬼将"
+    },
+    {
+      "wave": 11,
+      "choice": "gauntlet_star_strength.NX1",
+      "name": "将星 · 定锋"
+    },
+    {
+      "wave": 12,
+      "choice": "supply_grain",
+      "name": "军资 · 粮秣"
+    },
+    {
+      "wave": 12,
+      "choice": "gauntlet_star_command.NX1",
+      "name": "将星 · 接战"
+    },
+    {
+      "wave": 13,
+      "choice": "gauntlet_star_command.NC",
+      "name": "将星 · 励军"
+    },
+    {
+      "wave": 13,
+      "choice": "gauntlet_star_intellect.NR1",
+      "name": "将星 · 余烬"
+    },
+    {
+      "wave": 14,
+      "choice": "tactic_heavy_break",
+      "name": "破阵重击 · Lv.1"
+    },
+    {
+      "wave": 14,
+      "choice": "gauntlet_horse_chitu",
+      "name": "坐骑 · 赤兔 ★"
+    },
+    {
+      "wave": 15,
+      "choice": "martial_wanrendi_4",
+      "name": "万人敌 · Lv.4"
+    },
+    {
+      "wave": 15,
+      "choice": "gauntlet_star_agility.NR2",
+      "name": "将星 · 追风"
+    },
+    {
+      "wave": 15,
+      "choice": "gauntlet_divine",
+      "name": "挑战神将"
+    },
+    {
+      "wave": 16,
+      "choice": "new_manual_warrior",
+      "name": "研读心法 · 猛将"
+    },
+    {
+      "wave": 16,
+      "choice": "gauntlet_horse_jueying",
+      "name": "坐骑 · 绝影 ★"
+    },
+    {
+      "wave": 17,
+      "choice": "tactic_chain",
+      "name": "连环 · Lv.1"
+    },
+    {
+      "wave": 17,
+      "choice": "gauntlet_star_command.NR1",
+      "name": "将星 · 严阵"
+    },
+    {
+      "wave": 18,
+      "choice": "gauntlet_horse_dilu",
+      "name": "坐骑 · 的卢 ★"
+    },
+    {
+      "wave": 18,
+      "choice": "bounty_elites",
+      "name": "悬赏 · 破锐"
+    },
+    {
+      "wave": 19,
+      "choice": "gauntlet_horse_chitu",
+      "name": "坐骑 · 赤兔 ★"
+    },
+    {
+      "wave": 19,
+      "choice": "tactic_pursuit",
+      "name": "追袭 · Lv.1"
+    },
+    {
+      "wave": 20,
+      "choice": "gauntlet_horse_dilu",
+      "name": "坐骑 · 的卢 ★"
+    },
+    {
+      "wave": 20,
+      "choice": "gauntlet_settle",
+      "name": "收兵 · 结算"
+    }
+  ],
+  "recruits": [
+    {
+      "wave": 1,
+      "before": 209,
+      "after": 139
+    },
+    {
+      "wave": 1,
+      "before": 139,
+      "after": 69
+    },
+    {
+      "wave": 1,
+      "before": 74,
+      "after": 4
+    },
+    {
+      "wave": 2,
+      "before": 251,
+      "after": 171
+    },
+    {
+      "wave": 2,
+      "before": 171,
+      "after": 91
+    },
+    {
+      "wave": 2,
+      "before": 91,
+      "after": 11
+    },
+    {
+      "wave": 3,
+      "before": 327,
+      "after": 237
+    },
+    {
+      "wave": 3,
+      "before": 237,
+      "after": 147
+    },
+    {
+      "wave": 3,
+      "before": 147,
+      "after": 57
+    },
+    {
+      "wave": 4,
+      "before": 673,
+      "after": 573
+    },
+    {
+      "wave": 4,
+      "before": 573,
+      "after": 473
+    },
+    {
+      "wave": 4,
+      "before": 473,
+      "after": 373
+    },
+    {
+      "wave": 4,
+      "before": 373,
+      "after": 273
+    },
+    {
+      "wave": 4,
+      "before": 273,
+      "after": 173
+    },
+    {
+      "wave": 4,
+      "before": 173,
+      "after": 73
+    },
+    {
+      "wave": 5,
+      "before": 668,
+      "after": 558
+    },
+    {
+      "wave": 5,
+      "before": 558,
+      "after": 448
+    },
+    {
+      "wave": 5,
+      "before": 448,
+      "after": 338
+    },
+    {
+      "wave": 5,
+      "before": 338,
+      "after": 228
+    },
+    {
+      "wave": 5,
+      "before": 228,
+      "after": 118
+    },
+    {
+      "wave": 5,
+      "before": 118,
+      "after": 8
+    },
+    {
+      "wave": 6,
+      "before": 656,
+      "after": 536
+    },
+    {
+      "wave": 6,
+      "before": 536,
+      "after": 416
+    },
+    {
+      "wave": 6,
+      "before": 416,
+      "after": 296
+    },
+    {
+      "wave": 6,
+      "before": 296,
+      "after": 176
+    },
+    {
+      "wave": 6,
+      "before": 176,
+      "after": 56
+    },
+    {
+      "wave": 7,
+      "before": 815,
+      "after": 685
+    },
+    {
+      "wave": 7,
+      "before": 685,
+      "after": 555
+    },
+    {
+      "wave": 7,
+      "before": 555,
+      "after": 425
+    },
+    {
+      "wave": 7,
+      "before": 425,
+      "after": 295
+    },
+    {
+      "wave": 7,
+      "before": 295,
+      "after": 165
+    },
+    {
+      "wave": 7,
+      "before": 165,
+      "after": 35
+    },
+    {
+      "wave": 8,
+      "before": 788,
+      "after": 648
+    },
+    {
+      "wave": 8,
+      "before": 648,
+      "after": 508
+    },
+    {
+      "wave": 8,
+      "before": 508,
+      "after": 368
+    },
+    {
+      "wave": 8,
+      "before": 373,
+      "after": 233
+    },
+    {
+      "wave": 8,
+      "before": 233,
+      "after": 93
+    },
+    {
+      "wave": 8,
+      "before": 145,
+      "after": 5
+    },
+    {
+      "wave": 9,
+      "before": 729,
+      "after": 579
+    },
+    {
+      "wave": 9,
+      "before": 579,
+      "after": 429
+    },
+    {
+      "wave": 9,
+      "before": 429,
+      "after": 279
+    },
+    {
+      "wave": 9,
+      "before": 279,
+      "after": 129
+    },
+    {
+      "wave": 9,
+      "before": 159,
+      "after": 9
+    },
+    {
+      "wave": 10,
+      "before": 838,
+      "after": 678
+    },
+    {
+      "wave": 10,
+      "before": 678,
+      "after": 518
+    },
+    {
+      "wave": 10,
+      "before": 518,
+      "after": 358
+    },
+    {
+      "wave": 10,
+      "before": 358,
+      "after": 198
+    },
+    {
+      "wave": 10,
+      "before": 198,
+      "after": 38
+    },
+    {
+      "wave": 11,
+      "before": 240,
+      "after": 70
+    },
+    {
+      "wave": 12,
+      "before": 336,
+      "after": 156
+    },
+    {
+      "wave": 12,
+      "before": 182,
+      "after": 2
+    },
+    {
+      "wave": 13,
+      "before": 216,
+      "after": 26
+    },
+    {
+      "wave": 14,
+      "before": 262,
+      "after": 62
+    },
+    {
+      "wave": 15,
+      "before": 251,
+      "after": 41
+    },
+    {
+      "wave": 16,
+      "before": 237,
+      "after": 17
+    },
+    {
+      "wave": 17,
+      "before": 232,
+      "after": 2
+    },
+    {
+      "wave": 18,
+      "before": 240,
+      "after": 0
+    },
+    {
+      "wave": 19,
+      "before": 252,
+      "after": 2
+    },
+    {
+      "wave": 20,
+      "before": 264,
+      "after": 4
+    }
+  ]
+}

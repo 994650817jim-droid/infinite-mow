@@ -33,11 +33,14 @@ export abstract class ArcBossV2<M extends string> implements ArcController {
   readonly kit: BossKit; protected beat = new Beat<M>();
   protected gfx: Phaser.GameObjects.Graphics;
   protected angle = 0; protected next = 0;
+  private readonly artSize: number;
   private hitAt = 0; private corpse?: Phaser.GameObjects.Image; private deathMs = 0; protected gone = false;
   abstract readonly debug: BossDebug;
   abstract get label(): string;
   abstract update(dt: number, now: number): void;
   constructor(protected h: ArcHost, protected tex: string, readonly name: string, now: number) {
+    // These sheets have extra transparent padding around the same ground anchor.
+    this.artSize = ['chibi_caochun', 'hanzhong_caocao', 'shu_zhangren', 'nz_mangyachang'].includes(tex) ? 158 : 144;
     this.kit = new BossKit({ scene: h.scene, boss: h.boss, banner: h.banner, sfx: h.sfx });
     this.gfx = h.scene.add.graphics().setDepth(DEPTH.fx - 1);
     h.boss.controlImmune = true; this.next = now + 1200;
@@ -50,7 +53,7 @@ export abstract class ArcBossV2<M extends string> implements ArcController {
 
   protected pose(frame: number, now: number): void {
     const b = this.h.boss;
-    b.sprite.setTexture(this.tex, frame).setDisplaySize(144, 144).setOrigin(.5, 114 / 128).setFlipX(frame >= 16 && Math.cos(this.angle) < 0);
+    b.sprite.setTexture(this.tex, frame).setDisplaySize(this.artSize, this.artSize).setOrigin(.5, 114 / 128).setFlipX(frame >= 16 && Math.cos(this.angle) < 0);
     if (this.hitAt > now) b.sprite.setTint(0xffbbbb); else if (b.flashUntil <= now) b.sprite.setTint(0xffffff);
   }
   /** 走向主将并保持 keep 距离；返回是否在走。 */
@@ -73,7 +76,7 @@ export abstract class ArcBossV2<M extends string> implements ArcController {
 
   defeat(): void {
     this.state = 'dead'; this.gfx.clear(); const b = this.h.boss;
-    this.corpse = this.h.scene.add.image(b.x, b.y, this.tex, 28).setDisplaySize(144, 144).setOrigin(.5, 114 / 128).setDepth(28);
+    this.corpse = this.h.scene.add.image(b.x, b.y, this.tex, 28).setDisplaySize(this.artSize, this.artSize).setOrigin(.5, 114 / 128).setDepth(28);
     this.onDefeat();
   }
   protected onDefeat(): void { /* 子类清理 */ }

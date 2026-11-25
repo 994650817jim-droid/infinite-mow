@@ -70,11 +70,11 @@ const base8 = { version: 8, yellowStages: 3, dongzhuoStages: 0, warlordStages: 0
   await p.close();
 }
 
-// —— 2a. 营寨档存档读档压回 Lv1；卡片按钮写「占领城镇后可扩建」（用户 2026-11-18）——
+// —— 2a. 旧营建筑保持原级并锁定升级；卡片按钮写「占领城镇后可扩建」（用户 2026-11-18）——
 {
   const p = await page({ ...base8, provisions: 3000, version: 9, town: { year: 185, season: 1, levels: { hall: 1, barracks: 3, farm: 2, academy: 2, talent: 3, stable: 0, granary: 0, pavilion: 0 }, focus: {}, report: null, tech: [], drill: 0 } }, 'desktop');
   const r = await store(p, w => ({ ...w.loadWorld().town.levels }));
-  ck('营寨档旧存档：Lv1 以上的建筑读档时压回 Lv1', r.hall === 1 && r.barracks === 1 && r.farm === 1 && r.academy === 1 && r.talent === 1, r);
+  ck('旧营读档保留已投入的建筑等级', r.hall === 1 && r.barracks === 3 && r.farm === 2 && r.academy === 2 && r.talent === 3, r);
   await p.evaluate(() => window.__game.scene.getScenes(true).forEach(s => s.scene.start('CityScene')));
   await p.waitForFunction(() => window.__game.scene.isActive('CityScene'), null, { timeout: 30000 }); await p.waitForTimeout(1000);
   await p.evaluate(() => { const c = window.__game.scene.getScene('CityScene'); const h = c.hits.find(h => h.name === 'bld-barracks'); h.emit('pointerdown'); h.emit('pointerup'); });
@@ -85,7 +85,7 @@ const base8 = { version: 8, yellowStages: 3, dongzhuoStages: 0, warlordStages: 0
   await p.evaluate(() => window.__game.scene.getScene('CityScene').children.getByName('town-card').getByName('town-upgrade').emit('pointerdown'));
   await p.waitForTimeout(300);
   const after = await store(p, w => ({ grain: w.loadWorld().provisions, lv: w.loadWorld().town.levels.barracks }));
-  ck('营寨卡片：不显示花费，写「营寨只有 Lv1：占领城镇后可扩建」，按钮「需占领城镇」灰掉、点了不扣钱币', /占领城镇后可扩建/.test(card.lock ?? '') && !card.cost && card.btn && after.grain === before && after.lv === 1, { card, before, after });
+  ck('营寨卡片：不显示花费，写「旧营 Lv3 收益生效 · 占领城镇后可扩建」，按钮「需占领城镇」灰掉、点了不扣钱币', /旧营 Lv3 收益生效.*占领城镇后可扩建/.test(card.lock ?? '') && !card.cost && card.btn && after.grain === before && after.lv === 3, { card, before, after });
   await p.close();
 }
 
@@ -124,7 +124,7 @@ const base8 = { version: 8, yellowStages: 3, dongzhuoStages: 0, warlordStages: 0
   ck('开局增援：军营 4 级 = 2 人（封顶）', r.reinf === 2, r);
   await p.close();
   const p2 = await page({ ...base8, provisions: 5000, cleared: { huangjin: true, hulao: true }, dongzhuoStages: 3, warlordStages: 3, town: { year: 186, season: 0, levels: { hall: 3, barracks: 5, farm: 1, academy: 0, talent: 1, stable: 0, granary: 0, pavilion: 0 }, focus: {}, report: null, tech: [], drill: 0 }, version: 9 });
-  const r2 = await store(p2, w => { const o = { k5: w.unlockedTroopKinds() }; o.up6 = w.townUpgrade('barracks'); o.k6 = w.unlockedTroopKinds(); o.reinf = w.permanentEffects().reinforcements; o.max = w.townUpgrade('barracks'); return o; });
+  const r2 = await store(p2, w => { w.grantCity('xuchang'); const o = { k5: w.unlockedTroopKinds() }; o.up6 = w.townUpgrade('barracks'); o.k6 = w.unlockedTroopKinds(); o.reinf = w.permanentEffects().reinforcements; o.max = w.townUpgrade('barracks'); return o; });
   ck('州府：军营 5 → 6 级（900）解锁精锐戟兵，8 种全开；增援仍封顶 2；6 级满', !r2.k5.includes('halberdier') && r2.k5.includes('rider') && r2.k5.includes('medic') && r2.up6.ok && r2.k6.length === 8 && r2.reinf === 2 && !r2.max.ok, r2);
   await p2.close();
 }
@@ -154,8 +154,8 @@ for (const layout of ['mobile', 'desktop']) {
     return { nav: ['city-map', 'city-academy', 'city-focus', 'city-expedition', 'city-recruit', 'city-talent', 'city-tax', 'city-trade'].map(n), grain: c.children.getByName('city-grain')?.text, hint: c.children.getByName('city-hint')?.text,
       blds: c.hits.map(h => h.name), recruit: b('city-recruit'), grainBox: b('city-grain'), boon: b('city-boon'), mapBtn: b('city-map') }; });
   ck(`${layout}：营寨只剩「天下地图」一个按钮（讲武堂 / 出征 / 招募 / 招贤馆都改为点建筑或走天下地图）`, ui.nav.join() === 'true,false,false,false,false,false,false,false', ui.nav);
-  ck(`${layout}：顶部显示钱币与扩建提示`, ui.grain === '钱币 800' && ui.hint.includes('占领一座城镇'), [ui.grain, ui.hint]);
-  ck(`${layout}：全景只画营寨阶段的建筑`, ui.blds.sort().join() === 'bld-academy,bld-barracks,bld-farm,bld-hall,bld-stable,bld-talent', ui.blds); // 11-18：第一章通关（坐骑开放）营中自动设 1 级马厩
+  ck(`${layout}：顶部显示钱币与扩建提示`, ui.grain === '钱币 800' && ui.hint.includes('占领首座城镇') && ui.hint.includes('开放建筑升级'), [ui.grain, ui.hint]);
+  ck(`${layout}：全景只画营寨阶段的建筑`, ui.blds.sort().join() === 'bld-academy,bld-barracks,bld-farm,bld-hall,bld-medic,bld-merchant,bld-stable,bld-talent', ui.blds); // 11-18：第一章通关（坐骑开放）营中自动设 1 级马厩
   const overlap = (a, c) => a && c && a.x < c.x + c.width && c.x < a.x + a.width && a.y < c.y + c.height && c.y < a.y + a.height;
   ck(`${layout}：「天下地图」按钮不与钱币文字相叠`, !overlap(ui.mapBtn, ui.grainBox), [ui.mapBtn, ui.grainBox]);
   await p.screenshot({ path: `${out}/city-${layout}.png` });
@@ -189,7 +189,7 @@ for (const layout of ['mobile', 'desktop']) {
   await p.waitForTimeout(400);
   const after = await store(p, w => ({ lv: w.drillInfo().level, grain: w.loadWorld().provisions }));
   const overlap = (a, c) => a && c && a.x < c.x + c.width && c.x < a.x + a.width && a.y < c.y + c.height && c.y < a.y + a.height;
-  ck('军营面板：显示练兵等级，按钮不与「升级」相叠，点一下升 1 级扣 120', before.text?.startsWith('练兵 0 /') && !overlap(before.drill, before.up) && after.lv === 1 && after.grain === 380, { before, after });
+  ck('军营面板：显示练兵等级，按钮不与「升级」相叠，点一下升 1 级扣 120', before.text?.startsWith('练兵 Lv.0 /') && !overlap(before.drill, before.up) && after.lv === 1 && after.grain === 380, { before, after });
   await p.close();
 }
 
@@ -247,10 +247,10 @@ for (const layout of ['mobile', 'desktop']) {
   const p = await page(save);
   await p.evaluate(async () => { const { getCharacter } = await import('/src/data/characters.ts'); const m = window.__game.scene.getScene('MenuScene'); m.registry.set('worldCampaign', true); m.registry.remove('campaignTransfer'); m.registry.set('runConfig', { chapter: 'huangjin', stage: 1, character: 'zhaoyun', weapon: getCharacter('zhaoyun').startWeapon }); m.scene.start('GameScene'); });
   await p.waitForFunction(() => { const g = window.__game.scene.getScene('GameScene'); return window.__game.scene.isActive('GameScene') && g.player && g.legion; }, null, { timeout: 120000 }); await p.waitForTimeout(1500);
-  const r = await p.evaluate(() => { const g = window.__game.scene.getScene('GameScene'); return { pouch: g.supplies?.pouch.map(x => x.amount), maxHp: g.player.maxHp, lv: { ...g.legion.levels }, units: g.legion.units.filter(u => u.active).map(u => [u.kind, u.level, u.maxHp]), drill: g.legion.drillMultiplier }; });
+  const r = await p.evaluate(() => { const g = window.__game.scene.getScene('GameScene'); return { pouch: g.supplies?.pouch.map(x => x.amount), maxHp: g.player.maxHp, lv: { ...g.legion.levels }, units: g.legion.units.filter(u => u.active).map(u => [u.kind, u.level, u.maxHp]), command: g.player.growth.pts('command'), drill: g.legion.drillMultiplier }; });
   ck('开局药囊 2 份回血药（每份 30% 生命）', r.pouch?.length === 2 && r.pouch.every(a => a === Math.round(r.maxHp * .3)), r);
   ck('刀盾 / 长枪开局 Lv2，军营增援兵按 Lv2 入列', r.lv.swordsman === 2 && r.lv.spearman === 2 && r.lv.archer === 1 && r.units.length >= 1 && r.units.every(([k, l]) => !['swordsman', 'spearman'].includes(k) || l === 2), r);
-  ck('练兵 2 级：部曲倍率 1.3（加法），刀盾兵生命 = 85 × 1.3（Lv2）× 1.3', Math.abs(r.drill - 1.3) < 1e-9 && r.units.filter(([k]) => k === 'swordsman').every(([, , hp]) => hp === Math.round(85 * 1.3 * 1.3)), r);
+  ck('练兵 2 级：部曲倍率 1.3（加法），刀盾兵生命计入等级、练兵和赵云基础统御', Math.abs(r.drill - 1.3) < 1e-9 && r.command > 0 && r.units.some(([k])=>k==='swordsman') && r.units.filter(([k]) => k === 'swordsman').every(([, , hp]) => hp === 165 && hp === Math.round(85 * 1.3 * 1.3 * (1 + r.command * .03))), r);
   const pool = await p.evaluate(() => { const g = window.__game.scene.getScene('GameScene'), seen = new Set(); for (let wv = 1; wv <= 4; wv++) { g.waveIndex = wv; g.recruitedWaves?.clear?.(); g.resting = false; g.mode = 'none'; g.openRecruit(); for (const o of g.recruitOptions ?? []) seen.add(o.kind); g.setMode('none'); } return [...seen].sort(); });
   ck('战斗支援招兵只出现已解锁兵种（军营 2 级：刀盾 / 长枪 / 弓箭 / 连弩）', pool.length > 0 && pool.every(k => ['swordsman', 'spearman', 'archer', 'crossbowman'].includes(k)) && pool.includes('crossbowman'), pool);
   await p.screenshot({ path: `${out}/battle-potions.png` });

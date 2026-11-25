@@ -175,7 +175,7 @@ export class CityScene extends Phaser.Scene {
  private nextHint(s:ReturnType<typeof loadWorld>):string{
   const t=s.town,size=citySize(t),up=HALL_UPGRADE[size];
   // 营寨档：不能花军粮扩建，占领第一座城镇时自动升为县城（用户 2026-11-18）
-  if(size<=1)return '营寨建筑都只到 Lv1：去天下地图占领一座城镇，营寨升为县城后才能升级建筑';
+  if(!townProgress(s).city)return Object.keys(s.campLevelCeilings??{}).length?'旧营建筑保留原有等级与收益，占领首座城镇后可继续升级':'占领首座城镇后，营寨升为县城，开放建筑升级';
   if(up)return up.ok(townProgress(s))?`主帐可扩建为${CITY_TITLE[size+1]}（${costText(up.cost)}）`:`${up.needs}后，营寨可扩建为${CITY_TITLE[size+1]}`;
   return levelOf(t,'pavilion')?'':'州府已成：可建奇观麒麟阁';
  }
@@ -380,7 +380,7 @@ export class CityScene extends Phaser.Scene {
   line(def.blurb,13,'#c9bf99');
   line(lv?'现在：'+def.effect(lv):'尚未建造',14,'#efe2c4');
   const campLock=block[0]===CAMP_LOCK;
-  if(cost!==null&&campLock)line('营寨只有 Lv1：'+CAMP_LOCK,14,'#e59a83','town-card-camp-lock');
+  if(cost!==null&&campLock)line((lv>1?'旧营 Lv'+lv+' 收益生效 · ':'')+CAMP_LOCK,14,'#e59a83','town-card-camp-lock');
   else if(cost!==null){line((lv?'下一级：':'建成后：')+def.effect(lv+1),14,'#cfe0c8');line('花费：'+costText(cost),14,s.provisions>=cost?'#d9c58f':'#d4887a','town-card-cost');}
   else line('已达最高等级',14,'#b9a98a');
   if(id==='hall'&&cost!==null)line(lv===1?'占领第一座城镇后，营寨自动升为县城：开放马厩、粮仓，建筑可升到 Lv2':`扩建为${CITY_TITLE[lv+1]}：开放城池发展、奇观麒麟阁，建筑可升到 Lv3`,13,'#b9d2a8');

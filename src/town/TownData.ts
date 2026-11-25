@@ -107,7 +107,7 @@ export function buildBlockers(t: TownState, id: TownBuildingId, p: TownProgress)
   const l = levelOf(t, id), hall = levelOf(t, 'hall'), out: string[] = [];
   if (l >= (TOWN_BUILDINGS[id].maxLevel ?? MAX_LEVEL)) return ['已达最高等级'];
   // 营寨档：已建成的建筑（含主帐）都不能升级，只能新建到 Lv1
-  if (hall <= 1 && l >= 1) return [CAMP_LOCK];
+  if ((!p.city || hall <= 1) && l >= 1) return [CAMP_LOCK];
   if (id === 'hall') { const u = HALL_UPGRADE[l]; if (u && !u.ok(p)) out.push(u.needs); return out; }
   if (id === 'barracks') { const need = BARRACKS_HALL[l + 1]; if (need && hall < need) out.push(`扩建为${CITY_SIZE[need]}`); return out; }
   const minHall = TOWN_BUILDINGS[id].minHall ?? 1;
@@ -200,7 +200,7 @@ export function parseTown(v: unknown, legacy: { barracks: number; farm: number; 
     if (lv('wall') >= 1) tech.add('armor');
     if (lv('drill') >= 1) { tech.add('forge'); tech.add('drill_points'); }
     t.tech = [...tech];
-    if (t.tech.length) t.levels.academy = Math.max(1, Math.min(t.levels.hall, Math.max(lv('smithy'), lv('drill'), lv('wall'), lv('clinic') - 1)));
+    if (t.tech.length) t.levels.academy = Math.max(t.levels.academy, 1, Math.min(t.levels.hall, Math.max(lv('smithy'), lv('drill'), lv('wall'), lv('clinic') - 1)));
     for (const id of Object.keys(V8_BUILD) as Array<keyof typeof V8_BUILD>) refund += v8Spent(id, lv(id));
     money = int(o.money, 9_999_999);
     if (Array.isArray(o.caravans)) for (const c of o.caravans.slice(0, 3) as Array<{ value?: unknown }>) money += int(c?.value, 10000);

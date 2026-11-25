@@ -915,6 +915,8 @@ export class CoopScene extends Phaser.Scene {
           if (unit.defeats != null) figures.push(['击破',unit.defeats]);
           if (unit.revives != null) figures.push(['救援',unit.revives]);
           figures.push(['余部',unit.men], ['战损',unit.lost], ['钱币',unit.coins]);
+          if (unit.atBossFall != null && unit.afterBossRecruits != null)
+            figures.push(['斩将时部曲',unit.atBossFall], ['战后新募',unit.afterBossRecruits]);
           return {name:(unit.slot + 1) + 'P · ' + (hero?.name ?? unit.hero),
             portrait:hero && 'assets/ink-scroll/' + hero.id + '.webp', stats:figures,
             stars:unit.stars.map(k => networkStars.find(s => s.id === k)?.name ?? k).join('、')};

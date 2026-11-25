@@ -149,6 +149,7 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
       room.run.tier=room.run.nextTier;
       room.run.nextTier=null;
     }
+    for (const p of room.players.values()) delete p.checkpointArmy;
     nextWave(room);
     room.run.upcoming = bossForWave(room.run);
     room.phase = 'battle';
@@ -170,7 +171,13 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
       player.moving = false;
     }
     const checkpoint=challengeChoices(run.tier,run.wave,TOTAL_WAVES,run.roster.ghost.length).length>0;
-    if(checkpoint) run.milestones=run.tier==='mortal'?1:run.tier==='ghost'?2:3;
+    if(checkpoint) {
+      run.milestones=run.tier==='mortal'?1:run.tier==='ghost'?2:3;
+      for (const player of room.players.values()) {
+        const alive=player.company?.units.filter(u=>u.hp>0).length ?? 0;
+        player.checkpointArmy={survivors:alive,recruited:alive+(player.company?.deaths??0)};
+      }
+    }
     snapshot(room);
     draft(room,checkpoint);
   }
@@ -301,8 +308,12 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
     const reason = !victory ? 'defeated' : room.run.milestones === 3 ? 'completed' : 'withdrawn';
     room.result = { type: 'result', victory, reason, mythicSize:room.run.roster.ghost.length, tier:room.run.tier, wave:room.run.wave, kills: room.kills, generals: room.run.cleared,
       milestones: room.run.milestones, seconds: Math.floor(room.seconds), bosses:room.run.history.map(b=>b.name),
-      party: playersIn(room).map(p => ({ slot: p.slot, hero: p.hero, men: p.company?.units.length ?? 0,
-        damage:Math.round(p.damage??0), defeats:p.defeats??0, revives:p.revives??0, lost: p.company?.deaths ?? 0, coins: p.company?.coins ?? 0, stars: [...(p.stars ?? [])] })) };
+      party: playersIn(room).map(p => {
+        const men=p.company?.units.filter(u=>u.hp>0).length??0, lost=p.company?.deaths??0;
+        return {slot:p.slot, hero:p.hero, men, lost,
+        ...(p.checkpointArmy ? {atBossFall:p.checkpointArmy.survivors, afterBossRecruits:men+lost-p.checkpointArmy.recruited} : {}),
+        damage:Math.round(p.damage??0), defeats:p.defeats??0, revives:p.revives??0, coins:p.company?.coins??0, stars:[...(p.stars??[])]};
+      }) };
     broadcast(room, room.result);
   }
 

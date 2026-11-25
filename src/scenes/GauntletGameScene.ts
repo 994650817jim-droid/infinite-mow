@@ -270,6 +270,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       this.registry.remove('campaignTransfer'); this.registry.remove('worldCampaign'); // 无行营 / 无整军：不带部曲、不读征程构筑
       this.registry.set('runConfig', { ...saved, character: saved?.character ?? 'zhaoyun', chapter: 'hulao', westStage: 3, encounter: 'qunxiong' }); // encounter：不建剧情、不记战役进度、不建西凉专属机制（同篇章场景）
       this.gTier = 'mortal'; this.gMilestones = 0;
+      this.confirmedTier=undefined; this.checkpointArmy=undefined;
       this.closeGate?.();this.closeGate=undefined;
       this.claimSlot=activeSlot();
       this.claimId='gauntlet:'+(globalThis.crypto?.randomUUID?.() ?? Date.now().toString(36)+'-'+Math.random().toString(36).slice(2));
@@ -517,10 +518,16 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     private gRecruitCardState = '';
     /** 本局招了几次 / 几名兵（结算「本局打法」用）。 */
     gRecruits = { times: 0, men: 0 };
+    private checkpointArmy?: { survivors: number; recruited: number };
+    private confirmedTier?: GauntletRunTier;
     /** 现在能不能招：清场阶段、没有面板。 */
-    private recruitOpen(): boolean { return this.gPhase === 'clear' && this.mode === 'none' && !this.over && !!this.player?.alive; }
+    private recruitOpen(): boolean {
+      return this.gPhase === 'clear' && this.mode === 'none' && !this.over && !!this.player?.alive
+        && (!this.checkpointArmy || !!this.confirmedTier);
+    }
     /** 招一次：按本阵兵种表随机一种，per 名，花 recruitCost(阵数) 钱币；兵的阶抬到本阵档位。钱不够返回 false。 */
     recruitTroops(): boolean {
+      if (!this.recruitOpen()) return false;
       const cost = recruitCost(this.gWave), T = recruitTier(this.gWave); if (this.legion.food < cost) return false;
       const kind = T.kinds[Math.floor(Math.random() * T.kinds.length)];
       this.legion.food -= cost; for (let i = 0; i < 3 && this.legion.levels[kind] < T.level; i++) this.legion.train(kind, true);
@@ -698,7 +705,8 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       else if (this.gPhase === 'clear') {
         if (this.gQiyuPending) this.openQiyu();
         else if (!this.gLootShown && this.waveT >= 1.8) { this.gLootShown = true; this.openLoot(); }
-        else if (this.gLootShown && this.waveT >= GAUNTLET.clearSec) { if (challengeChoices(this.gTier,this.gWave,GAUNTLET.waves,this.mythicSize).length) this.openClearChoice(); else this.nextWave(); }
+        else if (this.gLootShown && this.checkpointArmy && !this.confirmedTier) this.openClearChoice();
+        else if (this.gLootShown && this.waveT >= GAUNTLET.clearSec) this.nextWave();
       }
     }
     /** 开发构建：左上的 DEV 徽标会盖住进度条左端——本模式下挪到左下（兵力 / 增益栏下面、FPS 行上面），离开场景放回原处。正式版没有这个徽标。 */
@@ -877,6 +885,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       this.gKills.push(b); this.gPhase = 'clear'; this.gAt = this.elapsed; this.gLootShown = false; this.traits?.clear();
       const checkpoint = challengeChoices(this.gTier,this.gWave,GAUNTLET.waves,this.mythicSize).length > 0;
       if (checkpoint) {
+        this.checkpointArmy = { survivors:this.legion.count, recruited:this.legion.recruited };
         this.gCleared = true;
         this.gMilestones = this.gTier==='mortal'?1:this.gTier==='ghost'?2:3;
       }
@@ -1147,14 +1156,13 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       void saveModeBest(this.recordKey,{kills:checkpointKills,wave:this.gWave,ms:Math.round(this.elapsed*1000)},this.debugRun(),this.claimSlot)
         .then(r=>{if(r.record && this.claimId===checkpointId)this.checkpointRecordKills=checkpointKills;})
         .catch(e=>console.warn('晋级战绩待结算',e));
-      let advance = false;
       const opts: UpgradeOption[] = choices.map(choice => ({
         id:'gauntlet_'+choice,
         name: choice==='ghost'?'挑战鬼将':choice==='divine'?'挑战神将':'继续 · 无尽',
         desc: choice==='endless'?'凡将继续轮换，记录最高连斩':tierTitle[choice]+' · 继承本局成长、军队与钱币',
         kind:'foundation', categoryLabel:tierTitle[this.gTier], scope:'run',
         icon: choice==='ghost'?this.portrait(GHOST_GENERALS[4]):choice==='divine'?this.portrait(DIVINE_GENERALS[9]):'growth_icon_might',
-        apply:() => { this.gTier=choice; this.gEndless=choice==='endless'; advance=true; },
+        apply:() => { this.confirmedTier=choice; },
       }));
       opts.push({id:'gauntlet_settle',name:'收兵 · 结算',desc:'按本局斩将数领奖',kind:'foundation',
         categoryLabel:tierTitle[this.gTier],scope:'once',icon:'growth_icon_pickup',apply:() => { this.gPhase='done'; }});
@@ -1162,8 +1170,10 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
         this.gTier==='ghost'?'天门将启 · 挑战'+this.mythicSize+'阵，神刘备守关':'三阶段告捷 · 可结算或进入无尽';
       this.showLoot(tierTitle[this.gTier]+' · 告捷',hint,opts,() => {
         this.closeGate?.();this.closeGate=undefined;
-        if (advance) this.nextWave();
-        else this.time.delayedCall(200,() => this.finish(true,'boss'));
+        if (this.confirmedTier) {
+          this.gPhase='clear';
+          this.gAt=this.elapsed-1.8; // 战利品已经选完，保留原清场阶段余下的招募时间。
+        } else this.time.delayedCall(200,() => this.finish(true,'boss'));
       });
       const next = this.gTier==='mortal'?'ghost':'divine';
       const earned=gauntletReward(this.gKills.length,false);
@@ -1185,6 +1195,13 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       });
     }
     nextWave(): void {
+      if (this.confirmedTier) {
+        this.gTier=this.confirmedTier;
+        this.gEndless=this.gTier==='endless';
+        this.gPhase='choice';
+      }
+      this.checkpointArmy=undefined;
+      this.confirmedTier=undefined;
       this.clearGauntletDual();
       clearSurvivorBossFx(this);
       this.traits?.clear(); // 清场期间的飞网与临时强化不带入下一阵。
@@ -1274,7 +1291,11 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
         chapterArt: completed && victory ? 'assets/ending/ending_unify.webp' : 'assets/ending/ending_three.webp',
         stages,
         stats: [['战斗用时', this.formatTime(this.elapsed)], ['击破敌军', this.kills], ['总伤害', Math.round(this.damageDealt)],
-          ['本局钱币', this.legion.food], ['现存部曲', this.legion.count], ['部曲战损', this.legion.dead]],
+          ['本局钱币', this.legion.food], ['现存部曲', this.legion.count], ['部曲战损', this.legion.dead],
+          ...(this.checkpointArmy ? [
+            ['斩将时部曲',this.checkpointArmy.survivors],
+            ['战后新募',this.legion.recruited-this.checkpointArmy.recruited],
+          ] as [string,number][] : [])],
         record:modeLabel(key) + '纪录　' + best + ' 将' + (record ? ' · 新纪录' : ''),
         reward: {label:'本局所得', observe:deferred?show=>observeDeferredReward(runId,this.claimSlot,show):undefined, value:debug ? '演练场 · 奖励不入库' : deferred ? '战报已保存 · 普通战役结束后入账' : pending ? '奖励写入未完成 · 下次进入时核对' : undefined,
           coins:rw.provisions, scrolls:rw.scrolls},

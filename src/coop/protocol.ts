@@ -63,7 +63,7 @@ export type ServerMessage =
   | { type: 'lobby'; code: string; slot: Side; count: number; mode: CoopMode; picks: { slot: Side; hero: CharacterId | null }[] }
   | { type: 'state'; burning?:number[]; retainers?:CompanyRow[]; spellMarks?:number[]; battleMs?: number; seconds: number; kills: number; players: Fighter[]; enemies: Foe[]; shots?: {x:number;y:number;angle:number;net:boolean}[]; troopEffects?: TroopEffect[]; gauntlet: GauntletState }
   | { type: 'draft'; seconds?:number; wave: number; total: number; mythicSize?:number; general: string; party: PartyMember[]; choices: string[]; ready: number; checkpoint: boolean; tier?: GauntletRunTier; continuation?: ChallengeChoice[]; votes?: (ChallengeChoice | null)[] }
-  | { type: 'result'; mythicSize?:number; tier?:string; wave?:number; victory: boolean; reason?: 'defeated'|'withdrawn'|'completed'; seconds?: number; bosses?:string[]; party?: {slot:number; hero:string; damage?:number; defeats?:number; revives?:number; men:number; lost:number; coins:number; stars:string[]}[]; kills: number; generals: number; milestones?: number }
+  | { type: 'result'; mythicSize?:number; tier?:string; wave?:number; victory: boolean; reason?: 'defeated'|'withdrawn'|'completed'; seconds?: number; bosses?:string[]; party?: {slot:number; hero:string; damage?:number; defeats?:number; revives?:number; men:number; lost:number; atBossFall?:number; afterBossRecruits?:number; coins:number; stars:string[]}[]; kills: number; generals: number; milestones?: number }
   | { type: 'error'; message: string }
   | { type: 'closed'; reason: string };
 

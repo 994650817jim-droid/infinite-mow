@@ -69,9 +69,10 @@ try{
   const first=await a.until(m=>m.type==='state'&&m.gauntlet.warning?.halberd);
   const mark=first.gauntlet.warning.halberd;
   // Set up a bait line with normal movement after the replicated planting warning.
-  a.send({type:'input',dx:0,dy:1});
-  await a.until(m=>m.type==='state'&&m.players[0].y>target.y+48);
-  a.send({type:'input',dx:0,dy:0});
+  const hold=()=>a.send({type:'input',dx:0,dy:1});
+  hold(); const keepAlive=setInterval(hold,60);
+  try {await a.until(m=>m.type==='state'&&m.players[0].y>target.y+48);}
+  finally {clearInterval(keepAlive);a.send({type:'input',dx:0,dy:0});}
   const live=await b.until(m=>m.type==='state'&&m.gauntlet.warning?.charge&&m.gauntlet.warning.halberd.locked);
   assert.equal(live.gauntlet.warning.halberd.collision,true);
   const pinned=live.gauntlet.warning;

@@ -86,10 +86,12 @@ try{
   assert.deepEqual(other.gauntlet.warning,first);
   assert.ok(Math.abs(first.angle)<.001);
   const moveY=async(peer,actor,y)=>{
-    const dir=Math.sign(y-actor.y);
-    peer.send({type:'input',dx:0,dy:dir});
     const end=Date.now()+1600;
-    while(dir*(y-actor.y)>3 && Date.now()<end)await wait(5);
+    while(Math.abs(y-actor.y)>3 && Date.now()<end){
+      const dy=Math.max(-1,Math.min(1,(y-actor.y)/28));
+      peer.send({type:'input',dx:0,dy});
+      await wait(35);
+    }
     peer.send({type:'input',dx:0,dy:0});
     assert.ok(Math.abs(actor.y-y)<14,'the real input must arrive');
   };

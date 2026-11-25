@@ -94,9 +94,14 @@ try{
   run.attackAt=room.seconds+.05;
   const shield=await host.until(m=>m.gauntlet?.warning?.wei?.stance==='shield');
   assert.deepEqual(shield.gauntlet.warning,(await guest.until(m=>m.gauntlet?.warning?.wei?.stance==='shield')).gauntlet.warning);
-  host.send({type:'input',dx:-1,dy:0});guest.send({type:'input',dx:0,dy:1});
-  const step=await host.until(m=>m.players?.[1]?.y>=375);
-  host.send({type:'input',dx:0,dy:0});guest.send({type:'input',dx:0,dy:0});
+  function hold(){host.send({type:'input',dx:-1,dy:0});guest.send({type:'input',dx:0,dy:1});}
+  hold(); const keepAlive=setInterval(hold,60);
+  let step;
+  try {step=await host.until(m=>m.players?.[1]?.y>=375);}
+  finally {
+    clearInterval(keepAlive);
+    host.send({type:'input',dx:0,dy:0});guest.send({type:'input',dx:0,dy:0});
+  }
   const inward=575-step.players[0].x, sideways=step.players[1].y-340;
   assert.ok(inward>0 && inward<sideways*.5);
   const bow=await guest.until(m=>m.gauntlet?.warning?.wei?.stance==='bow');

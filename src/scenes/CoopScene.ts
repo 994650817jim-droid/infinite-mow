@@ -306,9 +306,17 @@ export class CoopScene extends Phaser.Scene {
         if (message.seconds != null) results.push('用时 ' + Math.floor(message.seconds / 60) + '分' + message.seconds % 60 + '秒');
         for (const unit of message.party ?? []) {
           const name = CHARACTERS.find(hero => hero.id === unit.hero)?.name ?? unit.hero;
+          if(unit.damage!=null)results.push(name+' · 伤害 '+unit.damage+' · 击破 '+unit.defeats+' · 救援 '+unit.revives+'次');
+          if(unit.stars.length)results.push(unit.stars.map(k=>networkStars.find(s=>s.id===k)?.name??k).join('、'));
           results.push(name + ' · 余部 ' + unit.men + ' · 战损 ' + unit.lost + ' · 钱币 ' + unit.coins);
         }
         this.renderResult(title, results.join('　'));
+        const panel=this.panel.lastElementChild;
+        if(panel && message.bosses?.length) {
+          const details=document.createElement('details'),summary=document.createElement('summary'),names=document.createElement('p');
+          summary.textContent='已击败名将 · '+message.bosses.length;
+          names.textContent=message.bosses.join('、');details.append(summary,names);panel.append(details);
+        }
       }
     };
   }
@@ -858,6 +866,6 @@ export class CoopScene extends Phaser.Scene {
     this.phase = 'result';
     this.stick?.setEnabled(false);
     const card = this.card(title, message);
-    card.append(this.button('返回主菜单', () => this.back()));
+    card.append(this.button('凯旋归营', () => this.back()),this.button('再次挑战 · 组队',()=>this.renderSetup()));
   }
 }

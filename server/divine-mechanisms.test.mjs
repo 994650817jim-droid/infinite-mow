@@ -38,3 +38,14 @@ test('authoritative transit freezes on an unchanged clock, and death clears queu
   run.boss.hp=0;resolveBossWarning(run,[player],1.5,()=>assert.fail());assert.equal(run.warning,null);
   assert.deepEqual(run.mythicQueue,[]);clearBossAttack(run);
 });
+
+test('retainer and player damage credit the owner; a completed rescue counts once',async()=>{
+  const {troopHit}=await import('./coop-roster.mjs');
+  const {advanceRescue}=await import('./gauntlet.mjs');
+  const p={slot:0,hp:50,x:0,y:0},fallen={slot:1,hp:0,maxHp:100,rescue:9.95,x:0,y:0};
+  const room={players:new Map([[0,p],[1,fallen]])},e={hp:10};
+  troopHit(room,e,{owner:0},7);troopHit(room,e,p,50);troopHit(room,e,p,50);
+  assert.equal(p.damage,10);assert.equal(p.defeats,1);
+  advanceRescue([p,fallen],2000,.1);advanceRescue([p,fallen],2100,.1);
+  assert.equal(p.revives,1);assert.equal(fallen.hp,35);
+});

@@ -295,9 +295,9 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
     snapshot(room);
     const reason = !victory ? 'defeated' : room.run.milestones === 3 ? 'completed' : 'withdrawn';
     room.result = { type: 'result', victory, reason, kills: room.kills, generals: room.run.cleared,
-      milestones: room.run.milestones, seconds: Math.floor(room.seconds),
+      milestones: room.run.milestones, seconds: Math.floor(room.seconds), bosses:room.run.history.map(b=>b.name),
       party: playersIn(room).map(p => ({ slot: p.slot, hero: p.hero, men: p.company?.units.length ?? 0,
-        lost: p.company?.deaths ?? 0, coins: p.company?.coins ?? 0, stars: [...(p.stars ?? [])] })) };
+        damage:Math.round(p.damage??0), defeats:p.defeats??0, revives:p.revives??0, lost: p.company?.deaths ?? 0, coins: p.company?.coins ?? 0, stars: [...(p.stars ?? [])] })) };
     broadcast(room, room.result);
   }
 

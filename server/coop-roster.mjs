@@ -27,7 +27,13 @@ export function troopHit(room,e,player,damage) {
   const t=TYPES[e.troop]?.trait;
   if(t?.kind==='brace'&&e.cue){const angle=Math.atan2(player.y-e.y,player.x-e.x);if(Math.cos(angle-e.face)>.5)damage*=1-t.front;}
   if(t?.kind==='guard'&&living(room).some(b=>b.boss&&distance(b,e)<t.radius))damage*=t.mul;
+  const before=e.hp;
   e.hp-=damage;
+  const owner=room.players?.get?.(player.slot ?? player.owner);
+  if(owner && before>0){
+    owner.damage=(owner.damage??0)+Math.max(0,before-Math.max(0,e.hp));
+    if(e.hp<=0)owner.defeats=(owner.defeats??0)+1;
+  }
   if(e.cue&&(t?.kind==='signal'||t?.kind==='healer')){e.cue=null;e.skillAt=room.seconds+(t.retryMs??t.everyMs)/1000;}
 }
 function move(e,target,speed,dt,away=false){const d=distance(e,target);if(!d)return;const step=Math.min(d,speed*dt)*(away?-1:1);e.x=Math.max(24,Math.min(world.width-24,e.x+(target.x-e.x)*step/d));e.y=Math.max(24,Math.min(world.height-24,e.y+(target.y-e.y)*step/d));}

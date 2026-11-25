@@ -227,6 +227,7 @@ export function advanceRescue(players, now, dt) {
   fallen.rescue += dt;
   if (fallen.rescue + 1e-8 < content.rescueSeconds) return;
   fallen.rescue = 0;
+  ally.revives=(ally.revives??0)+1;
   fallen.hp = Math.ceil(fallen.maxHp * .35);
   fallen.hurtUntil = now + 1800;
   fallen.dx = fallen.dy = fallen.inputAt = 0;

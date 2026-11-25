@@ -382,8 +382,8 @@ export function spendWorld(c:{provisions?:number;merits?:number;money?:number}):
 /** 直接发军粮（如武将经验满级折军粮）。返回发放数。 */
 export function creditGauntletGrain(id:string, amount:number):number {
  const s=loadWorld(), paid=s.receipts.find(r=>r.id===id);
- if(paid)return paid.provisions;
  if(storageUnavailable)throw new Error('天下存档暂不可写');
+ if(paid)return paid.provisions;
  const before=s.provisions;
  bank(s,0,amount);
  const credited=s.provisions-before;

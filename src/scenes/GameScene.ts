@@ -1198,7 +1198,7 @@ export class GameScene extends Phaser.Scene {
     this.storyDir = new StoryDirector({ scene: this, chapterId, stage, ctx: this.storyCtx(),
       // 剧情卷轴播放期间记一个「剧情占用」：卷轴开播时正在三选一（首领宝箱补发的升级）也要记上，选完回到剧情暂停而不是回战斗（2026-11-20 夜间回归：1-3 章末卷轴在场时战斗照打、升级弹在卷轴上）
       pause: () => { this.storyHolds++; if (this.mode === 'none' && !this.over) this.setMode('story'); }, resume: () => { this.storyHolds = Math.max(0, this.storyHolds - 1); if (this.mode === 'story' && !this.over && !this.storyHolds) this.setMode('none'); },
-      reward: r => { if (r.merit) addMerit(r.merit); if (r.grain) addProvisions(r.grain); }, banner: (t, c) => { this.showWaveBanner(t, true, c); this.sfx.play('gong'); }, bossId: () => this.storyBossId() });
+      reward: r => { if (r.merit) addMerit(r.merit); if (r.grain) addProvisions(r.grain); }, banner: (t, c) => { this.showWaveBanner(t, true, c); this.children.getByName('combat-notice')?.setData('storyHighlight', true); }, bossId: () => this.storyBossId() });
     { const lord = this.runConfig.character, k = this.storyDir.bondDamageMul(lord), v = this.storyDir.bondSpeedMul(lord); if (k !== 1) this.player.stats.damageMul *= k; if (v !== 1) this.player.stats.moveMul *= v; this.player.stats.critChance += this.storyDir.bondCritBonus(lord); // 羁绊（「桃园」伤害、「借将」移速、「古城」暴击）
       for (const m of this.followers?.members ?? []) if (m.recruit.hero) m.weaponDamageMul *= this.storyDir.bondDamageMul(m.recruit.hero);
       const cd = this.storyDir.bondCooldownMul(lord); if (cd !== 1) this.player.stats.cooldownMul *= cd; // 羁绊「卧龙凤雏」冷却
@@ -1706,7 +1706,9 @@ export class GameScene extends Phaser.Scene {
     this.ordersPanel?.destroy(); this.battleMap?.destroy(); this.ordersPanel = null; this.battleMap = null;
     const orders = this.battleOrders = new BattleOrders({
       scene: this, elapsed: () => this.elapsed, over: () => ({over: this.over, victory: this.victory}),
-      banner: (t, c) => this.showWaveBanner(t, false, c),
+      banner: (t, c) => {
+        if (!this.children.getByName('combat-notice')?.getData('storyHighlight')) this.showWaveBanner(t, false, c);
+      },
       stageObjective: () => { const o = this.objective; if (!o) return null; const p = o.progress; return {kind: o.o.kind, cur: p.cur, max: p.max, label: o.o.label, target: o.o.kind === 'destroy' ? o.o.target : undefined, limit: o.o.limit, done: o.done, failed: o.failed, points: o.points}; },
       bosses: () => [...(this.dual ? this.dual.alive.map(x => ({key: x.id, name: x.name, e: x.enemy})) : this.boss?.active ? [{key: 'main', name: this.chapter.bossName, e: this.boss}] : []), ...this.dzLubuBoss()],
       waves: () => this.objective || !this.chapter.waves?.length ? null : {cur: Math.max(1, this.waveIndex + 1), total: this.chapter.waves.length, name: this.chapter.waves[Math.max(0, this.waveIndex)]?.name ?? '', bossAt: chapterBossTime(this.chapter)},

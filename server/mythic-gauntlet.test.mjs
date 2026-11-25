@@ -5,6 +5,9 @@ import {WebSocket} from 'ws';
 import {createCoopServer} from './coop.mjs';
 import {challengeChoices,challengeBoss,GHOST_GENERALS,DIVINE_GENERALS,mythicHit,mythicSequence} from '../src/data/mythicGauntlet.ts';
 
+const extreme = !process.argv.includes('--standard');
+const size = extreme ? 10 : 5;
+const lastWave = 10 + 2*size;
 const rooms=new Map();
 const server=createCoopServer({rooms,gauntletWarmup:.1,gauntletLineup:Array(10).fill('zhangliang')});
 const clients=[];
@@ -38,7 +41,7 @@ try{
   server.http.listen(0,'127.0.0.1');await once(server.http,'listening');
   const origin='http://127.0.0.1:'+server.http.address().port;
   const a=await peer(origin);let b=await peer(origin);
-  a.send({type:'create',extreme:true,heroes:['zhaoyun']});
+  a.send({type:'create',extreme,heroes:['zhaoyun']});
   const {code}=await a.until(m=>m.type==='lobby');
   b.send({type:'join',code,heroes:['guanyu']});
   await b.until(m=>m.type==='lobby'&&m.count===2);
@@ -46,14 +49,16 @@ try{
   await a.until(m=>m.type==='lobby'&&m.picks.every(p=>p.hero));
   a.send({type:'start'});
   const room=rooms.get(code),checkpoints=[];
-  for(let wave=1;wave<=30;wave++){
-    const tier=wave<=10?'mortal':wave<=20?'ghost':'divine';
+  for(let wave=1;wave<=lastWave;wave++){
+    const tier=wave<=10?'mortal':wave<=10+size?'ghost':'divine';
     const active=await a.until(m=>m.type==='state'&&m.gauntlet.wave===wave&&m.gauntlet.general);
     const partner=await b.until(m=>m.type==='state'&&m.gauntlet.wave===wave&&m.gauntlet.general);
     equal(active.gauntlet.tier,tier);
     equal(partner.gauntlet.general,active.gauntlet.general);
-    if(wave>10)equal(active.gauntlet.general.id,challengeBoss(tier,wave,10).id);
-    if(wave===15){
+    if(wave>10)equal(active.gauntlet.general.id,challengeBoss(tier,wave,10,room.run.roster).id);
+    if(wave===10+size)equal(active.gauntlet.general.id,'ghost_lubu');
+    if(wave===lastWave)equal(active.gauntlet.general.id,'divine_liubei');
+    if(extreme && wave===15){
       const boss=room.run.boss, host=room.players.get(0), guest=room.players.get(1);
       const {x,y}=host;
       boss.hp=Math.floor(boss.maxHp*.47);boss.x=x-100;boss.y=y;boss.attacks=1;
@@ -73,7 +78,7 @@ try{
       equal(mythicHit(hit.gauntlet.warning,hit.players.find(p=>p.slot===1)),false);
       b.send({type:'input',dx:0,dy:0});
     }
-    if(wave===11||wave===21){
+    if(extreme && (wave===11||wave===21)){
       const boss=room.run.boss;
       boss.hp=Math.floor(boss.maxHp*.49);
       const host=room.players.get(0),guest=room.players.get(1);
@@ -93,14 +98,14 @@ try{
     // Deterministic fixture. The authoritative tick, draft messages and next-wave transitions still run normally.
     room.run.boss.hp=0;
     let draftA=await a.until(m=>m.type==='draft'&&m.wave===wave),draftB=await b.until(m=>m.type==='draft'&&m.wave===wave);
-    if(wave%10===0){
-      const options=challengeChoices(tier,wave,10);
+    if(wave===10||wave===10+size||wave===lastWave){
+      const options=challengeChoices(tier,wave,10,size);
       equal(draftA.continuation,options);equal(draftB.continuation,options);
       equal(room.run.mythicQueue.length,0);checkpoints.push(tier);
-      if(wave===30){
+      if(wave===lastWave){
         a.send({type:'finish',wave});
         equal((await a.until(m=>m.type==='result')).milestones,3);
-        equal((await b.until(m=>m.type==='result')).generals,30);
+        equal((await b.until(m=>m.type==='result')).generals,lastWave);
         break;
       }
       b.send({type:'challenge',tier:options[0],wave});
@@ -109,6 +114,10 @@ try{
       a.send({type:'challenge',tier:options[0],wave:wave-1});
       await delay(110);
       equal(room.phase,'checkpoint');
+      a.send({type:'endless',wave});
+      await delay(110);
+      equal(room.phase,'checkpoint');
+      equal(room.votes,['endless',options[0]]);
       a.send({type:'challenge',tier:options[0],wave});
       draftA=await a.until(m=>m.type==='draft'&&m.wave===wave&&!m.checkpoint);
       draftB=await b.until(m=>m.type==='draft'&&m.wave===wave&&!m.checkpoint);
@@ -117,5 +126,5 @@ try{
     if(draftB.choices.length)b.send({type:'reward',id:draftB.choices[0]});
   }
   equal(checkpoints,['mortal','ghost','divine']);
-  console.log('Mythic network checks: '+checks+' passed, 30 waves, two WebSocket peers.');
+  console.log('Mythic network checks: '+checks+' passed, '+lastWave+' waves, two WebSocket peers.');
 }finally{for(const ws of clients)ws.terminate();await server.close();}

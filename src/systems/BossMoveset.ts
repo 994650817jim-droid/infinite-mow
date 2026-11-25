@@ -65,6 +65,7 @@ export class BossMoveset extends ArcBossV2<string> {
     if (def.p1.wards || def.p2.wards) ensureBossFx(h.scene, ['zj_pillar']);
     if (def.p1.wards) this.raiseWards(def.p1.wards, now);
   }
+  get charging(): boolean { return this.dash !== null; }
   get phaseDef(): PhaseDef { return this.phase === 1 ? this.def.p1 : this.def.p2; }
   get mounted(): boolean { return !!this.mount?.mounted; }
   protected takenMul(): number {

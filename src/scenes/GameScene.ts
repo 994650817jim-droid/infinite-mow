@@ -2249,7 +2249,8 @@ export class GameScene extends Phaser.Scene {
           const nx = dx / dist;
           const ny = dy / dist;
           const limit=soft?Math.min(2,120*dt):6;
-          const enemyPush = Math.min(limit, overlap * 0.7);
+          // A committed charge displaces infantry. Infantry separation must not consume its forward travel.
+          const enemyPush = enemy === this.boss && this.moveset?.charging ? 0 : Math.min(limit, overlap * 0.7);
           const allyPush = Math.min(soft?limit*.4:6, overlap * 0.3);
           enemy.sprite.x += nx * enemyPush;
           enemy.sprite.y += ny * enemyPush;

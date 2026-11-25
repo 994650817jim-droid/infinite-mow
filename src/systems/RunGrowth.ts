@@ -1,3 +1,4 @@
+import {ironHpBonus,ironIncoming,backwaterActive,backwaterDamage,vanguardDamage,vanguardSpeed} from '../data/coopStars';
 import { statEffective, statSource } from '../data/heroStats';
 import { SCHOOL_TIER } from '../data/schools';
 import { heroXpToNext } from '../data/heroLevels';
@@ -198,7 +199,7 @@ export class RunGrowth {
   starActive(id: string, now: number, alliesNear: boolean): boolean | null {
     if (!this.starsLive || !this.stars.includes(id)) return null;
     switch (id) {
-      case 'strength.NR2': return this.hpRatio < STAR_EFFECT['strength.NR2'].below;
+      case 'strength.NR2': return backwaterActive(this.hpRatio);
       case 'agility.NR2': return this.moving;
       case 'command.NR2': case 'bridge3.h': return alliesNear;
       case 'agility.NL2': return now < this.hasteUntil;
@@ -223,7 +224,7 @@ export class RunGrowth {
     this.pyreAt.push(now); this.pulse('intellect.K', x, y); return true;
   }
   /** 铁骨 + 身先士卒：主将生命上限（按基础生命的比例，和力量每点 +3% 加在一起）。 */
-  private starHp(): number { return (this.starOn('strength.NR1') ? STAR_EFFECT['strength.NR1'].hp : 0) + (this.starOn('bridge3.h') ? STAR_EFFECT['bridge3.h'].hp : 0); }
+  private starHp(): number { return ironHpBonus(this.starOn('strength.NR1')) + (this.starOn('bridge3.h') ? STAR_EFFECT['bridge3.h'].hp : 0); }
   /** 连击：暴击伤害加成（和战法的暴击伤害加成相加）。 */
   critDamageBonus(): number { return this.starOn('agility.NR1') ? STAR_EFFECT['agility.NR1'].critDamage : 0; }
   /** 拾取范围倍率：兵装词条 ×（追风 +20%）。 */
@@ -253,7 +254,7 @@ export class RunGrowth {
   starHit(time: number, weaponHit: boolean, crit: boolean, spellWeapon: boolean): number {
     if (!this.starsLive) return 1;
     let mul = 1;
-    if (weaponHit && this.starOn('bridge0.h')) mul *= 1 + STAR_EFFECT['bridge0.h'].weapon;
+    mul *= vanguardDamage(this.starOn('bridge0.h'),weaponHit);
     if (this.starOn('bridge1.h')) {
       if ((!weaponHit || spellWeapon) && time < this.spellSurgeUntil) mul *= 1 + STAR_EFFECT['bridge1.h'].spell;
       if (crit) this.spellSurgeUntil = time + STAR_EFFECT['bridge1.h'].ms;
@@ -315,7 +316,7 @@ export class RunGrowth {
     const might = (1 + ATTRIBUTE_EFFECT.strength.damage * this.pts('strength')) * (1 + this.primaryBonus());
     const mastered = (1 + .04 * Object.values(this.masteryExtra).reduce((n: number, v) => n + (v ?? 0), 0)) * (1 + .1 * this.weaponOver); // 武艺精熟、本命 Lv6 / 7
     const fury = mastered * (this.lowHp && this.gear.specials.includes('fury') ? 1.25 : 1) * (this.lowHp && this.stageDesperate ? 1 + this.stageDesperate : 1);
-    const stand = this.starOn('strength.NR2') && this.hpRatio < STAR_EFFECT['strength.NR2'].below ? 1 + STAR_EFFECT['strength.NR2'].damage : 1; // 星图·背水
+    const stand = backwaterDamage(this.starOn('strength.NR2'),this.hpRatio); // 星图·背水
     const wine = now < this.wineUntil && this.gear.specials.includes('jiuhu') ? 1.4 : 1; // 遗珍「乌巢酒葫」（BossRelics.RELIC.jiuhuDamage）
     return Math.min(2, might * (now < this.berserkUntil ? 1.25 : 1) * (1 + this.permanentDamage) * (1 + this.gear.damage) * (1 + this.temperDamage)) * fury * wine * stand * this.keystoneDamage();
   }
@@ -323,7 +324,7 @@ export class RunGrowth {
   attackSpeedMultiplier(now: number): number {
     const quickness = 1 + ATTRIBUTE_EFFECT.agility.attackSpeed * this.pts('agility');
     const haste = this.perk('agility', 3) && now < this.hasteUntil ? 1 + PRIMARY_PERK.agility.haste : 1, focus = this.perk('intellect', 1) ? 1 / (1 - PRIMARY_PERK.intellect.cooldown) : 1;
-    const star = (this.starOn('bridge0.h') ? 1 + STAR_EFFECT['bridge0.h'].attackSpeed : 1) * (this.moving && this.starOn('agility.NR2') ? 1 + STAR_EFFECT['agility.NR2'].moveHaste : 1); // 星图·骁锐 / 追风
+    const star = vanguardSpeed(this.starOn('bridge0.h')) * (this.moving && this.starOn('agility.NR2') ? 1 + STAR_EFFECT['agility.NR2'].moveHaste : 1); // 星图·骁锐 / 追风
     return Math.min(1.8, quickness * (now < this.berserkUntil ? 1.2 : 1) * (1 + this.gear.attackSpeed) * haste * focus * star * (this.keyOn('intellect.K') ? 1 / (1 + STAR_KEYSTONE['intellect.K'].cooldown) : 1)) * (now < this.frenzyUntil ? 1 + this.frenzyHaste : 1);
   }
 
@@ -334,7 +335,7 @@ export class RunGrowth {
 
   criticalBonus(): number { return Math.min(0.1, ATTRIBUTE_EFFECT.agility.crit * this.pts('agility')) + this.gear.crit + (this.perk('agility', 2) ? PRIMARY_PERK.agility.crit : 0) + (this.keyOn('agility.K') ? STAR_KEYSTONE['agility.K'].crit : 0); }
   bonusMaxHp(): number { return Math.round(BALANCE.player.maxHp * (ATTRIBUTE_EFFECT.strength.hp * this.pts('strength') + this.gear.hp + this.charmHp + this.starHp())); }
-  incomingDamageMultiplier(): number { return (this.gear.specials.includes('weixi') ? 1.15 : 1)*Math.max(.6, 1 - this.gear.reduce)*this.commandSelfGuard()*(this.starOn('strength.NR1') ? 1 - STAR_EFFECT['strength.NR1'].taken : 1); }
+  incomingDamageMultiplier(): number { return (this.gear.specials.includes('weixi') ? 1.15 : 1)*Math.max(.6, 1 - this.gear.reduce)*this.commandSelfGuard()*ironIncoming(this.starOn('strength.NR1')); }
   /** 刘备：统御每点本人受伤 −1%（2026-11-18 平衡审查，data/heroMechanics.ts LB_COMMAND）；其他武将为 1。 */
   commandSelfGuard(): number { return this.character === 'liubei' ? 1 - LB_COMMAND.selfGuardPerPoint * Math.min(LB_COMMAND.maxPoints, this.attributes.command) : 1; }
   allyDamageMultiplier(): number { return (this.build.tier('formation')>=2?1+SCHOOL_TIER.formation.allyDmg:1)*(1 + this.gear.ally)*(1 + ATTRIBUTE_EFFECT.command.allyDamage * this.pts('command')) * (1 + this.allyDamageBucket()); }

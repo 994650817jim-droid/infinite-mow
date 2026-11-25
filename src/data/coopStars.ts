@@ -9,3 +9,11 @@ export const FIELD_STAR_EFFECT = {
   'strength.NR2': {below:.4,damage:.15},
   'bridge0.h': {weapon:.06,attackSpeed:.06},
 } as const;
+
+/** Rules return unrounded contributions. Each host retains its existing final rounding and stat buckets. */
+export const ironHpBonus=(owned:boolean):number=>owned ? FIELD_STAR_EFFECT['strength.NR1'].hp : 0;
+export const ironIncoming=(owned:boolean):number=>owned ? 1-FIELD_STAR_EFFECT['strength.NR1'].taken : 1;
+export const backwaterActive=(ratio:number):boolean=>ratio<FIELD_STAR_EFFECT['strength.NR2'].below;
+export const backwaterDamage=(owned:boolean,ratio:number):number=>owned && backwaterActive(ratio) ? 1+FIELD_STAR_EFFECT['strength.NR2'].damage : 1;
+export const vanguardDamage=(owned:boolean,weaponHit:boolean):number=>owned && weaponHit ? 1+FIELD_STAR_EFFECT['bridge0.h'].weapon : 1;
+export const vanguardSpeed=(owned:boolean):number=>owned ? 1+FIELD_STAR_EFFECT['bridge0.h'].attackSpeed : 1;

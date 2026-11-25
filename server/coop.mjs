@@ -11,7 +11,7 @@ import world from '../src/coop/arena.json' with { type: 'json' };
 import { bossForWave, bossStats, advanceRescue, grantReward, beginBossWarning, clearBossAttack, resolveBossWarning, updateBossPhase, newGauntlet, nextWave, rewardsFor, TOTAL_WAVES } from './gauntlet.mjs';
 
 import { CHARACTERS } from '../src/data/characters.ts';
-import { FIELD_STAR_EFFECT } from '../src/data/coopStars.ts';
+import { ironIncoming, backwaterDamage, vanguardDamage, vanguardSpeed } from '../src/data/coopStars.ts';
 
 const heroes = new Map(CHARACTERS.map(hero => [hero.id, hero]));
 const attackProfiles = {
@@ -170,7 +170,7 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
   }
   function hurt(player, damage, now) {
     if (now < player.hurtUntil) return false;
-    if(player.stars?.includes('strength.NR1')) damage*=1-FIELD_STAR_EFFECT['strength.NR1'].taken;
+    damage*=ironIncoming(player.stars?.includes('strength.NR1'));
     player.hp = Math.max(0, player.hp - Math.round(damage));
     if (!player.hp) player.moving = false;
     player.hurtUntil = now + 550;
@@ -202,12 +202,9 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
       }
       if (!nearest) continue;
       player.fireIn = attack.interval * .91 ** (player.upgrades.haste ?? 0);
-      let power=3+(player.upgrades.damage??0);
-      if(player.stars?.includes('bridge0.h')) {
-        power*=1+FIELD_STAR_EFFECT['bridge0.h'].weapon;
-        player.fireIn/=1+FIELD_STAR_EFFECT['bridge0.h'].attackSpeed;
-      }
-      if(player.stars?.includes('strength.NR2') && player.hp<player.maxHp*FIELD_STAR_EFFECT['strength.NR2'].below) power*=1+FIELD_STAR_EFFECT['strength.NR2'].damage;
+      const vanguard=player.stars?.includes('bridge0.h');
+      const power=(3+(player.upgrades.damage??0))*vanguardDamage(vanguard,true)*backwaterDamage(player.stars?.includes('strength.NR2'),player.hp/player.maxHp);
+      player.fireIn/=vanguardSpeed(vanguard);
       player.strike = { n: player.strike.n + 1, x: nearest.x, y: nearest.y };
       troopHit(room, nearest, player, power);
     }

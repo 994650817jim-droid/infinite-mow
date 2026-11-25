@@ -1,7 +1,7 @@
 import { GAUNTLET, GAUNTLET_POOL, endlessBoss, pickBosses } from '../src/data/gauntlet.ts';
 import { challengeBoss, mythicBoss, mythicSequence, mythicHit } from '../src/data/mythicGauntlet.ts';
 import content from '../src/coop/gauntlet.json' with { type: 'json' };
-import {FIELD_STARS, FIELD_STAR_EFFECT} from '../src/data/coopStars.ts';
+import {FIELD_STARS, ironHpBonus} from '../src/data/coopStars.ts';
 
 const pool = GAUNTLET_POOL.filter(boss => Object.hasOwn(content.bosses, boss.id));
 export const TOTAL_WAVES = GAUNTLET.waves;
@@ -172,7 +172,7 @@ export function grantReward(player, id) {
     player.stars.push(id);
     if(id==='strength.NR1') {
       const ratio=player.hp/player.maxHp;
-      player.maxHp=Math.round(player.maxHp*(1+FIELD_STAR_EFFECT[id].hp));
+      player.maxHp=Math.round(player.maxHp*(1+ironHpBonus(true)));
       player.hp=Math.round(ratio*player.maxHp);
     }
     return;
@@ -184,7 +184,7 @@ export function grantReward(player, id) {
   player.upgrades[id] = (player.upgrades[id] ?? 0) + 1;
   if (id === 'health') {
     const base=100+15*player.upgrades.health;
-    player.maxHp=Math.round(base*(player.stars?.includes('strength.NR1')?1+FIELD_STAR_EFFECT['strength.NR1'].hp:1));
+    player.maxHp=Math.round(base*(1+ironHpBonus(player.stars?.includes('strength.NR1'))));
     player.hp=Math.min(player.maxHp,player.hp+15);
   }
 }

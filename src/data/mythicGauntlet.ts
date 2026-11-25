@@ -28,6 +28,7 @@ export type BladeScar = Point & {
 };
 
 export interface MythicWarning extends Point {
+  transit?: { start: number; to: Point; cast: number; harmless: boolean };
   scar?: BladeScar;
   retracesScar?: boolean;
   kind: MythicShape;
@@ -140,7 +141,48 @@ export function challengeWave(tier: GauntletRunTier, wave: number, size: number,
 }
 
 /** Lock both origin and aim for the complete sequence. Each strike has its own warning. */
-export function mythicSequence(boss: MythicBoss, origin: Point, target: Point, cast: number, phase2: boolean, now: number) {
+type CanTravel = (from: Point, to: Point) => boolean;
+
+function spearRoute(origin: Point, target: Point, cast: number, phase2: boolean, now: number, clear: CanTravel): MythicWarning[] {
+  const face = Math.atan2(target.y-origin.y,target.x-origin.x);
+  const dx = Math.cos(face), dy = Math.sin(face);
+  const length = Math.min(300, Math.hypot(target.x-origin.x,target.y-origin.y) + 65);
+  const point = (along: number, side = 0): Point => ({x:origin.x+dx*along-dy*side,y:origin.y+dy*along+dx*side});
+  let reach = length;
+  while (reach > 0 && !clear(origin,point(reach))) reach = Math.max(0,reach-16);
+  const end = point(reach);
+  const route: MythicWarning[] = [];
+  function leg(from: Point, to: Point, name: string, windup: number, harmless: boolean) {
+    const angle = Math.atan2(to.y-from.y,to.x-from.x), startsAt = route.length ? route[route.length-1].endsAt+.36 : now;
+    route.push({kind:'line', name, x:from.x,y:from.y,angle,face:angle, radius:Math.hypot(to.x-from.x,to.y-from.y),
+      halfWidth:20,lanes:1, power:harmless?0:.88, startsAt,endsAt:startsAt+windup+.22, mythic:'divine',
+      visual:'dragon',action:'attack',resolved:false,transit:{start:startsAt+windup,to,cast:cast+1,harmless}});
+  }
+  leg(origin,end,'七进七出 · 穿阵',.95,reach<30);
+  const bent = phase2 && (cast+1)%3===0 && reach>80;
+  if (bent) {
+    for (const side of [62,-62]) {
+      const mark=point(reach*.52,side), exit=point(reach*.52,-side);
+      if (clear(end,mark) && clear(mark,origin) && clear(point(reach*.52),exit)) {
+        leg(end,mark,'龙胆印 · 折锋',1.12,false);
+        leg(mark,origin,'七进七出 · 归枪',1.12,false);
+        return route;
+      }
+    }
+  }
+  leg(end,origin,'收枪归位',.45,true);
+  return route;
+}
+
+export function mythicTransit(w: MythicWarning, now: number): Point | undefined {
+  const m = w.transit;
+  if (!m || now < m.start) return;
+  const t = Math.min(1,(now-m.start)/(w.endsAt-m.start));
+  return {x:w.x+(m.to.x-w.x)*t, y:w.y+(m.to.y-w.y)*t};
+}
+
+export function mythicSequence(boss: MythicBoss, origin: Point, target: Point, cast: number, phase2: boolean, now: number, clear: CanTravel = () => true) {
+  if (boss.id === 'divine_zhaoyun') return spearRoute(origin,target,cast,phase2,now,clear);
   const face = Math.atan2(target.y-origin.y,target.x-origin.x);
   const moves = boss.moves[cast%2];
   const sequence = phase2 ? [...moves,boss.phaseMove] : moves;
@@ -174,6 +216,7 @@ export function mythicSequence(boss: MythicBoss, origin: Point, target: Point, c
 }
 
 export function mythicHit(w: MythicWarning, p: Point): boolean {
+  if (w.transit?.harmless) return false;
   const x=p.x-w.x, y=p.y-w.y, distance=Math.hypot(x,y);
   if(w.kind==='circle'||w.kind==='ring') return distance<=w.radius&&distance>=(w.innerRadius??0);
   if(w.kind==='sweep') return distance<=w.radius&&Math.abs(Math.atan2(y*Math.cos(w.angle)-x*Math.sin(w.angle),x*Math.cos(w.angle)+y*Math.sin(w.angle)))<=Math.PI/3;

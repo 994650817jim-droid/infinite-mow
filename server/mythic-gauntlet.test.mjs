@@ -31,9 +31,15 @@ try{
   for(const def of roster)for(const cast of [0,1]){
     const first=mythicSequence(def,{x:100,y:100},{x:200,y:100},cast,false,0);
     const second=mythicSequence(def,{x:100,y:100},{x:200,y:100},cast,true,0);
-    equal(second.length,first.length+1);
+    if (def.id==='divine_zhaoyun') {
+      const bend=mythicSequence(def,{x:100,y:100},{x:200,y:100},2,true,0);
+      equal(first.length,2);equal(first[1].transit.harmless,true);
+      equal(second[1].transit.harmless,true);equal(bend.length,3);equal(bend[2].transit.to,{x:100,y:100});
+      equal(bend[1].transit.start-bend[1].startsAt>=1.1,true);
+    } else equal(second.length,first.length+1);
     for(const [i,w] of second.entries()){
-      equal(w.endsAt-w.startsAt>=.84,true);
+      if(w.transit?.harmless) equal(mythicHit(w,{x:w.x,y:w.y}),false);
+      else equal(w.endsAt-w.startsAt>=.84,true);
       if(i>0)equal(w.startsAt>second[i-1].endsAt,true);
       equal(mythicHit(w,{x:9999,y:9999}),false);
     }

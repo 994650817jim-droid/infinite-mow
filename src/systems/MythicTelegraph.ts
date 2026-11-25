@@ -206,6 +206,13 @@ function edgeNotches(g: Phaser.GameObjects.Graphics, w: GroundWarning, color: nu
 
 export function drawMythicWarning(g: Phaser.GameObjects.Graphics,w: MythicWarning,id: string,now: number): void {
   const progress=Math.max(0,Math.min(1,(now-w.startsAt)/Math.max(.01,w.endsAt-w.startsAt)));
+  if (w.transit?.harmless) {
+    for(let i=1;i<6;i++){
+      const f=i/6;
+      g.fillStyle(0xa3c6d2,.45).fillCircle(w.x+(w.transit.to.x-w.x)*f,w.y+(w.transit.to.y-w.y)*f,2);
+    }
+    return;
+  }
   const scar=w.scar;
   if (scar && now>=scar.createdAt && now<scar.lightsAt) {
     if (scar.kind==='line') {

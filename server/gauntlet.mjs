@@ -2,7 +2,8 @@ import {EMBER,CINDERS} from '../src/rules/burning.ts';
 import {refreshRetinueHp} from './coop-retinue.mjs';
 import {canDraftMark} from './coop-marks.mjs';
 import { GAUNTLET, GAUNTLET_POOL, endlessBoss, pickBosses } from '../src/data/gauntlet.ts';
-import { mythicRoster, challengeBoss, mythicBoss, mythicSequence, mythicHit } from '../src/data/mythicGauntlet.ts';
+import { mythicRoster, challengeBoss, mythicBoss, mythicSequence, mythicHit, mythicTransit } from '../src/data/mythicGauntlet.ts';
+import arena from '../src/coop/arena.json' with {type:'json'};
 import content from '../src/coop/gauntlet.json' with { type: 'json' };
 import {FIELD_STARS, MARK_STAR, COMPANY_STARS, ironHpBonus} from '../src/data/coopStars.ts';
 
@@ -69,7 +70,8 @@ export function beginBossWarning(run, target, time, followup = false, nextPatter
   const mythic = mythicBoss(b.general.id);
   if (mythic) {
     if (run.mythicQueue?.length) return false;
-    const sequence = mythicSequence(mythic,b,target,b.attacks??0,phase2,time);
+    const sequence = mythicSequence(mythic,b,target,b.attacks??0,phase2,time,
+      (_,to)=>to.x>=20 && to.y>=20 && to.x<=arena.width-20 && to.y<=arena.height-20);
     b.attacks=(b.attacks??0)+1;
     const power=bossStats(run.wave,mythic.id,run.roster?.ghost.length).power*(phase2?1.1:1);
     run.mythicQueue=sequence.map(w => ({...w,power:w.power*power}));
@@ -102,6 +104,10 @@ export function resolveBossWarning(run, players, time, onHit) {
     if(queue[0]?.resolved&&time>=queue[0].endsAt+.32) queue.shift();
     const warning=queue[0];
     run.warning=warning&&time>=warning.startsAt?warning:null;
+    if (run.warning?.transit) {
+      const pos=mythicTransit(warning,time);
+      if (pos) Object.assign(run.boss,pos);
+    }
     if(run.warning&&!warning.resolved&&time>=warning.endsAt){
       warning.resolved=true;
       for(const player of players) if(player.hp>0&&mythicHit(warning,player)) onHit(player,warning.power);

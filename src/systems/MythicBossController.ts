@@ -1,6 +1,6 @@
 import type Phaser from 'phaser';
 import { DEPTH } from '../config';
-import { mythicArtKey, mythicHit, mythicSequence, type MythicWarning, mythicBoss } from '../data/mythicGauntlet';
+import { mythicArtKey, mythicHit, mythicTransit, mythicSequence, type MythicWarning, mythicBoss } from '../data/mythicGauntlet';
 import type { ArcHost } from './ArcBossV2';
 import { BossWalk } from './BossWalk';
 import { mythicFacing, clearMythicSignature, clearMythicWarning, drawMythicWarning, paintMythicSignature, poseMythic } from './MythicArt';
@@ -50,7 +50,8 @@ export class MythicBossController {
     let dir=mythicFacing(Math.atan2(dy,dx));
     while(this.queue[0]?.resolved&&now>=this.queue[0].endsAt+.32) this.queue.shift();
     if (!this.queue.length&&now>=this.next&&distance<260) {
-      this.queue=mythicSequence(this.definition,boss,player,this.casts++,this.phase2,now);
+      this.queue=mythicSequence(this.definition,boss,player,this.casts++,this.phase2,now,
+        (a,b)=>army.navigation.clearSegment(a.x,a.y,b.x,b.y,boss.radius+3));
       const phasePower=this.phase2?1.1:1;
       for (const warning of this.queue) warning.power*=phasePower;
       this.next=this.queue.at(-1)!.endsAt+(this.phase2?1.55:2);
@@ -64,6 +65,11 @@ export class MythicBossController {
     const moving = this.groundWalk.moving;
     this.state=active?(active.resolved?'attack':'warn'):moving?'approach':'recover';
     if(active) {
+      if (active.transit) {
+        const position = mythicTransit(active,now);
+        if (position) boss.sprite.setPosition(position.x,position.y);
+        dir = mythicFacing(active.face);
+      }
       if(this.announcedAt!==active.startsAt){
         this.announcedAt=active.startsAt;
         this.host.banner(active.name);
@@ -76,14 +82,14 @@ export class MythicBossController {
         for(const unit of army.grid.query(active.x,active.y,active.radius+80)){
           if(unit.active&&mythicHit(active,unit)) army.hurtByBoss(unit,power*.6,ms);
         }
-        this.host.sfx('hitHeavy');
+        if (!active.transit?.harmless) this.host.sfx('hitHeavy');
       }
       drawMythicWarning(this.graphics,active,id,now);
     }
     poseMythic(boss.sprite,id,now,dir,moving,active,this.groundWalk.frame);
     if(ms<this.flashUntil) boss.sprite.setTint(0xffb6a0);
     else boss.sprite.clearTint();
-    paintMythicSignature(this.signature,id,active,now,boss);
+    paintMythicSignature(this.signature,id,active?.transit?.harmless?null:active,now,boss);
   }
 
   defeat(): void {

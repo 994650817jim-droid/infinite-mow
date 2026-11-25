@@ -2051,7 +2051,7 @@ export class GameScene extends Phaser.Scene {
     const root = this.add.container(0, 0).setScrollFactor(0).setDepth(DEPTH.overlay - 8).setName('boss-announce').setVisible(this.mode === 'none');
     let t2: Phaser.GameObjects.Text;
     if (mythicStyle) {
-      t2 = addMythicBossNameplate(this, root, W / 2, D ? 101 : 132, title, name, mythicStyle);
+      t2 = addMythicBossNameplate(this, root, W / 2, D ? 68 : 88, title, name, mythicStyle);
     } else {
       const ink = this.textures.exists('btn_ink_secondary_normal') ? this.add.image(W / 2, y, 'btn_ink_secondary_normal').setDisplaySize(bw, bh).setTint(0x2a2420).setAlpha(.92) : this.add.rectangle(W / 2, y, bw, bh * .7, 0x120d0a, .8);
       const t1 = this.add.text(W / 2, y - 14, title, { fontFamily: HEADING_FONT, fontSize: '12px', color: '#d9b26a', resolution: 2 }).setOrigin(.5).setLetterSpacing(5);

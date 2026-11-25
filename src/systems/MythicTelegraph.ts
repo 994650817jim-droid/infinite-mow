@@ -208,13 +208,19 @@ export function drawMythicWarning(g: Phaser.GameObjects.Graphics,w: MythicWarnin
   const progress=Math.max(0,Math.min(1,(now-w.startsAt)/Math.max(.01,w.endsAt-w.startsAt)));
   const scar=w.scar;
   if (scar && now>=scar.createdAt && now<scar.lightsAt) {
-    const trace={...w,...scar,lanes:1,spread:0};
-    if (scar.kind==='line') drawLane(g,trace,scar.angle,0x638986,.36);
+    if (scar.kind==='line') {
+      const dx=Math.cos(scar.angle),dy=Math.sin(scar.angle);
+      g.lineStyle(2,0x475856,.72);
+      for (let i=0;i<6;i++) {
+        const start=scar.radius*i/6,end=start+scar.radius*.085;
+        g.lineBetween(scar.x+dx*start,scar.y+dy*start,scar.x+dx*end,scar.y+dy*end);
+      }
+    }
     else arcMarks(g,scar.x,scar.y,scar.radius,scar.angle-Math.PI/3,Math.PI*2/3,9,.46,2,0x638986,.6);
     if (w.retracesScar) return;
   }
   if (!w.resolved) edgeNotches(accentLayer(g),w,w.retracesScar?0x9ffff0:0xffdeb0,.90);
-  const warming = progress>.72 ? 0xffc384 : 0xff9c65;
+  const warming = w.retracesScar ? 0xabfff1 : progress>.72 ? 0xffc384 : 0xff9c65;
   const lanes = w.lanes ?? 1;
   if (!w.resolved) {
     const amount = .66+progress*.31;

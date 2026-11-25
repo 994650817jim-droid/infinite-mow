@@ -1,11 +1,18 @@
+import {uiSfx} from '../systems/Sfx';
+import {CINDERS,EMBER} from '../rules/burning';
+import {CoopRetinueView,preloadCompany} from '../coop/CoopRetinueView';
+import { drawMortalWarning } from '../systems/MythicTelegraph';
 import { loadSurvivorBossFx, playSurvivorBossFx, updateSurvivorBossFx, clearSurvivorBossFx } from '../systems/SurvivorBossFx';
 import Phaser from 'phaser';
+import { SnapshotTimeline, type BattleSnapshot } from '../coop/SnapshotTimeline';
 import { GAME_WIDTH, GAME_HEIGHT, IS_DESKTOP } from '../config';
 import { Joystick } from '../ui/Joystick';
+import { campaignHeader, campaignHonour, campaignPanel, campaignStages, campaignTrack, type CampaignReport } from '../ui/GauntletCampaignPanel';
 import { coopSocketUrl, type Fighter, type Foe, type ServerMessage, type Side, type CoopMode, type BossWarning, type PartyMember } from '../coop/protocol';
 import world from '../coop/arena.json';
 import gauntlet from '../coop/gauntlet.json';
 import { challengeWave, mythicArtKey, mythicBoss, tierTitle, type MythicWarning } from '../data/mythicGauntlet';
+import { walkRow } from '../systems/GroundMotion';
 import { preloadMythic, prepareMythicActions, mythicFacing, poseMythic, clearMythicSignature, clearMythicWarning, drawMythicWarning, paintMythicSignature } from '../systems/MythicArt';
 import { GAUNTLET_NAME } from '../data/gauntlet';
 import { CHARACTERS, getCharacter, type CharacterId } from '../data/characters';
@@ -13,13 +20,22 @@ import { heroUnlocked } from '../systems/HeroUnlocks';
 import roster from '../coop/roster.json';
 import { buildRecolor } from '../systems/IffOverlay';
 import { ART_V2_FILES } from '../systems/ArtStyle';
+import { FIELD_STARS, MARK_STAR, COMPANY_STARS } from '../data/coopStars';
+import { historyFigures, modeKey, saveModeBest, scoreRun } from '../systems/GauntletHistory';
+import { isChapterTestRun } from '../systems/ChapterProgress';
+import { activeSlot } from '../systems/SaveSlots';
+const networkStars=[...FIELD_STARS,MARK_STAR,...COMPANY_STARS,CINDERS];
 
-type ActorView = { body: Phaser.GameObjects.Image; label: Phaser.GameObjects.Text; tx: number; ty: number; strike: number; mythicFacing?: number };
+type ActorView = { body: Phaser.GameObjects.Image; label: Phaser.GameObjects.Text; tx: number; ty: number; strike: number; walkFacing?: number; walkPhase?: number; walkStride?: number };
 const TROOPS: Record<string, {name:string;art:{walk:string;attack:string;cell:number}}> = roster.types;
 const BOSS_SHEETS: Record<string, string[]> = gauntlet.bosses;
-const REWARDS = new Map([...gauntlet.rewards, { id: 'heal', name: '整备', detail: '回复 45% 最大生命' }].map(reward => [reward.id, reward]));
+const ATTACK_SHEETS: Readonly<Record<string, string>> = {
+  zhangliang: 'yellow_zhangliang_attack', zhangbao: 'yellow_zhangbao_cast', zhangjiao: 'zhangjiao_cast', huaxiong: 'huaxiong_attack', lubu: 'lubu_attack',
+};
+const REWARDS = new Map([...gauntlet.rewards, ...networkStars.map(s=>({...s,name:'将星 · '+s.name})), {id:EMBER.id,name:'火种',detail:'本命命中点燃敌军，每半秒结算一次。'}, { id: 'heal', name: '整备', detail: '回复 45% 最大生命' }].map(reward => [reward.id, reward]));
 
 export class CoopScene extends Phaser.Scene {
+  private recordSlot=0;
   private panel!: HTMLElement;
   private status!: HTMLElement;
   private socket?: WebSocket;
@@ -36,8 +52,12 @@ export class CoopScene extends Phaser.Scene {
   private score?: Phaser.GameObjects.Text;
   private partyBars?: Phaser.GameObjects.Graphics;
   private movementAt = 0;
+  private timeline = new SnapshotTimeline();
+  private displayed?: BattleSnapshot;
   private slot: Side = 0;
   private phase: 'setup' | 'lobby' | 'battle' | 'draft' | 'result' = 'setup';
+  private readonly companyView=new CoopRetinueView();
+  private companyOrder?:HTMLButtonElement;
   private fighters = new Map<Side, ActorView>();
   private foes = new Map<number, ActorView>();
   private marks: Phaser.GameObjects.Line[] = [];
@@ -58,6 +78,7 @@ export class CoopScene extends Phaser.Scene {
 
   private lastBossFx = '';
   preload(): void {
+    preloadCompany(this);
     preloadMythic(this);
     loadSurvivorBossFx(this);
     // Small standalone bundle; the home scene may have skipped the main battle preload.
@@ -69,11 +90,12 @@ export class CoopScene extends Phaser.Scene {
 
   create(): void {
     this.lastBossFx = '';
+    this.timeline.clear(); this.displayed=undefined;
     this.phase = 'setup';
     this.movementAt = 0;
     this.fighters.clear();
     this.troopTextures.clear();
-    this.foes.clear();
+    this.foes.clear();this.companyView.clear();this.companyOrder=undefined;
     this.generalTexture = undefined;
     this.mythicSignature = undefined; this.mythicCue = null; this.mythicId = ''; this.mythicClock = 0; this.preparedMythic = '';
     this.marks = [];
@@ -101,7 +123,7 @@ export class CoopScene extends Phaser.Scene {
       this.heroTextures.clear();
       this.fighters.clear();
       this.troopTextures.clear();
-      this.foes.clear();
+      this.foes.clear();this.companyView.clear();this.companyOrder=undefined;
       this.marks = [];
     });
   }
@@ -157,9 +179,14 @@ export class CoopScene extends Phaser.Scene {
     portrait.alt = '';
     portrait.src = 'assets/ink-scroll/lvbu.webp';
     modes.append(portrait, name, detail);
-    const host = this.button('创建房间', () => this.connect({ type: 'create', mode: 'gauntlet' }));
+    let extreme=new URLSearchParams(location.search).get('challenge')==='extreme';
+    const route=this.button(extreme?'极限三十阵':'标准二十阵',()=>{
+      extreme=!extreme;route.textContent=extreme?'极限三十阵':'标准二十阵';route.setAttribute('aria-pressed',String(extreme));
+    });
+    route.title='切换挑战阵数';route.setAttribute('aria-pressed',String(extreme));
+    const host = this.button('创建房间', () => this.connect({ type: 'create', mode: 'gauntlet', extreme }));
     host.classList.add('coop-primary');
-    hostSection.append(hostTitle, modes, host);
+    hostSection.append(hostTitle, modes, route, host);
 
     const guestSection = document.createElement('section');
     const guestTitle = document.createElement('h2');
@@ -214,7 +241,7 @@ export class CoopScene extends Phaser.Scene {
     socket?.close();
   }
 
-  private connect(command: { type: 'create'; mode: CoopMode } | { type: 'join'; code: string }): void {
+  private connect(command: { type: 'create'; mode: CoopMode; extreme?:boolean } | { type: 'join'; code: string }): void {
     this.disconnect();
     this.availableHeroes = CHARACTERS.filter(hero => heroUnlocked(hero.id, false)).map(hero => hero.id);
     this.status.textContent = '正在连接…';
@@ -229,6 +256,9 @@ export class CoopScene extends Phaser.Scene {
       const left = Math.ceil((this.retryUntil - Date.now()) / 1000);
       if (left > 0) {
         this.connectionBlocked = true;
+        this.timeline.clear();
+        this.displayed=undefined;
+        this.stick?.reset();
         this.showConnection('连接中断 · 战局暂停 · 自动重连 ' + left + '秒');
         window.clearTimeout(this.retryTimer);
         this.retryTimer = window.setTimeout(() => {
@@ -243,14 +273,14 @@ export class CoopScene extends Phaser.Scene {
     else this.renderSetup(message);
   }
 
-  private openSocket(command: { type: 'create'; mode: CoopMode } | { type: 'join'; code: string } | { type: 'resume'; code: string; token: string }): void {
+  private openSocket(command: { type: 'create'; mode: CoopMode; extreme?:boolean } | { type: 'join'; code: string } | { type: 'resume'; code: string; token: string }): void {
     const url = coopSocketUrl();
     if (!url) { this.connectionFailed('联机服务未配置', true); return; }
     if (this.retryUntil && Date.now() >= this.retryUntil) { this.connectionFailed('重连超时，请重新创建房间', true); return; }
     const socket = new WebSocket(url); this.socket = socket;
     const fail = (text: string, terminal = false) => { if (this.socket === socket) this.connectionFailed(text, terminal); };
     this.connectionTimer = window.setTimeout(() => fail('连接超时，请重试'), Math.min(8000, this.retryUntil ? this.retryUntil - Date.now() : 8000));
-    socket.onopen = () => { if (this.socket === socket) socket.send(JSON.stringify(command.type === 'resume' ? command : { ...command, heroes: this.availableHeroes })); };
+    socket.onopen = () => { if (this.socket === socket) socket.send(JSON.stringify(command.type === 'resume' ? command : { ...command, heroes: this.availableHeroes, starDraft:4 })); };
     socket.onerror = () => fail('无法连接联机服务，请检查网络');
     socket.onclose = () => fail('连接中断，请重试');
     socket.onmessage = event => {
@@ -259,19 +289,37 @@ export class CoopScene extends Phaser.Scene {
       try { message = JSON.parse(event.data) as ServerMessage; } catch { return; }
       window.clearTimeout(this.connectionTimer);
       if (message.type === 'session') {
+        if (!this.resumeSession) this.recordSlot=activeSlot();
         this.resumeSession = { code: message.code, token: message.token, graceMs: message.graceMs };
         this.slot = message.slot; this.retryUntil = 0; this.connectionBlocked = false; this.showConnection('');
       } else if (message.type === 'connection') {
         this.connectionBlocked = message.paused;
+        if (message.paused) { this.timeline.clear(); this.displayed=undefined; }
         this.showConnection(message.paused ? '队友掉线 · 战局暂停 · 等待重连 ' + message.remaining + '秒' : '');
       } else if (message.type === 'error') fail(message.message, true);
       else if (message.type === 'closed') fail(message.reason === 'reconnect-timeout' ? '队友重连超时，战局已结束' : message.reason === 'expired' ? '房间已到期' : '好友已离开房间', true);
       else if (message.type === 'lobby') this.renderLobby(message);
-      else if (message.type === 'state') this.renderState(message);
-      else if (message.type === 'draft') this.renderDraft(message);
+      else if (message.type === 'state') {
+        if (this.phase==='lobby') this.enterBattle();
+        if (this.phase==='draft') this.showBattleControls();
+        if (this.phase==='battle') this.timeline.push(message,performance.now());
+      }
+      else if (message.type === 'draft') {
+        if(message.continuation?.length && message.mythicSize) {
+          void saveModeBest(modeKey(true,message.mythicSize,false),{kills:message.wave,wave:message.wave,ms:(message.seconds??0)*1000},isChapterTestRun(),this.recordSlot)
+            .catch(e=>console.warn('双人晋级战绩保存失败',e));
+        }
+        this.timeline.clear(); this.displayed=undefined; this.renderDraft(message); }
       else if (message.type === 'result') {
+        if(message.mythicSize && message.tier && message.wave!=null) {
+          void saveModeBest(modeKey(true,message.mythicSize,message.tier==='endless'),
+            scoreRun(message.generals,message.wave,(message.seconds??0)*1000,message.mythicSize,message.milestones??0,message.tier==='endless'),isChapterTestRun(),this.recordSlot)
+            .catch(e=>console.warn('双人战绩保存失败',e));
+        }
         this.disconnect();
-        this.renderResult(message.milestones===3?'神将十阵告捷':message.milestones===2?'鬼将十阵告捷':message.victory?'凡将十阵告捷':'连战败退', '合力斩将 ' + message.generals + ' 位 · 击破 ' + message.kills + ' 名敌军');
+        const title = !message.victory ? '连战败退' : message.reason === 'withdrawn' ? '收兵归营' :
+          message.milestones === 3 ? campaignHonour(message.mythicSize ?? 10) : '连战告捷';
+        this.renderResult(title, '', message);
       }
     };
   }
@@ -380,11 +428,13 @@ export class CoopScene extends Phaser.Scene {
     if (focused) Array.from(card.querySelectorAll('button')).find(button => button.dataset.focus === focused)?.focus({ preventScroll: true });
   }
 
-  private send(message: object): void {
-    if (this.connectionBlocked) return;
+  private send(message: object): boolean {
+    if (this.connectionBlocked) return false;
     if (this.socket?.readyState === WebSocket.OPEN && this.socket.bufferedAmount < 16_384) {
       this.socket.send(JSON.stringify(message));
+      return true;
     }
+    return false;
   }
 
   private showBattleControls(): void {
@@ -416,12 +466,13 @@ export class CoopScene extends Phaser.Scene {
       this.input.on('pointerup', this.stick.handleUp, this.stick);
       this.input.on('pointerupoutside', this.stick.handleUp, this.stick);
       const blur = () => this.stick?.reset();
+      const stick = this.stick;
       window.addEventListener('blur', blur);
       this.events.once('shutdown', () => {
-        this.input.off('pointerdown', this.stick?.handleDown, this.stick);
-        this.input.off('pointermove', this.stick?.handleMove, this.stick);
-        this.input.off('pointerup', this.stick?.handleUp, this.stick);
-        this.input.off('pointerupoutside', this.stick?.handleUp, this.stick);
+        this.input.off('pointerdown', stick.handleDown, stick);
+        this.input.off('pointermove', stick.handleMove, stick);
+        this.input.off('pointerup', stick.handleUp, stick);
+        this.input.off('pointerupoutside', stick.handleUp, stick);
         window.removeEventListener('blur', blur);
       });
     }
@@ -434,12 +485,12 @@ export class CoopScene extends Phaser.Scene {
     return { body, label, tx: x, ty: y, strike: 0 };
   }
 
-  private renderState(state: Extract<ServerMessage, { type: 'state' }>): void {
+  private renderState(state: BattleSnapshot, immediate=true): void {
     if (this.phase === 'lobby') this.enterBattle();
     if (this.phase === 'draft') this.showBattleControls();
     if (this.phase !== 'battle') return;
     const fxNow=state.battleMs??state.seconds*1000;
-    updateSurvivorBossFx(this,fxNow);
+
     const cue=state.gauntlet?.warning, key=cue?.fx+':'+cue?.endsAt;
     if (cue?.resolved && cue.fx && this.lastBossFx!==key) {
       this.lastBossFx=key;const arrow=cue.fx==='arrow';
@@ -447,20 +498,27 @@ export class CoopScene extends Phaser.Scene {
     }
     this.mythicClock=(state.battleMs??state.seconds*1000)/1000;
     this.mythicId=state.gauntlet.general?.id??'';
+    if(cue?.wei?.stance==='bow' && !cue.resolved && this.mythicCue?.startsAt!==cue.startsAt) uiSfx().play('amb_horn');
     this.mythicCue=cue?.mythic?cue as MythicWarning:null;
-    const mythicOwner=state.enemies.find(enemy=>enemy.general?.id===this.mythicId);
-    if(mythicOwner&&mythicBoss(this.mythicId)&&!this.mythicSignature) this.mythicSignature=this.add.image(0,0,mythicArtKey(this.mythicId)).setDepth(75);
-    if(this.mythicSignature) paintMythicSignature(this.mythicSignature,this.mythicId,mythicOwner ? this.mythicCue : null,this.mythicClock,mythicOwner);
-    this.drawWarning(null);
-    for(const warning of state.gauntlet?.warnings??(state.gauntlet?.warning?[state.gauntlet.warning]:[]))this.drawWarning(warning,false);
+    if(mythicBoss(this.mythicId)&&!this.mythicSignature) this.mythicSignature=this.add.image(0,0,mythicArtKey(this.mythicId)).setDepth(75);
+    this.companyView.sync(this,state.retainers??[],performance.now());
+    if(state.players.some(p=>p.slot===this.slot) && state.retainers?.some(u=>u[1]===this.slot) && !this.panel.contains(this.companyOrder??null)){
+      const button=this.button('部曲 · 出击',()=>{const order=button.dataset.next==='guard'?'guard':'sortie';this.send({type:'order',order});});
+      button.classList.add('coop-order');this.companyOrder=button;this.panel.prepend(button);
+    }
+    const own=state.players.find(p=>p.slot===this.slot);
+    if(this.companyOrder&&own?.order){this.companyOrder.dataset.next=own.order==='guard'?'sortie':'guard';this.companyOrder.textContent=own.order==='guard'?'护阵中 · 出击':'出击中 · 归阵';}
     this.drawTroops(state);
+    if(immediate){updateSurvivorBossFx(this,fxNow);this.presentCues(state);}
     const nextIds=roster.waves[state.gauntlet.wave<=10?state.gauntlet.wave-1:7+(state.gauntlet.wave-11)%3]??[];
     for(const id of nextIds)this.loadTroop(id);
     for (const fighter of state.players) this.updateFighter(fighter);
     const liveIds = new Set<number>();
     for (const enemy of state.enemies) {
       liveIds.add(enemy.id);
-      this.updateFoe(enemy);
+      const attack = enemy.general && !mythicBoss(enemy.general.id)
+        ? (state.gauntlet.warnings ?? (cue ? [cue] : [])).find(w => w.ownerId === enemy.id || (w.ownerId === undefined && !state.gauntlet.dual && enemy.general?.id === this.mythicId)) : undefined;
+      this.updateFoe(enemy, attack);
     }
     for (const [id, view] of this.foes) {
       if (liveIds.has(id)) continue;
@@ -473,7 +531,7 @@ export class CoopScene extends Phaser.Scene {
       this.preparedMythic=state.gauntlet.upcoming.id;
       prepareMythicActions(this,this.preparedMythic);
     }
-    const needed=new Set([state.gauntlet.upcoming.id,...state.enemies.flatMap(e=>e.general?[e.general.id]:[])].map(id=>'coop_general_'+id));
+    const needed=new Set([state.gauntlet.upcoming.id,...state.enemies.flatMap(e=>e.general?[e.general.id]:[])].flatMap(id => ['coop_general_'+id, 'coop_general_'+id+'_action']));
     for(const key of this.generalTextures)if(!needed.has(key)){if(this.textures.exists(key))this.textures.remove(key);this.generalTextures.delete(key);}
     const self = state.players.find(f => f.slot === this.slot);
     const partner = state.players.find(f => f.slot !== this.slot);
@@ -492,7 +550,7 @@ export class CoopScene extends Phaser.Scene {
       const cue = run.warning?.name ?? (run.general ? (run.dual?'河北双雄':run.general.name) + '在阵' : run.remaining === 0 ? '本阵已平定' : `名将 ${run.remaining} 秒后登场`);
       const tier = run.tier ?? (run.wave>run.total?'endless':'mortal');
       const wave = tier==='endless'?`无尽 · 第 ${run.wave} 阵`:
-        `${tierTitle[tier]} · ${challengeWave(tier,run.wave,run.total)}/${run.total}`;
+        `${tierTitle[tier]} · ${challengeWave(tier,run.wave,run.total,run.mythicSize)}/${tier==='mortal'?run.total:(run.mythicSize??run.total)}`;
       const lines = [wave + ' · 已破 ' + run.cleared + ' 阵', cue];
       if (self && partner && (!self.hp || !partner.hp)) {
         const fallen = self.hp ? partner : self;
@@ -528,7 +586,7 @@ export class CoopScene extends Phaser.Scene {
     }
   }
 
-  private updateFoe(enemy: Foe): void {
+  private updateFoe(enemy: Foe, attack?: BossWarning): void {
     if(enemy.general)this.loadGeneral(enemy.general.id);
     const challenge = enemy.general && mythicBoss(enemy.general.id);
     const bossKey = enemy.general && (challenge?mythicArtKey(challenge.id):'coop_general_'+enemy.general.id);
@@ -548,39 +606,56 @@ export class CoopScene extends Phaser.Scene {
     if (enemy.boss && texture === 'coop_foe') view.body.setTint(0xffba75);
     else view.body.clearTint();
     const dx = enemy.x - view.tx, dy = enemy.y - view.ty;
-    const dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 1 : 2) : dy < 0 ? 3 : 0;
-    const frame = Math.abs(dx) + Math.abs(dy) > .01 ? Math.floor(this.time.now / 100) % 4 : 0;
+    const moving = Math.hypot(dx, dy) > .01;
+    if (moving) view.walkFacing = walkRow(dx, dy, view.walkFacing ?? 0);
+    const dir = view.walkFacing ?? 0;
+    const frame = moving ? Math.floor(view.walkPhase ?? 0) % 4 : 0;
     view.tx = enemy.x;
     view.ty = enemy.y;
     const face=enemy.cue&&enemy.face!==undefined?(Math.abs(Math.cos(enemy.face))>Math.abs(Math.sin(enemy.face))?(Math.cos(enemy.face)<0?1:2):(Math.sin(enemy.face)<0?3:0)):dir;
-    if (challenge && texture!=='coop_foe') {
-      const moving = Math.abs(dx) + Math.abs(dy) > .01;
-      const cue = this.mythicId === challenge.id ? this.mythicCue : null;
-      if (cue) {
-        const heading = cue.kind === 'line' || cue.kind === 'sweep' ? cue.angle : cue.face;
-        view.mythicFacing = mythicFacing(heading);
-      } else if (moving) {
-        view.mythicFacing = dir;
-      }
-      poseMythic(view.body,challenge.id,this.mythicClock,view.mythicFacing ?? 0,moving,cue);
-    } else view.body.setFrame(face * 4 + (enemy.cue?Math.floor(this.time.now/150)%4:frame));
+    const cue = challenge && this.mythicId === challenge.id ? this.mythicCue : null;
+    view.walkStride = moving && !cue && !attack && !enemy.cue ? (enemy.boss ? 10 : 9) : undefined;
+    if (challenge && texture !== 'coop_foe') {
+      if (cue) view.walkFacing = mythicFacing(cue.kind === 'line' || cue.kind === 'sweep' ? cue.angle : cue.face);
+      poseMythic(view.body, challenge.id, this.mythicClock, view.walkFacing ?? 0, moving, cue, frame);
+    } else if (attack && bossKey && texture === bossKey) {
+      const dir = mythicFacing(attack.angle);
+      view.walkFacing = dir;
+      const wind = Math.max(.1, attack.endsAt - (attack.startsAt ?? attack.endsAt - .9));
+      const progress = Phaser.Math.Clamp(1 - (attack.endsAt - this.mythicClock) / wind, 0, 1);
+      const phase = attack.resolved ? (this.mythicClock - attack.endsAt < .16 ? 2 : 3) : (progress < .55 ? 0 : 1);
+      const actionKey = bossKey + '_action';
+      if (this.textures.exists(actionKey)) view.body.setTexture(actionKey, dir * 4 + phase).setFlipX(false);
+      else if (view.body.texture.has('23')) {
+        const cast = attack.kind === 'circle' || attack.kind === 'ring';
+        view.body.setFrame(cast ? [24, 25, 26, 27][phase] : [16, 17, 19, 23][phase]).setFlipX(Math.cos(attack.angle) < 0);
+      } else view.body.setFrame(dir * 4).setFlipX(false);
+    } else view.body.setFlipX(false).setFrame(face * 4 + (enemy.cue ? Math.floor(this.time.now / 150) % 4 : frame));
     if(!enemy.boss)view.label.setText(troop?(enemy.cue?.kind==='heal'?'施药':enemy.cue?.kind==='signal'?'鸣号':troop.name):'').setFontSize(11);
-    if (enemy.boss) view.label.setText(`${enemy.general?.name ?? '敌将'}${enemy.enraged ? ' · 奋威' : ''} ${enemy.hp}/${enemy.maxHp}`);
+    if (enemy.boss) view.label.setText(`${enemy.general?.name ?? '敌将'}${enemy.enraged ? ' · 奋威' : ''} ${Math.ceil(enemy.hp)}/${enemy.maxHp}`);
   }
 
   private loadTroop(id:string):void {
     const t=TROOPS[id];if(!t)return;
+    let added=false;
     for(const key of [t.art.walk,t.art.attack]){
       if(this.textures.exists(key)||this.troopTextures.has(key))continue;
       const file=ART_V2_FILES[key];if(!file)continue;this.troopTextures.add(key);
       this.load.once('filecomplete-spritesheet-'+key,()=>{this.textures.get(key).setFilter(Phaser.Textures.FilterMode.NEAREST);buildRecolor(this.game,key,'enemy',false,true);});
       this.load.spritesheet(key,file,{frameWidth:t.art.cell,frameHeight:t.art.cell});
+      added=true;
     }
-    if(!this.load.isLoading())this.load.start();
+    if(added&&!this.load.isLoading())this.load.start();
   }
   private drawTroops(state:Extract<ServerMessage,{type:'state'}>):void {
     const g=this.troopFx?.clear();if(!g)return;
     for(const e of state.enemies){
+      if(state.burning?.includes(e.id)){
+        const flicker=Math.floor(this.mythicClock*9+e.id)%3;
+        g.fillStyle(0xba4828,.95).fillTriangle(e.x-5,e.y+1,e.x+5,e.y+1,e.x+2,e.y-10-flicker);
+        g.fillStyle(0xffcb69,.95).fillTriangle(e.x-2,e.y,e.x+3,e.y,e.x,e.y-5-flicker);
+      }
+      if(state.spellMarks?.includes(e.id)) g.lineStyle(2,0xa4d9ed,.9).strokeTriangle(e.x-4,e.y-39,e.x+4,e.y-39,e.x,e.y-33);
       const c=e.cue;
       if(c){
         g.lineStyle(2,0xe6aa79,.85);
@@ -595,7 +670,9 @@ export class CoopScene extends Phaser.Scene {
       if(e.boosted)g.lineStyle(2,0xe2ad75,.7).lineBetween(e.x-7,e.y+3,e.x,e.y-2).lineBetween(e.x,e.y-2,e.x+7,e.y+3);
     }
     for(const s of state.shots??[]){const dx=Math.cos(s.angle),dy=Math.sin(s.angle);g.lineStyle(2,0xe9d4ad,.95).lineBetween(s.x-dx*14,s.y-dy*14,s.x+dx*4,s.y+dy*4);if(s.net)g.strokeRect(s.x-7,s.y-7,14,14);}
-    for(const f of state.troopEffects??[]){g.lineStyle(2,f.kind==='heal'?0x9fc59c:0xf3ce9c,.9);if(f.kind==='heal')g.lineBetween(f.x-6,f.y-22,f.x+6,f.y-22).lineBetween(f.x,f.y-28,f.x,f.y-16);else g.strokeRect(f.x-13,f.y-20,26,18);}
+    for(const f of state.troopEffects??[]){
+      if(f.kind==='spell-chain' && f.fromX!==undefined && f.fromY!==undefined){g.lineStyle(2,0xa4d9ed,.85).lineBetween(f.fromX,f.fromY-16,f.x,f.y-16);continue;}
+      g.lineStyle(2,f.kind==='heal'?0x9fc59c:0xf3ce9c,.9);if(f.kind==='heal')g.lineBetween(f.x-6,f.y-22,f.x+6,f.y-22).lineBetween(f.x,f.y-28,f.x,f.y-16);else g.strokeRect(f.x-13,f.y-20,26,18);}
   }
 
   private loadHero(id: CharacterId): string {
@@ -619,15 +696,19 @@ export class CoopScene extends Phaser.Scene {
     const key = 'coop_general_' + id;
     const file = BOSS_SHEETS[id]?.[0];
     if (!file || this.generalTextures.has(key)) return;
-    this.generalTextures.add(key);this.generalTexture = key;
-    if (!this.textures.exists(key)) {
-      this.load.once('filecomplete-spritesheet-' + key, () => {
-        if (!this.generalTextures.has(key)) this.textures.remove(key);
-        else this.textures.get(key).setFilter(Phaser.Textures.FilterMode.NEAREST);
+    this.generalTexture = key;
+    const sheets = [[key, file]];
+    if (ATTACK_SHEETS[id]) sheets.push([key+'_action', ATTACK_SHEETS[id]]);
+    for (const [texture, sheet] of sheets) {
+      this.generalTextures.add(texture);
+      if (this.textures.exists(texture)) continue;
+      this.load.once('filecomplete-spritesheet-' + texture, () => {
+        if (!this.generalTextures.has(texture)) this.textures.remove(texture);
+        else this.textures.get(texture).setFilter(Phaser.Textures.FilterMode.NEAREST);
       });
-      this.load.spritesheet(key, 'assets/bosses-v2/' + file + '.png', { frameWidth: 288, frameHeight: 288 });
-      if (!this.load.isLoading()) this.load.start();
+      this.load.spritesheet(texture, 'assets/bosses-v2/' + sheet + '.png', { frameWidth: 288, frameHeight: 288 });
     }
+    if (!this.load.isLoading()) this.load.start();
   }
 
   private drawWarning(cue: BossWarning | null, clear=true): void {
@@ -635,31 +716,7 @@ export class CoopScene extends Phaser.Scene {
     if(clear&&g) clearMythicWarning(g);
     if (!g || !cue) return;
     if(cue.mythic) { drawMythicWarning(g,cue as MythicWarning,this.mythicId,this.mythicClock); return; }
-    const { x, y, radius, angle } = cue;
-    const ink = cue.resolved ? 0xffba73 : 0xfa7057;
-    g.fillStyle(ink, cue.resolved ? .28 : .15).lineStyle(2, ink, .88);
-    if (cue.kind === 'ring') {
-      const inner = cue.innerRadius ?? 0;
-      g.lineStyle(radius - inner, ink, cue.resolved ? .3 : .13).strokeCircle(x, y, (radius + inner) / 2);
-      g.lineStyle(2, ink, .9).strokeCircle(x, y, radius);
-      g.lineStyle(2, 0xc4cda6, .9).strokeCircle(x, y, inner);
-    } else if (cue.kind === 'circle') {
-      g.fillCircle(x, y, radius).strokeCircle(x, y, radius);
-    } else if (cue.kind === 'line') {
-      for(let lane=0;lane<(cue.lanes??1);lane++){
-      const a=angle+(lane-((cue.lanes??1)-1)/2)*(cue.spread??0),w=cue.halfWidth??25;
-      const dx = Math.cos(a), dy = Math.sin(a);
-      const corners = [
-        new Phaser.Math.Vector2(x - dy * w, y + dx * w),
-        new Phaser.Math.Vector2(x + dy * w, y - dx * w),
-        new Phaser.Math.Vector2(x + dx * radius + dy * w, y + dy * radius - dx * w),
-        new Phaser.Math.Vector2(x + dx * radius - dy * w, y + dy * radius + dx * w),
-      ];
-      g.fillPoints(corners, true).strokePoints(corners, true);
-      }
-    } else {
-      g.beginPath().moveTo(x, y).arc(x, y, radius, angle - Math.PI / 3, angle + Math.PI / 3).closePath().fillPath().strokePath();
-    }
+    drawMortalWarning(g,cue,this.mythicClock);
   }
 
   private partyMember(p: PartyMember, checkpoint: boolean): HTMLElement {
@@ -677,8 +734,14 @@ export class CoopScene extends Phaser.Scene {
     bar.value = p.hp;
     bar.setAttribute('aria-label', title.textContent + '生命');
     const status = document.createElement('small');
-    status.textContent = checkpoint ? '已过十阵' : p.ready ? '已选定' : '选择中';
+    status.textContent = checkpoint ? '阶段告捷' : p.ready ? '已选定' : '选择中';
     row.append(portrait, title, hp, bar, status);
+    if(p.stars?.length) {
+      const stars=document.createElement('small');
+      stars.className='coop-party-stars';
+      stars.textContent=p.stars.map(k=>networkStars.find(s=>s.id===k)?.name).filter(Boolean).join(' · ');
+      row.append(stars);
+    }
     return row;
   }
 
@@ -689,26 +752,55 @@ export class CoopScene extends Phaser.Scene {
     this.stick?.reset();
     this.stick?.setEnabled(false);
     const tier = message.tier??'mortal';
-    const card = this.card(message.checkpoint ? tierTitle[tier]+'告捷' : '斩将强化',
-      `第 ${challengeWave(tier,message.wave,message.total)} 阵 · 已击败${message.general}`);
+    const card = this.card(message.checkpoint ? (tier==='mortal'?'鬼门已开':tier==='ghost'?'天门将启':'封神告捷') : '斩将强化',
+      `第 ${challengeWave(tier,message.wave,message.total,message.mythicSize)} 阵 · 已击败${message.general}`);
     if (this.mythicSignature) clearMythicSignature(this.mythicSignature);
     this.panel.classList.add('coop-draft');
     const party = document.createElement('div');
     party.className = 'coop-party';
     party.setAttribute('aria-label', '队伍状态');
     const members = [...message.party].sort((a, b) => Number(b.slot === this.slot) - Number(a.slot === this.slot));
+    const company=members.find(m=>m.slot===this.slot)?.company;
+    if(company&&!message.checkpoint){
+      const label=document.createElement('small');label.textContent='钱币 '+company.coins+' · 部曲 '+company.men+'/'+company.cap+' · 阵亡 '+company.deaths;
+      party.append(label);const button=this.button('招募三人 · '+company.cost+'钱',()=>this.send({type:'recruit',receipt:company.receipt,wave:message.wave}));
+      button.disabled=company.coins<company.cost||company.men+3>company.cap||!!members.find(m=>m.slot===this.slot)?.ready;party.append(button);
+    }
     for (const member of members) party.append(this.partyMember(member, message.checkpoint));
     card.insertBefore(party, this.status);
     if (message.checkpoint) {
-      this.status.textContent = this.slot ? '等待房主选择' : '选择下一场挑战';
-      if (!this.slot) {
+      const ghost = tier === 'mortal';
+      const size = message.mythicSize ?? 10;
+      const remaining = Math.max(0, message.total + 2 * size - message.wave);
+      const header = card.querySelector('header')!;
+      card.classList.add('campaign-gate', ghost ? 'ghost' : 'divine');
+      campaignHeader(header, {
+        title:header.querySelector('h1')!.textContent!,
+        subtitle:tier === 'divine' ? '三关尽破，可收兵或再战无尽' : '下一阶段 · ' + (ghost ? '鬼将 ' : '神将 ') + size + ' 阵\n全程剩余 ' + remaining + ' 阵',
+        caption:'双人连战 · ' + ((message.mythicSize ?? 10) === 5 ? '标准二十阵' : '极限三十阵'),
+        chapterArt:ghost ? 'assets/epic-home/dongzhuo-desktop.webp' : 'assets/ending/ending_unify.webp',
+        portrait:'assets/epic-home/' + (tier === 'divine' ? members[0]?.hero ?? 'liubei' : ghost ? 'lvbu' : 'liubei') + '.webp',
+      }, 'h1');
+      const body = document.createElement('section');
+      body.className = 'report-body';
+      campaignTrack(body, campaignStages(message.wave, size));
+      body.append(party, this.status);
+      card.append(body);
+      const actions = document.createElement('footer');
+      card.append(actions);
+      const votes = message.votes ?? [];
+      const mine = votes[this.slot], other = votes[1-this.slot];
+      this.status.textContent = mine && other && mine!==other ? '两人选择不同，可改选或收兵结算' :
+        mine ? '已确认，等待战友' : other ? '战友已选择，请确认去向' : '两人选择相同后继续，一人收兵即可结算';
+      {
         for (const choice of message.continuation??['endless']) {
-          const label = choice==='ghost'?'挑战鬼将十阵':choice==='divine'?'挑战神将十阵':'进入无尽';
-          const proceed=this.button(label,() => this.send(choice==='endless'?{type:'endless'}:{type:'challenge',tier:choice}));
+          const label = choice==='ghost'?'挑战鬼将 · '+(message.mythicSize??10)+'阵':choice==='divine'?'挑战神将 · '+(message.mythicSize??10)+'阵':'进入无尽';
+          const proceed=this.button(label,() => this.send(choice==='endless'?{type:'endless',wave:message.wave}:{type:'challenge',tier:choice,wave:message.wave}));
           if(choice!=='endless') proceed.classList.add('coop-primary');
-          card.append(proceed);
+          proceed.disabled = choice === mine;
+          actions.append(proceed);
         }
-        card.append(this.button('结束并结算',() => this.send({type:'finish'})));
+        actions.append(this.button('结束并结算',() => this.send({type:'finish',wave:message.wave})));
       }
     } else {
       this.status.textContent = message.choices.length ? '选择本阵奖励，两人选定后进入下一阵' : `已就绪 ${message.ready}/2 · 等待队友`;
@@ -716,11 +808,14 @@ export class CoopScene extends Phaser.Scene {
         const reward = REWARDS.get(id);
         if (!reward) continue;
         const choice = this.button('', () => {
+          if (!this.send({ type: 'reward', id })) {
+            this.status.textContent='等待连接恢复后再选择奖励';
+            return;
+          }
           for (const option of card.querySelectorAll<HTMLButtonElement>('.coop-reward')) option.disabled = true;
-          this.send({ type: 'reward', id });
         });
         const name = document.createElement('strong');
-        name.textContent = reward.name;
+        name.textContent = id===EMBER.id?'火种 · Lv.'+((members.find(m=>m.slot===this.slot)?.ember??0)+1):reward.name;
         const detail = document.createElement('span');
         detail.textContent = reward.detail;
         choice.classList.add('coop-reward');
@@ -728,11 +823,21 @@ export class CoopScene extends Phaser.Scene {
         card.append(choice);
       }
     }
-    card.append(this.button('离开战斗', () => this.back()));
+    const leave = this.button('离开战斗', () => this.back());
+    if (message.checkpoint) card.querySelector('.report-body')!.append(leave);
+    else card.append(leave);
   }
 
   update(time: number, delta: number): void {
+    if(this.phase==='battle'&&!this.connectionBlocked)this.companyView.draw(performance.now(),delta);
     if (this.phase !== 'battle') return;
+    if (this.connectionBlocked) return;
+    const frame=this.timeline.sample(performance.now());
+    if (!frame) return;
+    const state=frame.a.state;
+    if (this.displayed!==state) { this.displayed=state; this.renderState(state,false); }
+    this.mythicClock=frame.ms/1000;
+    updateSurvivorBossFx(this,frame.ms);
     if (time >= this.movementAt) {
       this.movementAt = time + 65;
       const keys = this.keyset;
@@ -741,14 +846,25 @@ export class CoopScene extends Phaser.Scene {
       this.send({ type: 'input', dx: this.stick?.active ? this.stick.vector.x : dx, dy: this.stick?.active ? this.stick.vector.y : dy });
     }
     const t = 1 - Math.exp(-Math.min(delta, 90) / 65);
-    const smooth = ({ body, label, tx, ty }: ActorView) => {
-      body.x += (tx - body.x) * t;
-      body.y += (ty - body.y) * t;
+    const smooth = (view: ActorView, next?: {x:number;y:number}, local=false) => {
+      const { body, label, tx, ty, walkStride } = view;
+      const mix=next && Math.hypot(next.x-tx,next.y-ty)<320 ? frame.mix : 0;
+      const x=next ? (local?next.x:tx+(next.x-tx)*mix) : tx;
+      const y=next ? (local?next.y:ty+(next.y-ty)*mix) : ty;
+      const dx=(x-body.x)*(local?t:1), dy=(y-body.y)*(local?t:1);
+      body.x += dx;
+      body.y += dy;
+      if (walkStride) {
+        view.walkPhase = ((view.walkPhase ?? 0) + Math.hypot(dx, dy) / walkStride) % 4;
+        const frame = (view.walkFacing ?? 0) * 4 + Math.floor(view.walkPhase);
+        if (Number(body.frame.name) !== frame && body.texture.has(String(frame))) body.setFrame(frame);
+      }
       body.setDepth(body.y / 10);
       label.setPosition(body.x, body.y - body.displayHeight * .78 - 8).setDepth(81);
     };
-    this.fighters.forEach(smooth);
-    this.foes.forEach(smooth);
+    this.fighters.forEach((v,id)=>smooth(v,(id===this.slot?frame.latest:frame.b).party.get(id),id===this.slot));
+    this.foes.forEach((v,id)=>smooth(v,frame.b.foes.get(id)));
+    this.presentCues(state);
     const self = this.fighters.get(this.slot)?.body;
     if (self) {
       this.cameras.main.setScroll(
@@ -758,13 +874,59 @@ export class CoopScene extends Phaser.Scene {
     }
   }
 
-  private renderResult(title: string, message: string): void {
+  private presentCues(state: BattleSnapshot): void {
+    this.drawWarning(null);
+    for(const cue of state.gauntlet.warnings??(state.gauntlet.warning?[state.gauntlet.warning]:[])) this.drawWarning(cue,false);
+    if(this.mythicSignature){
+      const enemy=state.enemies.find(e=>e.general?.id===this.mythicId);
+      const body=enemy && this.foes.get(enemy.id)?.body;
+      paintMythicSignature(this.mythicSignature,this.mythicId,body?this.mythicCue:null,this.mythicClock,body);
+      if(body && this.mythicCue) poseMythic(body,this.mythicId,this.mythicClock,0,false,this.mythicCue);
+    }
+  }
+
+  private renderResult(title: string, message: string, battle?: Extract<ServerMessage, {type:'result'}>): void {
     clearSurvivorBossFx(this);
     if(this.warning) clearMythicWarning(this.warning);
     if (this.mythicSignature) clearMythicSignature(this.mythicSignature);
     this.phase = 'result';
     this.stick?.setEnabled(false);
+    if (battle) {
+      this.panel.replaceChildren();
+      this.panel.className = 'coop-layer coop-during-battle';
+      const stats: CampaignReport['stats'] = [['合力斩将', battle.generals], ['击破敌军', battle.kills]];
+      if (battle.seconds != null) stats.push(['战斗用时', Math.floor(battle.seconds / 60) + '分' + battle.seconds % 60 + '秒']);
+      const size = battle.mythicSize ?? 10;
+      const routeKills = battle.tier === 'endless' ? 10 + Math.max(0, (battle.milestones ?? 1) - 1) * size : battle.generals;
+      const commander = battle.party?.find(unit => unit.slot === this.slot);
+      const hero = CHARACTERS.find(h => h.id === commander?.hero);
+      campaignPanel(this, {
+        title, caption:'双人' + (size === 10 ? '极限三十阵' : '标准二十阵') + ' · 战报',
+        subtitle: (hero ? hero.name + ' · ' : '') + '合力斩将 ' + battle.generals + ' 位',
+        portrait:hero && 'assets/epic-home/' + hero.id + '.webp',
+        stages:campaignStages(routeKills,size), history:() => historyFigures(isChapterTestRun()),
+        theme:battle.victory ? 'divine' : 'defeat',
+        chapterArt:battle.victory ? 'assets/ending/ending_unify.webp' : 'assets/ending/ending_three.webp',
+        stats,
+        party:(battle.party ?? []).map(unit => {
+          const hero = CHARACTERS.find(h => h.id === unit.hero);
+          const figures: CampaignReport['stats'] = [];
+          if (unit.damage != null) figures.push(['有效伤害',unit.damage]);
+          if (unit.defeats != null) figures.push(['击破',unit.defeats]);
+          if (unit.revives != null) figures.push(['救援',unit.revives]);
+          figures.push(['余部',unit.men], ['战损',unit.lost], ['钱币',unit.coins]);
+          if (unit.atBossFall != null && unit.afterBossRecruits != null)
+            figures.push(['斩将时部曲',unit.atBossFall], ['战后新募',unit.afterBossRecruits]);
+          return {name:(unit.slot + 1) + 'P · ' + (hero?.name ?? unit.hero),
+            portrait:hero && 'assets/ink-scroll/' + hero.id + '.webp', stats:figures,
+            stars:unit.stars.map(k => networkStars.find(s => s.id === k)?.name ?? k).join('、')};
+        }),
+        bosses:battle.bosses?.map(name => ({name})),
+        actions:[{label:'凯旋归营',run:() => this.back()}, {label:'再次挑战 · 组队',run:() => this.renderSetup()}],
+      });
+      return;
+    }
     const card = this.card(title, message);
-    card.append(this.button('返回主菜单', () => this.back()));
+    card.append(this.button('凯旋归营', () => this.back()),this.button('再次挑战 · 组队',()=>this.renderSetup()));
   }
 }

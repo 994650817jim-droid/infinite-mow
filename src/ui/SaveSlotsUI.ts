@@ -5,7 +5,7 @@
 import Phaser from 'phaser';
 import { FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, IS_DESKTOP } from '../config';
 import { homeCommand, warPanelTexture } from './HomeCommand';
-import { deleteSlot, listSlots, reloadGame, switchSlot, type SlotSummary } from '../systems/SaveSlots';
+import { SlotBattleConflict, deleteSlotSafely, listSlots, reloadGame, switchSlotSafely, type SlotSummary } from '../systems/SaveSlots';
 
 const NUM = ['一', '二', '三'];
 
@@ -18,6 +18,7 @@ function when(t?: number): string {
 export class SaveSlotsUI {
   readonly root: Phaser.GameObjects.Container;
   private rows: Phaser.GameObjects.GameObject[] = [];
+  private busy = false;
 
   constructor(private scene: Phaser.Scene, private onClose?: () => void) {
     const W = GAME_WIDTH, H = GAME_HEIGHT, D = IS_DESKTOP;
@@ -32,7 +33,7 @@ export class SaveSlotsUI {
     this.render();
   }
 
-  close(): void { this.root.destroy(); this.onClose?.(); }
+  close(): void { if(this.busy)return; this.root.destroy(); this.onClose?.(); }
 
   private render(): void {
     for (const o of this.rows) o.destroy();
@@ -69,21 +70,40 @@ export class SaveSlotsUI {
     // 当前档位只有标题旁的「当前」小签，不再另放一个灰色「当前存档」按钮（2026-11-21 全界面体检：信息重复）
     if (s.active) { /* 无按钮 */ }
     // 2026-11-21 全界面体检：空档位有两三个时「新建征途」水墨按钮会叠出好几个；一律漆金（每屏最多一个水墨）
-    else button(bx, s.empty ? '新建征途' : '读取', false, true, `save-slot-${s.index}-load`, () => this.load(s.index));
+    else button(bx, s.empty ? '新建征途' : '读取', false, true, `save-slot-${s.index}-load`, () => void this.change(s.index, false));
     if (!s.empty) {
       const del = button(s.active ? bx : bx - bw - 14, '删除', false, true, `save-slot-${s.index}-delete`);
       del.hit.on('pointerdown', () => {
         if (!del.hit.getData('confirm')) { del.hit.setData('confirm', true); del.caption.setText('确认删除？').setColor('#ff9f86'); return; }
-        deleteSlot(s.index);
-        if (s.active) { this.loading('已删除，重新载入…'); return; }
-        this.render();
+        void this.change(s.index, true);
       });
     }
   }
 
-  private load(i: number): void { switchSlot(i); this.loading('载入存档…'); }
+  private async change(i: number, deleting: boolean): Promise<void> {
+    if (this.busy) return;
+    this.busy = true;
+    try {
+      if (deleting) {
+        if (await deleteSlotSafely(i)) { this.loading('已删除，重新载入…'); return; }
+        if (this.root.active) this.render();
+      } else {
+        if (!await switchSlotSafely(i)) throw new Error('存档切换失败');
+        this.loading('载入存档…');
+        return;
+      }
+    } catch (error) {
+      if (this.root.active) {
+        this.root.getByName('save-switch-error')?.destroy();
+        const message = error instanceof SlotBattleConflict ? error.message : '存档已变化或暂不可写，请重新打开存档面板后重试。';
+        this.root.add(this.scene.add.text(GAME_WIDTH/2, IS_DESKTOP ? 96 : 151, message, {fontFamily:FONT,fontSize:'15px',color:'#ffc4a6'}).setOrigin(.5).setName('save-switch-error'));
+      }
+    }
+    this.busy = false;
+  }
 
   private loading(msg: string): void {
+    if (!this.root.active) { reloadGame(); return; }
     const W = GAME_WIDTH, H = GAME_HEIGHT;
     this.root.add(this.scene.add.rectangle(W / 2, H / 2, W, H, 0x0b0907, .9).setInteractive());
     this.root.add(this.scene.add.text(W / 2, H / 2, msg, { fontFamily: FONT, fontSize: '20px', color: '#e8d0aa', resolution: 2 }).setOrigin(.5));

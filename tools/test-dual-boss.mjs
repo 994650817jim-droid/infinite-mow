@@ -19,7 +19,7 @@ try {
   /** 开某关、跳过剧情卷轴、首领出场；dual：等第二位登场。 */
   const open = async (scene, reg, run, dual = true) => {
     // 每关前清掉上一例留下的降将 / 招降斩杀旗标（否则已在降将栏的首领不弹窗）
-    await p.evaluate(() => { const v = JSON.parse(localStorage.getItem('im_story_v1') ?? '{}'); if (v.flags) for (const k of Object.keys(v.flags)) if (/^(surrendered|executed|neverSeen|hebei_|yanliang_by|wenchou_by)/.test(k)) delete v.flags[k]; localStorage.setItem('im_story_v1', JSON.stringify(v)); const r = JSON.parse(localStorage.getItem('im_roster_v1') ?? '{}'); if (r.captives) r.captives = []; localStorage.setItem('im_roster_v1', JSON.stringify(r)); });
+    await p.evaluate(() => { const v = JSON.parse(localStorage.getItem('im_story_v1') ?? '{}'); if (v.flags) for (const k of Object.keys(v.flags)) if (/^(surrendered|executed|honored|neverSeen|hebei_|pair_fixture_|yanliang_by|wenchou_by)/.test(k)) delete v.flags[k]; localStorage.setItem('im_story_v1', JSON.stringify(v)); const r = JSON.parse(localStorage.getItem('im_roster_v1') ?? '{}'); if (r.captives) r.captives = []; localStorage.setItem('im_roster_v1', JSON.stringify(r)); });
     await p.evaluate(([key, reg, run]) => { const g = window.__game; for (const k of ['campaignTransfer', 'thirdTransfer', 'guanduTransfer', 'hanzhongTransfer']) g.registry.remove(k); for (const [k, v] of Object.entries(reg)) g.registry.set(k, v); g.registry.set('runConfig', { character: 'zhaoyun', ...run }); const cur = g.scene.getScene(key); if (cur && g.scene.isActive(key)) cur.scene.restart(); else { for (const s of g.scene.getScenes(true)) s.scene.stop(); g.scene.start(key); } }, [scene, reg, run]);
     await p.waitForTimeout(500);
     await p.waitForFunction(S0 => { const s = eval(S0); return s?.player && s.scene.isActive(); }, S(scene), { timeout: 90000 }); await p.waitForTimeout(800);
@@ -37,7 +37,30 @@ try {
   const waitPanel = async ev => { for (let i = 0; i < 25; i++) { const r = await ev(s => s.mode === 'parley' && !!s.children.getByName('parley-panel')); if (r) return true; await p.waitForTimeout(120); } return false; };
   const roll = (ev, v) => ev((s, v) => { const P = s.dual.entries.find(x => x.parley)?.parley?.constructor; if (P) P.random = () => v; }, v);
   /** 让某位首领了结：execute / persuade（劝降掷骰先设好）。 */
-  const finish = async (ev, id, how) => { await hurtE(ev, id, .12); const ok = await waitPanel(ev); if (!ok) { console.log('  [finish] 没弹窗', id, JSON.stringify(await ev(s => ({ roster: (() => { const r = JSON.parse(localStorage.getItem('im_roster_v1') ?? '{}'); return { owned: (r.owned ?? []).map(o => o.name + ':' + (o.boss ?? '')), cap: (r.captives ?? []).map(o => o.name) }; })(), mode: s.mode, story: s.children.list.filter(o => /^story/.test(o.name ?? '')).map(o => o.name), e: s.dual.entries.map(x => ({ id: x.id, hp: Math.round(x.enemy.hp), active: x.enemy.active, done: x.done, parley: x.parley?.state, inv: x.enemy.invulnerable })) })))); return false; } await ev((s, c) => s.choose(c), how); await p.waitForTimeout(how === 'persuade' ? 1700 : 600); return true; };
+  const finish = async (ev, id, how) => { await hurtE(ev, id, .12); const never=await ev((s,id)=>s.dual.entries.find(x=>x.id===id)?.parley?.def.tier==='never',id);
+    if(never){
+      const state=await ev(s=>({panel:!!s.children.getByName('parley-panel'),mode:s.mode}));
+      if(state.panel||state.mode==='parley')throw new Error('宁死不降触发了劝降弹窗');
+      if(how==='execute')await hurtE(ev,id,0);
+      return how==='execute';
+    }
+    const ok = await waitPanel(ev); if (!ok) { console.log('  [finish] 没弹窗', id, JSON.stringify(await ev(s => ({ roster: (() => { const r = JSON.parse(localStorage.getItem('im_roster_v1') ?? '{}'); return { owned: (r.owned ?? []).map(o => o.name + ':' + (o.boss ?? '')), cap: (r.captives ?? []).map(o => o.name) }; })(), mode: s.mode, story: s.children.list.filter(o => /^story/.test(o.name ?? '')).map(o => o.name), e: s.dual.entries.map(x => ({ id: x.id, hp: Math.round(x.enemy.hp), active: x.enemy.active, done: x.done, parley: x.parley?.state, inv: x.enemy.invulnerable })) })))); return false; } await ev((s, c) => s.choose(c), how); await p.waitForTimeout(how === 'persuade' ? 1700 : 600); return true; };
+  // 正式河北两将均为 never。通用双首领劝降分支以正式可降的李傕、张绣作组合夹具。
+  // 只替换测试场内的两个角色和剧情键；不改任何正式配置和存档。
+  const recruitablePair=async()=>{
+    const ev=await open(...G42);
+    await ev(async s=>{
+      const {surrenderDef}=await import('/src/data/surrender.ts');
+      const pair=s.dual.entries;
+      s.dual.plan={...s.dual.plan,outcomeFlag:'pair_fixture_outcome'};
+      for(const [i,key] of ['qunxiong-1:lijue','qunxiong-2:zhangxiu'].entries()){
+        const e=pair[i],def=surrenderDef(key);
+        e.id=def.id;e.name=def.name;
+        e.parley=s.makeParley(()=>!e.done&&e.enemy.active?e.enemy:null,def,{partner:()=>s.dual.partnerOdds(e)});
+      }
+    });
+    return ev;
+  };
   // 横幅按字排（一个字一个 Text）：容器里的字连起来也算一条
   const texts = ev => ev(s => { const out = []; const walk = o => { if (!o || !o.visible) return; if (o.type === 'Text' && o.text) out.push(o.text); if (o.list) { const j = o.list.filter(c => c.type === 'Text' && c.visible).map(c => c.text).join(''); if (j) out.push(j); for (const c of o.list) walk(c); } }; for (const o of s.children.list) walk(o); return out; });
   const flags = () => p.evaluate(() => (JSON.parse(localStorage.getItem('im_story_v1') ?? '{}').flags ?? {}));
@@ -117,41 +140,46 @@ try {
   }
   // ⑤ 一人被劝降：心乱；⑦ 一降一斩：一个宝箱、降者进降将栏
   if (want('shaken')) {
-    const ev = await open(...G42);
+    const ev = await recruitablePair();
     await ev(s => s.dual.comboNow(s.combatNow + 1e9)); await roll(ev, .01);
     await ev(s => { s.__chests = []; const g = s.grantBossChest.bind(s); s.grantBossChest = () => { const out = g(); s.__chests.push(out.map(o => o.name + '|' + o.tag)); return out; }; });
-    await finish(ev, 'wenchou', 'persuade');
+    await finish(ev, 'zhangxiu', 'persuade');
     await p.waitForTimeout(1900);
     const r = await snap(ev), y = r.entries[0], tx = await texts(ev);
-    ck('文丑归降：颜良「心乱」15 秒（伤害 ×0.85）、不狂怒', y.shaken && !y.rage && Math.abs(y.dmgMul - .8 * .85) < 1e-6 && tx.some(t => t.includes('心乱')), y);
+    ck('张绣归降：李傕「心乱」15 秒（伤害 ×0.85）、不狂怒', y.shaken && !y.rage && Math.abs(y.dmgMul - .8 * .85) < 1e-6 && tx.some(t => t.includes('心乱')), y);
     const odds = await ev(s => s.dual.entries[0].parley.odds());
-    ck('文丑已降 → 劝颜良把握 +20%（表里「文丑已降」与同伴已降不重复加）', odds.parts.filter(p => p.add === 20).length === 1 && odds.pct === 35 + 2, odds);
-    await finish(ev, 'yanliang', 'execute');
+    ck('张绣已降 → 劝李傕把握 +20%（表里「张绣已降」与同伴已降不重复加）', odds.parts.filter(p => p.add === 20).length === 1 && odds.pct === odds.parts.reduce((sum,p)=>sum+p.add,0), odds);
+    await finish(ev, 'lijue', 'execute');
     await p.waitForTimeout(1200);
     const ch = await ev(s => s.bossChests.length), cap = await p.evaluate(() => (JSON.parse(localStorage.getItem('im_roster_v1') ?? '{}').captives ?? []).map(o => o.boss).filter(Boolean));
-    ck('一降一斩：只掉一个宝箱（最后了结处），文丑进降将栏', ch === 1 && cap.includes('wenchou'), { ch, cap });
+    ck('一降一斩：只掉一个宝箱（最后了结处），张绣进降将栏', ch === 1 && cap.includes('zhangxiu'), { ch, cap });
     // 走到宝箱：双将宝箱额外兵装 + 首次斩杀紫装
     await ev(s => { const c = s.bossChests[0]; if (c) { s.player.x = c.x ?? s.player.x; s.player.y = c.y ?? s.player.y; } });
     for (let i = 0; i < 20 && !(await ev(s => s.__chests.length)); i++) { await ev(s => { const c = s.bossChests[0]; const o = c?.sprite ?? c?.img ?? c?.root; if (o) { s.player.sprite.x = o.x; s.player.sprite.y = o.y; } }); await p.waitForTimeout(200); }
     const out = await ev(s => s.__chests);
-    ck('双将宝箱：额外一次兵装；颜良首次斩杀紫装', out.length === 1 && out[0].some(t => t.endsWith('|双将')) && out[0].some(t => t.startsWith('紫色兵装')), out);
+    ck('双将宝箱：额外一次兵装；李傕首次斩杀紫装', out.length === 1 && out[0].some(t => t.endsWith('|双将')) && out[0].some(t => t.startsWith('紫色兵装')), out);
     const f = await flags();
-    ck('剧情旗标 hebei_outcome = 颜斩文降（kp）', f.hebei_outcome === 'kp', f.hebei_outcome);
+    ck('剧情旗标 pair_fixture_outcome = 李斩张降（kp）', f.pair_fixture_outcome === 'kp', f.pair_fixture_outcome);
   }
   // ⑥ 双降：横幅、军粮 +100、不掉宝箱、算告捷；⑧ 两人都首斩：两件紫装
   if (want('double')) {
-    const ev = await open(...G42);
+    const ev = await recruitablePair();
     await ev(s => s.dual.comboNow(s.combatNow + 1e9)); await roll(ev, .01);
+    await ev(s=>{
+      s.__pairNotices=[];
+      const sample=()=>{const n=s.children.getByName('combat-notice');if(n?.visible){const t=n.list.filter(o=>o.type==='Text').map(o=>o.text).join(' ');if(t.includes('同归麾下'))s.__pairNotices.push(t);}};
+      s.events.on('postupdate',sample);s.events.once('shutdown',()=>s.events.off('postupdate',sample));
+    });
     const g0 = await p.evaluate(async () => (await import('/src/world/WorldStore.ts')).loadWorld().provisions);
-    await finish(ev, 'yanliang', 'persuade'); await p.waitForTimeout(1800);
+    await finish(ev, 'lijue', 'persuade'); await p.waitForTimeout(1800);
     await ev(s => { const x = s.dual.entries[1]; x.invulnUntil = 0; x.enemy.invulnerable = false; });
-    await finish(ev, 'wenchou', 'persuade'); await p.waitForTimeout(100);
+    await finish(ev, 'zhangxiu', 'persuade'); await p.waitForTimeout(100);
     const tx = await texts(ev); await p.screenshot({ path: `${OUT}/double-surrender-1280x720.png` });
     const r = await ev(s => ({ chests: s.bossChests.length, killed: s.bossKilled })), g1 = await p.evaluate(async () => (await import('/src/world/WorldStore.ts')).loadWorld().provisions), f = await flags();
-    const notice = await ev(s => s.children.list.filter(o => o.name === 'combat-notice').flatMap(o => o.list.filter(c => c.type === 'Text').map(c => c.text)));
+    const notice = await ev(s => s.__pairNotices);
     ck('双降：横幅「河北双雄 · 同归麾下」、不掉宝箱、算击败首领', (tx.some(t => t.includes('同归麾下')) || notice.some(t => t.includes('同归麾下'))) && r.chests === 0 && r.killed, { r, tx: tx.filter(t => t.includes('麾下')) });
     ck('双降：钱币 +100（另加各自首次劝降 +60）', g1 - g0 === 100 + 60 + 60, { g0, g1 });
-    ck('剧情旗标 hebei_outcome = 双降（pp）', f.hebei_outcome === 'pp', f.hebei_outcome);
+    ck('剧情旗标 pair_fixture_outcome = 双降（pp）', f.pair_fixture_outcome === 'pp', f.pair_fixture_outcome);
   }
   if (want('bothkill')) {
     await p.evaluate(() => { const v = JSON.parse(localStorage.getItem('im_story_v1') ?? '{}'); if (v.flags) { delete v.flags.executed; delete v.flags.executed_yanliang; delete v.flags.executed_wenchou; } localStorage.setItem('im_story_v1', JSON.stringify(v)); });
@@ -232,32 +260,32 @@ try {
   }
   // ⑭ 弹劝降窗时另一个首领也暂停；关窗后两人恢复
   if (want('pause')) {
-    const ev = await open(...G42);
+    const ev = await recruitablePair();
     await ev(s => s.dual.comboNow(s.combatNow + 1e9));
-    await hurtE(ev, 'yanliang', .12); await waitPanel(ev);
+    await hurtE(ev, 'lijue', .12); await waitPanel(ev);
     const a = await ev(s => ({ t: s.combatNow, w: { x: s.dual.entries[1].enemy.x, y: s.dual.entries[1].enemy.y } }));
     await p.waitForTimeout(1200);
     const b2 = await ev(s => ({ t: s.combatNow, w: { x: s.dual.entries[1].enemy.x, y: s.dual.entries[1].enemy.y }, mode: s.mode }));
-    ck('弹劝降窗：战斗时钟停、文丑不动', b2.mode === 'parley' && b2.t === a.t && b2.w.x === a.w.x && b2.w.y === a.w.y, { a, b2 });
+    ck('弹劝降窗：战斗时钟停、张绣不动', b2.mode === 'parley' && b2.t === a.t && b2.w.x === a.w.x && b2.w.y === a.w.y, { a, b2 });
     await ev(s => s.choose('press')); await p.waitForTimeout(1000);
     const c = await ev(s => ({ t: s.combatNow, mode: s.mode }));
     ck('关窗（再压一压）后恢复', c.mode === 'none' && c.t > b2.t, c);
   }
   // ⑮ 中途退出回滚：两人的招降 / 斩杀旗标一起回滚
   if (want('rollback')) {
-    const sn = () => p.evaluate(() => { const f = (JSON.parse(localStorage.getItem('im_story_v1') ?? '{}').flags ?? {}); return { sur: f.surrendered ?? '', exe: f.executed ?? '', out: f.hebei_outcome ?? '', cap: (JSON.parse(localStorage.getItem('im_roster_v1') ?? '{}').captives ?? []).map(o => o.boss).filter(Boolean).sort().join(',') }; });
-    await p.evaluate(() => { const v = JSON.parse(localStorage.getItem('im_story_v1') ?? '{}'); if (v.flags) { for (const k of ['surrendered', 'executed', 'surrendered_yanliang', 'surrendered_wenchou', 'executed_yanliang', 'executed_wenchou']) delete v.flags[k]; } localStorage.setItem('im_story_v1', JSON.stringify(v)); const r = JSON.parse(localStorage.getItem('im_roster_v1') ?? '{}'); if (r.captives) r.captives = r.captives.filter(c => c.boss !== 'yanliang' && c.boss !== 'wenchou'); localStorage.setItem('im_roster_v1', JSON.stringify(r)); });
-    const ev = await open(...G42);
+    const sn = () => p.evaluate(() => { const f = (JSON.parse(localStorage.getItem('im_story_v1') ?? '{}').flags ?? {}); return { sur: f.surrendered ?? '', exe: f.executed ?? '', out: f.pair_fixture_outcome ?? '', cap: (JSON.parse(localStorage.getItem('im_roster_v1') ?? '{}').captives ?? []).map(o => o.boss).filter(Boolean).sort().join(',') }; });
+    await p.evaluate(() => { const v = JSON.parse(localStorage.getItem('im_story_v1') ?? '{}'); if (v.flags) { for (const k of ['surrendered', 'executed', 'surrendered_yanliang', 'surrendered_wenchou', 'executed_yanliang', 'executed_wenchou']) delete v.flags[k]; } localStorage.setItem('im_story_v1', JSON.stringify(v)); const r = JSON.parse(localStorage.getItem('im_roster_v1') ?? '{}'); if (r.captives) r.captives = r.captives.filter(c => c.boss !== 'lijue' && c.boss !== 'zhangxiu'); localStorage.setItem('im_roster_v1', JSON.stringify(r)); });
+    const ev = await recruitablePair();
     await p.evaluate(async () => { (await import('/src/systems/BattleSnapshot.ts')).beginBattle('test-dual-boss'); });
     await ev(s => s.dual.comboNow(s.combatNow + 1e9)); await roll(ev, .01);
     const a0 = await sn();
-    await finish(ev, 'wenchou', 'persuade'); await p.waitForTimeout(1800);
+    await finish(ev, 'zhangxiu', 'persuade'); await p.waitForTimeout(1800);
     await ev(s => { const x = s.dual.entries[0]; x.invulnUntil = 0; x.enemy.invulnerable = false; });
-    await finish(ev, 'yanliang', 'execute'); await p.waitForTimeout(600); /* 宝箱未捡：战斗未结算 */
+    await finish(ev, 'lijue', 'execute'); await p.waitForTimeout(600); /* 宝箱未捡：战斗未结算 */
     const a1 = await sn();
     await p.evaluate(async () => { (await import('/src/systems/BattleSnapshot.ts')).rollbackBattle(); });
     const a2 = await sn();
-    ck('中途退出回滚：文丑劝降（旗标 + 降将栏）与两人结果旗标 hebei_outcome（颜斩文降）一起撤销', a1.sur.includes('wenchou') && a1.cap.includes('wenchou') && a1.out === 'kp' && a2.sur === a0.sur && a2.exe === a0.exe && a2.cap === a0.cap && a2.out === a0.out, { a0, a1, a2 });
+    ck('中途退出回滚：张绣劝降（旗标 + 降将栏）与两人结果旗标 pair_fixture_outcome（李斩张降）一起撤销', a1.sur.includes('zhangxiu') && a1.cap.includes('zhangxiu') && a1.out === 'kp' && a2.sur === a0.sur && a2.exe === a0.exe && a2.cap === a0.cap && a2.out === a0.out, { a0, a1, a2 });
   }
   // ⑯ 帧率：双将关首领在场 vs 同章单首领关（各采样 5 秒）
   if (want('fps')) {

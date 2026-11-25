@@ -16,10 +16,13 @@ export class GauntletPickScene extends Phaser.Scene {
   private picker: HomeHeroPicker | null = null;
   constructor() { super('GauntletPickScene'); }
   create(): void {
+    let extreme=new URLSearchParams(location.search).get('challenge')==='extreme';
+    this.registry.set('gauntletExtreme',extreme);
+    const route={label:()=>extreme?'极限三十阵　⇄':'标准二十阵　⇄',toggle:()=>{extreme=!extreme;this.registry.set('gauntletExtreme',extreme);}};
     this.from = this.registry.get('gauntletFrom') === 'map' ? 'map' : 'menu';
     this.cameras.main.setBackgroundColor('#17130e');
     this.picker = new HomeHeroPicker(this, index => this.launch(CHARACTERS[index].id), () => this.back(),
-      { free: true, name: 'gauntlet-hero-picker', title: D ? GAUNTLET_NAME.split('').join(' ') + ' · 选 将' : GAUNTLET_NAME + ' · 选将', okLabel: '出 战', note: GAUNTLET_TAGLINE + ' · 不带战役成长' });
+      { route, free: true, name: 'gauntlet-hero-picker', title: D ? GAUNTLET_NAME.split('').join(' ') + ' · 选 将' : GAUNTLET_NAME + ' · 选将', okLabel: '出 战', note: GAUNTLET_TAGLINE + ' · 不带战役成长' });
     const saved = lastGauntletHero(), at = CHARACTERS.findIndex(c => c.id === saved && heroUnlocked(c.id));
     this.picker.open(at >= 0 ? at : Math.max(0, CHARACTERS.findIndex(c => heroUnlocked(c.id))), true);
     this.loadArt();

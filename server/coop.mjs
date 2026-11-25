@@ -1,3 +1,8 @@
+import {weiAdvance} from '../src/data/divineCaocao.ts';
+import {tryIgnite,tickBurns,fireWire} from './coop-burning.mjs';
+import {paySpoils,companyStatus,companyWire,recruitCompany,updateRetinue,strikeRetainer} from './coop-retinue.mjs';
+import {BOSS_VS_TROOPS,BOSS_VS_ALLY} from '../src/data/legion.ts';
+import {strikeSpellMark, visibleSpellMarks} from './coop-marks.mjs';
 import { startHebei, stepHebei, resolveHebei, dualDeaths, dualState, dualWarnings } from './coop-dual.mjs';
 import { GAUNTLET_POOL } from '../src/data/gauntlet.ts';
 import { challengeChoices, mythicBoss } from '../src/data/mythicGauntlet.ts';
@@ -6,11 +11,13 @@ import { randomInt, randomBytes } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { WebSocket, WebSocketServer } from 'ws';
 import { TYPES, chooseTroop, initTroop, troopHit, prepareTroops, stepTroop, clearTroops } from './coop-roster.mjs';
+import { starEyeOpen, hitStarEye } from '../src/data/mythicGauntlet.ts';
 import world from '../src/coop/arena.json' with { type: 'json' };
 
 import { bossForWave, bossStats, advanceRescue, grantReward, beginBossWarning, clearBossAttack, resolveBossWarning, updateBossPhase, newGauntlet, nextWave, rewardsFor, TOTAL_WAVES } from './gauntlet.mjs';
 
 import { CHARACTERS } from '../src/data/characters.ts';
+import { ironIncoming, backwaterDamage, vanguardDamage, vanguardSpeed } from '../src/data/coopStars.ts';
 
 const heroes = new Map(CHARACTERS.map(hero => [hero.id, hero]));
 const attackProfiles = {
@@ -31,7 +38,7 @@ const INPUT_TTL = 450;
 const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const playersIn = room => [...room.players.values()];
 
-export function createCoopServer({ origins = [], allowLocal = true, gauntletWarmup, gauntletLineup, reconnectMs = 30_000, troopRandom = Math.random, rooms = new Map() } = {}) {
+export function createCoopServer({ origins = [], allowLocal = true, gauntletWarmup, gauntletLineup, reconnectMs = 30_000, emberRandom = Math.random, troopRandom = Math.random, rooms = new Map() } = {}) {
   const http = createServer((_request, response) => {
     response.writeHead(404).end();
   });
@@ -77,12 +84,12 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
       send(player.socket, { type: 'lobby', code: room.code, slot: player.slot, count: room.players.size, mode: room.mode, picks });
     }
   }
-  function createRoom(now) {
+  function createRoom(now, extreme) {
     if (rooms.size >= MAX_ROOMS) return null;
     let code;
     do { code = Array.from({ length: 6 }, () => alphabet[randomInt(alphabet.length)]).join(''); }
     while (rooms.has(code));
-    const room = { code, created: now, mode: 'gauntlet', run: newGauntlet(gauntletWarmup), players: new Map(), phase: 'lobby', enemies: [], seconds: 0, kills: 0, nextEnemyId: 0, spawnIn: 0, snapshots: 0 };
+    const room = { code, created: now, mode: 'gauntlet', run: newGauntlet(gauntletWarmup,extreme), players: new Map(), phase: 'lobby', enemies: [], seconds: 0, kills: 0, nextEnemyId: 0, spawnIn: 0, snapshots: 0 };
     // Trusted server/test configuration only; clients cannot choose encounters.
     if(gauntletLineup?.length){const ids=gauntletLineup.map(id=>GAUNTLET_POOL.find(b=>b.id===id));if(ids.every(Boolean))room.run.lineup=ids;}
     rooms.set(code, room);
@@ -92,7 +99,7 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
     const edge = randomInt(4);
     const x = edge === 0 ? 24 : edge === 1 ? world.width - 24 : randomInt(24, world.width - 24);
     const y = edge === 2 ? 24 : edge === 3 ? world.height - 24 : randomInt(24, world.height - 24);
-    const hp = general ? bossStats(room.run.wave, general.id).hp : boss ? 64 : 4 + Math.min(3, Math.floor(((room.run?.wave ?? 1) - 1) / 4));
+    const hp = general ? bossStats(room.run.wave, general.id, room.run.roster.ghost.length).hp : boss ? 64 : 4 + Math.min(3, Math.floor(((room.run?.wave ?? 1) - 1) / 4));
     const enemy = { id: ++room.nextEnemyId, x, y, hp, maxHp: hp, boss, general, hitIn: 0 };
     if (troop) initTroop(enemy, troop, room.seconds);
     room.enemies.push(enemy);
@@ -102,10 +109,12 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
   function snapshot(room) {
     broadcast(room, {
       type: 'state', seconds: Math.floor(room.seconds), battleMs: Math.round(room.seconds*1000), kills: room.kills,
-      players: playersIn(room).map(({ slot, hero, x, y, hp, maxHp, rescue, dir, moving, strike }) => ({ slot, hero, x, y, hp, maxHp, rescue, dir, moving, strike })),
+      players: playersIn(room).map(({ slot, hero, x, y, hp, maxHp, rescue, dir, moving, strike, stars, company }) => ({ slot, hero, x, y, hp, maxHp, rescue, dir, moving, strike, stars,order:company?.order })),
       enemies: room.enemies.map(({ id, x, y, hp, maxHp, boss, general, troop, cue, face, speedBuff, enraged }) => ({ id, x, y, hp, maxHp, boss, troop, cue, face, enraged: !!enraged, boosted: speedBuff > 1, general: general && { id: general.id, name: general.name } })),
+      burning:fireWire(room),retainers:companyWire(room),
+      spellMarks: visibleSpellMarks(room),
       shots: (room.shots ?? []).map(({x,y,angle,slow})=>({x,y,angle,net:!!slow})), troopEffects: room.troopEffects ?? [],
-      gauntlet: room.run && { wave: room.run.wave, cleared: room.run.cleared, total: TOTAL_WAVES,
+      gauntlet: room.run && { wave: room.run.wave, cleared: room.run.cleared, total: TOTAL_WAVES, mythicSize: room.run.roster.ghost.length,
         tier: room.run.tier, milestones: room.run.milestones, remaining: room.run.stage === 'field' ? Math.max(0, Math.ceil(waveWarmup(room.run) - room.seconds + room.run.started)) : 0,
         general: room.run.boss && { id: room.run.boss.general.id, name: room.run.boss.general.name },
         upcoming: { id: room.run.upcoming.id, name: room.run.upcoming.name }, warning: room.run.warning, warnings: dualWarnings(room.run), dual: !!room.run.dual },
@@ -113,17 +122,18 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
   }
   function draft(room, checkpoint = false) {
     room.phase = checkpoint ? 'checkpoint' : 'draft';
+    room.votes = [null, null];
     room.idleSince = Date.now();
-    for (const player of room.players.values()) player.choices = checkpoint ? [] : rewardsFor(player);
+    for (const player of room.players.values()) player.choices = checkpoint ? [] : rewardsFor(player,room.run.wave);
     updateDraft(room);
   }
   function updateDraft(room) {
     const ready = playersIn(room).filter(player => !player.choices?.length).length;
     for (const player of room.players.values()) {
-      send(player.socket, { type: 'draft', wave: room.run.wave, total: TOTAL_WAVES, general: room.run.history.at(-1).dual ? '河北双雄 · 颜良 / 文丑' : room.run.history.at(-1).name,
-        party: playersIn(room).map(({ slot, hero, hp, maxHp, choices }) => ({ slot, hero, hp, maxHp, ready: !choices?.length })),
-        choices: player.choices ?? [], ready, checkpoint: room.phase === 'checkpoint', tier: room.run.tier,
-        continuation: room.phase==='checkpoint'?challengeChoices(room.run.tier,room.run.wave,TOTAL_WAVES):[] });
+      send(player.socket, { type: 'draft', seconds:Math.floor(room.seconds), wave: room.run.wave, total: TOTAL_WAVES, mythicSize: room.run.roster.ghost.length, general: room.run.history.at(-1).dual ? '河北双雄 · 颜良 / 文丑' : room.run.history.at(-1).name,
+      party: playersIn(room).map(({ slot, hero, hp, maxHp, choices, stars, upgrades }) => ({ slot, hero, hp, maxHp, ember:upgrades.ember, ready: !choices?.length, company:companyStatus(room.players.get(slot),room.run.wave), stars })),
+        votes: room.votes, choices: player.choices ?? [], ready, checkpoint: room.phase === 'checkpoint', tier: room.run.tier,
+        continuation: room.phase==='checkpoint'?challengeChoices(room.run.tier,room.run.wave,TOTAL_WAVES,room.run.roster.ghost.length):[] });
     }
     if (room.phase === 'draft' && !missing(room).length && ready === room.players.size) beginNextWave(room);
   }
@@ -139,15 +149,17 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
       room.run.tier=room.run.nextTier;
       room.run.nextTier=null;
     }
+    for (const p of room.players.values()) delete p.checkpointArmy;
     nextWave(room);
     room.run.upcoming = bossForWave(room.run);
     room.phase = 'battle';
     snapshot(room);
   }
   function bossDefeated(room) {
+    for(const player of room.players.values()){delete player.casting;delete player.burns;}
     clearTroops(room);
     const run = room.run;
-    run.cleared++;
+    run.cleared++;paySpoils(room);
     run.history.push(run.upcoming);
     run.history = run.history.slice(-40);
     clearBossAttack(run);
@@ -158,17 +170,32 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
       player.hp = Math.min(player.maxHp, player.hp + Math.ceil(player.maxHp * .35));
       player.moving = false;
     }
-    const checkpoint=challengeChoices(run.tier,run.wave,TOTAL_WAVES).length>0;
-    if(checkpoint) run.milestones=run.wave/TOTAL_WAVES;
+    const checkpoint=challengeChoices(run.tier,run.wave,TOTAL_WAVES,run.roster.ghost.length).length>0;
+    if(checkpoint) {
+      run.milestones=run.tier==='mortal'?1:run.tier==='ghost'?2:3;
+      for (const player of room.players.values()) {
+        const alive=player.company?.units.filter(u=>u.hp>0).length ?? 0;
+        player.checkpointArmy={survivors:alive,recruited:alive+(player.company?.deaths??0)};
+      }
+    }
     snapshot(room);
     draft(room,checkpoint);
   }
   function strikePlayers(room, now) {
-    if (room.run?.dual) resolveHebei(room.run,playersIn(room),room.seconds,(player,damage)=>hurt(player,damage,now));
-    else if (room.run) resolveBossWarning(room.run, playersIn(room), room.seconds, (player, damage) => hurt(player, damage, now));
+    const party=playersIn(room),targets=[...party];let fallen=0;
+    for(const p of party)if(p.company)targets.push(...p.company.units);
+    const hit=(target,damage)=>{
+      if(target.owner===undefined)return hurt(target,damage,now);
+      const applied=strikeRetainer(room,target,damage*BOSS_VS_TROOPS.skillMul,true,fallen>=BOSS_VS_ALLY.killCapPerCast?1:0);
+      if(applied && target.hp===0)fallen++;
+      return applied;
+    };
+    if(room.run?.dual)resolveHebei(room.run,targets,room.seconds,hit);
+    else if(room.run)resolveBossWarning(room.run,targets,room.seconds,hit);
   }
   function hurt(player, damage, now) {
     if (now < player.hurtUntil) return false;
+    damage*=ironIncoming(player.stars?.includes('strength.NR1'));
     player.hp = Math.max(0, player.hp - Math.round(damage));
     if (!player.hp) player.moving = false;
     player.hurtUntil = now + 550;
@@ -182,8 +209,10 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
       const vx = now - player.inputAt <= INPUT_TTL ? player.dx : 0;
       const vy = now - player.inputAt <= INPUT_TTL ? player.dy : 0;
       const speed = 174 * (1 + .07 * (player.upgrades.speed ?? 0)) * (room.seconds < (player.slowUntil ?? 0) ? 1 - player.slow : 1);
-      const x = Math.max(24, Math.min(world.width - 24, player.x + vx * speed * dt));
-      const y = Math.max(24, Math.min(world.height - 24, player.y + vy * speed * dt));
+      const nextX=player.x+vx*speed*dt,nextY=player.y+vy*speed*dt;
+      const held=room.run.warning?.wei && weiAdvance(room.run.warning,player,{x:nextX,y:nextY},room.seconds);
+      const x=Math.max(24,Math.min(world.width-24,held?.x??nextX));
+      const y=Math.max(24,Math.min(world.height-24,held?.y??nextY));
       player.moving = x !== player.x || y !== player.y;
       if (player.moving) player.dir = Math.abs(vx) > Math.abs(vy) ? (vx < 0 ? 1 : 2) : (vy < 0 ? 3 : 0);
       player.x = x;
@@ -198,11 +227,24 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
         const distance = Math.hypot(enemy.x - x, enemy.y - y);
         if (distance < best) { nearest = enemy; best = distance; }
       }
-      if (!nearest) continue;
+      const starField=room.run.mythicQueue?.[0]?.constellation;
+      const aimEye=starField && starEyeOpen(starField,room.seconds) && Math.hypot(x-starField.eye.x,y-starField.eye.y)<=attack.range;
+      if (!nearest && !aimEye) continue;
       player.fireIn = attack.interval * .91 ** (player.upgrades.haste ?? 0);
+      const vanguard=player.stars?.includes('bridge0.h');
+      const power=(3+(player.upgrades.damage??0))*vanguardDamage(vanguard,true)*backwaterDamage(player.stars?.includes('strength.NR2'),player.hp/player.maxHp);
+      player.fireIn/=vanguardSpeed(vanguard);
+      if (aimEye) {
+        player.strike={n:player.strike.n+1,x:starField.eye.x,y:starField.eye.y};
+        hitStarEye(starField,room.seconds);
+        continue;
+      }
       player.strike = { n: player.strike.n + 1, x: nearest.x, y: nearest.y };
-      troopHit(room, nearest, player, 3 + (player.upgrades.damage ?? 0));
+      troopHit(room, nearest, player, power);
+      tryIgnite(player,nearest,power,room.seconds*1000,emberRandom);
+      if(player.stars?.includes('intellect.NX1')) strikeSpellMark(room,player,nearest,power);
     }
+    updateRetinue(room,dt);
     if(room.run.dual)stepHebei(room.run,live,room.seconds,dt);
     for (const enemy of room.enemies) {
       if (enemy.hp <= 0) continue;
@@ -219,7 +261,7 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
         const run = dualState(room.run,enemy)??room.run;
         if(room.run.dual?.gather || room.seconds<(room.run.dual?.soloUntil??0))continue;
         updateBossPhase(run, room.seconds);
-        if ((run.warning && !run.warning.resolved) || (mythicBoss(enemy.general.id) && room.seconds<run.attackAt-.8 && run.mythicQueue.length)) continue;
+        if (run.warning?.shadow || run.warning?.transit || (run.warning && !run.warning.resolved) || (mythicBoss(enemy.general.id) && room.seconds<run.attackAt-.8 && run.mythicQueue.length)) continue;
         if (!room.run.dual && nearest < 245 && room.seconds >= run.attackAt && beginBossWarning(run, target, room.seconds)) continue;
       }
       enemy.hitIn -= dt;
@@ -229,11 +271,12 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
         enemy.x += (target.x - enemy.x) * step / nearest;
         enemy.y += (target.y - enemy.y) * step / nearest;
       } else if (enemy.hitIn <= 0) {
-        const damage = enemy.general ? bossStats(room.run.wave,enemy.general.id).touch * (room.run.dual ? .8*(enemy.dualRage?1.25:1) : 1) : Math.min(11, 5 + Math.floor(room.run.wave / 2));
+        const damage = enemy.general ? bossStats(room.run.wave,enemy.general.id,room.run.roster.ghost.length).touch * (room.run.dual ? .8*(enemy.dualRage?1.25:1) : 1) : Math.min(11, 5 + Math.floor(room.run.wave / 2));
         if (hurt(target, damage * (TYPES[enemy.troop]?.mul.damage ?? 1) * (enemy.damageBuff ?? 1), now)) enemy.hitIn = .85;
       }
     }
     strikePlayers(room, now);
+    tickBurns(room);
     const beaten = room.run.dual ? dualDeaths(room.run,room.seconds) : room.enemies.some(enemy => enemy.boss && enemy.hp <= 0);
     const oldCount = room.enemies.filter(e=>!e.escaped).length;
     room.enemies = room.enemies.filter(enemy => enemy.hp > 0);
@@ -257,11 +300,21 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
     if (++room.snapshots % 2 === 0) snapshot(room);
   }
   function finish(room, victory) {
+    if (room.phase === 'finished') return;
     room.phase = 'finished';
     if (room.run) clearBossAttack(room.run);
     room.idleSince = Date.now();
     snapshot(room);
-    broadcast(room, { type: 'result', victory: victory || (room.run?.cleared ?? 0) >= TOTAL_WAVES, kills: room.kills, generals: room.run.cleared, milestones: room.run.milestones });
+    const reason = !victory ? 'defeated' : room.run.milestones === 3 ? 'completed' : 'withdrawn';
+    room.result = { type: 'result', victory, reason, mythicSize:room.run.roster.ghost.length, tier:room.run.tier, wave:room.run.wave, kills: room.kills, generals: room.run.cleared,
+      milestones: room.run.milestones, seconds: Math.floor(room.seconds), bosses:room.run.history.map(b=>b.name),
+      party: playersIn(room).map(p => {
+        const men=p.company?.units.filter(u=>u.hp>0).length??0, lost=p.company?.deaths??0;
+        return {slot:p.slot, hero:p.hero, men, lost,
+        ...(p.checkpointArmy ? {atBossFall:p.checkpointArmy.survivors, afterBossRecruits:men+lost-p.checkpointArmy.recruited} : {}),
+        damage:Math.round(p.damage??0), defeats:p.defeats??0, revives:p.revives??0, coins:p.company?.coins??0, stars:[...(p.stars??[])]};
+      }) };
+    broadcast(room, room.result);
   }
 
   network.on('connection', socket => {
@@ -289,14 +342,20 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
       if (!room && command.type === 'resume') {
         const candidate = typeof command.code === 'string' && rooms.get(command.code);
         const member = candidate && typeof command.token === 'string' && playersIn(candidate).find(p => p.token === command.token);
-        if (!member || member.disconnectedAt == null || now - member.disconnectedAt >= reconnectMs || candidate.phase === 'finished') {
+        if (!member || member.disconnectedAt == null || now - member.disconnectedAt >= reconnectMs) {
           send(socket, { type: 'error', message: '重连已失效，请重新创建房间' }); return;
         }
         room = candidate; player = member; player.socket = socket; player.disconnectedAt = null;
-        session(room, player); restore(room, now); return;
+        session(room, player);
+        if (room.phase === 'finished') send(socket, room.result);
+        else restore(room, now);
+        return;
       }
       if (room && command.type === 'leave') {
-        if (room.phase !== 'lobby' || player.slot === 0) disband(room, 'teammate-left');
+        if (room.phase === 'finished') {
+          room.players.delete(player.slot);
+          if (!room.players.size) rooms.delete(room.code);
+        } else if (room.phase !== 'lobby' || player.slot === 0) disband(room, 'teammate-left');
         else { room.players.delete(player.slot); restore(room, now); }
         room = undefined; socket.close(1000, 'left'); return;
       }
@@ -308,7 +367,7 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
           return;
         }
         const candidate = command.type === 'create'
-          ? createRoom(now)
+          ? createRoom(now, command.extreme === true)
           : typeof command.code === 'string' && /^[A-Z2-9]{6}$/.test(command.code) && rooms.get(command.code);
         if (!candidate || candidate.phase !== 'lobby' || candidate.players.size >= 2) {
           send(socket, { type: 'error', message: command.type === 'create' ? '服务器房间已满' : '房间不存在、已满或已开战' });
@@ -318,6 +377,7 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
         const slot = room.players.size === 0 ? 0 : 1;
         player = { socket, token: randomBytes(24).toString('hex'), disconnectedAt: null, slot, available, hero: null, x: world.width / 2 + (slot ? 48 : -48), y: world.height / 2, hp: 100, maxHp: 100, rescue: 0, upgrades: {}, dir: 0, moving: false,
           fireIn: 0, dx: 0, dy: 0, inputAt: 0, hurtUntil: 0, strike: { n: 0, x: 0, y: 0 } };
+        if([1,2,3,4].includes(command.starDraft)){player.starDraft=command.starDraft;player.stars=[];}
         room.players.set(slot, player);
         session(room, player);
         lobby(room);
@@ -329,17 +389,27 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
         room.phase = 'battle';
         if (room.run) room.run.upcoming = bossForWave(room.run);
         snapshot(room);
+       } else if(room?.phase==='draft'&&command.type==='recruit'&&!missing(room).length){
+        if(recruitCompany(room,player,command))updateDraft(room);
+      } else if(room?.phase==='battle'&&command.type==='order'&&player.company&&!missing(room).length){
+        if(command.order==='guard'||command.order==='sortie')player.company.order=command.order;
       } else if (room?.phase === 'draft' && command.type === 'reward' && player.choices?.includes(command.id)) {
         grantReward(player, command.id);
         player.choices = [];
         updateDraft(room);
-      } else if (room?.phase === 'checkpoint' && player.slot === 0) {
-        const choice = command.type === 'endless' ? 'endless' : command.type === 'challenge' ? command.tier : null;
-        if (choice && challengeChoices(room.run.tier,room.run.wave,TOTAL_WAVES).includes(choice) && !missing(room).length) {
-          room.run.nextTier=choice;
-          draft(room);
+      } else if (room?.phase === 'checkpoint' && command.wave === room.run.wave) {
+        if (command.type === 'finish') {
+          finish(room, true);
+        } else {
+          const choice = command.type === 'endless' ? 'endless' : command.type === 'challenge' ? command.tier : null;
+          if (!challengeChoices(room.run.tier,room.run.wave,TOTAL_WAVES,room.run.roster.ghost.length).includes(choice)) return;
+          if (room.votes[player.slot] === choice) return;
+          room.votes[player.slot] = choice;
+          if (room.votes.every(vote => vote === choice)) {
+            room.run.nextTier = choice;
+            draft(room);
+          } else updateDraft(room);
         }
-        if (command.type === 'finish') finish(room, true);
       } else if (room?.phase === 'battle' && command.type === 'input' && Number.isFinite(command.dx) && Number.isFinite(command.dy)) {
         const limit = Math.max(1, Math.hypot(command.dx, command.dy));
         player.dx = command.dx / limit;
@@ -349,7 +419,7 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
     });
     socket.on('close', () => {
       if (!room || !rooms.has(room.code) || player.socket !== socket) return;
-      if (room.phase === 'finished') { room.players.delete(player.slot); if (!room.players.size) rooms.delete(room.code); return; }
+      if (room.phase === 'finished') { player.disconnectedAt = Date.now(); return; }
       player.disconnectedAt = Date.now(); player.dx = player.dy = 0; player.inputAt = 0; player.moving = false;
       room.pausedAt ??= player.disconnectedAt;
       for (const p of playersIn(room)) { p.dx = p.dy = 0; p.moving = false; }
@@ -377,6 +447,10 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
     const dt = Math.max(0, Math.min(.10, (now - last) / 1000));
     last = now;
     for (const room of rooms.values()) {
+      if (room.phase === 'finished') {
+        if (now - room.idleSince >= reconnectMs) disband(room, 'expired');
+        continue;
+      }
       const absent = missing(room);
       if (absent.length) {
         if (absent.some(p => now - p.disconnectedAt >= reconnectMs)) disband(room, 'reconnect-timeout');

@@ -278,7 +278,7 @@ export class DualBoss {
     // 台词：斩杀 → 剧情（关羽斩颜良）优先，否则本人临终台词；退走 → 退兵台词
     const L = this.plan.lines[x.id] ?? {};
     // 宁死不降（已弹过窗）：拒绝台词当临终台词；关羽在队：剧本「斩颜良」横幅 + 旗标
-    if (how === 'killed') { this.quietUntil = performance.now() + 1600; /* 斩将横幅（斩颜良）先亮一会儿 */ if (!x.parley?.dyingLine(at) && !this.h.storyFall(x.id, at) && L.fall) this.h.bark(at, x.name, L.fall); }
+    if (how === 'killed') { this.quietUntil = performance.now() + 1600; /* 斩将横幅（斩颜良）先亮一会儿 */ if (!this.h.storyFall(x.id, at) && !x.parley?.dyingLine(at) && L.fall) this.h.bark(at, x.name, L.fall); }
     const last = !o || !!o.done, rl = last && L.retreatLast ? L.retreatLast : L.retreat;
     if (how === 'retreated' && rl) this.h.bark(at, x.name, rl);
     if (last) {

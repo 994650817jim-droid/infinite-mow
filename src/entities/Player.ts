@@ -1,3 +1,5 @@
+import {weiAdvance} from '../data/divineCaocao';
+import type {MythicWarning} from '../data/mythicGauntlet';
 import { SCHOOL_TIER } from '../data/schools';
 import { LVBU } from '../data/lvbu';
 import {visualTextureKey} from '../systems/ReadableTextures';
@@ -188,6 +190,7 @@ export class Player {
     this.knockVx = dx / (duration / 1000); this.knockVy = dy / (duration / 1000);
   }
   /** 当前移动输入方向（单位向量，没推摇杆为 0）；被击退 / 冲刺锁定时也照记（七进七出的锚点跟着它走）。 */
+  weiWarning?: MythicWarning;
   readonly moveInput = { x: 0, y: 0 };
   move(dt: number, vx: number, vy: number): void {
     { const il = Math.hypot(vx, vy); this.moveInput.x = il > .001 ? vx / il : 0; this.moveInput.y = il > .001 ? vy / il : 0; }
@@ -205,8 +208,9 @@ export class Player {
       const ny = vy / len;
       moving = true;
       this.heading.x = nx; this.heading.y = ny;
-      this.sprite.x += nx * this.speed * dt;
-      this.sprite.y += ny * this.speed * dt;
+      const x=this.x+nx*this.speed*dt, y=this.y+ny*this.speed*dt;
+      const held=this.weiWarning && weiAdvance(this.weiWarning,this,{x,y},now/1000);
+      this.sprite.setPosition(held?.x??x,held?.y??y);
       // 四方向朝向：左右翻转，上下使用不同行走帧（有素材时）或占位步态
       const forced = this.forcedDir && ((this.scene as Phaser.Scene & { combatNow?: number }).combatNow ?? this.scene.time.now) < this.forcedUntil ? this.forcedDir : null;
       this.direction = forced ?? (Math.abs(nx) > Math.abs(ny) ? (nx < 0 ? 'left' : 'right') : ny < 0 ? 'up' : 'down');

@@ -285,8 +285,11 @@ export function gauntletReward(kills: number, firstClear: boolean): { provisions
 /** 最高连斩记录（存档单独一个键；开发测试存档 ?dev=1 用另一个键 _test，不碰正式记录）：读 / 写（只在超过时写，返回是否新纪录）。 */
 export function bestKey(test = false): string { return GAUNTLET.bestKey + (test ? '_test' : ''); }
 export function readGauntletBest(test = false): { kills: number; wave: number; ms: number } {
-  try { const v = JSON.parse(localStorage.getItem(bestKey(test)) ?? 'null'); if (v && typeof v.kills === 'number') return { kills: v.kills, wave: v.wave ?? v.kills, ms: v.ms ?? 0 }; } catch { /* 存储不可用 */ }
-  return { kills: 0, wave: 0, ms: 0 };
+  try {
+    const old=JSON.parse(localStorage.getItem(bestKey(test))??'null');
+    const modes=JSON.parse(localStorage.getItem('im_gauntlet_modes_v1'+(test?'_test':''))??'{}');
+    return [old,...Object.values(modes)].reduce((best,v)=>v && typeof v.kills==='number' && v.kills>best.kills ? {kills:v.kills,wave:v.wave??v.kills,ms:v.ms??0}:best,{kills:0,wave:0,ms:0});
+  } catch { return {kills:0,wave:0,ms:0}; }
 }
 export function writeGauntletBest(kills: number, wave: number, ms: number, test = false): boolean {
   const b = readGauntletBest(test); if (kills <= b.kills) return false;

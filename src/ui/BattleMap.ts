@@ -205,6 +205,12 @@ const SCROLL_FILES = { closed: 'map_scroll_closed', left: 'map_scroll_left', mid
 const SCROLL_TEX = { h: 677, paperTop: 139, paperBot: 563, midW: 1126 } as const;
 type ScrollState = 'closed' | 'opening' | 'open' | 'closing';
 
+export function queueMapScrollArt(scene: Phaser.Scene): number {
+  const missing = Object.values(SCROLL_FILES).filter(key => !scene.textures.exists(key));
+  for (const key of missing) scene.load.image(key, 'assets/ui/' + key + '.webp');
+  return missing.length;
+}
+
 export class BattleMap {
   private big: MapView | null = null;
   private readonly arrow: Phaser.GameObjects.Graphics;
@@ -222,10 +228,8 @@ export class BattleMap {
     this.arrow = s.add.graphics().setScrollFactor(0).setDepth(DEPTH.hud + 1).setName('orders-arrow');
     this.arrowText = s.add.text(0, 0, '', warText(12, '#ffd9a0')).setOrigin(.5).setScrollFactor(0).setDepth(DEPTH.hud + 1).setStroke('#1a0e08', 3).setVisible(false);
     if (!s.textures.exists(MAP_ICONS)) { s.load.atlas(MAP_ICONS, MAP_ICONS_FILES.png, MAP_ICONS_FILES.json); if (!s.load.isLoading()) s.load.start(); }
-    const need = Object.values(SCROLL_FILES).filter(k => !s.textures.exists(k));
-    if (!need.length) this.makeIcon();
+    if (!queueMapScrollArt(s)) this.makeIcon();
     else {
-      for (const k of need) s.load.image(k, 'assets/ui/' + k + '.webp');
       s.load.once('complete', () => { if (s.sys.settings.status < Phaser.Scenes.SHUTDOWN) this.makeIcon(); });
       if (!s.load.isLoading()) s.load.start();
     }

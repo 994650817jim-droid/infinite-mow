@@ -19,7 +19,7 @@ export const TACTIC_UNLOCK_SCROLLS = 6;
 export const RESPEC_GRAIN_PER_LEVEL = 100;
 export const XINDE_SLOTS = 2;
 
-interface MasterySave { version: 1; scrolls: number; /** 战功（击杀精英 / 首领获得，讲武堂换残卷）。 */ merit: number; temper: Record<string, number>; xinde: Record<string, TacticId[]>; tactics: TacticId[]; respecFree: Record<string, number>; migrated: boolean }
+interface MasterySave { gauntletClaim?: {id:string; credited:number}; version: 1; scrolls: number; /** 战功（击杀精英 / 首领获得，讲武堂换残卷）。 */ merit: number; temper: Record<string, number>; xinde: Record<string, TacticId[]>; tactics: TacticId[]; respecFree: Record<string, number>; migrated: boolean }
 const TACTIC_IDS = Object.keys(TACTICS) as TacticId[];
 /** 起始解锁：每个流派在 TACTICS 里排第一个的战法。 */
 export const STARTER_TACTICS: readonly TacticId[] = (() => { const seen = new Set<string>(), out: TacticId[] = []; for (const id of TACTIC_IDS) { const t = TACTICS[id].tag; if (t && !seen.has(t)) { seen.add(t); out.push(id); } } return out; })();
@@ -27,12 +27,18 @@ const int = (v: unknown, max: number) => Number.isSafeInteger(v) ? Math.max(0, M
 const isHeroKey = (k: string) => /^r_\d{1,9}$/.test(k) || /^[a-z]{2,20}$/.test(k);
 
 let memory: MasterySave | null = null;
+let cachedRaw: string | null = null;
 function read(): MasterySave {
-  if (memory) return memory;
+  let raw: string | null = null;
+  try { raw = localStorage.getItem(MASTERY_KEY); } catch { if (memory) return memory; }
+  // Storage events can arrive after a player's next click. Check the actual value before using a cached wallet.
+  if (memory && raw === cachedRaw) return memory;
+  cachedRaw = raw;
   let s: MasterySave = { version: 1, scrolls: 0, merit: 0, temper: {}, xinde: {}, tactics: [...STARTER_TACTICS], respecFree: {}, migrated: false };
   try {
-    const v = JSON.parse(localStorage.getItem(MASTERY_KEY) ?? 'null');
+    const v = JSON.parse(raw ?? 'null');
     if (v && v.version === 1) {
+      if(typeof v.gauntletClaim?.id==='string')s.gauntletClaim={id:v.gauntletClaim.id,credited:int(v.gauntletClaim.credited,1e6)};
       s.scrolls = int(v.scrolls, 1e6); s.merit = int(v.merit, 1e7); s.migrated = v.migrated === true;
       for (const [k, n] of Object.entries(v.temper ?? {})) if (isHeroKey(k)) s.temper[k] = int(n, TEMPER.max);
       s.tactics = [...new Set([...STARTER_TACTICS, ...(Array.isArray(v.tactics) ? v.tactics : []).filter((t: unknown): t is TacticId => typeof t === 'string' && t in TACTICS)])];
@@ -44,7 +50,16 @@ function read(): MasterySave {
   if (!s.migrated) { s.migrated = true; s.scrolls += SCROLL.perClearedChapter * Math.max(0, chaptersOpen() - 1); commit(); }
   return s;
 }
-function commit(): void { try { if (memory) localStorage.setItem(MASTERY_KEY, JSON.stringify(memory)); localStorage.setItem('im_slot_touched', String(Date.now())); } catch { /* 存储不可用 */ } }
+function commit(): void {
+  try {
+    if (memory) {
+      const raw = JSON.stringify(memory);
+      localStorage.setItem(MASTERY_KEY, raw);
+      cachedRaw = raw;
+    }
+    localStorage.setItem('im_slot_touched', String(Date.now()));
+  } catch { /* keep in-session progress when storage is unavailable */ }
+}
 export function resetMasteryCache(): void { memory = null; }
 
 export interface Result { ok: boolean; message: string }
@@ -62,6 +77,18 @@ export function exchangeMerit(count: number): Result {
   return { ok: true, message: `兑换武学残卷 ×${n}（战功 −${cost}）` };
 }
 /** 战斗结算收入残卷（测试战斗不调用）。 */
+export function creditGauntletScrolls(id:string, amount:number):number {
+  resetMasteryCache();
+  const s=read();
+  if(s.gauntletClaim?.id===id)return s.gauntletClaim.credited;
+  const before=s.scrolls, total=Math.min(1e6,before+amount);
+  const next={...s,scrolls:total,gauntletClaim:{id,credited:total-before}};
+  const raw = JSON.stringify(next);
+  localStorage.setItem(MASTERY_KEY,raw);
+  cachedRaw=raw;
+  memory=next;
+  return total-before;
+}
 export function addScrolls(n: number): number { const s = read(); const k = Math.max(0, Math.floor(n)); if (k) { s.scrolls = Math.min(1e6, s.scrolls + k); commit(); } return s.scrolls; }
 export function grain(): number { try { return loadWorld().provisions; } catch { return 0; } }
 

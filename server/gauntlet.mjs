@@ -1,12 +1,19 @@
+import {EMBER,CINDERS} from '../src/rules/burning.ts';
+import {refreshRetinueHp} from './coop-retinue.mjs';
+import {canDraftMark} from './coop-marks.mjs';
 import { GAUNTLET, GAUNTLET_POOL, endlessBoss, pickBosses } from '../src/data/gauntlet.ts';
-import { challengeBoss, mythicBoss, mythicSequence, mythicHit } from '../src/data/mythicGauntlet.ts';
+import {windBand,windContact} from '../src/data/divineZhouyu.ts';
+import {lockHalberdCharge} from '../src/data/ghostLubu.ts';
+import { mythicRoster, challengeBoss, mythicBoss, mythicSequence, mythicHit, mythicTransit } from '../src/data/mythicGauntlet.ts';
+import arena from '../src/coop/arena.json' with {type:'json'};
 import content from '../src/coop/gauntlet.json' with { type: 'json' };
+import {FIELD_STARS, MARK_STAR, COMPANY_STARS, ironHpBonus} from '../src/data/coopStars.ts';
 
 const pool = GAUNTLET_POOL.filter(boss => Object.hasOwn(content.bosses, boss.id));
 export const TOTAL_WAVES = GAUNTLET.waves;
 
-export function newGauntlet(warmup = 26) {
-  return { wave: 1, cleared: 0, tier: 'mortal', milestones: 0, mythicQueue: [], stage: 'field', started: 0, warmup, lineup: pickBosses(pool), history: [], boss: null, warning: null, attackAt: 0, followup: null };
+export function newGauntlet(warmup = 26, extreme = false) {
+  return { roster: mythicRoster(extreme), wave: 1, cleared: 0, tier: 'mortal', milestones: 0, mythicQueue: [], stage: 'field', started: 0, warmup, lineup: pickBosses(pool), history: [], boss: null, warning: null, attackAt: 0, followup: null };
 }
 
 export function nextWave(room) {
@@ -20,17 +27,17 @@ export function nextWave(room) {
 }
 
 export function bossForWave(run) {
-  return challengeBoss(run.tier,run.wave,TOTAL_WAVES) ?? run.lineup[run.wave - 1] ?? endlessBoss(pool, run.history.at(-1) ?? null, Math.random, run.history);
+  return challengeBoss(run.tier,run.wave,TOTAL_WAVES,run.roster) ?? run.lineup[run.wave - 1] ?? endlessBoss(pool, run.history.at(-1) ?? null, Math.random, run.history);
 }
 
 // Co-op durability only: let existing warnings resolve over several attack cycles.
 export const COOP_BOSS_BALANCE = Object.freeze({ phase2Power: 1.15, powerCap: 36, phase2Gap: .9, followupPower: .7, followupDelay: .45, recover: 1.5 });
 
-export function bossStats(wave, id) {
+export function bossStats(wave, id, mythicSize = 10) {
   const mythic = mythicBoss(id);
   if (mythic) {
     const divine = mythic.tierName === 'divine';
-    const local = Math.max(1,Math.min(10,wave-(divine?20:10)));
+    const local = Math.max(1,Math.min(10,Math.ceil((wave-(divine?10+mythicSize:10))*10/mythicSize)));
     return { hp:(divine?770:690)+local*8, touch:divine?20:18, power:divine?34:31 };
   }
   const hpMul = id === 'zhangxiu' && wave >= 2 ? 1.1 : 1;
@@ -58,6 +65,7 @@ export function bossPattern(id, cast, phase2) {
   return null;
 }
 
+const arenaClear=(_,to)=>to.x>=20 && to.y>=20 && to.x<=arena.width-20 && to.y<=arena.height-20;
 export function beginBossWarning(run, target, time, followup = false, nextPattern = null) {
   const b = run.boss;
   if (!b || b.hp <= 0 || !target || target.hp <= 0 || run.warning || (!followup && run.followup)) return false;
@@ -65,9 +73,11 @@ export function beginBossWarning(run, target, time, followup = false, nextPatter
   const mythic = mythicBoss(b.general.id);
   if (mythic) {
     if (run.mythicQueue?.length) return false;
-    const sequence = mythicSequence(mythic,b,target,b.attacks??0,phase2,time);
+    const sequence = mythicSequence(mythic,b,target,b.attacks??0,phase2,time,
+      (mythic.id==='divine_caocao'||mythic.id==='divine_zhouyu'||mythic.id==='ghost_zhangxiu')?(a,b)=>arenaClear(a,a) && arenaClear(a,b):arenaClear);
+    for(const w of sequence)if(w.charge)w.targetSlot=target.slot;
     b.attacks=(b.attacks??0)+1;
-    const power=bossStats(run.wave,mythic.id).power*(phase2?1.1:1);
+    const power=bossStats(run.wave,mythic.id,run.roster?.ghost.length).power*(phase2?1.1:1);
     run.mythicQueue=sequence.map(w => ({...w,power:w.power*power}));
     run.warning=run.mythicQueue[0];
     run.attackAt=sequence.at(-1).endsAt+(phase2?1.55:2);
@@ -95,11 +105,28 @@ export function resolveBossWarning(run, players, time, onHit) {
   if (!run.boss || run.boss.hp <= 0) { clearBossAttack(run); return; }
   if (mythicBoss(run.boss.general.id)) {
     const queue=run.mythicQueue;
-    if(queue[0]?.resolved&&time>=queue[0].endsAt+.32) queue.shift();
+    if(queue[0]?.resolved&&time>=(queue[0].charge?queue[0].halberd.recoverUntil:queue[0].endsAt+.32)) queue.shift();
     const warning=queue[0];
     run.warning=warning&&time>=warning.startsAt?warning:null;
+    if(run.warning?.wind && windBand(warning,time)){
+      for(const unit of players)if(unit.hp>0)windContact(warning,unit,time,0,()=>onHit(unit,warning.power));
+    }
+    if(run.warning?.charge){
+      const target=players.find(p=>p.owner===undefined&&p.slot===warning.targetSlot&&p.hp>0) ??
+        players.find(p=>p.owner===undefined&&p.hp>0);
+      if(target)lockHalberdCharge(warning,target,time,arenaClear);
+      if(warning.halberd.locked)run.attackAt=warning.halberd.recoverUntil;
+    }
+    if(warning?.closing && warning.constellation.broken) {
+      run.mythicQueue=[];run.warning=null;run.attackAt=time+1.4;return;
+    }
+    if (run.warning?.transit || run.warning?.shadow) {
+      const pos=mythicTransit(warning,time);
+      if (pos) Object.assign(run.boss,pos);
+    }
     if(run.warning&&!warning.resolved&&time>=warning.endsAt){
       warning.resolved=true;
+      if(warning.charge&&warning.halberd.collision){warning.halberd.broken=true;warning.name='残戟已断 · 反击';}
       for(const player of players) if(player.hp>0&&mythicHit(warning,player)) onHit(player,warning.power);
     }
     return;
@@ -114,7 +141,7 @@ export function resolveBossWarning(run, players, time, onHit) {
   if (run.followup && time >= run.followup.at && !run.warning) {
     const { previousSlot, pattern } = run.followup, boss = run.boss;
     run.followup = null;
-    const nearby = players.filter(p => p.hp > 0 && Math.hypot(p.x - boss.x, p.y - boss.y) < 245);
+    const nearby = players.filter(p => p.owner === undefined && p.hp > 0 && Math.hypot(p.x - boss.x, p.y - boss.y) < 245);
     // Give the other living nearby player a turn to dodge; never aim at a fallen/faraway teammate.
     const target = nearby.find(p => p.slot !== previousSlot) ?? nearby[0];
     if (target) beginBossWarning(run, target, time, true, pattern);
@@ -128,7 +155,7 @@ export function makeWarning(boss, target, wave, time, pattern = null) {
   const angle = Math.atan2(target.y - boss.y, target.x - boss.x);
   const facing = Math.hypot(target.x - boss.x, target.y - boss.y) > 0 ? angle : 0;
   return {
-    kind, name, fx: pattern?.fx, x: origin.x, y: origin.y, angle: facing,
+    ownerId: boss.id, startsAt: time, kind, name, fx: pattern?.fx, x: origin.x, y: origin.y, angle: facing,
     radius: pattern?.radius ?? (kind === 'circle' ? 70 + Math.min(wave, 10) * 2 : kind === 'sweep' ? 119 : 235),
     innerRadius: pattern?.innerRadius ?? 0,
     endsAt: time + (kind === 'line' ? .85 : .95), resolved: false,
@@ -147,23 +174,59 @@ export function hits(warning, player) {
 
 const REWARD_LIMIT = { damage: 4, haste: 3, health: 4, speed: 3 };
 
-export function rewardsFor(player) {
+export function rewardsFor(player, wave=1) {
   const available = content.rewards.filter(({ id }) => (player.upgrades[id] ?? 0) < REWARD_LIMIT[id]);
   const choices = [];
   while (available.length && choices.length < 3) {
     choices.push(available.splice(Math.floor(Math.random() * available.length), 1)[0].id);
+  }
+  if (player.stars && (wave%3===0 || choices.length<3)) {
+    const pool=canDraftMark(player)?[...FIELD_STARS,MARK_STAR]:FIELD_STARS;
+    const supported=player.company?[...pool,...COMPANY_STARS]:pool;
+    const eligible=player.starDraft>=4 && player.upgrades.ember>0?[...supported,CINDERS]:supported;
+    const availableStars=eligible.filter(star=>!player.stars.includes(star.id));
+    if(availableStars.length) {
+      const star=availableStars[Math.floor(Math.random()*availableStars.length)];
+      if(choices.length===3) choices.pop();
+      choices.push(star.id);
+    }
+  }
+  if(player.starDraft>=4 && (player.upgrades.ember??0)<3 && (wave%3===1 || choices.length<3)){
+    if(choices.length===3)choices.splice(choices.findIndex(id=>Object.hasOwn(REWARD_LIMIT,id)),1);
+    choices.push(EMBER.id);
   }
   if (choices.length < 3 && player.hp < player.maxHp) choices.push('heal');
   return choices;
 }
 
 export function grantReward(player, id) {
+  if(id===MARK_STAR.id && !canDraftMark(player))return;
+  if(id===EMBER.id){if(player.starDraft>=4 && (player.upgrades.ember??0)<3)player.upgrades.ember=(player.upgrades.ember??0)+1;return;}
+  const cinders=id===CINDERS.id;
+  if(cinders && !(player.starDraft>=4 && player.upgrades.ember>0))return;
+  const companyStar=COMPANY_STARS.some(s=>s.id===id);
+  if(companyStar&&!player.company)return;
+  if(cinders || companyStar || id===MARK_STAR.id || FIELD_STARS.some(s=>s.id===id)) {
+    if(!player.stars || player.stars.includes(id))return;
+    player.stars.push(id);
+    if(id==='command.NR1')refreshRetinueHp(player);
+    if(id==='strength.NR1') {
+      const ratio=player.hp/player.maxHp;
+      player.maxHp=Math.round(player.maxHp*(1+ironHpBonus(true)));
+      player.hp=Math.round(ratio*player.maxHp);
+    }
+    return;
+  }
   if (id === 'heal') {
     player.hp = Math.min(player.maxHp, player.hp + Math.ceil(player.maxHp * .45));
     return;
   }
   player.upgrades[id] = (player.upgrades[id] ?? 0) + 1;
-  if (id === 'health') { player.maxHp += 15; player.hp += 15; }
+  if (id === 'health') {
+    const base=100+15*player.upgrades.health;
+    player.maxHp=Math.round(base*(1+ironHpBonus(player.stars?.includes('strength.NR1'))));
+    player.hp=Math.min(player.maxHp,player.hp+15);
+  }
 }
 
 /** Advance only during a live battle. Progress belongs to the fallen player. */
@@ -178,6 +241,7 @@ export function advanceRescue(players, now, dt) {
   fallen.rescue += dt;
   if (fallen.rescue + 1e-8 < content.rescueSeconds) return;
   fallen.rescue = 0;
+  ally.revives=(ally.revives??0)+1;
   fallen.hp = Math.ceil(fallen.maxHp * .35);
   fallen.hurtUntil = now + 1800;
   fallen.dx = fallen.dy = fallen.inputAt = 0;

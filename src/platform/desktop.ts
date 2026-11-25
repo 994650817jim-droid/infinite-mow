@@ -8,7 +8,7 @@ interface DesktopBridge {
   platform: 'desktop';
   /** 仅自动测试（IM_TEST=1 启动）为 true。 */
   testMode?: boolean;
-  store: { load(): Record<string, string> | null; set(key: string, value: string): boolean; remove(key: string): boolean; replace(all: Record<string, string>): boolean; path(): string };
+  store: { load(): Record<string, string> | null | false; set(key: string, value: string): boolean; remove(key: string): boolean; replace(all: Record<string, string>): boolean; path(): string };
   quit(): void; toggleFullscreen(): void; isFullscreen(): boolean;
   /** Steam 成就（S3）：有 steamworks.js 与 App ID 时同步，否则忽略。 */
   achievement?(id: string): void; steamStatus?(): { enabled: boolean; reason: string };
@@ -27,19 +27,24 @@ class FileStorage implements Storage {
   get length(): number { return Object.keys(this.data).length; }
   key(i: number): string | null { return Object.keys(this.data)[i] ?? null; }
   getItem(key: string): string | null { return Object.prototype.hasOwnProperty.call(this.data, key) ? this.data[key] : null; }
-  setItem(key: string, value: string): void { const v = String(value); this.data[String(key)] = v; if (!this.bridge.store.set(String(key), v)) throw new DOMException('存档写入失败', 'QuotaExceededError'); }
-  removeItem(key: string): void { delete this.data[String(key)]; this.bridge.store.remove(String(key)); }
-  clear(): void { this.data = {}; this.bridge.store.replace({}); }
+  setItem(key: string, value: string): void { const v = String(value); if (!this.bridge.store.set(key, v)) throw new DOMException('存档写入失败', 'QuotaExceededError'); this.data[key] = v; }
+  removeItem(key: string): void { if (!this.bridge.store.remove(key)) throw new DOMException('存档删除失败','InvalidStateError'); delete this.data[key]; }
+  clear(): void { if(!this.bridge.store.replace({})) throw new DOMException('存档清理失败','InvalidStateError'); this.data = {}; }
   [name: string]: unknown;
 }
 
 if (desktop) {
   let data = desktop.store.load();
+  if(data===false) {
+    const message='存档文件读取失败。请检查文件权限或从备份恢复后再启动。';
+    document.body.textContent=message;
+    throw new Error(message);
+  }
   if (!data) {
     // 首次启动：把（桌面外壳自带的）浏览器存储里已有的键迁移进存档文件
     data = {};
     try { for (let i = 0; i < window.localStorage.length; i++) { const k = window.localStorage.key(i); if (k !== null) data[k] = window.localStorage.getItem(k) ?? ''; } } catch { /* 无旧存档 */ }
-    desktop.store.replace(data);
+    if(!desktop.store.replace(data)) throw new Error('初次存档迁移写入失败，原来的浏览器存档仍然保留。');
   }
   const storage = new FileStorage({ ...data }, desktop);
   Object.defineProperty(window, 'localStorage', { configurable: true, get: () => storage });

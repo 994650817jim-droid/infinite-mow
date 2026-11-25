@@ -152,7 +152,7 @@ export function sideLubuGameSceneClass(Base: typeof GameScene) {
     chengong: Enemy | null = null; private cgLife = 0; private cgCtrl: BossMoveset | null = null; private cgTag?: Phaser.GameObjects.Text; private cgBar?: Phaser.GameObjects.Graphics; private cgPlotAt = 0; private cgBuffUntil = 0; private cgBaseDmg = 0;
     /** 测试用。 */ readonly cgStats = { plots: 0, fell: false };
     constructor() { super('SideLubuGameScene'); }
-    preload() { if (!this.textures.exists(sideTexture(cg.id))) loadBossSheet(this.load, sideTexture(cg.id), cg.v1); }
+    preload() { super.preload();  if (!this.textures.exists(sideTexture(cg.id))) loadBossSheet(this.load, sideTexture(cg.id), cg.v1); }
     /** 吕布出阵 1.5 秒后陈宫在他身后现身。 */
     protected spawnBoss(): void {
       const had = this.boss?.active; super.spawnBoss();

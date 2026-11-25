@@ -1,4 +1,7 @@
+import {CINDERS} from '../rules/burning';
+import {RETINUE_STARS} from '../rules/retinue';
 import { STAR_OUTER_NAMES, STAR_OUTER_DESCS, STAR_OUTER_TUNING } from './starOuter';
+import { FIELD_STAR_EFFECT } from './coopStars';
 import { PRIMARY_ATTRIBUTE, type AttributeId } from './attributes';
 import { STAT_ORDER, statSource, type StatSource } from './heroStats';
 
@@ -50,30 +53,30 @@ export const STAR_TUNING = {
  * 第二期：12 颗新要星的效果数值（设计稿第 4 节的表，初值，归平衡会话）。键 = 节点编号；结算在 systems/RunGrowth.ts（starOn / STAR_EFFECT）。
  * STAR_NEAR_RADIUS =「主将身边」的半径（号令、身先士卒）。
  */
-export const STAR_NEAR_RADIUS = 220;
+export const STAR_NEAR_RADIUS = RETINUE_STARS.radius;
 export const STAR_EFFECT = {
   'strength.NX1': STAR_OUTER_TUNING, 'strength.NX2': STAR_OUTER_TUNING,
   'agility.NX1': STAR_OUTER_TUNING, 'agility.NX2': STAR_OUTER_TUNING,
   'intellect.NX1': STAR_OUTER_TUNING, 'intellect.NX2': STAR_OUTER_TUNING,
   'command.NX1': STAR_OUTER_TUNING, 'command.NX2': STAR_OUTER_TUNING,
   /** 铁骨：生命上限 +8%，受到的伤害 −5%。 */
-  'strength.NR1': { hp: .08, taken: .05 },
+  'strength.NR1': FIELD_STAR_EFFECT['strength.NR1'],
   /** 背水：生命低于 40% 时伤害 +15%。 */
-  'strength.NR2': { below: .4, damage: .15 },
+  'strength.NR2': FIELD_STAR_EFFECT['strength.NR2'],
   /** 连击：暴击伤害 +20%。 */
   'agility.NR1': { critDamage: .2 },
   /** 追风：移动中攻速 +8%，拾取范围 +20%。 */
   'agility.NR2': { moveHaste: .08, pickup: .2 },
   /** 余烬：灼烧、地火等持续伤害 +20%，持续时间 +1 秒。 */
-  'intellect.NR1': { dot: .2, extraMs: 1000 },
+  'intellect.NR1': CINDERS,
   /** 妙算：锦囊效果 +15%。 */
   'intellect.NR2': { jinnang: .15 },
   /** 严阵：部曲生命 +15%，部曲受首领伤害 −15%。 */
-  'command.NR1': { allyHp: .15, bossTaken: .15 },
+  'command.NR1': { allyHp: RETINUE_STARS.hp, bossTaken: RETINUE_STARS.bossTaken },
   /** 号令：主将身边的部曲伤害 +12%（进部曲伤害加法桶）。 */
-  'command.NR2': { nearAllyDamage: .12 },
+  'command.NR2': { nearAllyDamage: RETINUE_STARS.nearDamage },
   /** 骁锐：武器伤害 +6%，攻速 +6%。 */
-  'bridge0.h': { weapon: .06, attackSpeed: .06 },
+  'bridge0.h': FIELD_STAR_EFFECT['bridge0.h'],
   /** 奇谋：暴击后 3 秒内法术伤害 +12%。 */
   'bridge1.h': { ms: 3000, spell: .12 },
   /** 帷幄：每 1 点智力生效点，部曲伤害 +0.8%（进部曲伤害加法桶）。 */
@@ -281,8 +284,11 @@ export function perkLit(lit: Iterable<string>, attr: AttributeId, tier: number):
  * 把一组星整理成「按规则能依次点亮」的顺序（读档、setHeroStars、预设都走这里）：从入口出发反复点亮能点的，
  * 点不到的（不相连、主星不够门槛或超过 2 颗、不认识的编号）丢掉。尽量保持传入的先后；返回值不含自己的入口。
  */
-export function orderStars(ids: Iterable<string>, gate: string): string[] {
-  const want = [...new Set(ids)].filter(id => id !== gate && STAR_BY_ID.has(id)), out: string[] = [], lit = new Set<string>([gate]);
+export function orderStars(ids: Iterable<string>, gate: string, awarded: Iterable<string> = []): string[] {
+  const want = [...new Set(ids)].filter(id => id !== gate && STAR_BY_ID.has(id));
+  // Only the current gauntlet supplies earned cards. Saved and campaign stars start at the gate.
+  const lit = litSet(awarded, gate);
+  const out = [...lit].filter(id => id !== gate);
   for (let moved = true; moved;) {
     moved = false;
     for (const id of want) if (!lit.has(id) && canLight(lit, id, gate)) { lit.add(id); out.push(id); moved = true; }

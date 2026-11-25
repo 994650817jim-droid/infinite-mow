@@ -32,6 +32,8 @@ export type BuildingId='barracks'|'farm'|'clinic';
 /** 第三章起的群雄篇章：各自独立的关卡进度与失败最佳成绩。 */
 export type WarlordArc='qunxiong'|'guandu'|'chibi'|'jingnan'|'shu'|'hanzhong'|'xiangfan'|'yiling'|'nanzheng'|'beifa';
 export interface WorldSave {version:10;
+ /** Earned pre-capture levels from a legacy save; empty on a new campaign. */
+ campLevelCeilings?:Partial<Record<TownBuildingId,number>>;
  /** v10 城池建设（city-build-proposal.md）：各占领城池的建筑等级，键为城池 id；失守的城也保留，夺回后原样恢复。 */
  cities:Record<string,CityLevels>;
  /** v9 营寨简化（city-simplify-proposal.md）：只剩军粮（provisions），merits 恒为 0（旧档军功与钱读入时折成军粮）；town 含建筑、科技、城池发展方向。buildings 供旧的战斗加成使用。 */
@@ -70,14 +72,25 @@ let memory:WorldSave|undefined;
 export let storageUnavailable=false;
 export let incompatibleSave=false;
 const integer=(v:unknown,max=1_000_000)=>typeof v==='number'&&Number.isFinite(v)?Math.max(0,Math.min(max,Math.floor(v))):0;
-const defaults=():WorldSave=>({version:10,cities:{},town:migrateTown({barracks:1,farm:1,clinic:1}),ownedCities:[],eraSeen:0,capturedEver:[],alerts:[],lastLost:[],defenseCooldown:0,morale:{},yellowStages:0,warlordStages:0,thirdFailureBest:0,guanduStages:0,guanduFailureBest:0,chibiStages:0,jingnanStages:0,jingnanFailureBest:0,shuStages:0,shuFailureBest:0,hanzhongStages:0,hanzhongFailureBest:0,xiangfanStages:0,xiangfanFailureBest:0,yilingStages:0,yilingFailureBest:0,nanzhengStages:0,nanzhengFailureBest:0,beifaStages:0,beifaFailureBest:0,chibiFailureBest:0,dongzhuoStages:0,legacyHulaoAccess:false,worldAvailable:false,chapterSeen:1,tutorialDone:false,mountTutorialDone:false,mountHintDone:false,hardCleared:[],intel:[],intelSeq:0,lubuClears:0,revision:0,merits:0,provisions:0,buildings:{barracks:1,farm:1,clinic:1},cleared:{huangjin:false,hulao:false},failureBest:{huangjin:0,hulao:0},nodes:['huangjin'],reserve:{},armyPlan:{capacity:2,garrison:0},active:null,receipts:[]});
+const defaults=():WorldSave=>({version:10,campLevelCeilings:{},cities:{},town:migrateTown({barracks:1,farm:1,clinic:1}),ownedCities:[],eraSeen:0,capturedEver:[],alerts:[],lastLost:[],defenseCooldown:0,morale:{},yellowStages:0,warlordStages:0,thirdFailureBest:0,guanduStages:0,guanduFailureBest:0,chibiStages:0,jingnanStages:0,jingnanFailureBest:0,shuStages:0,shuFailureBest:0,hanzhongStages:0,hanzhongFailureBest:0,xiangfanStages:0,xiangfanFailureBest:0,yilingStages:0,yilingFailureBest:0,nanzhengStages:0,nanzhengFailureBest:0,beifaStages:0,beifaFailureBest:0,chibiFailureBest:0,dongzhuoStages:0,legacyHulaoAccess:false,worldAvailable:false,chapterSeen:1,tutorialDone:false,mountTutorialDone:false,mountHintDone:false,hardCleared:[],intel:[],intelSeq:0,lubuClears:0,revision:0,merits:0,provisions:0,buildings:{barracks:1,farm:1,clinic:1},cleared:{huangjin:false,hulao:false},failureBest:{huangjin:0,hulao:0},nodes:['huangjin'],reserve:{},armyPlan:{capacity:2,garrison:0},active:null,receipts:[]});
 function parse(raw:string|null):WorldSave|null {try{if(!raw)return null;const v=JSON.parse(raw);if(![1,2,3,4,5,6,7,8,9,10].includes(v.version)||!v.buildings||!v.cleared)return null;const s=defaults();s.warlordStages=integer(v.warlordStages,3);s.thirdFailureBest=integer(v.thirdFailureBest,20);
  // v6：第四章（官渡）进度；旧档默认为 0，第三章全通后开放。
  s.guanduStages=v.version>=6?integer(v.guanduStages,3):0;s.chibiStages=integer(v.chibiStages,3);s.jingnanStages=integer(v.jingnanStages,3);s.jingnanFailureBest=integer(v.jingnanFailureBest,20);s.shuStages=integer(v.shuStages,3);s.shuFailureBest=integer(v.shuFailureBest,20);s.hanzhongStages=integer(v.hanzhongStages,3);s.hanzhongFailureBest=integer(v.hanzhongFailureBest,20);s.xiangfanStages=integer(v.xiangfanStages,3);s.xiangfanFailureBest=integer(v.xiangfanFailureBest,20);s.yilingStages=integer(v.yilingStages,3);s.yilingFailureBest=integer(v.yilingFailureBest,20);s.nanzhengStages=integer(v.nanzhengStages,3);s.nanzhengFailureBest=integer(v.nanzhengFailureBest,20);s.beifaStages=integer(v.beifaStages,3);s.beifaFailureBest=integer(v.beifaFailureBest,20);s.chibiFailureBest=integer(v.chibiFailureBest,20);s.guanduFailureBest=v.version>=6?integer(v.guanduFailureBest,20):0;
  // v7：天下地图城池；旧档无城池，eraSeen=0（之后按当前时代处理）
  s.ownedCities=v.version>=7&&Array.isArray(v.ownedCities)?[...new Set(v.ownedCities.filter((c:unknown)=>typeof c==='string'&&c.length<=32))].slice(0,64) as string[]:[];s.eraSeen=v.version>=7?integer(v.eraSeen,3):0;s.capturedEver=v.version>=7&&Array.isArray(v.capturedEver)?[...new Set(v.capturedEver.filter((c:unknown)=>typeof c==='string'&&c.length<=32))].slice(0,64) as string[]:[];s.alerts=v.version>=7&&Array.isArray(v.alerts)?v.alerts.filter((a:CityAlert)=>a&&typeof a.city==='string'&&s.ownedCities.includes(a.city)&&typeof a.attacker==='string'&&a.attacker.length<=16).slice(0,16).map((a:CityAlert)=>({city:a.city,attacker:a.attacker,cause:a.cause==='era'?'era':'retaliation',countdown:typeof a.countdown==='number'?Math.max(0,Math.min(9,Math.floor(a.countdown))):DEFENSE_RULES.muster})):[];s.defenseCooldown=integer(v.defenseCooldown,9);s.morale=v.morale&&typeof v.morale==='object'?Object.fromEntries(Object.entries(v.morale as Record<string,unknown>).filter(([k,n])=>typeof k==='string'&&k.length<=32&&typeof n==='number'&&n>0).map(([k,n])=>[k,Math.min(9,Math.floor(n as number))])):{};s.lastLost=v.version>=7&&Array.isArray(v.lastLost)?v.lastLost.filter((c:unknown)=>typeof c==='string'&&c.length<=32).slice(0,16):[];s.yellowStages=integer(v.yellowStages,3);s.revision=integer(v.revision);s.provisions=integer(v.provisions);for(const id of ['barracks','farm','clinic'] as BuildingId[])s.buildings[id]=Math.max(1,integer(v.buildings[id],3));
  // v9：统一军粮。旧档的军功、钱（含在途商队）与已删建筑的退还一并折成军粮；v9 存档 merits 恒为 0。
- {const pt=parseTown(v.version>=8?v.town:null,s.buildings);s.town=pt.town;s.provisions=Math.min(1_000_000,s.provisions+Math.round(integer(v.merits)*MERIT_TO_GRAIN)+Math.round(pt.money*MONEY_TO_GRAIN)+pt.refund);s.merits=0;}if(!(v.town?.levels&&typeof v.town.levels==='object'&&'talent' in v.town.levels)){try{const r=JSON.parse(localStorage.getItem('im_roster_v1')??'null');s.town.levels.talent=Math.max(1,Math.min(3,integer(r?.hall,3)));}catch{s.town.levels.talent=1;}}applyCampRule(s);for(const id of ['huangjin','hulao'] as ChapterId[]){s.cleared[id]=v.cleared[id]===true;s.failureBest[id]=integer(v.failureBest?.[id],20);}if(s.cleared.huangjin||s.cleared.hulao)s.yellowStages=3;
+ {const pt=parseTown(v.version>=8?v.town:null,s.buildings);s.town=pt.town;s.provisions=Math.min(1_000_000,s.provisions+Math.round(integer(v.merits)*MERIT_TO_GRAIN)+Math.round(pt.money*MONEY_TO_GRAIN)+pt.refund);s.merits=0;}if(!(v.version>=8&&v.town?.levels&&typeof v.town.levels==='object'&&'talent' in v.town.levels)){try{const r=JSON.parse(localStorage.getItem('im_roster_v1')??'null');s.town.levels.talent=Math.max(1,Math.min(3,integer(r?.hall,3)));}catch{s.town.levels.talent=1;}}
+ // v1–v7 legacy buildings, v8 plots and v9–v10 levels have already been normalized above.
+ // A v10 record without this field predates the compatibility rule.
+ if (!s.capturedEver.length && !s.ownedCities.length) {
+   const migrated = v.version < 10 || !Object.hasOwn(v, 'campLevelCeilings');
+   for (const id of Object.keys(s.town.levels) as TownBuildingId[]) {
+     const earned = s.town.levels[id];
+     const ceiling = migrated ? earned : Math.min(earned, integer(v.campLevelCeilings?.[id]));
+     if (ceiling > 1) s.campLevelCeilings![id] = ceiling;
+   }
+ }
+ applyCampRule(s);for(const id of ['huangjin','hulao'] as ChapterId[]){s.cleared[id]=v.cleared[id]===true;s.failureBest[id]=integer(v.failureBest?.[id],20);}if(s.cleared.huangjin||s.cleared.hulao)s.yellowStages=3;
  // v1/v2 builds opened the map directly after Zhangjiao. Keep that access for existing saves;
  // v3–v8 builds opened it only after Hulao; since the chapter timeline it opens after Zhangjiao (see below).
  s.worldAvailable=v.version<3?(s.yellowStages===3||s.cleared.huangjin||s.cleared.hulao):v.worldAvailable===true;
@@ -112,15 +125,20 @@ export function upgradeBuilding(id:BuildingId):{ok:boolean;message:string}{retur
 type TownResult={ok:boolean;message:string};
 /** 主帐扩建的前提：占领第一座城镇 → 县城（自动）；第三章通关或占领一座城池 → 州府（花军粮）。 */
 export function townProgress(s:WorldSave=loadWorld()):TownProgress{return{hulao:s.cleared.hulao,bigCity:s.warlordStages>=3||s.ownedCities.length>0,city:s.capturedEver.length>0||s.ownedCities.length>0};}
-/**
- * 营寨规则（用户 2026-11-18：「营寨只有lv1建筑不可以升级，只有占领城镇才解锁升级建筑」）：
- * 占领过城镇而主帐还是 Lv1 → 营寨自动升为县城（不花军粮）；仍是营寨的存档，Lv1 以上的建筑一律压回 Lv1（开发期不做兼容）。
- * 返回 true = 这次刚升为县城。
- */
-export function applyCampRule(s:WorldSave):boolean{const t=s.town;let promoted=false;
- if(t.levels.hall<2&&(s.capturedEver.length>0||s.ownedCities.length>0)){t.levels.hall=2;promoted=true;}
- if(t.levels.hall<=1)for(const id of Object.keys(t.levels) as TownBuildingId[])if(t.levels[id]>1)t.levels[id]=1;
- s.buildings=legacyLevels(t);return promoted;}
+/** Before first capture only earned legacy levels survive. First capture lifts the camp gate. */
+export function applyCampRule(s:WorldSave):boolean{
+ const t=s.town, captured=s.capturedEver.length>0||s.ownedCities.length>0;
+ const promoted=captured&&t.levels.hall<2;
+ if(captured){
+   if(promoted)t.levels.hall=2;
+   s.campLevelCeilings={};
+ }else{
+   for(const id of Object.keys(t.levels) as TownBuildingId[]){
+     t.levels[id]=Math.min(t.levels[id],s.campLevelCeilings?.[id]??1);
+   }
+ }
+ s.buildings=legacyLevels(t);return promoted;
+}
 /** 营寨刚升为县城时附在结算 / 提示里的一句话。 */
 export const CAMP_PROMOTED='营寨升为县城：建筑可以升级了';
 function townCommit(s:WorldSave,message:string):TownResult{s.buildings=legacyLevels(s.town);const persisted=commit(s);return{ok:true,message:persisted?message:message+'（仅本次会话，存储不可用）'};}
@@ -362,6 +380,17 @@ export function loseProvisionsPct(pct:number,cap:number):number{const s=loadWorl
 export function gainProvisions(n:number):void{if(!(n>0))return;const s=loadWorld();s.provisions+=Math.floor(n);commit(s);}
 export function spendWorld(c:{provisions?:number;merits?:number;money?:number}):boolean{const need=Math.max(0,Math.floor(c.provisions??0))+grainOf(Math.max(0,Math.floor(c.merits??0)),Math.max(0,Math.floor(c.money??0)));const s=loadWorld();if(s.provisions<need)return false;s.provisions-=need;commit(s);return true;}
 /** 直接发军粮（如武将经验满级折军粮）。返回发放数。 */
+export function creditGauntletGrain(id:string, amount:number):number {
+ const s=loadWorld(), paid=s.receipts.find(r=>r.id===id);
+ if(storageUnavailable)throw new Error('天下存档暂不可写');
+ if(paid)return paid.provisions;
+ const before=s.provisions;
+ bank(s,0,amount);
+ const credited=s.provisions-before;
+ s.receipts.push({id,merits:0,provisions:credited});s.receipts=s.receipts.slice(-32);
+ if(!commit(s))throw new Error('天下存档写入失败');
+ return credited;
+}
 export function addProvisions(amount:number):number{const n=Math.floor(amount);if(!(n>0))return 0;const s=loadWorld();bank(s,0,n);commit(s);return n;}
 export function addTownMoney(amount:number):void{const n=Math.floor(amount);if(!(n>0))return;const s=loadWorld();bank(s,0,0,n);commit(s);}
 

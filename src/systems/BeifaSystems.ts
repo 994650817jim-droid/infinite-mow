@@ -18,7 +18,9 @@ export class Strikes {
   private list: Strike[] = []; private seq = 0;
   readonly metrics = { fired: 0, playerHits: 0 };
   constructor(private h: StrikeHost) {}
-  add(kind: StrikeKind, x: number, y: number, r: number, warnMs: number, ratio: number, ally: number): void { this.list.push({ id: `beifa-strike-${++this.seq}`, kind, x, y, r, at: this.h.now() + warnMs, warnMs, ratio, ally }); }
+  add(kind: StrikeKind, x: number, y: number, r: number, warnMs: number, ratio: number, ally: number): void { const strike={id:`beifa-strike-${++this.seq}`,kind,x,y,r,at:this.h.now()+warnMs,warnMs,ratio,ally};
+    this.list.push(strike);if(ally>0)this.h.army.warnings.set(strike,{kind:'circle',x,y,radius:r});
+  }
   get pending(): number { return this.list.length; }
   update(): void {
     const now = this.h.now(), wf = warnFx(this.h.scene), p = this.h.player;
@@ -27,7 +29,7 @@ export class Strikes {
       if (s.kind === 'lightning') wf.warn(s.id, 'lightning', s.x, s.y, s.r, prog, now);
       else wf.circle(s.id, s.kind === 'arrows' ? 'arrows' : 'slam', s.x, s.y, s.r, prog, now);
       if (now < s.at) continue;
-      this.list.splice(i, 1); this.metrics.fired++;
+      this.list.splice(i, 1); this.h.army.warnings.delete(s); this.metrics.fired++;
       if (s.kind === 'lightning') wf.impact('lightning', s.x, s.y, s.r);
       else if (s.kind === 'arrows') wf.shapeImpact(s.id, 'arrows', s.x, s.y, s.r * 2, 0, now);
       else { playSheet(this.h.scene, 'fx_explosion', s.x, s.y + 6, { size: s.r * 2.6, ms: 620, depth: actorDepth(s.y) + .6, originY: .84, name: 'beifa-meteor-hit' }); this.h.scene.cameras.main.shake(160, .006); }
@@ -35,7 +37,7 @@ export class Strikes {
       this.h.army.hurtArea(s.x, s.y, s.r, s.ally, now);
     }
   }
-  clear(): void { this.list = []; }
+  clear(): void { for(const s of this.list)this.h.army.warnings.delete(s); this.list = []; }
 }
 
 // ---------------- 街亭：汲水点 ----------------

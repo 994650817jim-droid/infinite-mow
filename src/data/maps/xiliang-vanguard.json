@@ -1,0 +1,513 @@
+{
+  "type": "map",
+  "version": "1.10",
+  "tiledversion": "1.11.2",
+  "orientation": "orthogonal",
+  "renderorder": "right-down",
+  "infinite": false,
+  "width": 80,
+  "height": 48,
+  "tilewidth": 32,
+  "tileheight": 32,
+  "nextlayerid": 8,
+  "nextobjectid": 23,
+  "layers": [
+    {
+      "id": 1,
+      "type": "objectgroup",
+      "name": "Origin",
+      "opacity": 1,
+      "visible": true,
+      "x": 0,
+      "y": 0,
+      "draworder": "topdown",
+      "objects": [
+        {
+          "id": 1,
+          "name": "start",
+          "type": "start",
+          "x": 1280,
+          "y": 640,
+          "width": 0,
+          "height": 0,
+          "rotation": 0,
+          "visible": true,
+          "point": true
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "objectgroup",
+      "name": "Gate",
+      "opacity": 1,
+      "visible": true,
+      "x": 0,
+      "y": 0,
+      "draworder": "topdown",
+      "objects": [
+        {
+          "id": 2,
+          "name": "gate",
+          "type": "gate",
+          "x": 1280,
+          "y": 200,
+          "width": 0,
+          "height": 0,
+          "rotation": 0,
+          "visible": true,
+          "point": true
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "objectgroup",
+      "name": "Tents",
+      "opacity": 1,
+      "visible": true,
+      "x": 0,
+      "y": 0,
+      "draworder": "topdown",
+      "objects": [
+        {
+          "id": 3,
+          "name": "tent",
+          "type": "tent",
+          "x": 725,
+          "y": 345,
+          "width": 0,
+          "height": 0,
+          "rotation": 0,
+          "visible": true,
+          "point": true
+        },
+        {
+          "id": 4,
+          "name": "tent",
+          "type": "tent",
+          "x": 455,
+          "y": 380,
+          "width": 0,
+          "height": 0,
+          "rotation": 0,
+          "visible": true,
+          "point": true
+        },
+        {
+          "id": 5,
+          "name": "tent",
+          "type": "tent",
+          "x": 1835,
+          "y": 345,
+          "width": 0,
+          "height": 0,
+          "rotation": 0,
+          "visible": true,
+          "point": true
+        },
+        {
+          "id": 6,
+          "name": "tent",
+          "type": "tent",
+          "x": 2105,
+          "y": 380,
+          "width": 0,
+          "height": 0,
+          "rotation": 0,
+          "visible": true,
+          "point": true
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "objectgroup",
+      "name": "Palisades",
+      "opacity": 1,
+      "visible": true,
+      "x": 0,
+      "y": 0,
+      "draworder": "topdown",
+      "objects": [
+        {
+          "id": 7,
+          "name": "stakes",
+          "type": "stakes",
+          "x": 435,
+          "y": 515,
+          "width": 0,
+          "height": 0,
+          "rotation": 0,
+          "visible": true,
+          "point": true,
+          "properties": [
+            {
+              "name": "frame",
+              "type": "int",
+              "value": 3
+            },
+            {
+              "name": "size",
+              "type": "int",
+              "value": 116
+            }
+          ]
+        },
+        {
+          "id": 8,
+          "name": "stakes",
+          "type": "stakes",
+          "x": 765,
+          "y": 515,
+          "width": 0,
+          "height": 0,
+          "rotation": 0,
+          "visible": true,
+          "point": true,
+          "properties": [
+            {
+              "name": "frame",
+              "type": "int",
+              "value": 3
+            },
+            {
+              "name": "size",
+              "type": "int",
+              "value": 116
+            }
+          ]
+        },
+        {
+          "id": 9,
+          "name": "stakes",
+          "type": "stakes",
+          "x": 1795,
+          "y": 515,
+          "width": 0,
+          "height": 0,
+          "rotation": 0,
+          "visible": true,
+          "point": true,
+          "properties": [
+            {
+              "name": "frame",
+              "type": "int",
+              "value": 3
+            },
+            {
+              "name": "size",
+              "type": "int",
+              "value": 116
+            }
+          ]
+        },
+        {
+          "id": 10,
+          "name": "stakes",
+          "type": "stakes",
+          "x": 2125,
+          "y": 515,
+          "width": 0,
+          "height": 0,
+          "rotation": 0,
+          "visible": true,
+          "point": true,
+          "properties": [
+            {
+              "name": "frame",
+              "type": "int",
+              "value": 3
+            },
+            {
+              "name": "size",
+              "type": "int",
+              "value": 116
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "objectgroup",
+      "name": "Supplies",
+      "opacity": 1,
+      "visible": true,
+      "x": 0,
+      "y": 0,
+      "draworder": "topdown",
+      "objects": [
+        {
+          "id": 11,
+          "name": "rack",
+          "type": "rack",
+          "x": 365,
+          "y": 405,
+          "width": 0,
+          "height": 0,
+          "rotation": 0,
+          "visible": true,
+          "point": true,
+          "properties": [
+            {
+              "name": "frame",
+              "type": "int",
+              "value": 5
+            },
+            {
+              "name": "size",
+              "type": "int",
+              "value": 105
+            }
+          ]
+        },
+        {
+          "id": 12,
+          "name": "brazier",
+          "type": "brazier",
+          "x": 1765,
+          "y": 430,
+          "width": 0,
+          "height": 0,
+          "rotation": 0,
+          "visible": true,
+          "point": true,
+          "properties": [
+            {
+              "name": "frame",
+              "type": "int",
+              "value": 7
+            },
+            {
+              "name": "size",
+              "type": "int",
+              "value": 100
+            }
+          ]
+        },
+        {
+          "id": 13,
+          "name": "crates",
+          "type": "crates",
+          "x": 2190,
+          "y": 420,
+          "width": 0,
+          "height": 0,
+          "rotation": 0,
+          "visible": true,
+          "point": true,
+          "properties": [
+            {
+              "name": "frame",
+              "type": "int",
+              "value": 4
+            },
+            {
+              "name": "size",
+              "type": "int",
+              "value": 104
+            }
+          ]
+        },
+        {
+          "id": 14,
+          "name": "standard",
+          "type": "standard",
+          "x": 295,
+          "y": 520,
+          "width": 0,
+          "height": 0,
+          "rotation": 0,
+          "visible": true,
+          "point": true,
+          "properties": [
+            {
+              "name": "frame",
+              "type": "int",
+              "value": 6
+            },
+            {
+              "name": "size",
+              "type": "int",
+              "value": 110
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "objectgroup",
+      "name": "Muster",
+      "opacity": 1,
+      "visible": true,
+      "x": 0,
+      "y": 0,
+      "draworder": "topdown",
+      "objects": [
+        {
+          "id": 15,
+          "name": "muster",
+          "type": "muster",
+          "x": 684,
+          "y": 414,
+          "width": 0,
+          "height": 0,
+          "rotation": 0,
+          "visible": true,
+          "point": true
+        },
+        {
+          "id": 16,
+          "name": "muster",
+          "type": "muster",
+          "x": 512,
+          "y": 449,
+          "width": 0,
+          "height": 0,
+          "rotation": 0,
+          "visible": true,
+          "point": true
+        },
+        {
+          "id": 17,
+          "name": "muster",
+          "type": "muster",
+          "x": 1876,
+          "y": 414,
+          "width": 0,
+          "height": 0,
+          "rotation": 0,
+          "visible": true,
+          "point": true
+        },
+        {
+          "id": 18,
+          "name": "muster",
+          "type": "muster",
+          "x": 2048,
+          "y": 449,
+          "width": 0,
+          "height": 0,
+          "rotation": 0,
+          "visible": true,
+          "point": true
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "objectgroup",
+      "name": "Routes",
+      "opacity": 1,
+      "visible": true,
+      "x": 0,
+      "y": 0,
+      "draworder": "topdown",
+      "objects": [
+        {
+          "id": 19,
+          "name": "lane",
+          "type": "lane",
+          "x": 684,
+          "y": 414,
+          "width": 0,
+          "height": 0,
+          "rotation": 0,
+          "visible": true,
+          "polyline": [
+            {
+              "x": 0,
+              "y": 0
+            },
+            {
+              "x": -75,
+              "y": 60
+            },
+            {
+              "x": -75,
+              "y": 158
+            }
+          ]
+        },
+        {
+          "id": 20,
+          "name": "lane",
+          "type": "lane",
+          "x": 512,
+          "y": 449,
+          "width": 0,
+          "height": 0,
+          "rotation": 0,
+          "visible": true,
+          "polyline": [
+            {
+              "x": 0,
+              "y": 0
+            },
+            {
+              "x": 83,
+              "y": 60
+            },
+            {
+              "x": 83,
+              "y": 158
+            }
+          ]
+        },
+        {
+          "id": 21,
+          "name": "lane",
+          "type": "lane",
+          "x": 1876,
+          "y": 414,
+          "width": 0,
+          "height": 0,
+          "rotation": 0,
+          "visible": true,
+          "polyline": [
+            {
+              "x": 0,
+              "y": 0
+            },
+            {
+              "x": 75,
+              "y": 60
+            },
+            {
+              "x": 75,
+              "y": 158
+            }
+          ]
+        },
+        {
+          "id": 22,
+          "name": "lane",
+          "type": "lane",
+          "x": 2048,
+          "y": 449,
+          "width": 0,
+          "height": 0,
+          "rotation": 0,
+          "visible": true,
+          "polyline": [
+            {
+              "x": 0,
+              "y": 0
+            },
+            {
+              "x": -83,
+              "y": 60
+            },
+            {
+              "x": -83,
+              "y": 158
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "tilesets": []
+}

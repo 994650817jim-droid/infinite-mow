@@ -1,35 +1,108 @@
-import { PROGRESS_KEYS, activeSlot } from './SaveSlots';
+import { battleOwnerActive, battlePageOwner, registerBattlePage } from './BattlePageOwner';
+import { withGauntletLock } from './GauntletSaveLock';
+import { PROGRESS_KEYS, activeSlot, recoverSlotTransfer } from './SaveSlots';
+import { pageRetired, writerKey } from './SlotLocalView';
 
-/**
- * 中途退出不算（用户 2026-11-17：「中途退出游戏，然后重新进入，那中途退出那一场打的资源等级都不算，重新计算」）。
- * 进关时把当前存档位的全部进度键（PROGRESS_KEYS：天下 / 武将等级经验 / 行囊兵装遗珍信物 / 名将收录 / 心得 / 战役进度 / 招兵…）
- * 原样存一份「进行中战斗」快照；关卡告捷（进行营 / 战报）或战败（沿用现行规则）时丢掉快照，本场的写入就此生效。
- * 其余离开方式都算中途退出：暂停里「返回选将」→ 立刻回滚并重载；关页面 / 刷新 / 崩溃 → 下次启动时先回滚（BattleSnapshotBoot）。
- * 战斗中照旧随时写存档（升级、拾取等），回滚时整份换回快照，所以不用逐处改成延迟写入。成就（im_achievements）是全局统计，不在快照里，不回滚。
- */
 export const BATTLE_SNAPSHOT_KEY = 'im_battle_snapshot';
-interface Snapshot { slot: number; at: number; label: string; keys: Record<string, string | null> }
-
-function read(): Snapshot | null {
-  try { const v = JSON.parse(localStorage.getItem(BATTLE_SNAPSHOT_KEY) ?? 'null'); return v && typeof v === 'object' && v.keys && typeof v.keys === 'object' ? v as Snapshot : null; } catch { return null; }
-}
-/** 进关：记下当前存档（总是覆盖：上一份快照要么已结算丢掉，要么是没进成关的残留，不能拿它当回滚点）。 */
-export function beginBattle(label: string): void {
-  const keys: Record<string, string | null> = {};
-  try { for (const k of PROGRESS_KEYS) keys[k] = localStorage.getItem(k); localStorage.setItem(BATTLE_SNAPSHOT_KEY, JSON.stringify({ slot: activeSlot(), at: Date.now(), label, keys } satisfies Snapshot)); } catch { /* 存储不可用：不做回滚保护 */ }
-}
-/** 告捷 / 战败结算：本场写入生效，丢掉快照。 */
-export function commitBattle(): void { try { localStorage.removeItem(BATTLE_SNAPSHOT_KEY); } catch { /* ignore */ } }
-export function battleInProgress(): string | null { return read()?.label ?? null; }
-/** 中途退出：把存档换回进关时的样子并丢掉快照；返回是否真的回滚了（调用方随后应重载，丢掉各存档模块的内存缓存）。 */
-/** 中途撤退回滚后要重载页面：撤退前写入 sessionStorage，启动（BootScene）读到后直接进这个场景（一次性）。 */
 export const BOOT_TO_KEY = 'im_boot_to';
-export function rollbackBattle(): boolean {
-  const s = read(); if (!s) return false;
-  try {
-    // 剧情「已看过」不回滚（关前军情重打不再播）；剧情旗标 im_story_v1 照常回滚
-    if (s.slot === activeSlot()) for (const k of PROGRESS_KEYS) { if (k === 'im_story_seen_v1' || !Object.prototype.hasOwnProperty.call(s.keys, k)) continue; /* 旧快照没有新增的进度键时保留原值 */ const v = s.keys[k]; if (v === null || v === undefined) localStorage.removeItem(k); else localStorage.setItem(k, v); }
-    localStorage.removeItem(BATTLE_SNAPSHOT_KEY);
-  } catch { return false; }
-  return s.slot === activeSlot();
+export class CampaignOccupied extends Error {
+  constructor(){super('该存档已有战役进行中');}
 }
+interface Snapshot {owner?:string;slot:number;at:number;label:string;keys:Record<string,string|null>}
+function read():Snapshot|null {
+  const raw=localStorage.getItem(BATTLE_SNAPSHOT_KEY);
+  if(!raw)return null;
+  const data=JSON.parse(raw) as Snapshot;
+  if(!data.keys || typeof data.keys!=='object' || !Number.isInteger(data.slot))throw new Error('战役快照无法恢复');
+  return data;
+}
+function writer(slot:number){return localStorage.getItem(writerKey(slot));}
+function wakeSettlement(){
+  void import('./GauntletSettlement').then(m=>m.recoverGauntletSettlement())
+    .catch(error=>console.warn('连战战报待入账',error));
+}
+function restore(s:Snapshot) {
+  // A partially restored image stays in storage until all its writes succeed.
+  // Legacy clients could switch slots with an abandoned snapshot. As before, never
+  // copy that other slot's rollback image into the newly active wallet.
+  if(s.slot===activeSlot())for(const key of PROGRESS_KEYS){
+    if(key==='im_story_seen_v1' || !Object.hasOwn(s.keys,key))continue;
+    const value=s.keys[key];
+    if(value==null)localStorage.removeItem(key);else localStorage.setItem(key,value);
+  }
+  localStorage.removeItem(BATTLE_SNAPSHOT_KEY);
+}
+function ownsSnapshot(snapshot:Snapshot|null):boolean {
+  const owner=writer(activeSlot())??snapshot?.owner;
+  return !pageRetired() && (!owner || owner===battlePageOwner) && (!snapshot?.owner || snapshot.owner===battlePageOwner);
+}
+export function beginBattle(label:string):void {
+  const slot=activeSlot(),existing=read();
+  if(!ownsSnapshot(existing))throw new CampaignOccupied();
+  const keys:Record<string,string|null>={};
+  for(const key of PROGRESS_KEYS)keys[key]=localStorage.getItem(key);
+  localStorage.setItem(writerKey(slot),battlePageOwner);
+  localStorage.setItem(BATTLE_SNAPSHOT_KEY,JSON.stringify({owner:battlePageOwner,slot,at:Date.now(),label,keys} satisfies Snapshot));
+}
+
+// Never wait for a page's lifetime lock while holding the short wallet transaction.
+// A dead owner is recovered only if both the owner and the snapshot are unchanged.
+async function checkpoint(label?:string,stillNeeded=()=>true):Promise<void>{
+  await registerBattlePage();
+  const slot=activeSlot();
+  for(;;){
+    const probe=await withGauntletLock(()=>{
+      if(!stillNeeded())return null;
+      if(pageRetired() || activeSlot()!==slot)throw new Error('存档页面已变更，请重新载入');
+      recoverSlotTransfer();
+      const saved=read(),holder=writer(slot),other=holder??saved?.owner;
+      if(!holder&&!saved || other===battlePageOwner){
+        if(label && !saved)beginBattle(label);
+        return null;
+      }
+      return {holder,raw:localStorage.getItem(BATTLE_SNAPSHOT_KEY),owner:other};
+    });
+    if(!probe)return;
+    if(await battleOwnerActive(probe.owner)){
+      if(label)throw new CampaignOccupied();
+      return;
+    }
+    await withGauntletLock(()=>{
+      if(!stillNeeded() || pageRetired() || slot!==activeSlot())return;
+      if(writer(slot)!==probe.holder || localStorage.getItem(BATTLE_SNAPSHOT_KEY)!==probe.raw)return;
+      const abandoned=read();
+      if(abandoned)restore(abandoned);
+      localStorage.removeItem(writerKey(slot));
+      wakeSettlement();
+    });
+  }
+}
+export const openBattleCheckpoint=(label:string,stillNeeded=()=>true)=>checkpoint(label,stillNeeded);
+export const recoverAbandonedCampaign=()=>checkpoint();
+
+export function commitBattle(keepWriter=false):void {
+  if(!ownsSnapshot(read()))return;
+  localStorage.removeItem(BATTLE_SNAPSHOT_KEY);
+  if(!keepWriter)localStorage.removeItem(writerKey(activeSlot()));
+  wakeSettlement();
+}
+export function rollbackBattle():boolean {
+  const saved=read();
+  if(!ownsSnapshot(saved))return false;
+  if(saved)restore(saved);
+  localStorage.removeItem(writerKey(activeSlot()));
+  wakeSettlement();
+  return !!saved && saved.slot===activeSlot();
+}
+export function releaseCampWriter(continuing=false):void {
+  if(pageRetired() || writer(activeSlot())!==battlePageOwner)return;
+  // Deliberate in-game scene changes previously retained their story/reward writes.
+  // The retreat action already restored its snapshot; browser crashes recover at boot.
+  commitBattle(continuing);
+}
+export function campaignUsesSave(slot:number):boolean {
+  if(slot!==activeSlot())return false;
+  const snapshot=read();
+  return !!snapshot && snapshot.slot===slot && snapshot.label!=='GauntletGameScene';
+}
+export function battleInProgress():string|null {return read()?.label??null;}

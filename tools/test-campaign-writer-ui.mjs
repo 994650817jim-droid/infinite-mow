@@ -1,0 +1,34 @@
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+import {join,resolve} from 'node:path';
+import {writeFileSync} from 'node:fs';
+const root=process.env.GAME_REPO??resolve(import.meta.dirname,'..');
+const {chromium}=createRequire(join(root,'package.json'))('playwright');
+const base=process.env.BASE??'http://127.0.0.1:5294';
+const browser=await chromium.launch({channel:'chrome'});
+try {
+  const ctx=await browser.newContext({viewport:{width:390,height:844}}),a=await ctx.newPage(),b=await ctx.newPage();
+  const errors=[];b.on('pageerror',e=>errors.push(e.message));
+  await a.route('**/__writer',r=>r.fulfill({contentType:'text/html',body:'<!doctype html><title>First player</title>'}));
+  await a.goto(base+'/__writer');
+  await a.evaluate(async()=>{const s=await import('/src/systems/BattleSnapshot.ts');await s.openBattleCheckpoint('GameScene');});
+  await b.goto(base+'/?gauntlet=1&layout=mobile',{waitUntil:'domcontentloaded'});
+  await b.waitForFunction(()=>window.__game?.scene.getScene('GauntletGameScene')?.player?.alive,null,{timeout:210000});
+  const snap=await b.evaluate(()=>localStorage.getItem('im_battle_snapshot'));
+  await b.evaluate(()=>{const g=window.__game;g.registry.set('runConfig',{chapter:'huangjin',stage:1,character:'zhaoyun'});g.scene.getScene('GauntletGameScene').scene.start('GameScene');});
+  await b.getByRole('dialog').getByText('该存档已有战役进行中',{exact:true}).waitFor({timeout:90000});
+  assert.equal(await b.evaluate(()=>localStorage.getItem('im_battle_snapshot')),snap);
+  assert.equal(await b.evaluate(()=>window.__game.scene.isActive('GameScene')),false);
+  if(process.env.SHOT)await b.screenshot({path:process.env.SHOT});
+  await b.getByRole('button',{name:'返回主菜单'}).click();
+  assert.equal(await b.getByRole('dialog').count(),0);
+  await a.close();
+  await b.evaluate(()=>{window.__game.scene.getScene('MenuScene').scene.start('GameScene');});
+  await b.waitForFunction(()=>window.__game.scene.getScene('GameScene')?.player?.alive,null,{timeout:90000});
+  const owned=await b.evaluate(()=>JSON.parse(localStorage.getItem('im_battle_snapshot')));
+  assert.notEqual(owned.owner,JSON.parse(snap).owner);
+  assert.deepEqual(errors,[]);
+  const outcome={denied:'该存档已有战役进行中',preservedOldSnapshot:true,enteredAfterClose:true,pageErrors:errors};
+  if(process.env.PROOF)writeFileSync(process.env.PROOF,JSON.stringify(outcome,null,2));
+  console.log(outcome);
+}finally{await browser.close()}

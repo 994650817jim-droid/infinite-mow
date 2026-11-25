@@ -1,3 +1,4 @@
+import {applySpellMark,expireMarks,type SpellMark} from '../rules/starMarks';
 import type {Enemy} from '../entities/Enemy';
 import {STAR_OUTER_TUNING as T,STAR_COMBOS,STAR_COMBO_ORDER_MS,activeStarCombos,type StarOuterView,type StarOuterRow,type StarComboId} from '../data/starOuter';
 
@@ -15,7 +16,8 @@ export class StarOuterCombat {
  readonly stats:Record<string,number>={};
  private target=-1;private streak=0;private hitAt=-Infinity;private surgeAt=-Infinity;private deathAt=-Infinity;
  private travel=0;private moving=false;private stoppedUntil=0;private echoAt=-Infinity;private spellAt=-Infinity;private slowAt=-Infinity;private orderAt=-Infinity;
- private marks=new Map<Enemy,{spawn:number;until:number;raw:number}>();
+ private marks=new Map<Enemy,SpellMark>();
+ private readonly markHost={valid:(e:Enemy)=>this.valid(e),identity:(e:Enemy)=>e.spawnId};
  private relay?:{e:Enemy;spawn:number;issued:number;due:number};
  private clock=0;private dragonAt=-Infinity;private tacticsAt=-Infinity;private volleyStamp=-Infinity;private spentVolley=-Infinity;private notice='';private noticeUntil=0;
  private echoes:Array<{e:Enemy;spawn:number;raw:number;spell:boolean;due:number;x:number;y:number;boost:boolean}>=[];
@@ -54,8 +56,13 @@ export class StarOuterCombat {
   if(e.hp<=0&&this.h.has('strength.NX2')&&now>=this.deathAt){this.deathAt=now+T.deathCd;this.pulse('strength.NX2',e);let n=0;for(const o of [...this.h.query(e.x,e.y,T.deathRadius)])if(o!==e&&this.valid(o)&&Math.hypot(o.x-e.x,o.y-e.y)<=T.deathRadius){this.h.deal(o,raw*T.deathRatio,spell);if(++n>=T.deathTargets)break;}}
   if(spell){
    if(this.h.has('intellect.NX2')&&now>=this.slowAt&&e.hp>0&&!e.controlImmune&&e.kind!=='boss'){this.slowAt=now+T.slowCd;this.h.slow(e,now);this.pulse('intellect.NX2',e);}
-   const key=this.h.has('intellect.K2');if(key||this.h.has('intellect.NX1')){this.updateMarks(now);if(now>=this.spellAt){let n=0;for(const[o,m]of this.marks)if(o!==e&&this.valid(o)&&o.spawnId===m.spawn&&Math.hypot(o.x-e.x,o.y-e.y)<=T.chainRadius){this.h.deal(o,raw*(key?T.chainRatio:T.smallChainRatio),true);this.pulse(key?'intellect.K2':'intellect.NX1',o);if(++n>=(key?T.chainTargets:1))break;}if(n)this.spellAt=now+T.chainCd;}
-    if(e.hp>0){if(!this.marks.has(e)&&this.marks.size>=(key?T.markTargets:2))this.marks.delete(this.marks.keys().next().value!);this.marks.set(e,{spawn:e.spawnId,until:now+T.markMs,raw});}}
+   const key=this.h.has('intellect.K2');
+   if(key||this.h.has('intellect.NX1')){
+    this.spellAt=applySpellMark(this.marks,e,raw,now,this.spellAt,key,T,this.markHost,(other,damage)=>{
+     this.h.deal(other,damage,true);
+     this.pulse(key?'intellect.K2':'intellect.NX1',other);
+    });
+   }
   }
  }
  private combo(id:StarComboId):boolean{return STAR_COMBOS[id].keys.every(key=>this.h.has(key));}
@@ -89,6 +96,6 @@ export class StarOuterCombat {
   return{rows,combos:activeStarCombos(id=>this.h.has(id)),notice:now<this.noticeUntil?this.notice:this.relay?'军师授策 · 待传导':''};
  }
  private valid(e:Enemy):boolean{return e.active&&e.hp>0&&!e.invulnerable&&!e.isSupplySlot;}
- private updateMarks(now:number):void{for(const[e,m]of this.marks)if(!this.valid(e)||e.spawnId!==m.spawn||now>=m.until)this.marks.delete(e);}
+ private updateMarks(now:number):void{expireMarks(this.marks,now,this.markHost);}
  clear():void{this.relay=undefined;this.clock=0;this.dragonAt=this.tacticsAt=this.volleyStamp=this.spentVolley=-Infinity;this.notice='';this.noticeUntil=0;this.target=-1;this.streak=this.travel=0;this.moving=false;this.stoppedUntil=0;this.hitAt=this.surgeAt=this.deathAt=this.echoAt=this.spellAt=this.slowAt=this.orderAt=-Infinity;this.marks.clear();this.echoes=[];for(const k of Object.keys(this.stats))delete this.stats[k];}
 }

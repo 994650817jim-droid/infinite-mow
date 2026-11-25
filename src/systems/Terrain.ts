@@ -44,6 +44,14 @@ const TREE_FRAMES: Record<TreeKind, [keyof typeof ART_FILES, number, number?]> =
   willow: ['trees2', 0, 4], cypress: ['trees2', 1], poplar: ['trees2', 2], dead: ['trees2', 3, 5], palm: ['trees2', 6], banyan: ['trees2', 7],
 };
 
+export function queueTreeArt(scene: Phaser.Scene, secondSheet: boolean): number {
+  const sheets = [[TERRAIN_ART.trees, ART_FILES.trees], [ART, ART_FILE]];
+  if (secondSheet) sheets.push([TERRAIN_ART.trees2, ART_FILES.trees2]);
+  const missing = sheets.filter(([key]) => !scene.textures.exists(key));
+  for (const [key, url] of missing) scene.load.spritesheet(key, url, { frameWidth: 384, frameHeight: 384 });
+  return missing.length;
+}
+
 export class Terrain {
   readonly trees: Tree[] = [];
   readonly rivers: River[] = [];
@@ -78,11 +86,8 @@ export class Terrain {
     for (const t of this.trees) { const k = this.key(Math.floor(t.x / TERRAIN.cell), Math.floor(t.y / TERRAIN.cell)); const l = this.grid.get(k); if (l) l.push(t); else this.grid.set(k, [t]); }
     // 树的图：没载入就现载（山道图集），载完再画
     // 地形图没载入就现载（v2 地形图；载不到时退回山道图集），载完再画
-    const L = scene.load; let pending = 0;
-    if (!scene.textures.exists(TERRAIN_ART.trees)) { L.spritesheet(TERRAIN_ART.trees, ART_FILES.trees, { frameWidth: 384, frameHeight: 384 }); pending++; }
-    if (this.trees.some(t => TREE_FRAMES[t.kind][0] === 'trees2') && !scene.textures.exists(TERRAIN_ART.trees2)) { L.spritesheet(TERRAIN_ART.trees2, ART_FILES.trees2, { frameWidth: 384, frameHeight: 384 }); pending++; }
+    const L = scene.load; let pending = queueTreeArt(scene, this.trees.some(t => TREE_FRAMES[t.kind][0] === 'trees2'));
     if (this.rivers.length) for (const [k, f] of Object.entries(RIVER_ART)) if (!scene.textures.exists(k)) { L.image(k, f); pending++; }
-    if (!scene.textures.exists(ART)) { L.spritesheet(ART, ART_FILE, { frameWidth: 384, frameHeight: 384 }); pending++; }
     if (!pending) { this.build(); this.buildWater(); }
     else { L.once('complete', () => { if (scene.sys.isActive() || scene.sys.isPaused()) { this.build(); this.buildWater(); } }); L.start(); }
   }

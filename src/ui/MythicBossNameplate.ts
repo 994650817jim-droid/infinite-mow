@@ -24,6 +24,11 @@ export function addMythicBossNameplate(
   scene: Phaser.Scene, root: Phaser.GameObjects.Container, x: number, y: number,
   title: string, name: string, { tier, portraitKey }: MythicNameplateStyle,
 ): Phaser.GameObjects.Text {
+  // The HUD reserves a narrow strip below the wave track during the entrance.
+  const group = scene.add.container(x, y).setScale(.78);
+  root.add(group);
+  x = 0;
+  y = 0;
   const colors = PALETTES[tier];
   const key = 'mythic-nameplate-' + tier;
   const plate = scene.textures.exists(key)
@@ -39,6 +44,6 @@ export function addMythicBossNameplate(
   const label = scene.add.text(x - 66, y + 9, name, {
     fontFamily: TITLE_FONT, fontSize: '30px', color: colors.name, resolution: 2,
   }).setOrigin(0, .5).setLetterSpacing(3).setShadow(0, 2, '#080b08', 3, true, true);
-  root.add([plate, portrait, caption, label]);
+  group.add([plate, portrait, caption, label]);
   return label;
 }

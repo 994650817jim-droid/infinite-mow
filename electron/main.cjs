@@ -14,6 +14,11 @@ const SAVE_FILE = () => path.join(app.getPath('userData'), 'save.json');
 const devMode = !app.isPackaged && process.env.IM_DEVTOOLS === '1';
 // 自动测试用：指定独立的用户数据目录，避免碰到玩家真实存档
 if (process.env.IM_USER_DATA) app.setPath('userData', process.env.IM_USER_DATA);
+// Only the process owning this profile may cache and rewrite its save file.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+  return;
+}
 // 部分 Windows 环境里 Chromium 的 GPU 子进程沙箱启动即“拒绝访问”（0xC0000022），重试 9 次后整个程序退出（0x80000003）。
 // 关闭 GPU 进程沙箱即可正常启动，仍保留硬件加速（单机离线游戏，不加载外部网页）。
 app.commandLine.appendSwitch('disable-gpu-sandbox');
@@ -51,23 +56,33 @@ protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { standard: t
 let store = null;
 function loadStore() {
   if (store) return store;
-  try { store = JSON.parse(fs.readFileSync(SAVE_FILE(), 'utf8')); if (!store || typeof store !== 'object' || Array.isArray(store)) store = {}; }
-  catch { store = null; }
+  let raw;
+  try { raw=fs.readFileSync(SAVE_FILE(), 'utf8'); } catch(error) { if(error.code==='ENOENT') return null; throw error; }
+  const parsed=JSON.parse(raw);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('存档文件格式错误');
+  store=parsed;
   return store;
 }
-function writeStore() {
+function writeStore(next) {
   const file = SAVE_FILE(), tmp = file + '.tmp';
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(tmp, JSON.stringify(store ?? {}), 'utf8');
+  fs.writeFileSync(tmp, JSON.stringify(next), 'utf8');
   fs.renameSync(tmp, file);
+  store = next;
 }
-ipcMain.on('store:load', e => { e.returnValue = loadStore(); });           // null = 还没有存档文件（首次启动，由渲染进程迁移旧存档）
-ipcMain.on('store:set', (e, key, value) => { if (!store) store = {}; store[String(key)] = String(value); try { writeStore(); e.returnValue = true; } catch { e.returnValue = false; } });
-ipcMain.on('store:remove', (e, key) => { if (!store) store = {}; delete store[String(key)]; try { writeStore(); e.returnValue = true; } catch { e.returnValue = false; } });
-ipcMain.on('store:replace', (e, all) => { store = all && typeof all === 'object' ? Object.fromEntries(Object.entries(all).map(([k, v]) => [String(k), String(v)])) : {}; try { writeStore(); e.returnValue = true; } catch { e.returnValue = false; } });
+ipcMain.on('store:load', e => { try { e.returnValue=loadStore(); } catch { e.returnValue=false; } }); // null = first launch; false = unreadable, preserve file
+function persist(e,next) { try { writeStore(next); e.returnValue=true; } catch { e.returnValue=false; } }
+ipcMain.on('store:set', (e,key,value) => persist(e,{...store,[String(key)]:String(value)}));
+ipcMain.on('store:remove', (e,key) => { const next={...store}; delete next[String(key)]; persist(e,next); });
+ipcMain.on('store:replace', (e,all) => persist(e,all && typeof all==='object' ? Object.fromEntries(Object.entries(all).map(([k,v])=>[String(k),String(v)])) : {}));
 ipcMain.on('store:path', e => { e.returnValue = SAVE_FILE(); });
 
 let win = null;
+app.on('second-instance', () => {
+  if (!win || win.isDestroyed()) return;
+  if (win.isMinimized()) win.restore();
+  win.focus();
+});
 function toggleFullscreen() { if (win) win.setFullScreen(!win.isFullScreen()); }
 /** 当前屏幕放得下的分辨率（窗口模式用）。 */
 function availableResolutions() {

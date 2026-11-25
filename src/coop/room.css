@@ -188,3 +188,5 @@
 
 /* 断线反馈不覆盖摇杆与退出入口，双方等待时服务器冻结战斗。 */
 .coop-reconnect { position:fixed; z-index:100020; top:max(116px,env(safe-area-inset-top)); left:50%; transform:translateX(-50%); max-width:calc(100vw - 24px); box-sizing:border-box; padding:12px 18px; border:1px solid #ae8b50; background:rgba(29,21,14,.94); color:#f2dfb5; font:600 15px/1.5 serif; text-align:center; pointer-events:none; }
+
+.coop-during-battle > .coop-order { top: calc(max(12px, env(safe-area-inset-top)) + 52px); min-height: 44px; }

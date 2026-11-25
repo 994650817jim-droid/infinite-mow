@@ -68,6 +68,7 @@ export class ItemBagUI {
     this.notice = notes.join('\n');
     markBagSeen();
     this.tip = new ItemTooltip(scene, DEPTH.overlay + 30);
+    if (!IS_DESKTOP) loadBagArt(scene, () => { if (this.root.active) this.render(); });
     this.render();
   }
 

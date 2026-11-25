@@ -44,6 +44,7 @@ const P = 'sm_', BASE = 'assets/star-map/';
 const SETS = ['neutral', 'strength', 'agility', 'intellect', 'command'] as const;
 const KINDS = ['gate', 'small', 'notable', 'keystone'] as const;
 const STATES = ['off', 'ready', 'on'] as const;
+type StarLine = Phaser.GameObjects.Image | Phaser.GameObjects.TileSprite;
 type NodeState = typeof STATES[number];
 /** 设计稿 1× 显示尺寸（底座图是 2×）、图标尺寸、点亮特效尺寸、命中半径。 */
 const DISP: Record<StarNode['kind'], number> = { gate: 44, small: 20, notable: 44, keystone: 64 };
@@ -97,7 +98,7 @@ export class StarMapUI {
   readonly root: Phaser.GameObjects.Container;
   private map!: Phaser.GameObjects.Container;
   private readonly nodes = new Map<string, { n: StarNode; base: Phaser.GameObjects.Image; icon?: Phaser.GameObjects.Image; hit: Phaser.GameObjects.Zone; baseAlpha: number; iconAlpha: number; fade: number }>();
-  private readonly lines: Array<{ a: string; b: string; ink: Phaser.GameObjects.TileSprite; gold: Phaser.GameObjects.TileSprite }> = [];
+  private readonly lines: Array<{ a: string; b: string; ink: StarLine; gold: StarLine }> = [];
   private ring!: Phaser.GameObjects.Graphics;
   private left!: Phaser.GameObjects.Text;
   private leftSub!: Phaser.GameObjects.Text;
@@ -157,7 +158,16 @@ export class StarMapUI {
     // 连线（先画，在节点下面）
     for (const [a, b] of STAR_EDGES) {
       const A = STAR_BY_ID.get(a)!, B = STAR_BY_ID.get(b)!, len = Math.hypot(B.x - A.x, B.y - A.y), ang = Math.atan2(B.y - A.y, B.x - A.x);
-      const mk = (key: string, alpha: number) => { const tex = s.textures.get(key).getSourceImage() as { height: number }; const t = s.add.tileSprite(A.x, A.y, len * 2, tex.height, key).setOrigin(0, .5).setScale(.5).setRotation(ang).setAlpha(alpha).setScrollFactor(0); this.map.add(t); return t; };
+      const mk = (key: string, alpha: number) => {
+        const frame = s.textures.get(key).get(), width = len * 2;
+        // A cropped image shares the source texture. TileSprite creates a canvas and GPU texture for every edge.
+        const line = width <= frame.width
+          ? s.add.image(A.x, A.y, key).setCrop(0, 0, width, frame.height)
+          : s.add.tileSprite(A.x, A.y, width, frame.height, key);
+        line.setOrigin(0, .5).setScale(.5).setRotation(ang).setAlpha(alpha).setScrollFactor(0);
+        this.map.add(line);
+        return line;
+      };
       this.lines.push({ a, b, ink: mk(P + 'line_ink', .72), gold: mk(P + 'line_gold', 1) });
     }
     // 中心头像（水墨立轴取头肩，裁成圆；没图用像素头像）
@@ -214,7 +224,7 @@ export class StarMapUI {
     const s = this.scene, st = this.o.state(), key = 'ink_hero_' + st.hero, faceKey = P + 'face_' + st.hero, R = 40;
     if (!s.textures.exists(faceKey) && s.textures.exists(key)) {
       const src = s.textures.get(key).getSourceImage() as HTMLImageElement, c = document.createElement('canvas'); c.width = c.height = 160;
-      const g = c.getContext('2d')!; g.beginPath(); g.arc(80, 80, 78, 0, Math.PI * 2); g.clip();
+      const g = c.getContext('2d', { willReadFrequently: true })!; g.beginPath(); g.arc(80, 80, 78, 0, Math.PI * 2); g.clip();
       // 立轴人物在上半部：取宽度 70%、从顶上 6% 开始的方块（头肩）
       const w = src.width * .7, sx = (src.width - w) / 2, sy = src.height * .06; g.drawImage(src, sx, sy, w, w, 0, 0, 160, 160);
       s.textures.addCanvas(faceKey, c);

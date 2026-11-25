@@ -3,7 +3,7 @@ import type { Enemy } from '../entities/Enemy';
 import { DEPTH, FONT, GAME_HEIGHT, GAME_WIDTH, HEADING_FONT, IS_DESKTOP } from '../config';
 import { SURRENDER, SURRENDER_TIERS, parleyTier, surrenderLine, surrenderOdds, type Odds, type OddsCtx, type SurrenderDef } from '../data/surrender';
 import { bossInRoster, captureBoss, joinByPersuasion } from './RosterStore';
-import { markSurrender, neverSeenIds, surrenderedIds, surrenderLive } from './SurrenderStore';
+import { markSurrender, surrenderedIds, surrenderLive } from './SurrenderStore';
 import { gainProvisions } from '../world/WorldStore';
 import { homeCommand } from '../ui/HomeCommand';
 import { LQ, lqButton, lqDivider, lqLabelColor, type LqState } from '../ui/LacquerKit';
@@ -39,12 +39,9 @@ export class Parley {
   /** 测试注入随机数（0–1）。 */ static random: (() => number) | null = null;
   readonly log: { opens: number; rolls: Array<{ pct: number; roll: number; ok: boolean }>; choices: ParleyChoice[] } = { opens: 0, rolls: [], choices: [] };
   private panel?: Phaser.GameObjects.Container; private pressUntil = 0; private keys?: (e: KeyboardEvent) => void;
-  private readonly firstNever: boolean;
   constructor(private h: ParleyHost, readonly def: SurrenderDef) {
     const roster = bossInRoster(def.id, def.name, def.hero);
-    const seenNever = def.tier === 'never' && neverSeenIds().includes(def.key);
-    this.firstNever = def.tier === 'never' && !seenNever;
-    if (!parleyTier(def) || roster || seenNever) this.state = 'skip';
+    if (!parleyTier(def) || roster || def.tier === 'never') this.state = 'skip';
   }
   /** 宿主按场景建：只有弹窗档且未在麾下的首领才建（其余 null）。 */
   static for(h: ParleyHost, def: SurrenderDef | null): Parley | null { return def && parleyTier(def) ? new Parley(h, def) : null; }
@@ -70,7 +67,6 @@ export class Parley {
     const b = this.h.boss(); if (!b) return;
     if (this.state === 'idle' && this.h.wenjiu?.()) { this.state = 'skip'; return; } // 温酒斩华雄优先
     const second = this.state === 'pressing'; this.state = 'open'; this.log.opens++; b.invulnerable = true;
-    if (this.firstNever) markSurrender('neverSeen', this.def.key);
     this.h.setMode('parley'); this.h.opened?.(this); this.render(second);
   }
   /** 选择（按钮 / 键盘 1 2 3 / 手柄 A B X / 测试直接调）。 */
@@ -126,7 +122,7 @@ export class Parley {
   }
   /** 宁死不降（已弹过窗）倒下：拒绝台词当临终台词。返回是否播了（播了宿主就不再播剧本 bossFall）。 */
   dyingLine(at: { x: number; y: number }): boolean {
-    if (this.def.tier !== 'never' || this.firstNever) return false;
+    if (this.def.tier !== 'never') return false;
     return this.h.bark(at, this.def.name, surrenderLine(this.def, false, this.h.ctx()));
   }
 

@@ -44,7 +44,7 @@ export function intelGameSceneClass(Base: typeof GameScene) {
     private cart?: Phaser.GameObjects.Container; private cartBar?: Phaser.GameObjects.Graphics; private cartLabel?: Phaser.GameObjects.Text; private escortHint?: Phaser.GameObjects.Text; private cartPointer?: Phaser.GameObjects.Text;
     private cartHp = 0; private cartStartY = 0; private cartArrived = false; private ambushWave = 0; private cartStopped = false;
     constructor() { super('IntelGameScene'); }
-    preload() { for (const [key, url] of Object.entries({...GUANDU_ATLAS_FILES, ...BOUNTY_ATLAS_FILES})) if (!this.textures.exists(key)) loadBossSheet(this.load, key, url); }
+    preload() { super.preload();  for (const [key, url] of Object.entries({...GUANDU_ATLAS_FILES, ...BOUNTY_ATLAS_FILES})) if (!this.textures.exists(key)) loadBossSheet(this.load, key, url); }
     private get escort() { return this.event?.kind === 'escort'; }
     /** 商车劫掠进度等，供测试读取。 */
     get escortState() { return this.cart ? {hp: this.cartHp, progress: this.progress, arrived: this.cartArrived, stopped: this.cartStopped, x: this.cart.x, y: this.cart.y} : null; }

@@ -7,7 +7,7 @@
   },
   "scripts": {
     "start": "node coop.mjs",
-    "test": "node --test coop.test.mjs"
+    "test": "cd .. && node --test server/*.test.mjs"
   },
   "dependencies": {
     "ws": "8.23.0"

@@ -1,8 +1,10 @@
+import {allyHp} from '../rules/retinue';
 import {visualTextureKey} from '../systems/ReadableTextures';
 import {figureCorrection} from '../systems/SpriteMetrics';
 import {isV2Texture, V2_TROOP_SCALE, v2TroopGround} from '../systems/ArtStyle';
 import Phaser from 'phaser';
 import { createTacticState } from '../systems/LegionTactics';
+import { GroundMotion, WALK_DIRECTIONS, walkRow } from '../systems/GroundMotion';
 import { DEPTH, FONT, actorDepth } from '../config';
 import { TROOPS, type TroopKind } from '../data/legion';
 export type AllyKind = TroopKind;
@@ -14,7 +16,7 @@ const LUNGE: Partial<Record<TroopKind, number>> = { spearman: 10, swordsman: 7, 
 export class Ally {
   readonly id = ++sequence;
   private campaignHpMultiplier=1;
-  applyCampaignHp(multiplier:number):void{const ratio=this.maxHp>0?this.hp/this.maxHp:1;this.campaignHpMultiplier=multiplier;this.maxHp=Math.round(this.def.hp*(1+.3*(this.level-1))*multiplier);this.hp=Math.min(this.maxHp,this.maxHp*ratio);}
+  applyCampaignHp(multiplier:number):void{const ratio=this.maxHp>0?this.hp/this.maxHp:1;this.campaignHpMultiplier=multiplier;this.maxHp=allyHp(this.def.hp,this.level,multiplier);this.hp=Math.min(this.maxHp,this.maxHp*ratio);}
   active = true; level = 1; hp = 1; maxHp = 1; cooldown = 0; hurtUntil = 0; bossImmuneUntil = 0; attackUntil = 0;
   /** 太史慈「单骑突围」给的护盾：shieldUntil 前挨打先扣 shield（Legion.hurt）。 */
   shield = 0; shieldUntil = 0;
@@ -38,6 +40,8 @@ export class Ally {
   formSpeed = 1;
   private px: number; private py: number; private walked = 0;
   private moving = false;
+  private readonly motion = new GroundMotion();
+  private lastMove = -Infinity;
   private dir: 'down' | 'up' | 'left' | 'right' = 'down';
   view: AllyView | null = null;
   constructor(readonly scene: Phaser.Scene, x: number, y: number, public kind: TroopKind = 'swordsman', slot = 0) { this.px = x; this.py = y; this.reset(x, y, kind, 1, slot); }
@@ -50,35 +54,35 @@ export class Ally {
   get sprite(): Phaser.GameObjects.Image { if (!this.view) this.attach(Ally.makeView(this.scene)); return this.view!.sprite; }
   get shadow(): Phaser.GameObjects.Image { if (!this.view) this.attach(Ally.makeView(this.scene)); return this.view!.shadow; }
   reset(x: number, y: number, kind: TroopKind, level: number, slot: number): void {
-    this.campaignHpMultiplier=1;this.kind = kind; this.active = true; this.level = level; this.maxHp = Math.round(this.def.hp * (1 + .3 * (level - 1))); this.hp = this.maxHp;
+    this.campaignHpMultiplier=1;this.kind = kind; this.active = true; this.level = level; this.maxHp = allyHp(this.def.hp,level); this.hp = this.maxHp;
+    this.motion.stop(); this.lastMove = -Infinity;
     this.reserveSoldier=false;this.garrison=false;this.pose=null;this.lifeId++; this.attackStarted = 0; this.moving = false; this.ai = createTacticState(x, y); this.ai.nextThink = slot % 12 * 17;
     this.px = x; this.py = y; this.slot = slot; this.cooldown = (slot % 10) * .08; this.hurtUntil = this.bossImmuneUntil = this.attackUntil = this.simDebt = this.walked = 0; this.deathsReported = false; this.dir = 'down';
     this.view?.sprite.setPosition(x, y);
   }
-  train(level: number): void { const old = this.maxHp; this.level = level; this.maxHp = Math.round(this.def.hp * (1 + .3 * (level - 1))*this.campaignHpMultiplier); this.hp = Math.min(this.maxHp, this.hp + this.maxHp - old); }
+  train(level: number): void { const old = this.maxHp; this.level = level; this.maxHp = allyHp(this.def.hp,level,this.campaignHpMultiplier); this.hp = Math.min(this.maxHp, this.hp + this.maxHp - old); }
   upgrade(): void { this.train(Math.min(3, this.level + 1)); }
   push(dx: number, dy: number): void { this.setPosition(this.x + dx, this.y + dy); }
   setPosition(x: number, y: number): void { this.px = x; this.py = y; this.view?.sprite.setPosition(x, y); }
   beginStep(): void { this.moving = false; }
   /** 地形（河水）移动倍率：有地形层的战场由 GameScene 设置，水里 0.6 */
   static terrainMul: ((x: number, y: number) => number) | null = null;
-  moveTo(x: number, y: number, dt: number, speed: number, preserveFacing = false): void {
+  moveTo(x: number, y: number, dt: number, speed: number, now: number, preserveFacing = false, immediate = false): void {
     if (Ally.terrainMul) speed *= Ally.terrainMul(this.x, this.y);
-    const dx = x - this.x, dy = y - this.y, distance = Math.hypot(dx, dy);
-    if (distance <= 2 || dt <= 0) return;
-    // Arrive without overshoot; no inertial coasting after the target stops.
-    const step = Math.min(distance - 2, speed * dt * Math.min(1, distance / 16));
+    if (now - this.lastMove > dt * 1000 + 5) this.motion.stop();
+    this.lastMove = now;
+    const dx = x - this.x, dy = y - this.y;
+    this.motion.advance(dx, dy, dt, speed, Math.hypot(dx, dy) - 2, immediate);
+    const mx = this.motion.vx * dt, my = this.motion.vy * dt, step = Math.hypot(mx, my);
     if (step <= .001) return;
     this.moving = true; this.walked += step;
-    const horizontal = this.dir === 'left' || this.dir === 'right';
-    // Hysteresis selects an axis, never retains the wrong sign on diagonals.
-    const useX = horizontal ? Math.abs(dx) * 1.15 >= Math.abs(dy) : Math.abs(dx) > Math.abs(dy) * 1.15;
-    if(!preserveFacing)this.dir = useX ? dx < 0 ? 'left' : 'right' : dy < 0 ? 'up' : 'down';
-    this.push(dx / distance * step, dy / distance * step);
+    if (!preserveFacing) this.dir = WALK_DIRECTIONS[walkRow(mx, my, WALK_DIRECTIONS.indexOf(this.dir))];
+    this.push(mx, my);
+    if (immediate) this.motion.stop();
   }
-  face(x: number, y: number): void { const dx = x - this.x, dy = y - this.y; if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return; this.dir = Math.abs(dx) > Math.abs(dy) ? dx < 0 ? 'left' : 'right' : dy < 0 ? 'up' : 'down'; }
+  face(x: number, y: number): void { const dx = x - this.x, dy = y - this.y; if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return; this.dir = WALK_DIRECTIONS[walkRow(dx, dy, WALK_DIRECTIONS.indexOf(this.dir))]; }
   attach(view: AllyView): void { this.view = view; view.sprite.setPosition(this.px, this.py); this.render(0); }
-  act(x: number, y: number, now: number, duration: number): void { this.aimLeft = x < this.x; this.aimY = y; this.dir = Math.abs(x - this.x) > Math.abs(y - this.y) ? x < this.x ? 'left' : 'right' : y < this.y ? 'up' : 'down'; this.attackStarted = now; this.attackUntil = now + duration; }
+  act(x: number, y: number, now: number, duration: number): void { this.motion.stop(); this.aimLeft = x < this.x; this.aimY = y; this.dir = Math.abs(x - this.x) > Math.abs(y - this.y) ? x < this.x ? 'left' : 'right' : y < this.y ? 'up' : 'down'; this.attackStarted = now; this.attackUntil = now + duration; }
   release(): AllyView | null { const v = this.view; if (v) { this.px = v.sprite.x; this.py = v.sprite.y; v.sprite.setVisible(false); v.shadow.setVisible(false); v.label.setVisible(false); } this.view = null; return v; }
   render(now: number): void {
     const v = this.view; if (!v) return; const art = this.def.art, reused = art.startsWith('xiliang'), custom = this.def.walkVisual;
@@ -98,15 +102,15 @@ export class Ally {
     const scale = v2art ? V2_TROOP_SCALE : custom?.scale ?? (this.kind === 'rider' ? .8 : .58);
     const frameHeight=v2art?v2fh:action&&meleeAction?112:96;
     const ground = v2art?v2TroopGround(v2fh):action&&meleeAction?100/112:custom?.groundY ?? (reused ? .875 : .98);
-    // 行走起伏：每步上下约 2px，与步伐帧同步，正对镜头时也能看出在走。
-    const hop=this.moving&&now>=this.attackUntil?Math.abs(Math.sin(Math.PI*this.walked/14))*2:0;
+    // Keep the feet planted; the body follows the weight shift of each step.
+    const stepStretch = this.moving && now >= this.attackUntil ? Math.abs(Math.sin(Math.PI * this.walked / 28)) * .022 : 0;
     // 出手动作：沿朝向前冲后收回（远程为后坐），并带轻微伸缩；保持同一角色素材，不冒充独立攻击帧。
     const strike=now<this.attackUntil?Math.sin(progress*Math.PI):0,lunge=(LUNGE[this.kind]??0)*strike,horizontal=this.facingX!==0;
     // 探身往下射：城头上的远程兵射城垛线以南的目标时前倾（朝目标那侧转 lean 弧度、往下沉 3 像素）
     const lean = !pose && Ally.leanBelow !== null && !!this.def.ranged && now < this.attackUntil + 250 && this.y < Ally.leanBelow && this.aimY > Ally.leanBelow;
     const poseSy = pp?.sy ?? 1, poseDy = pp?.dy ?? (lean ? 3 : 0), poseRot = pp?.rot ?? (lean ? (this.aimLeft ? -1 : 1) * .16 : 0);
     const tex=visualTextureKey(this.scene,texture),corr=texture===sheet||v2art?1:figureCorrection(this.scene,visualTextureKey(this.scene,sheet),tex,frame,!(attack&&!action));
-    v.sprite.setVisible(this.active).setTexture(tex, frame).setScale(corr*scale*(1+(horizontal?.07:-.03)*Math.abs(strike)*(lunge?1:0)),corr*scale*(1+(horizontal?-.03:.06)*Math.abs(strike)*(lunge?1:0))*poseSy).setTint(now < this.hurtUntil ? 0xff9999 : this.def.tint).setOrigin(.5-this.facingX*lunge/((v2art?v2fh:96)*scale), ground - this.radius * .72 / (frameHeight * scale)-this.facingY*lunge/(frameHeight*scale)+hop/(frameHeight*scale)-poseDy/(frameHeight*scale)).setDepth(actorDepth(this.y + this.radius * .72));
+    v.sprite.setVisible(this.active).setTexture(tex, frame).setScale(corr*scale*(1+(horizontal?.07:-.03)*Math.abs(strike)*(lunge?1:0)),corr*scale*(1+(horizontal?-.03:.06)*Math.abs(strike)*(lunge?1:0))*poseSy*(1+stepStretch)).setTint(now < this.hurtUntil ? 0xff9999 : this.def.tint).setOrigin(.5-this.facingX*lunge/((v2art?v2fh:96)*scale), ground - this.radius * .72 / (frameHeight * scale)-this.facingY*lunge/(frameHeight*scale)-poseDy/(frameHeight*scale)).setDepth(actorDepth(this.y + this.radius * .72));
     // Same-character procedural follow-through where independent attack art is still absent.
     const follow=now<this.attackUntil?Math.sin(progress*Math.PI):0;
     v.sprite.setRotation((this.kind==='guardian'?follow*.035*(this.facingX||1):this.kind==='rider'?follow*.045*(this.facingX||1):0)+poseRot);

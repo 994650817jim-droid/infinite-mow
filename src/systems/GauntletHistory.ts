@@ -26,6 +26,12 @@ export function modeHistory(test = false): Modes & { legacy?: Best } {
   try { old = JSON.parse(localStorage.getItem('im_gauntlet_best'+suffix(test)) ?? 'null'); } catch { /* old records had no format marker */ }
   return old && Number.isFinite(old.kills) ? {...modes, legacy:{kills:old.kills,wave:old.wave??old.kills,ms:old.ms??0}} : modes;
 }
+export function historyFigures(test: boolean): [string,string][] {
+  return Object.entries(modeHistory(test)).map(([key, record]) => [
+    key === 'legacy' ? '历史未分类' : modeLabel(key as ModeKey), record.kills + ' 将',
+  ]);
+}
+
 /** Caller holds the shared save lock: read current values from storage, never a tab cache. */
 export function updateModeBest(key: ModeKey, candidate: Best, test: boolean) {
   const storageKey = MODES_KEY+suffix(test);

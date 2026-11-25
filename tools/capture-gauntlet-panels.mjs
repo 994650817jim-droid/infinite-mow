@@ -49,13 +49,11 @@ async function capture(p, layout, id, heading) {
     assert.ok(w>=44 && h>=44 && x>=0 && y+h<=layouts[layout].height+1, JSON.stringify(evidence));
   }
   await p.screenshot({path:join(out,layout+'-'+id+'.png')});
-  const roster = dialog.getByText(/^已击败名将/);
+  const roster = dialog.getByRole('tab',{name:'斩将名册'});
   if (await roster.count()) {
     await roster.click();
-    const names = await dialog.locator('details[open] .roster small').allTextContents();
-    assert.ok(names.length);
-    evidence.bosses = names;
-    await roster.click();
+    evidence.bosses = await dialog.locator('.roster li').allTextContents();
+    assert.ok(evidence.bosses.length);
   }
   captures.push({layout,id,...evidence});
   console.log(layout,id,heading);
@@ -114,7 +112,7 @@ async function coop() {
       },port));
       clients.push(p);
       await p.waitForFunction(() => window.__game?.scene.isActive('MenuScene'), null,{timeout:120000});
-      await p.evaluate(() => window.__game.scene.getScene('MenuScene').scene.start('CoopScene'));
+      await p.evaluate(() => {window.__game.scene.getScene('MenuScene').scene.start('CoopScene');});
       await p.locator('.coop-layer').waitFor({timeout:120000});
     }
     const [host,guest] = clients;
@@ -195,7 +193,7 @@ async function coop() {
 try {
   const cases = [
     ['ghost-gate','mortal',1,'鬼门已开'], ['divine-gate','ghost',2,'天门将启'],
-    ['standard-clear','divine',3,'三界凯旋'], ['extreme-clear','divine',3,'三界凯旋'],
+    ['standard-clear','divine',3,'三界凯旋'], ['extreme-clear','divine',3,'三界无双'],
     ['withdrawn','mortal',1,'收兵归营'], ['defeat','mortal',0,'沙场败退'],
   ];
   for (const layout of soloLayouts) for (const [id,...params] of cases) {

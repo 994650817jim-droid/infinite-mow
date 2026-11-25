@@ -1,102 +1,110 @@
 .campaign-gate {
-  --ink: #201b16;
-  --accent: #e5c58a;
-  --edge: #8d744e;
-  --wash: #61342a;
-  --paper: #f4e9d6;
-  --muted: #caba9f;
+  --ink: #211b16; --accent: #f2ce86; --edge: #9c8255; --wash: #694037;
+  --paper: #f6ecd9; --muted: #c8bca7; --rule: #b4a48942;
+  --margin: clamp(16px,4vw,32px);
+  --limit: calc(100dvh - max(28px, env(safe-area-inset-top) + env(safe-area-inset-bottom)));
   box-sizing: border-box;
   padding: 0;
-  width: min(630px, calc(100vw - 28px));
-  max-height: calc(100dvh - max(28px, env(safe-area-inset-top) + env(safe-area-inset-bottom)));
-  overflow: auto;
-  overscroll-behavior: contain;
+  width: min(710px, calc(100vw - 24px));
+  max-height: var(--limit);
+  overflow: hidden;
   color: var(--paper);
   background: var(--ink);
   border: 1px solid var(--edge);
   box-shadow: 0 14px 64px #090909a3;
-  font: 15px/1.5 "Microsoft YaHei", system-ui, sans-serif;
-  scrollbar-width: thin;
-  scrollbar-color: var(--edge) var(--ink);
+  font: 15px/1.45 "Microsoft YaHei", system-ui, sans-serif;
 }
-.campaign-gate.ghost { --ink: #172525; --accent: #b7dfcb; --edge: #648e80; --wash: #31594f; --muted: #becac1; }
-.campaign-gate.divine { --ink: #26231d; --accent: #f4d590; --edge: #ae9359; --wash: #6b522a; }
-.campaign-gate.defeat { --ink: #211c1c; --accent: #e6b9ac; --edge: #95736b; --wash: #663d39; }
+.campaign-gate.ghost { --ink: #172525; --accent: #b7dfcb; --edge: #648e80; --wash: #31594f; --muted: #c0d2c6; }
+.campaign-gate.divine { --ink: #26231d; --accent: #f4d590; --edge: #ae9359; --wash: #70582e; }
+.campaign-gate.defeat { --ink: #211c1c; --accent: #e6bbad; --edge: #95736b; --wash: #663d39; }
 .campaign-gate::backdrop { background: #101010c7; }
-.campaign-gate article { overflow: clip; }
-.campaign-gate header {
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  display: grid;
-  align-content: end;
-  align-items: end;
-  box-sizing: border-box;
-  min-height: clamp(150px, 23vh, 205px);
-  padding: 22px clamp(18px, 4vw, 34px) 20px;
-  border-bottom: 1px solid var(--edge);
-  background: var(--ink);
+.campaign-gate article, .coop-layer .coop-card.campaign-gate {
+  display: grid; grid-template-rows: auto minmax(0,1fr) auto; gap: 0;
+  max-height: calc(var(--limit) - 2px);
 }
-.campaign-gate header::before, .campaign-gate header::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
+.campaign-gate article:has(.report-tabs) { height: min(800px,calc(var(--limit) - 2px)); }
+@media (min-height: 650px) {
+  .campaign-gate .report-body:has(.report-tabs) { display: flex; flex-direction: column; overflow: hidden; }
+  .campaign-gate .report-body:has(.report-tabs) > :not(.report-page) { flex-shrink: 0; }
+  .campaign-gate .report-body .report-page { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--edge) var(--ink); }
 }
+.campaign-gate header, .coop-layer .campaign-gate header {
+  position: relative; isolation: isolate; overflow: hidden; display: grid;
+  grid-template-columns: 1fr; align-content: end; gap: 0; box-sizing: border-box;
+  min-height: clamp(128px,21dvh,195px); padding: 18px var(--margin) 16px;
+  border-bottom: 1px solid var(--edge); background: var(--ink);
+}
+.campaign-gate header::before, .campaign-gate header::after { content: ""; position: absolute; inset: 0; pointer-events: none; }
 .campaign-gate header::before { z-index: -3; background: var(--chapter-art) center 45% / cover; }
 .campaign-gate.ghost header::before { filter: grayscale(.92) sepia(.45) hue-rotate(100deg); }
-.campaign-gate header::after { z-index: -2; background: linear-gradient(95deg, var(--ink) 4%, transparent 83%), linear-gradient(0deg, var(--ink), transparent 68%); }
+.campaign-gate header::after { z-index: -2; background: linear-gradient(95deg,var(--ink) 4%,transparent 83%),linear-gradient(0deg,var(--ink),transparent 68%); }
 .campaign-gate .commander { position: absolute; z-index: -1; right: -1%; top: 1%; width: 39%; height: 170%; object-fit: contain; object-position: center top; pointer-events: none; }
-.campaign-gate header > :not(img) { max-width: 71%; margin: 0; text-shadow: 0 1px 5px #110f0d; }
+.campaign-gate header > :not(img) { max-width: 72%; margin: 0; text-shadow: 0 1px 5px #110f0d; }
 .campaign-gate .report-caption { color: var(--accent); font-size: 12px; font-weight: 650; letter-spacing: .12em; }
-.campaign-gate h1, .campaign-gate h2, .campaign-gate h3, .campaign-gate button { font-family: IMWarHeading, "Songti SC", "SimSun", serif; }
-.campaign-gate h2 { color: #fff4dc; font-size: clamp(34px, 4.4vw, 48px); line-height: 1.3; letter-spacing: .08em; outline: none; }
-.campaign-gate header p { color: #eee2cc; font-size: 14px; line-height: 1.5; }
-.campaign-gate .report-body, .campaign-gate footer { padding-inline: clamp(18px, 4vw, 34px); }
-.campaign-gate .report-body { padding-block: 14px 4px; }
-.campaign-gate .report-stages, .campaign-gate .report-figures { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; }
-.campaign-gate .report-stages { gap: 12px; margin-bottom: 12px; }
-.campaign-gate .report-stages li { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 2px 4px; border-bottom: 2px solid #7c776345; padding-bottom: 6px; font-size: 13px; color: var(--muted); }
-.campaign-gate .report-stages .cleared { border-color: var(--accent); color: var(--accent); }
+.campaign-gate h1, .campaign-gate h2, .campaign-gate h3, .campaign-gate button { font-family: IMWarHeading,"Songti SC","SimSun",serif; }
+.campaign-gate h2, .coop-layer .campaign-gate h1 { margin: 0; padding: 0; border: 0; color: #fff4dc; font-size: clamp(34px,4.4vw,48px); line-height: 1.3; letter-spacing: .08em; outline: none; }
+.campaign-gate header p, .coop-layer .campaign-gate header p { color: #eee2cc; white-space: pre-line; font-size: 14px; line-height: 1.45; }
+.campaign-gate .report-body {
+  min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
+  scrollbar-color: var(--edge) var(--ink); padding: 14px var(--margin);
+}
+.campaign-gate .report-stages, .campaign-gate .report-figures { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); padding: 0; margin: 0; list-style: none; }
+.campaign-gate .report-stages { gap: 12px; margin-bottom: 14px; }
+.campaign-gate .report-stages li { display: grid; grid-template-columns: 1fr auto; gap: 5px 2px; font-size: 13px; color: var(--muted); }
+.campaign-gate .report-stages .cleared { color: var(--accent); }
 .campaign-gate .report-stages b { font-variant-numeric: tabular-nums; }
-.campaign-gate .report-figures { gap: 10px 14px; }
+.campaign-gate .report-stages progress { grid-column: 1/-1; width: 100%; height: 4px; border: 0; appearance: none; background: var(--rule); }
+.campaign-gate progress::-webkit-progress-bar { background: var(--rule); }
+.campaign-gate progress::-webkit-progress-value { background: var(--accent); }
+.campaign-gate progress::-moz-progress-bar { background: var(--accent); }
+.campaign-gate .report-figures { gap: 10px; }
 .campaign-gate .report-figures dt { color: var(--muted); font-size: 12px; }
-.campaign-gate .report-figures dd { margin: 0; font-weight: 620; font-size: clamp(16px, 2vw, 21px); line-height: 1.35; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.campaign-gate .report-body > .report-figures > div:last-child:nth-child(3n + 1):not(:first-child) { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 10px; }
-.campaign-gate .report-reward { display: flex; align-items: baseline; flex-wrap: wrap; gap: 5px 14px; margin-top: 14px; padding: 9px 12px; background: #b7a16c12; border-left: 2px solid var(--accent); }
+.campaign-gate .report-figures dd { margin: 0; color: var(--paper); font: 650 clamp(18px,2.6vw,27px)/1.23 system-ui,sans-serif; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.campaign-gate .report-figures > div:nth-child(n+4) dd, .campaign-gate .report-member dd { font-size: 17px; }
+.campaign-gate .report-record { margin: 8px 0 0; color: var(--accent); font-size: 13px; }
+.campaign-gate .report-reward { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 16px; margin-top: 10px; padding: 8px 10px; background: #b7a16c15; border-left: 2px solid var(--accent); }
 .campaign-gate .report-reward span { font-size: 13px; color: var(--muted); }
-.campaign-gate .report-reward strong { color: var(--accent); font-size: 15px; }
-.campaign-gate details { border-bottom: 1px solid #b4a4893d; }
-.campaign-gate summary { cursor: pointer; padding: 10px 0; color: var(--accent); min-height: 22px; }
-.campaign-gate details p { margin: 0 0 12px; }
-.campaign-gate .roster { display: flex; flex-wrap: wrap; gap: 7px; padding: 2px 0 14px; }
-.campaign-gate .roster span { display: grid; place-items: center; min-width: 40px; }
-.campaign-gate .roster img { width: 40px; height: 40px; object-fit: contain; }
-.campaign-gate .report-member { display: grid; grid-template-columns: 82px 1fr; gap: 2px 18px; border-top: 1px solid #b4a4894d; margin-top: 12px; padding-top: 10px; }
-.campaign-gate .report-member h3 { grid-row: span 2; display: grid; align-content: start; margin: 0; color: var(--accent); font-size: 16px; }
-.campaign-gate .report-member img { width: 56px; height: 46px; object-fit: cover; object-position: center 10%; }
-.campaign-gate .report-member .report-figures { gap: 4px 10px; }
-.campaign-gate .report-member dd { font-size: 15px; }
-.campaign-gate .report-member p { grid-column: 2; margin: 0; font-size: 12px; color: var(--muted); }
-.campaign-gate footer { display: flex; gap: 8px; padding-block: 12px 18px; }
-.campaign-gate button { flex: 1; min-width: 0; min-height: 44px; padding: 6px 10px; border: 1px solid var(--edge); background: transparent; color: var(--paper); font-size: 16px; cursor: pointer; }
-.campaign-gate button:first-child { background: var(--wash); color: #fff1d6; box-shadow: inset 0 0 0 2px #15120d40; }
-.campaign-gate button:focus-visible, .campaign-gate summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
-.campaign-gate button:hover { border-color: var(--accent); }
+.campaign-gate .report-reward strong { display: inline-flex; gap: 5px; align-items: center; color: var(--accent); font-size: 15px; }
+.campaign-gate .report-reward img { width: 25px; height: 25px; object-fit: contain; }
+.campaign-gate .report-reward b { font-size: 17px; font-variant-numeric: tabular-nums; }
+.campaign-gate .report-tabs { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); margin-top: 12px; border-bottom: 1px solid var(--rule); }
+.campaign-gate .report-tabs button { min-height: 44px; padding: 4px 2px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); font-size: 15px; }
+.campaign-gate .report-tabs button[aria-selected="true"] { border-color: var(--accent); color: var(--accent); background: linear-gradient(0deg,#cdb37712,transparent); }
+.campaign-gate .report-page { padding-top: 9px; }
+.campaign-gate .report-page:focus-visible { outline: 1px solid var(--edge); }
+.campaign-gate .roster { display: grid; grid-template-columns: repeat(auto-fill,minmax(58px,1fr)); gap: 7px 4px; margin: 0; padding: 0; list-style: none; }
+.campaign-gate .roster li { display: grid; place-items: center; align-content: end; padding: 4px 1px; background: #b7a16c0b; text-align: center; min-width: 0; font-size: 12px; }
+.campaign-gate .roster img { width: 42px; height: 44px; object-fit: contain; }
+.campaign-gate .report-build { display: grid; grid-template-columns: minmax(80px, 1fr) 4fr; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--rule); }
+.campaign-gate .report-build h3 { margin: 2px 0; color: var(--accent); font-size: 14px; font-weight: 500; }
+.campaign-gate .report-build ul { display: flex; align-items: start; flex-wrap: wrap; gap: 4px 6px; margin: 0; padding: 0; list-style: none; }
+.campaign-gate .report-build li { padding: 2px 6px; font-size: 13px; background: #b7a16c11; }
+.campaign-gate .report-member { display: grid; grid-template-columns: 76px 1fr; gap: 6px 12px; border-bottom: 1px solid var(--rule); padding-block: 8px; }
+.campaign-gate .report-member h3 { grid-row: span 2; margin: 0; color: var(--accent); font-size: 15px; }
+.campaign-gate .report-member img { display: block; width: 54px; height: 46px; object-fit: cover; object-position: center 10%; }
+.campaign-gate .report-member p { grid-column: 2; margin: 0; font-size: 13px; }
+.campaign-gate .report-empty { margin: 6px 0; color: var(--muted); }
+.campaign-gate footer { display: flex; gap: 8px; padding: 11px var(--margin) max(12px,env(safe-area-inset-bottom)); border-top: 1px solid var(--rule); background: var(--ink); }
+.campaign-gate button { cursor: pointer; }
+.campaign-gate footer button, .coop-layer .campaign-gate footer button { flex: 1; min-width: 0; min-height: 44px; padding: 6px 8px; border: 1px solid var(--edge); background: transparent; color: var(--paper); font: 16px IMWarHeading,"Songti SC","SimSun",serif; }
+.campaign-gate footer button:first-child, .coop-layer .campaign-gate footer .coop-primary { background: var(--wash); color: #fff1d6; box-shadow: inset 0 0 0 2px #15120d40; }
+.campaign-gate button:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
+.campaign-gate button:hover { color: var(--accent); }
 .campaign-gate button:active { transform: translateY(1px); }
+.coop-layer .coop-card.campaign-gate { --limit: calc(100dvh - max(48px,env(safe-area-inset-top) + env(safe-area-inset-bottom) + 8px)); width: min(710px,100%); padding: 0; background: var(--ink); border: 1px solid var(--edge); color: var(--paper); }
+.coop-layer .coop-party-member .coop-party-stars { grid-area: 3 / 2 / 4 / -1; text-align: left; }
+.coop-layer .campaign-gate .coop-party-member { background: #b7a16c12; border-color: var(--edge); }
+.coop-layer .campaign-gate .coop-status { margin-block: 10px 0; color: var(--accent); }
+.coop-layer .campaign-gate .report-body > button:last-child { display: block; padding: 2px 0; margin-left: auto; border: 0; color: var(--muted); font-size: 14px; background: transparent; }
 @media (max-width: 550px) {
-  .campaign-gate .report-member { grid-template-columns: 74px 1fr; gap: 2px 8px; }
+  .campaign-gate .report-figures { column-gap: 6px; }
+  .campaign-gate .report-reward { gap: 4px 9px; }
+  .campaign-gate .report-reward img { width: 21px; height: 21px; }
+  .campaign-gate .report-build { grid-template-columns: minmax(68px,1fr) 3fr; }
   .campaign-gate footer:has(button:nth-child(3)) { display: grid; grid-template-columns: 1fr 1fr; }
   .campaign-gate footer:has(button:nth-child(3)) button:first-child { grid-column: 1/-1; }
 }
-@media (max-height: 480px) { .campaign-gate header { min-height: 110px; } }
-.coop-layer .coop-card.campaign-gate { display: block; width: min(630px,100%); padding: 0; background: var(--ink); border: 1px solid var(--edge); color: var(--paper); }
-.coop-layer .campaign-gate header { display: grid; grid-template-columns: 1fr; gap: 0; align-content: end; padding: 22px clamp(18px,4vw,34px) 20px; }
-.coop-layer .campaign-gate h1 { padding: 0; border: 0; color: #fff4dc; font-size: clamp(34px,4.4vw,48px); line-height: 1.3; font-weight: 700; }
-.coop-layer .campaign-gate header p { margin: 0; color: #eee2cc; }
-.coop-layer .campaign-gate .coop-party, .coop-layer .campaign-gate .coop-status { margin: 12px clamp(18px,4vw,34px) 0; }
-.coop-layer .campaign-gate .coop-party-member { background: #b7a16c12; border-color: var(--edge); }
-.coop-layer .campaign-gate .coop-status { color: var(--accent); }
-.coop-layer .campaign-gate footer button { background: transparent; border-color: var(--edge); color: var(--paper); font-family: IMWarHeading, "Songti SC", "SimSun", serif; }
-.coop-layer .campaign-gate footer .coop-primary { background: var(--wash); color: #fff1d6; }
-.coop-layer .campaign-gate > button:last-child { display: block; min-height: 44px; padding: 0 4px; margin: -10px clamp(18px,4vw,34px) 6px auto; border: 0; color: var(--muted); font-size: 14px; background: transparent; }
+@media (max-height: 480px) {
+  .campaign-gate header, .coop-layer .campaign-gate header { min-height: 85px; padding-block: 6px; }
+  .campaign-gate h2, .coop-layer .campaign-gate h1 { font-size: 26px; }
+}

@@ -6,7 +6,7 @@ import Phaser from 'phaser';
 import { SnapshotTimeline, type BattleSnapshot } from '../coop/SnapshotTimeline';
 import { GAME_WIDTH, GAME_HEIGHT, IS_DESKTOP } from '../config';
 import { Joystick } from '../ui/Joystick';
-import { campaignHeader, campaignPanel, type CampaignReport } from '../ui/GauntletCampaignPanel';
+import { campaignHeader, campaignHonour, campaignPanel, campaignStages, campaignTrack, type CampaignReport } from '../ui/GauntletCampaignPanel';
 import { coopSocketUrl, type Fighter, type Foe, type ServerMessage, type Side, type CoopMode, type BossWarning, type PartyMember } from '../coop/protocol';
 import world from '../coop/arena.json';
 import gauntlet from '../coop/gauntlet.json';
@@ -20,7 +20,7 @@ import roster from '../coop/roster.json';
 import { buildRecolor } from '../systems/IffOverlay';
 import { ART_V2_FILES } from '../systems/ArtStyle';
 import { FIELD_STARS, MARK_STAR, COMPANY_STARS } from '../data/coopStars';
-import { modeKey, saveModeBest, scoreRun } from '../systems/GauntletHistory';
+import { historyFigures, modeKey, saveModeBest, scoreRun } from '../systems/GauntletHistory';
 import { isChapterTestRun } from '../systems/ChapterProgress';
 import { activeSlot } from '../systems/SaveSlots';
 const networkStars=[...FIELD_STARS,MARK_STAR,...COMPANY_STARS,CINDERS];
@@ -317,7 +317,7 @@ export class CoopScene extends Phaser.Scene {
         }
         this.disconnect();
         const title = !message.victory ? '连战败退' : message.reason === 'withdrawn' ? '收兵归营' :
-          message.milestones === 3 ? '封神告捷' : '连战告捷';
+          message.milestones === 3 ? campaignHonour(message.mythicSize ?? 10) : '连战告捷';
         this.renderResult(title, '', message);
       }
     };
@@ -736,6 +736,7 @@ export class CoopScene extends Phaser.Scene {
     row.append(portrait, title, hp, bar, status);
     if(p.stars?.length) {
       const stars=document.createElement('small');
+      stars.className='coop-party-stars';
       stars.textContent=p.stars.map(k=>networkStars.find(s=>s.id===k)?.name).filter(Boolean).join(' · ');
       row.append(stars);
     }
@@ -767,15 +768,22 @@ export class CoopScene extends Phaser.Scene {
     card.insertBefore(party, this.status);
     if (message.checkpoint) {
       const ghost = tier === 'mortal';
+      const size = message.mythicSize ?? 10;
+      const remaining = Math.max(0, message.total + 2 * size - message.wave);
       const header = card.querySelector('header')!;
       card.classList.add('campaign-gate', ghost ? 'ghost' : 'divine');
       campaignHeader(header, {
         title:header.querySelector('h1')!.textContent!,
-        subtitle:header.querySelector('p')!.textContent!,
+        subtitle:tier === 'divine' ? '三关尽破，可收兵或再战无尽' : '下一阶段 · ' + (ghost ? '鬼将 ' : '神将 ') + size + ' 阵\n全程剩余 ' + remaining + ' 阵',
         caption:'双人连战 · ' + ((message.mythicSize ?? 10) === 5 ? '标准二十阵' : '极限三十阵'),
         chapterArt:ghost ? 'assets/epic-home/dongzhuo-desktop.webp' : 'assets/ending/ending_unify.webp',
-        portrait:tier === 'divine' ? undefined : 'assets/epic-home/' + (ghost ? 'lvbu' : 'liubei') + '.webp',
+        portrait:'assets/epic-home/' + (tier === 'divine' ? members[0]?.hero ?? 'liubei' : ghost ? 'lvbu' : 'liubei') + '.webp',
       }, 'h1');
+      const body = document.createElement('section');
+      body.className = 'report-body';
+      campaignTrack(body, campaignStages(message.wave, size));
+      body.append(party, this.status);
+      card.append(body);
       const actions = document.createElement('footer');
       card.append(actions);
       const votes = message.votes ?? [];
@@ -813,7 +821,9 @@ export class CoopScene extends Phaser.Scene {
         card.append(choice);
       }
     }
-    card.append(this.button('离开战斗', () => this.back()));
+    const leave = this.button('离开战斗', () => this.back());
+    if (message.checkpoint) card.querySelector('.report-body')!.append(leave);
+    else card.append(leave);
   }
 
   update(time: number, delta: number): void {
@@ -884,8 +894,15 @@ export class CoopScene extends Phaser.Scene {
       this.panel.className = 'coop-layer coop-during-battle';
       const stats: CampaignReport['stats'] = [['合力斩将', battle.generals], ['击破敌军', battle.kills]];
       if (battle.seconds != null) stats.push(['战斗用时', Math.floor(battle.seconds / 60) + '分' + battle.seconds % 60 + '秒']);
+      const size = battle.mythicSize ?? 10;
+      const routeKills = battle.tier === 'endless' ? 10 + Math.max(0, (battle.milestones ?? 1) - 1) * size : battle.generals;
+      const commander = battle.party?.find(unit => unit.slot === this.slot);
+      const hero = CHARACTERS.find(h => h.id === commander?.hero);
       campaignPanel(this, {
-        title, caption:'双人连战 · 战报', subtitle:'两军合战 · 个人战绩',
+        title, caption:'双人' + (size === 10 ? '极限三十阵' : '标准二十阵') + ' · 战报',
+        subtitle: (hero ? hero.name + ' · ' : '') + '合力斩将 ' + battle.generals + ' 位',
+        portrait:hero && 'assets/epic-home/' + hero.id + '.webp',
+        stages:campaignStages(routeKills,size), history:() => historyFigures(isChapterTestRun()),
         theme:battle.victory ? 'divine' : 'defeat',
         chapterArt:battle.victory ? 'assets/ending/ending_unify.webp' : 'assets/ending/ending_three.webp',
         stats,

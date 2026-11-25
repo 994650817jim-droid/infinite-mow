@@ -16,7 +16,7 @@ import type { EnemyDef } from '../data/enemies';
 import { GAUNTLET, GAUNTLET_MOVES, GAUNTLET_POOL, GAUNTLET_TROOPS, type GauntletArc, type GauntletProps, endlessBoss, gauntletReward, pickBosses, gauntletPool, GAUNTLET_NAME, waveScale, type GauntletBoss } from '../data/gauntlet';
 import { GAUNTLET_RECRUIT, recruitCost, recruitTier } from '../data/gauntletCards';
 import { TROOPS } from '../data/legion';
-import { campaignPanel } from '../ui/GauntletCampaignPanel';
+import { campaignHonour, campaignPanel, campaignStages } from '../ui/GauntletCampaignPanel';
 import { drawRecruitCard, preloadRecruitPortraits } from '../ui/GauntletRecruitCard';
 import { GAUNTLET_BUILD, RARITY, STAR_CARD_IDS, cardCategory, cardRarity, pickByRarity, rollRarity, starCardPool, type GCategory, type GRarity, type StarCard } from '../data/gauntletCards';
 import { STAR_BY_ID, STAR_REGIONS } from '../data/starMap';
@@ -69,7 +69,7 @@ import type { ArcHost } from '../systems/ArcBossV2';
 import { ART_V2_FILES, isV2Texture, loadBossSheet, loadV2TroopSheets } from '../systems/ArtStyle';
 import { isChapterTestRun } from '../systems/ChapterProgress';
 import { activeSlot } from '../systems/SaveSlots';
-import { modeHistory, modeKey, modeLabel, saveModeBest, scoreRun } from '../systems/GauntletHistory';
+import { historyFigures, modeHistory, modeKey, modeLabel, saveModeBest, scoreRun } from '../systems/GauntletHistory';
 import { observeDeferredReward, settleGauntlet } from '../systems/GauntletSettlement';
 import { FollowerSquad, type Follower } from '../systems/FollowerSquad';
 import { GauntletTrack } from '../ui/GauntletTrack';
@@ -551,7 +551,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       const ownId = CHARACTERS.find(c => c.id === this.runConfig.character)?.startWeapon, ownLv = this.player.weapons.find(w => w.id === ownId)?.level;
       const fam = (id: string) => id === 'gauntlet_qiyu_weapon' ? 'signature_weapon_' + ownId : id.replace(/^(martial_.+)_\d+$/, '$1').replace(/^weapon_over_\d+$/, 'weapon_over'); // 奇遇的「本命连升两级」和本命升级算同一项
       const last = new Map<string, { id: string; name: string; icon?: string; rarity: GRarity; cat: GCategory }>();
-      for (const e of this.gBuildLog) if (!/^gauntlet_(follow|spoils|replace_|keep|endless|settle|formation_)/.test(e.id)) last.set(fam(e.id), e); // 收副将 / 取辎重 / 收兵这些是面板动作，不算；军阵在「军阵 · 部曲」里列（副将另列）
+      for (const e of this.gBuildLog) if (!/^gauntlet_(follow|spoils|replace_|keep|ghost$|divine$|endless|settle|formation_)/.test(e.id)) last.set(fam(e.id), e); // 收副将 / 取辎重 / 收兵这些是面板动作，不算；军阵在「军阵 · 部曲」里列（副将另列）
       const pick = (cat: GCategory) => [...last.values()].filter(e => e.cat === cat && !/^gauntlet_(gear|charm|horse)_/.test(e.id)).map(e => { const sn = GauntletGameScene.shortName(e.name), own = fam(e.id) === 'signature_weapon_' + ownId; return { name: sn.label, lv: own && ownLv ? String(ownLv) : sn.lv, icon: e.icon ?? 'icon_passive', rarity: e.rarity }; }); // 本命写现在的实际等级
       const kit: Array<{ name: string; icon: string; rarity: GRarity }> = [];
       const qr = (q: ItemQuality): GRarity => q === 'orange' ? 'legend' : q === 'purple' ? 'rare' : q === 'blue' ? 'fine' : 'common';
@@ -1161,12 +1161,13 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
         theme: next,
         title: finalGate ? '封神告捷' : next === 'ghost' ? '鬼门已开' : '天门将启',
         caption: (this.mythicSize === 10 ? '极限三十阵' : '标准二十阵') + ' · ' + tierTitle[this.gTier],
-        subtitle: finalGate ? '三关尽破，可收兵或再战无尽' : '再战 ' + this.mythicSize + ' 阵 · ' + (next === 'ghost' ? '鬼吕布' : '神刘备') + '守关',
+        subtitle: finalGate ? '三关尽破，可收兵或再战无尽' : (next === 'ghost' ? '下一阶段 · 鬼将 ' : '下一阶段 · 神将 ') + this.mythicSize + ' 阵 · ' + (next === 'ghost' ? '鬼吕布' : '神刘备') + '守关',
         chapterArt: next === 'ghost' ? 'assets/epic-home/dongzhuo-desktop.webp' : 'assets/ending/ending_unify.webp',
         portrait: 'assets/epic-home/' + (finalGate ? hero.id : next === 'ghost' ? 'lvbu' : 'liubei') + '.webp',
-        stats: [['已破阵数', this.gWave], ['全程余阵', 10 + this.mythicSize * 2 - this.gWave],
+        stages: campaignStages(this.gWave, this.mythicSize),
+        stats: [['已破阵数', this.gWave], ['全程剩余', (10 + this.mythicSize * 2 - this.gWave) + ' 阵'],
           ['战斗用时', this.formatTime(this.elapsed)], ['当前兵力', this.legion.count], ['本局钱币', this.legion.food]],
-        reward: {label:'基础结算', value:'钱币 ' + earned.provisions + ' · 残卷 ' + earned.scrolls},
+        reward: {label:'基础结算', coins:earned.provisions, scrolls:earned.scrolls},
         actions: opts.map((o,i) => ({label:o.name, run:() => this.chooseUpgrade(i)})),
       });
     }
@@ -1234,28 +1235,37 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       restart?.setActive(true).setVisible(true); (this.resultPanel.getByName('result-restart-text') as Phaser.GameObjects.Text | null)?.setVisible(true).setText('再来一局'); this.layoutResultButtons?.();
       const hero = CHARACTERS.find(v=>v.id===this.runConfig.character)!;
       const limit=this.mythicSize;
-      const stages = [
-        {label:'凡将', count:Math.min(kills,10), total:10},
-        {label:'鬼将', count:Math.max(0,Math.min(kills-10,limit)), total:limit},
-        {label:'神将', count:Math.max(0,Math.min(kills-10-limit,limit)), total:limit},
-      ];
+      const routeKills = this.gEndless ? 10 + Math.max(0, this.gMilestones - 1) * limit : kills;
+      const stages = campaignStages(routeKills, limit);
+      const build = this.gauntletBuild().map(group => ({
+        label:group.cat, items:group.items.map(item => item.name + (item.lv ? ' Lv.' + item.lv : '')),
+      }));
+      const lit = new Map<string, number>();
+      for (const id of this.player.growth.stars) {
+        const name = STAR_BY_ID.get(id)?.name ?? id;
+        lit.set(name, (lit.get(name) ?? 0) + 1);
+      }
+      if (lit.size) build.push({
+        label:'已点亮星图 · ' + this.player.growth.stars.length,
+        items:[...lit].map(([name,n]) => n > 1 ? name + ' ×' + n : name),
+      });
       const completed = this.gMilestones === 3;
       const outcome = !victory ? '止步第 ' + this.gWave + ' 阵' : this.gEndless ? '无尽 · 已破 ' + kills + ' 阵' : '已破 ' + kills + ' 阵';
       this.resultPanel.setVisible(false);
       campaignPanel(this, {
         theme: !victory ? 'defeat' : completed ? 'divine' : this.gTier === 'ghost' ? 'ghost' : 'mortal',
-        title: !victory ? '沙场败退' : completed ? '三界凯旋' : '收兵归营',
+        title: !victory ? '沙场败退' : completed ? campaignHonour(limit) : '收兵归营',
         caption: (limit === 10 ? '极限三十阵' : '标准二十阵') + ' · 战报',
         subtitle: hero.name + ' · ' + outcome,
         portrait: 'assets/epic-home/' + hero.id + '.webp',
         chapterArt: completed && victory ? 'assets/ending/ending_unify.webp' : 'assets/ending/ending_three.webp',
         stages,
         stats: [['战斗用时', this.formatTime(this.elapsed)], ['击破敌军', this.kills], ['总伤害', Math.round(this.damageDealt)],
-          ['本局钱币', this.legion.food], ['现存部曲', this.legion.count], ['部曲战损', this.legion.dead],
-          [modeLabel(key)+'纪录', best + ' 位' + (record ? ' · 新纪录' : '')]],
-        reward: {label:'本局所得', observe:deferred?show=>observeDeferredReward(runId,this.claimSlot,show):undefined, value:debug ? '演练场 · 奖励不入库' : deferred ? '战报已保存 · 普通战役结束后入账' : pending ? '奖励写入未完成 · 下次进入时核对' : '钱币 +' + rw.provisions + ' · 残卷 +' + rw.scrolls},
-        details:[...this.gauntletBuild().filter(group=>group.items.length).map(group=>({label:group.cat,body:group.items.map(i=>i.name+(i.lv?' '+i.lv:'')).join('、')})),
-          {label:'历次战绩',body:Object.entries(modeHistory(debug)).map(([k,r])=>(k==='legacy'?'历史未分类':modeLabel(k as typeof key))+' '+r.kills+' 将').join('　')||'尚无记录'}],
+          ['本局钱币', this.legion.food], ['现存部曲', this.legion.count], ['部曲战损', this.legion.dead]],
+        record:modeLabel(key) + '纪录　' + best + ' 将' + (record ? ' · 新纪录' : ''),
+        reward: {label:'本局所得', observe:deferred?show=>observeDeferredReward(runId,this.claimSlot,show):undefined, value:debug ? '演练场 · 奖励不入库' : deferred ? '战报已保存 · 普通战役结束后入账' : pending ? '奖励写入未完成 · 下次进入时核对' : undefined,
+          coins:rw.provisions, scrolls:rw.scrolls},
+        build, history:() => historyFigures(debug),
         bosses:this.gKills.map(b=>({name:b.name,image:this.textures.getBase64(this.portrait(b))})),
         actions:[{label:'凯旋归营',run:()=>home?.emit('pointerdown')},{label:'再次挑战',run:()=>this.scene.restart()}]});
     }

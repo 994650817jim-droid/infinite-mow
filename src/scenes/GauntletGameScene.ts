@@ -1145,6 +1145,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       });
       const next = this.gTier==='mortal'?'ghost':'divine';
       const earned=gauntletReward(this.gKills.length,false);
+      this.levelPanel.setVisible(false);
       this.closeGate=campaignPanel(this,{theme:next,title:this.gMilestones===3?'封神告捷':next==='ghost'?'鬼门已开':'天门将启',
         subtitle:hint,chapterArt:'assets/epic-home/dongzhuo-'+(IS_DESKTOP?'desktop':'mobile')+'.webp',
         stats:['已破 '+this.gWave+' 阵 · 用时 '+this.formatTime(this.elapsed),
@@ -1217,6 +1218,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       const progress=[['名将',Math.min(kills,10),10],['鬼将',Math.max(0,Math.min(kills-10,limit)),limit],['神将',Math.max(0,Math.min(kills-10-limit,limit)),limit]];
       const stages=this.gEndless?'无尽 · 已破 '+kills+'阵':progress.map(([label,n,total])=>label+' '+n+'/'+total).join('　');
       const art='assets/epic-home/'+hero.id+'.webp';
+      this.resultPanel.setVisible(false);
       campaignPanel(this,{theme:this.gTier==='ghost'?'ghost':this.gTier==='divine'?'divine':'mortal',
         title:!victory?'沙场败退':this.gMilestones===3?'三界凯旋':'收兵归营',subtitle:hero.name+' · '+stages,portrait:art,
         chapterArt:'assets/epic-home/dongzhuo-'+(IS_DESKTOP?'desktop':'mobile')+'.webp',

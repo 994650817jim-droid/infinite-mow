@@ -19,6 +19,7 @@ export function preloadMythicTelegraph(scene: Phaser.Scene): void {
 }
 
 export function clearMythicWarning(graphics: Phaser.GameObjects.Graphics): void {
+  warningAccents.get(g)?.clear();
   graphics.clear();
   const art = fieldArt.get(graphics);
   if (!art) return;
@@ -174,8 +175,45 @@ export function drawMortalWarning(g: Phaser.GameObjects.Graphics, w: GroundWarni
   else drawBossImpact(g,{kind:'circle',x,y,r:radius,inner:w.innerRadius},ink,0xffe9af,age);
 }
 
+const warningAccents = new WeakMap<Phaser.GameObjects.Graphics, Phaser.GameObjects.Graphics>();
+
+function accentLayer(g: Phaser.GameObjects.Graphics) {
+  let layer = warningAccents.get(g);
+  if (!layer) {
+    layer = g.scene.add.graphics().setDepth(46);
+    warningAccents.set(g, layer);
+    const owned = layer;
+    g.once('destroy', () => owned.destroy());
+  }
+  return layer;
+}
+
+// Small notches remain visible through crowds without painting over the entire battlefield.
+function edgeNotches(g: Phaser.GameObjects.Graphics, w: GroundWarning, color: number, alpha: number) {
+  const line = w.kind === 'line';
+  const radii = w.kind === 'ring' ? [w.radius,w.innerRadius ?? 0] : [w.radius];
+  const count = line ? (w.lanes ?? 1)*4 : w.kind === 'sweep' ? 5 : 8;
+  for (const r of radii) for (let i=0;i<count;i++) {
+    const a = line ? w.angle+(Math.floor(i/4)-((w.lanes??1)-1)/2)*(w.spread??0)
+      : w.angle+(w.kind==='sweep' ? (i/4-.5)*Math.PI*2/3 : i*Math.PI/4);
+    const reach=line ? r*(i%4<2?.48:.92) : r;
+    const side=line ? (i%2?1:-1)*(w.halfWidth??25) : 0;
+    const dx=Math.cos(a),dy=Math.sin(a),x=w.x+dx*reach-dy*side,y=w.y+dy*reach+dx*side;
+    g.lineStyle(4,0x241821,alpha).lineBetween(x,y,x-dx*7,y-dy*7);
+    g.lineStyle(2,color,alpha).lineBetween(x,y,x-dx*7,y-dy*7);
+  }
+}
+
 export function drawMythicWarning(g: Phaser.GameObjects.Graphics,w: MythicWarning,id: string,now: number): void {
   const progress=Math.max(0,Math.min(1,(now-w.startsAt)/Math.max(.01,w.endsAt-w.startsAt)));
+  const scar=w.scar;
+  if (scar && now>=scar.createdAt && now<scar.lightsAt) {
+    const trace={...w,...scar,lanes:1,spread:0};
+    if (scar.kind==='line') drawLane(g,trace,scar.angle,0x638986,.36);
+    else arcMarks(g,scar.x,scar.y,scar.radius,scar.angle-Math.PI/3,Math.PI*2/3,9,.46,2,0x638986,.6);
+    if (w.retracesScar) return;
+  }
+  if (!w.resolved) edgeNotches(accentLayer(g),w,w.retracesScar?0x9ffff0:0xffdeb0,.90);
   const warming = progress>.72 ? 0xffc384 : 0xff9c65;
   const lanes = w.lanes ?? 1;
   if (!w.resolved) {

@@ -22,7 +22,14 @@ type Strike = {
   side?: number;
 };
 
+export type BladeScar = Point & {
+  kind: 'line' | 'sweep'; radius: number; angle: number; halfWidth?: number;
+  createdAt: number; lightsAt: number;
+};
+
 export interface MythicWarning extends Point {
+  scar?: BladeScar;
+  retracesScar?: boolean;
   kind: MythicShape;
   name: string;
   radius: number;
@@ -125,7 +132,7 @@ export function mythicSequence(boss: MythicBoss, origin: Point, target: Point, c
   const sequence = phase2 ? [...moves,boss.phaseMove] : moves;
   let startsAt = now;
   const primaryUsesWeapon=boss.moves[0].some(move=>move.kind==='line'||move.kind==='sweep');
-  return sequence.map((strike,index): MythicWarning => {
+  const warnings = sequence.map((strike,index): MythicWarning => {
     const isWeapon=index<moves.length&&primaryUsesWeapon===(cast%boss.moves.length===0);
     const base = strike.kind === 'circle' ? target : origin;
     const offset = strike.side ?? 0;
@@ -135,6 +142,21 @@ export function mythicSequence(boss: MythicBoss, origin: Point, target: Point, c
     startsAt = endsAt + .36;
     return warning;
   });
+  if (phase2 && boss.id === 'ghost_guanyu') {
+    // The first swing cuts the trail. Later movement of the caster or target cannot bend it.
+    const first = warnings[0], back = warnings[warnings.length - 1];
+    const kind = first.kind;
+    if (kind === 'line' || kind === 'sweep') {
+      const scar: BladeScar = { kind, x:first.x, y:first.y, angle:first.angle,
+        radius:first.radius, halfWidth:first.halfWidth, createdAt:first.endsAt,
+        lightsAt:back.startsAt + .45 };
+      for (const w of warnings) w.scar = scar;
+      Object.assign(back, { kind, x:scar.x, y:scar.y, angle:scar.angle, face:scar.angle,
+        radius:scar.radius, halfWidth:scar.halfWidth, lanes:1, spread:0, retracesScar:true,
+        visual:kind === 'sweep' ? 'blade' : 'dragon', endsAt:scar.lightsAt + 1.15 });
+    }
+  }
+  return warnings;
 }
 
 export function mythicHit(w: MythicWarning, p: Point): boolean {

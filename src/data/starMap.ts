@@ -1,3 +1,4 @@
+import {RETINUE_STARS} from '../rules/retinue';
 import { STAR_OUTER_NAMES, STAR_OUTER_DESCS, STAR_OUTER_TUNING } from './starOuter';
 import { FIELD_STAR_EFFECT } from './coopStars';
 import { PRIMARY_ATTRIBUTE, type AttributeId } from './attributes';
@@ -51,7 +52,7 @@ export const STAR_TUNING = {
  * 第二期：12 颗新要星的效果数值（设计稿第 4 节的表，初值，归平衡会话）。键 = 节点编号；结算在 systems/RunGrowth.ts（starOn / STAR_EFFECT）。
  * STAR_NEAR_RADIUS =「主将身边」的半径（号令、身先士卒）。
  */
-export const STAR_NEAR_RADIUS = 220;
+export const STAR_NEAR_RADIUS = RETINUE_STARS.radius;
 export const STAR_EFFECT = {
   'strength.NX1': STAR_OUTER_TUNING, 'strength.NX2': STAR_OUTER_TUNING,
   'agility.NX1': STAR_OUTER_TUNING, 'agility.NX2': STAR_OUTER_TUNING,
@@ -70,9 +71,9 @@ export const STAR_EFFECT = {
   /** 妙算：锦囊效果 +15%。 */
   'intellect.NR2': { jinnang: .15 },
   /** 严阵：部曲生命 +15%，部曲受首领伤害 −15%。 */
-  'command.NR1': { allyHp: .15, bossTaken: .15 },
+  'command.NR1': { allyHp: RETINUE_STARS.hp, bossTaken: RETINUE_STARS.bossTaken },
   /** 号令：主将身边的部曲伤害 +12%（进部曲伤害加法桶）。 */
-  'command.NR2': { nearAllyDamage: .12 },
+  'command.NR2': { nearAllyDamage: RETINUE_STARS.nearDamage },
   /** 骁锐：武器伤害 +6%，攻速 +6%。 */
   'bridge0.h': FIELD_STAR_EFFECT['bridge0.h'],
   /** 奇谋：暴击后 3 秒内法术伤害 +12%。 */

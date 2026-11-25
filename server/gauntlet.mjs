@@ -1,8 +1,9 @@
+import {refreshRetinueHp} from './coop-retinue.mjs';
 import {canDraftMark} from './coop-marks.mjs';
 import { GAUNTLET, GAUNTLET_POOL, endlessBoss, pickBosses } from '../src/data/gauntlet.ts';
 import { challengeBoss, mythicBoss, mythicSequence, mythicHit } from '../src/data/mythicGauntlet.ts';
 import content from '../src/coop/gauntlet.json' with { type: 'json' };
-import {FIELD_STARS, MARK_STAR, ironHpBonus} from '../src/data/coopStars.ts';
+import {FIELD_STARS, MARK_STAR, COMPANY_STARS, ironHpBonus} from '../src/data/coopStars.ts';
 
 const pool = GAUNTLET_POOL.filter(boss => Object.hasOwn(content.bosses, boss.id));
 export const TOTAL_WAVES = GAUNTLET.waves;
@@ -116,7 +117,7 @@ export function resolveBossWarning(run, players, time, onHit) {
   if (run.followup && time >= run.followup.at && !run.warning) {
     const { previousSlot, pattern } = run.followup, boss = run.boss;
     run.followup = null;
-    const nearby = players.filter(p => p.hp > 0 && Math.hypot(p.x - boss.x, p.y - boss.y) < 245);
+    const nearby = players.filter(p => p.owner === undefined && p.hp > 0 && Math.hypot(p.x - boss.x, p.y - boss.y) < 245);
     // Give the other living nearby player a turn to dodge; never aim at a fallen/faraway teammate.
     const target = nearby.find(p => p.slot !== previousSlot) ?? nearby[0];
     if (target) beginBossWarning(run, target, time, true, pattern);
@@ -157,7 +158,8 @@ export function rewardsFor(player, wave=1) {
   }
   if (player.stars && (wave%3===0 || choices.length<3)) {
     const pool=canDraftMark(player)?[...FIELD_STARS,MARK_STAR]:FIELD_STARS;
-    const availableStars=pool.filter(star=>!player.stars.includes(star.id));
+    const supported=player.company?[...pool,...COMPANY_STARS]:pool;
+    const availableStars=supported.filter(star=>!player.stars.includes(star.id));
     if(availableStars.length) {
       const star=availableStars[Math.floor(Math.random()*availableStars.length)];
       if(choices.length===3) choices.pop();
@@ -170,9 +172,12 @@ export function rewardsFor(player, wave=1) {
 
 export function grantReward(player, id) {
   if(id===MARK_STAR.id && !canDraftMark(player))return;
-  if(id===MARK_STAR.id || FIELD_STARS.some(s=>s.id===id)) {
+  const companyStar=COMPANY_STARS.some(s=>s.id===id);
+  if(companyStar&&!player.company)return;
+  if(companyStar || id===MARK_STAR.id || FIELD_STARS.some(s=>s.id===id)) {
     if(!player.stars || player.stars.includes(id))return;
     player.stars.push(id);
+    if(id==='command.NR1')refreshRetinueHp(player);
     if(id==='strength.NR1') {
       const ratio=player.hp/player.maxHp;
       player.maxHp=Math.round(player.maxHp*(1+ironHpBonus(true)));

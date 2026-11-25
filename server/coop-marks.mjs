@@ -6,7 +6,7 @@ import {troopHit} from './coop-roster.mjs';
 
 const casters=new Set(CHARACTERS.filter(hero=>SPELL_WEAPONS.has(hero.startWeapon)).map(hero=>hero.id));
 const host={valid:enemy=>enemy.hp>0&&!enemy.escaped,identity:enemy=>enemy.id};
-export const canDraftMark=player=>player.starDraft===2 && casters.has(player.hero);
+export const canDraftMark=player=>player.starDraft>=2 && casters.has(player.hero);
 
 export function strikeSpellMark(room,player,target,power){
   if(!canDraftMark(player) || !player.stars?.includes('intellect.NX1'))return;

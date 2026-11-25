@@ -1,3 +1,4 @@
+import {retinueStarHp,retinueBossTaken,nearOrderBonus} from '../rules/retinue';
 import {ironHpBonus,ironIncoming,backwaterActive,backwaterDamage,vanguardDamage,vanguardSpeed} from '../data/coopStars';
 import { statEffective, statSource } from '../data/heroStats';
 import { SCHOOL_TIER } from '../data/schools';
@@ -234,7 +235,7 @@ export class RunGrowth {
   /** 妙算：锦囊效果倍率（数值或持续时间 ×1.15，见 GameScene.useJinnang）。 */
   jinnangMultiplier(): number { return this.starOn('intellect.NR2') ? 1 + STAR_EFFECT['intellect.NR2'].jinnang : 1; }
   /** 严阵：部曲受首领伤害倍率。 */
-  allyBossTakenMultiplier(): number { return this.starOn('command.NR1') ? 1 - STAR_EFFECT['command.NR1'].bossTaken : 1; }
+  allyBossTakenMultiplier(): number { return retinueBossTaken(this.starOn('command.NR1')); }
   /** 主将身边（dx, dy = 部曲相对主将的位移）。 */
   private near(dx: number, dy: number): boolean { return dx * dx + dy * dy <= STAR_NEAR_RADIUS * STAR_NEAR_RADIUS; }
   /**
@@ -242,8 +243,7 @@ export class RunGrowth {
    * 这里返回身边这名部曲要补乘的系数 (1 + 桶 + 12%) ÷ (1 + 桶)。
    */
   allyNearDamageFactor(dx: number, dy: number): number {
-    if (!this.starOn('command.NR2') || !this.near(dx, dy)) return 1;
-    const b = this.allyDamageBucket(); return (1 + b + STAR_EFFECT['command.NR2'].nearAllyDamage) / (1 + b);
+    return nearOrderBonus(this.starOn('command.NR2'),dx,dy,this.allyDamageBucket());
   }
   /** 身先士卒：主将身边的部曲受伤倍率。 */
   allyNearTakenFactor(dx: number, dy: number): number { return this.starOn('bridge3.h') && this.near(dx, dy) ? 1 - STAR_EFFECT['bridge3.h'].nearAllyTaken : 1; }
@@ -361,7 +361,7 @@ export class RunGrowth {
   /** 统御「同袍」：随从救起所需时间倍率与救起生命比例（null = 用默认）。 */
   followerRevive(): { secMul: number; hp: number } | null { return this.perk('command', 3) ? { secMul: 1 - PRIMARY_PERK.command.reviveFaster, hp: PRIMARY_PERK.command.reviveHp } : null; }
   /** 统御：部曲生命倍率。 */
-  allyHpMultiplier(): number { return (1 + ATTRIBUTE_EFFECT.command.allyHp * this.pts('command')) * (this.starOn('command.NR1') ? 1 + STAR_EFFECT['command.NR1'].allyHp : 1) * (this.keyOn('command.K') ? 1 + STAR_KEYSTONE['command.K'].allyHp : 1); } // 星图·严阵
+  allyHpMultiplier(): number { return (1 + ATTRIBUTE_EFFECT.command.allyHp * this.pts('command')) * retinueStarHp(this.starOn('command.NR1')) * (this.keyOn('command.K') ? 1 + STAR_KEYSTONE['command.K'].allyHp : 1); } // 星图·严阵
   /** 兵装「对精锐 / 首领伤害」与名器「斩将」：只作用于武将本人的命中。 */
   gearHitMultiplier(kind: string): number { return (this.perk('strength', 3) && (kind === 'boss' || kind === 'elite') ? 1 + PRIMARY_PERK.strength.eliteMul : 1) * (kind === 'boss' ? 1 + this.gear.elite + this.gear.boss : kind === 'elite' ? 1 + this.gear.elite : 1) * (kind === 'boss' && this.keyOn('strength.K') ? 1 + STAR_KEYSTONE['strength.K'].boss : 1); }
   /** 兵装「经验获取」× 来源倍率（主线 1.0、其余 0.5）：小数部分累计，不丢失。 */

@@ -1,3 +1,4 @@
+import {allyHp} from '../rules/retinue';
 import {visualTextureKey} from '../systems/ReadableTextures';
 import {figureCorrection} from '../systems/SpriteMetrics';
 import {isV2Texture, V2_TROOP_SCALE, v2TroopGround} from '../systems/ArtStyle';
@@ -14,7 +15,7 @@ const LUNGE: Partial<Record<TroopKind, number>> = { spearman: 10, swordsman: 7, 
 export class Ally {
   readonly id = ++sequence;
   private campaignHpMultiplier=1;
-  applyCampaignHp(multiplier:number):void{const ratio=this.maxHp>0?this.hp/this.maxHp:1;this.campaignHpMultiplier=multiplier;this.maxHp=Math.round(this.def.hp*(1+.3*(this.level-1))*multiplier);this.hp=Math.min(this.maxHp,this.maxHp*ratio);}
+  applyCampaignHp(multiplier:number):void{const ratio=this.maxHp>0?this.hp/this.maxHp:1;this.campaignHpMultiplier=multiplier;this.maxHp=allyHp(this.def.hp,this.level,multiplier);this.hp=Math.min(this.maxHp,this.maxHp*ratio);}
   active = true; level = 1; hp = 1; maxHp = 1; cooldown = 0; hurtUntil = 0; bossImmuneUntil = 0; attackUntil = 0;
   /** 太史慈「单骑突围」给的护盾：shieldUntil 前挨打先扣 shield（Legion.hurt）。 */
   shield = 0; shieldUntil = 0;
@@ -50,12 +51,12 @@ export class Ally {
   get sprite(): Phaser.GameObjects.Image { if (!this.view) this.attach(Ally.makeView(this.scene)); return this.view!.sprite; }
   get shadow(): Phaser.GameObjects.Image { if (!this.view) this.attach(Ally.makeView(this.scene)); return this.view!.shadow; }
   reset(x: number, y: number, kind: TroopKind, level: number, slot: number): void {
-    this.campaignHpMultiplier=1;this.kind = kind; this.active = true; this.level = level; this.maxHp = Math.round(this.def.hp * (1 + .3 * (level - 1))); this.hp = this.maxHp;
+    this.campaignHpMultiplier=1;this.kind = kind; this.active = true; this.level = level; this.maxHp = allyHp(this.def.hp,level); this.hp = this.maxHp;
     this.reserveSoldier=false;this.garrison=false;this.pose=null;this.lifeId++; this.attackStarted = 0; this.moving = false; this.ai = createTacticState(x, y); this.ai.nextThink = slot % 12 * 17;
     this.px = x; this.py = y; this.slot = slot; this.cooldown = (slot % 10) * .08; this.hurtUntil = this.bossImmuneUntil = this.attackUntil = this.simDebt = this.walked = 0; this.deathsReported = false; this.dir = 'down';
     this.view?.sprite.setPosition(x, y);
   }
-  train(level: number): void { const old = this.maxHp; this.level = level; this.maxHp = Math.round(this.def.hp * (1 + .3 * (level - 1))*this.campaignHpMultiplier); this.hp = Math.min(this.maxHp, this.hp + this.maxHp - old); }
+  train(level: number): void { const old = this.maxHp; this.level = level; this.maxHp = allyHp(this.def.hp,level,this.campaignHpMultiplier); this.hp = Math.min(this.maxHp, this.hp + this.maxHp - old); }
   upgrade(): void { this.train(Math.min(3, this.level + 1)); }
   push(dx: number, dy: number): void { this.setPosition(this.x + dx, this.y + dy); }
   setPosition(x: number, y: number): void { this.px = x; this.py = y; this.view?.sprite.setPosition(x, y); }

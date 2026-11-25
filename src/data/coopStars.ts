@@ -19,3 +19,5 @@ export const vanguardDamage=(owned:boolean,weaponHit:boolean):number=>owned && w
 export const vanguardSpeed=(owned:boolean):number=>owned ? 1+FIELD_STAR_EFFECT['bridge0.h'].attackSpeed : 1;
 
 export const MARK_STAR={id:'intellect.NX1',name:'牵印',detail:'本命法术留下两枚印记，命中可向附近另一枚传导10%伤害'} as const;
+
+export const COMPANY_STARS=[{id:'command.NR1',name:'严阵',detail:'自己的部曲生命 +15%，受首领伤害 −15%'},{id:'command.NR2',name:'号令',detail:'主将身边220px内自己的部曲伤害 +12%'}] as const;

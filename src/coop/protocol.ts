@@ -1,3 +1,4 @@
+import type {CompanyRow,CompanyStatus} from './CoopRetinueView';
 import type { ChallengeChoice, GauntletRunTier, MythicTier, MythicWarning } from '../data/mythicGauntlet';
 import type { CharacterId } from '../data/characters';
 
@@ -33,6 +34,7 @@ export interface GauntletState {
   dual?: boolean;
 }
 export interface Fighter {
+  order?:'guard'|'sortie';
   stars?: string[];
   slot: Side;
   hero: CharacterId;
@@ -45,7 +47,7 @@ export interface Fighter {
   moving: boolean;
   strike: { n: number; x: number; y: number };
 }
-export type PartyMember = Pick<Fighter, 'slot' | 'hero' | 'hp' | 'maxHp' | 'stars'> & { ready: boolean };
+export type PartyMember = Pick<Fighter, 'slot' | 'hero' | 'hp' | 'maxHp' | 'stars'> & { ready: boolean; company?:CompanyStatus };
 export interface TroopCue { kind: string; x: number; y: number; angle: number; range: number; width: number; endsAt: number; spread?: number }
 export interface TroopEffect { fromX?:number; fromY?:number; kind: string; x: number; y: number; radius: number; until: number }
 export interface Foe { enraged?: boolean; troop?: string; cue?: TroopCue; face?: number; boosted?: boolean; id: number; x: number; y: number; hp: number; maxHp: number; boss: boolean; general?: General }
@@ -53,7 +55,7 @@ export type ServerMessage =
   | { type: 'session'; code: string; slot: Side; token: string; graceMs: number }
   | { type: 'connection'; paused: boolean; remaining: number }
   | { type: 'lobby'; code: string; slot: Side; count: number; mode: CoopMode; picks: { slot: Side; hero: CharacterId | null }[] }
-  | { type: 'state'; spellMarks?:number[]; battleMs?: number; seconds: number; kills: number; players: Fighter[]; enemies: Foe[]; shots?: {x:number;y:number;angle:number;net:boolean}[]; troopEffects?: TroopEffect[]; gauntlet: GauntletState }
+  | { type: 'state'; retainers?:CompanyRow[]; spellMarks?:number[]; battleMs?: number; seconds: number; kills: number; players: Fighter[]; enemies: Foe[]; shots?: {x:number;y:number;angle:number;net:boolean}[]; troopEffects?: TroopEffect[]; gauntlet: GauntletState }
   | { type: 'draft'; wave: number; total: number; general: string; party: PartyMember[]; choices: string[]; ready: number; checkpoint: boolean; tier?: GauntletRunTier; continuation?: ChallengeChoice[] }
   | { type: 'result'; victory: boolean; kills: number; generals: number; milestones?: number }
   | { type: 'error'; message: string }

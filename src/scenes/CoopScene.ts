@@ -1,3 +1,4 @@
+import {CoopRetinueView,preloadCompany} from '../coop/CoopRetinueView';
 import { loadSurvivorBossFx, playSurvivorBossFx, updateSurvivorBossFx, clearSurvivorBossFx } from '../systems/SurvivorBossFx';
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT, IS_DESKTOP } from '../config';
@@ -13,8 +14,8 @@ import { heroUnlocked } from '../systems/HeroUnlocks';
 import roster from '../coop/roster.json';
 import { buildRecolor } from '../systems/IffOverlay';
 import { ART_V2_FILES } from '../systems/ArtStyle';
-import { FIELD_STARS, MARK_STAR } from '../data/coopStars';
-const networkStars=[...FIELD_STARS,MARK_STAR];
+import { FIELD_STARS, MARK_STAR, COMPANY_STARS } from '../data/coopStars';
+const networkStars=[...FIELD_STARS,MARK_STAR,...COMPANY_STARS];
 
 type ActorView = { body: Phaser.GameObjects.Image; label: Phaser.GameObjects.Text; tx: number; ty: number; strike: number; mythicFacing?: number };
 const TROOPS: Record<string, {name:string;art:{walk:string;attack:string;cell:number}}> = roster.types;
@@ -40,6 +41,8 @@ export class CoopScene extends Phaser.Scene {
   private movementAt = 0;
   private slot: Side = 0;
   private phase: 'setup' | 'lobby' | 'battle' | 'draft' | 'result' = 'setup';
+  private readonly companyView=new CoopRetinueView();
+  private companyOrder?:HTMLButtonElement;
   private fighters = new Map<Side, ActorView>();
   private foes = new Map<number, ActorView>();
   private marks: Phaser.GameObjects.Line[] = [];
@@ -60,6 +63,7 @@ export class CoopScene extends Phaser.Scene {
 
   private lastBossFx = '';
   preload(): void {
+    preloadCompany(this);
     preloadMythic(this);
     loadSurvivorBossFx(this);
     // Small standalone bundle; the home scene may have skipped the main battle preload.
@@ -75,7 +79,7 @@ export class CoopScene extends Phaser.Scene {
     this.movementAt = 0;
     this.fighters.clear();
     this.troopTextures.clear();
-    this.foes.clear();
+    this.foes.clear();this.companyView.clear();this.companyOrder=undefined;
     this.generalTexture = undefined;
     this.mythicSignature = undefined; this.mythicCue = null; this.mythicId = ''; this.mythicClock = 0; this.preparedMythic = '';
     this.marks = [];
@@ -103,7 +107,7 @@ export class CoopScene extends Phaser.Scene {
       this.heroTextures.clear();
       this.fighters.clear();
       this.troopTextures.clear();
-      this.foes.clear();
+      this.foes.clear();this.companyView.clear();this.companyOrder=undefined;
       this.marks = [];
     });
   }
@@ -252,7 +256,7 @@ export class CoopScene extends Phaser.Scene {
     const socket = new WebSocket(url); this.socket = socket;
     const fail = (text: string, terminal = false) => { if (this.socket === socket) this.connectionFailed(text, terminal); };
     this.connectionTimer = window.setTimeout(() => fail('连接超时，请重试'), Math.min(8000, this.retryUntil ? this.retryUntil - Date.now() : 8000));
-    socket.onopen = () => { if (this.socket === socket) socket.send(JSON.stringify(command.type === 'resume' ? command : { ...command, heroes: this.availableHeroes, starDraft:2 })); };
+    socket.onopen = () => { if (this.socket === socket) socket.send(JSON.stringify(command.type === 'resume' ? command : { ...command, heroes: this.availableHeroes, starDraft:3 })); };
     socket.onerror = () => fail('无法连接联机服务，请检查网络');
     socket.onclose = () => fail('连接中断，请重试');
     socket.onmessage = event => {
@@ -455,6 +459,13 @@ export class CoopScene extends Phaser.Scene {
     if(this.mythicSignature) paintMythicSignature(this.mythicSignature,this.mythicId,mythicOwner ? this.mythicCue : null,this.mythicClock,mythicOwner);
     this.drawWarning(null);
     for(const warning of state.gauntlet?.warnings??(state.gauntlet?.warning?[state.gauntlet.warning]:[]))this.drawWarning(warning,false);
+    this.companyView.sync(this,state.retainers??[],performance.now());
+    if(state.players.some(p=>p.slot===this.slot) && state.retainers?.some(u=>u[1]===this.slot) && !this.panel.contains(this.companyOrder??null)){
+      const button=this.button('部曲 · 出击',()=>{const order=button.dataset.next==='guard'?'guard':'sortie';this.send({type:'order',order});});
+      button.classList.add('coop-order');this.companyOrder=button;this.panel.prepend(button);
+    }
+    const own=state.players.find(p=>p.slot===this.slot);
+    if(this.companyOrder&&own?.order){this.companyOrder.dataset.next=own.order==='guard'?'sortie':'guard';this.companyOrder.textContent=own.order==='guard'?'护阵中 · 出击':'出击中 · 归阵';}
     this.drawTroops(state);
     const nextIds=roster.waves[state.gauntlet.wave<=10?state.gauntlet.wave-1:7+(state.gauntlet.wave-11)%3]??[];
     for(const id of nextIds)this.loadTroop(id);
@@ -707,6 +718,12 @@ export class CoopScene extends Phaser.Scene {
     party.className = 'coop-party';
     party.setAttribute('aria-label', '队伍状态');
     const members = [...message.party].sort((a, b) => Number(b.slot === this.slot) - Number(a.slot === this.slot));
+    const company=members.find(m=>m.slot===this.slot)?.company;
+    if(company&&!message.checkpoint){
+      const label=document.createElement('small');label.textContent='钱币 '+company.coins+' · 部曲 '+company.men+'/'+company.cap+' · 阵亡 '+company.deaths;
+      party.append(label);const button=this.button('招募三人 · '+company.cost+'钱',()=>this.send({type:'recruit',receipt:company.receipt,wave:message.wave}));
+      button.disabled=company.coins<company.cost||company.men+3>company.cap||!!members.find(m=>m.slot===this.slot)?.ready;party.append(button);
+    }
     for (const member of members) party.append(this.partyMember(member, message.checkpoint));
     card.insertBefore(party, this.status);
     if (message.checkpoint) {
@@ -742,6 +759,7 @@ export class CoopScene extends Phaser.Scene {
   }
 
   update(time: number, delta: number): void {
+    if(this.phase==='battle'&&!this.connectionBlocked)this.companyView.draw(performance.now(),delta);
     if (this.phase !== 'battle') return;
     if (time >= this.movementAt) {
       this.movementAt = time + 65;

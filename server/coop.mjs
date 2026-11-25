@@ -1,3 +1,5 @@
+import {paySpoils,companyStatus,companyWire,recruitCompany,updateRetinue,strikeRetainer} from './coop-retinue.mjs';
+import {BOSS_VS_TROOPS,BOSS_VS_ALLY} from '../src/data/legion.ts';
 import {strikeSpellMark, visibleSpellMarks} from './coop-marks.mjs';
 import { startHebei, stepHebei, resolveHebei, dualDeaths, dualState, dualWarnings } from './coop-dual.mjs';
 import { GAUNTLET_POOL } from '../src/data/gauntlet.ts';
@@ -104,8 +106,9 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
   function snapshot(room) {
     broadcast(room, {
       type: 'state', seconds: Math.floor(room.seconds), battleMs: Math.round(room.seconds*1000), kills: room.kills,
-      players: playersIn(room).map(({ slot, hero, x, y, hp, maxHp, rescue, dir, moving, strike, stars }) => ({ slot, hero, x, y, hp, maxHp, rescue, dir, moving, strike, stars })),
+      players: playersIn(room).map(({ slot, hero, x, y, hp, maxHp, rescue, dir, moving, strike, stars, company }) => ({ slot, hero, x, y, hp, maxHp, rescue, dir, moving, strike, stars,order:company?.order })),
       enemies: room.enemies.map(({ id, x, y, hp, maxHp, boss, general, troop, cue, face, speedBuff, enraged }) => ({ id, x, y, hp, maxHp, boss, troop, cue, face, enraged: !!enraged, boosted: speedBuff > 1, general: general && { id: general.id, name: general.name } })),
+      retainers:companyWire(room),
       spellMarks: visibleSpellMarks(room),
       shots: (room.shots ?? []).map(({x,y,angle,slow})=>({x,y,angle,net:!!slow})), troopEffects: room.troopEffects ?? [],
       gauntlet: room.run && { wave: room.run.wave, cleared: room.run.cleared, total: TOTAL_WAVES,
@@ -124,7 +127,7 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
     const ready = playersIn(room).filter(player => !player.choices?.length).length;
     for (const player of room.players.values()) {
       send(player.socket, { type: 'draft', wave: room.run.wave, total: TOTAL_WAVES, general: room.run.history.at(-1).dual ? '河北双雄 · 颜良 / 文丑' : room.run.history.at(-1).name,
-      party: playersIn(room).map(({ slot, hero, hp, maxHp, choices, stars }) => ({ slot, hero, hp, maxHp, ready: !choices?.length, stars })),
+      party: playersIn(room).map(({ slot, hero, hp, maxHp, choices, stars }) => ({ slot, hero, hp, maxHp, ready: !choices?.length, company:companyStatus(room.players.get(slot),room.run.wave), stars })),
         choices: player.choices ?? [], ready, checkpoint: room.phase === 'checkpoint', tier: room.run.tier,
         continuation: room.phase==='checkpoint'?challengeChoices(room.run.tier,room.run.wave,TOTAL_WAVES):[] });
     }
@@ -151,7 +154,7 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
     for(const player of room.players.values()) delete player.casting;
     clearTroops(room);
     const run = room.run;
-    run.cleared++;
+    run.cleared++;paySpoils(room);
     run.history.push(run.upcoming);
     run.history = run.history.slice(-40);
     clearBossAttack(run);
@@ -168,8 +171,14 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
     draft(room,checkpoint);
   }
   function strikePlayers(room, now) {
-    if (room.run?.dual) resolveHebei(room.run,playersIn(room),room.seconds,(player,damage)=>hurt(player,damage,now));
-    else if (room.run) resolveBossWarning(room.run, playersIn(room), room.seconds, (player, damage) => hurt(player, damage, now));
+    const party=playersIn(room),targets=[...party];let fallen=0;
+    for(const p of party)if(p.company)targets.push(...p.company.units);
+    const hit=(target,damage)=>{
+      if(target.owner===undefined)return hurt(target,damage,now);
+      if(strikeRetainer(room,target,damage*BOSS_VS_TROOPS.skillMul,true,fallen>=BOSS_VS_ALLY.killCapPerCast?1:0)&&target.hp===0)fallen++;
+    };
+    if(room.run?.dual)resolveHebei(room.run,targets,room.seconds,hit);
+    else if(room.run)resolveBossWarning(room.run,targets,room.seconds,hit);
   }
   function hurt(player, damage, now) {
     if (now < player.hurtUntil) return false;
@@ -212,6 +221,7 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
       troopHit(room, nearest, player, power);
       if(player.stars?.includes('intellect.NX1')) strikeSpellMark(room,player,nearest,power);
     }
+    updateRetinue(room,dt);
     if(room.run.dual)stepHebei(room.run,live,room.seconds,dt);
     for (const enemy of room.enemies) {
       if (enemy.hp <= 0) continue;
@@ -327,7 +337,7 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
         const slot = room.players.size === 0 ? 0 : 1;
         player = { socket, token: randomBytes(24).toString('hex'), disconnectedAt: null, slot, available, hero: null, x: world.width / 2 + (slot ? 48 : -48), y: world.height / 2, hp: 100, maxHp: 100, rescue: 0, upgrades: {}, dir: 0, moving: false,
           fireIn: 0, dx: 0, dy: 0, inputAt: 0, hurtUntil: 0, strike: { n: 0, x: 0, y: 0 } };
-        if(command.starDraft===1 || command.starDraft===2){player.starDraft=command.starDraft;player.stars=[];}
+        if([1,2,3].includes(command.starDraft)){player.starDraft=command.starDraft;player.stars=[];}
         room.players.set(slot, player);
         session(room, player);
         lobby(room);
@@ -339,6 +349,10 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
         room.phase = 'battle';
         if (room.run) room.run.upcoming = bossForWave(room.run);
         snapshot(room);
+       } else if(room?.phase==='draft'&&command.type==='recruit'&&!missing(room).length){
+        if(recruitCompany(room,player,command))updateDraft(room);
+      } else if(room?.phase==='battle'&&command.type==='order'&&player.company&&!missing(room).length){
+        if(command.order==='guard'||command.order==='sortie')player.company.order=command.order;
       } else if (room?.phase === 'draft' && command.type === 'reward' && player.choices?.includes(command.id)) {
         grantReward(player, command.id);
         player.choices = [];

@@ -5,7 +5,6 @@
 import { QUALITIES } from './items';
 import { ATTRIBUTE_IDS, type AttributeId } from './attributes';
 import { STAR_BY_ID, STAR_NODES, STAR_RULES, perkStarId } from './starMap';
-import type { TroopKind } from './legion';
 
 export type GRarity = 'common' | 'fine' | 'rare' | 'legend';
 export const RARITY_ORDER: readonly GRarity[] = ['common', 'fine', 'rare', 'legend'];
@@ -72,16 +71,7 @@ export function cardRarity(o: { id: string; name: string; kind: string }, extra?
  * 每点一次 per 名、价格 base + perWave × 阵数；兵种随阵数（前三阵刀盾 / 长枪，四到六阵加弓箭 / 重盾，第七阵起加轻骑 / 精锐戟兵），
  * 兵的阶（Legion 训练等级 1–3）也随阵数抬。初值，交平衡。
  */
-export const GAUNTLET_RECRUIT = {
-  per: 3, base: 60, perWave: 10,
-  tiers: [
-    { upTo: 3, kinds: ['swordsman', 'spearman'], level: 1 },
-    { upTo: 6, kinds: ['swordsman', 'spearman', 'archer', 'guardian'], level: 2 },
-    { upTo: Infinity, kinds: ['spearman', 'archer', 'guardian', 'rider', 'halberdier'], level: 3 },
-  ] as ReadonlyArray<{ upTo: number; kinds: readonly TroopKind[]; level: number }>,
-} as const;
-export function recruitTier(wave: number): { upTo: number; kinds: readonly TroopKind[]; level: number } { return GAUNTLET_RECRUIT.tiers.find(t => wave <= t.upTo) ?? GAUNTLET_RECRUIT.tiers[GAUNTLET_RECRUIT.tiers.length - 1]; }
-export function recruitCost(wave: number): number { return GAUNTLET_RECRUIT.base + GAUNTLET_RECRUIT.perWave * Math.max(1, Math.floor(wave)); }
+export { GAUNTLET_RECRUIT,recruitCost,recruitTier } from './gauntletRecruit';
 
 // ———— 将星卡（统筹确认：星图开关关着也出；拿一颗点亮一颗，不走连线 / 点数）————
 export type StarCardKind = 'perk' | 'named' | 'keystone';

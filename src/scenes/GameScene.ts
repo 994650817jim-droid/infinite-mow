@@ -2846,7 +2846,6 @@ export class GameScene extends Phaser.Scene {
     if (enemy === this.boss) this.ensureBossPhase2();
     if (this.xiliang) rawDamage *= this.xiliang.incoming(enemy, source);
     if (enemy === this.boss && this.moveset) { rawDamage *= this.moveset.incoming(fromAlly); this.moveset.hit(time); }
-    if (this.dzLubu && enemy === this.dzLubu.lubu) rawDamage = this.dzLubu.clampDamage(enemy, rawDamage); // 2-3 吕布锁在 1/3 血
     if (enemy.def.trait && this.traits) rawDamage *= this.traits.damageTakenMul(enemy,fromAlly,source==='fire');
     if (this.enemyForms) rawDamage *= this.enemyForms.damageMul(enemy, time); // 敌方军阵：盾墙正面减伤 / 阵破易伤 // 新兵种：盾墙 / 举盾正面减伤
     if(this.yellow&&enemy.kind==='shield'&&enemy.shieldMax===0&&enemy.def.behavior!=='wall'&&!fromAlly&&source!=='fire'){const angle=enemy.direction==='left'?Math.PI:enemy.direction==='right'?0:enemy.direction==='up'?-Math.PI/2:Math.PI/2;if(Math.cos(Math.atan2(this.player.y-enemy.y,this.player.x-enemy.x)-angle)>.25)rawDamage*=.65;}
@@ -2907,6 +2906,10 @@ export class GameScene extends Phaser.Scene {
       if(starPrimary)this.starOuter?.hit(enemy,starSeed,time,starSpell);
       if (enemy.hp <= 0) { this.starSpellKill = spellHit; this.killEnemy(enemy); this.starSpellKill = false; }
       return true;
+    }
+    if (this.dzLubu && enemy === this.dzLubu.lubu) {
+      damage = this.dzLubu.clampDamage(enemy, damage);
+      if (damage <= 0) return false;
     }
     enemy.hp -= damage;
     this.damageDealt += damage;

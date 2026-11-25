@@ -2,7 +2,7 @@
 // 需要开发服务器 5173。用法：node tools/test-save-slots.mjs
 import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
-import { PADJS, padApi } from './pad-harness.mjs';
+import { BTN, PADJS, padApi } from './pad-harness.mjs';
 const base = process.env.BASE ?? 'http://127.0.0.1:5173/', out = 'assets/review/save-slots';
 mkdirSync(out, { recursive: true });
 let pass = 0, fail = 0; const errors = [];
@@ -55,21 +55,29 @@ const s3 = await store(), t3 = await texts();
 ck('删除非当前存档：第一次只提示确认，第二次删除', half.slot1 && !s3.slot1 && (t3.match(/空存档位/g) ?? []).length === 2, { half, s3 });
 // 手柄：Ⓑ 关闭面板；方向键到「存档」Ⓐ 打开
 const pad = padApi(p);
-await pad.press('B'); await p.waitForTimeout(200);
+// 游戏在 prestep 轮询。每个按下、松开各经历一帧，慢帧也能收到一次完整的点按。
+const tap = name => p.evaluate(async index => {
+  for (const value of [1, 0]) {
+    window.__vpad.buttons[index] = value;
+    await new Promise(resolve => window.__game.events.once('poststep', resolve));
+  }
+}, BTN[name]);
+await tap('B');
 ck('手柄 Ⓑ 关闭存档面板', !(await p.evaluate(M0 => !!eval(M0).children.getByName('save-slots-panel'), M)));
-// 2026-11-17：主页会先弹「主公」确认（lord-keep / lord-repick）抓住手柄焦点；Ⓐ 确认沿用后再去「存档」
-for (let i = 0; i < 3; i++) { await pad.press('DOWN', 60); const lf = await pad.focus(); if (lf?.name === 'lord-keep') { await pad.press('A'); await p.waitForTimeout(400); break; } }
-const f = await pad.focusTo(x => x.name === 'home-saves');
-await pad.press('A'); await p.waitForTimeout(300);
+if ((await pad.focus())?.name === 'lord-keep') await tap('A');
+// 从默认「匡扶汉室」向下经过名将连战幸存者、战役回顾，再向左经过图鉴到存档。
+for (const dir of ['DOWN', 'DOWN', 'LEFT', 'LEFT']) await tap(dir);
+const f = await pad.focus();
+if (f?.name === 'home-saves') await tap('A');
 const pf = await pad.focus();
-ck('手柄移到「存档」Ⓐ 打开，默认焦点「返回」', !!f && pf?.name === 'save-slots-close', { f, pf });
-await pad.press('UP'); const up = await pad.focus();
+ck('手柄移到「存档」Ⓐ 打开，默认焦点「返回」', f?.name === 'home-saves' && pf?.name === 'save-slots-close', { f, pf });
+await tap('UP'); const up = await pad.focus();
 ck('手柄可移到存档位按钮', /^save-slot-\d-/.test(up?.name ?? ''), up);
 // 布局：可点区域不重叠
 const c = await pad.cands();
 const overlaps = []; for (let i = 0; i < c.length; i++) for (let j = i + 1; j < c.length; j++) { const a = c[i], d = c[j], ox = Math.min(a.x + a.w, d.x + d.w) - Math.max(a.x, d.x), oy = Math.min(a.y + a.h, d.y + d.h) - Math.max(a.y, d.y); if (ox > 2 && oy > 2) overlaps.push(a.name + '×' + d.name); }
-ck('Deck 存档面板可点区域不重叠、不出界', !overlaps.length && c.every(r => r.x >= 0 && r.y >= 0 && r.x + r.w <= 960 && r.y + r.h <= 540), overlaps);
-await pad.press('B');
+ck('Deck 存档面板可点区域不重叠、不出界', c.some(r => r.name === 'save-slots-close') && !overlaps.length && c.every(r => r.x >= 0 && r.y >= 0 && r.x + r.w <= 960 && r.y + r.h <= 540), overlaps);
+await tap('B');
 // 删除当前存档：清空进度
 await open(); await click('save-slot-0-delete'); await click('save-slot-0-delete'); await reloaded();
 const s4 = await store();

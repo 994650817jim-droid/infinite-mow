@@ -14,6 +14,11 @@ const SAVE_FILE = () => path.join(app.getPath('userData'), 'save.json');
 const devMode = !app.isPackaged && process.env.IM_DEVTOOLS === '1';
 // 自动测试用：指定独立的用户数据目录，避免碰到玩家真实存档
 if (process.env.IM_USER_DATA) app.setPath('userData', process.env.IM_USER_DATA);
+// Only the process owning this profile may cache and rewrite its save file.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+  return;
+}
 // 部分 Windows 环境里 Chromium 的 GPU 子进程沙箱启动即“拒绝访问”（0xC0000022），重试 9 次后整个程序退出（0x80000003）。
 // 关闭 GPU 进程沙箱即可正常启动，仍保留硬件加速（单机离线游戏，不加载外部网页）。
 app.commandLine.appendSwitch('disable-gpu-sandbox');
@@ -73,6 +78,11 @@ ipcMain.on('store:replace', (e,all) => persist(e,all && typeof all==='object' ? 
 ipcMain.on('store:path', e => { e.returnValue = SAVE_FILE(); });
 
 let win = null;
+app.on('second-instance', () => {
+  if (!win || win.isDestroyed()) return;
+  if (win.isMinimized()) win.restore();
+  win.focus();
+});
 function toggleFullscreen() { if (win) win.setFullScreen(!win.isFullScreen()); }
 /** 当前屏幕放得下的分辨率（窗口模式用）。 */
 function availableResolutions() {

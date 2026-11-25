@@ -4,6 +4,46 @@ export async function instrument(page) {
     if (src.split(orig).length !== 2) throw Error('Missing or duplicate observation point: '+orig);
     return src.replace(orig, replacement);
   };
+  await page.addInitScript(()=>{
+    window.qaBulletSources=new WeakMap();
+    window.qaImpact=null;
+    window.qaWithImpact=(detail,hit)=>{
+      const before=window.qaImpact;
+      window.qaImpact=detail;
+      try{return hit();}finally{window.qaImpact=before;}
+    };
+    window.qaShooter=(category,e)=>({category,shooter:e?.kind??null,life:e?.spawnId??null,roster:e?.def?.roster??null,trait:e?.def?.trait?.kind??null});
+    window.qaBullet=bullet=>({...window.qaBulletSources.get(bullet),texture:bullet.img.texture.key,aimAtHero:!!bullet.atHero});
+  });
+  await page.route(/\/src\/scenes\/GameScene\.ts(?:\?|$)/,async route=>{
+    const res=await route.fetch();
+    let js=await res.text();
+    const shoot=(from,to)=>{js=replaceOnce(js,from,to);};
+    shoot('enemyArrowTexture(this, e.sprite.texture.key), life)', 'enemyArrowTexture(this, e.sprite.texture.key), life, window.qaShooter("trait-arrow",e))');
+    shoot('enemyArrowTexture(this, enemy.sprite.texture.key));','enemyArrowTexture(this, enemy.sprite.texture.key), undefined, window.qaShooter("archer-arrow",enemy));');
+    shoot('? "bossfx_zj_talisman" : "orb"),','? "bossfx_zj_talisman" : "orb", undefined, window.qaShooter("zhangjiao-talisman",this.boss)),');
+    shoot('false, 250, "orb");','false, 250, "orb", undefined, window.qaShooter("boss-aimed-orb",this.boss));');
+    shoot('false, 220, "orb");','false, 220, "orb", undefined, window.qaShooter("boss-radial-orb",this.boss));');
+    shoot('bolt.atHero = !fromPlayer && this.nextBoltAtHero;', 'if (!fromPlayer) window.qaBulletSources.set(bolt,arguments[11]??{category:"unknown-bullet"}); bolt.atHero = !fromPlayer && this.nextBoltAtHero;');
+    const soldierHit=js.match(/this\.legion\.hurt\(soldier, bullet\.damage,[^;]+\);/g);
+    if(soldierHit?.length!==1)throw Error('Soldier bullet collision has changed');
+    shoot(soldierHit[0],'window.qaWithImpact(window.qaBullet(bullet),()=>'+soldierHit[0].slice(0,-1)+');');
+    const playerHit='this.player.takeDamage(bullet.damage * this.playerBulletMul(bullet), this.combatNow)';
+    shoot(playerHit,'window.qaWithImpact(window.qaBullet(bullet),()=>'+playerHit+')');
+    await route.fulfill({response:res,body:js});
+  });
+  await page.route(/\/src\/systems\/BeifaSystems\.ts(?:\?|$)/,async route=>{
+    const res=await route.fetch(),line='this.h.army.hurtArea(s.x, s.y, s.r, s.ally, now)';
+    const js=replaceOnce(await res.text(),line,'window.qaWithImpact({category:"ground-"+s.kind},()=>'+line+')');
+    await route.fulfill({response:res,body:js});
+  });
+  await page.route(/\/src\/systems\/MythicBossController\.ts(?:\?|$)/,async route=>{
+    const res=await route.fetch(),line='army.hurtByBoss(unit, power * 0.6, ms)';
+    const src=await res.text();
+    if(src.split(line).length!==3)throw Error('Mythic hit sites have changed');
+    const js=src.replaceAll(line,'window.qaWithImpact({category:"mythic-skill",boss:id,move:active.name},()=>'+line+')');
+    await route.fulfill({response:res,body:js});
+  });
   await page.route(/\/src\/systems\/Legion\.ts(?:\?|$)/, async route => {
     const res = await route.fetch();
     let js = await res.text();
@@ -24,7 +64,7 @@ export async function instrument(page) {
 
 export function attachObserver() {
   const s=window.__game.scene.getScene('GauntletGameScene'), legion=s.legion;
-  const units={}, events=[], notes=[], orderLog=[];
+  const units={}, events=[], notes=[], orderLog=[],playerBullets=[];
   const ctx=()=>({t:Math.round(s.elapsed*1000)/1000,w:s.gWave,phase:s.gPhase,order:legion.order});
   const key=(id,life)=>id+'/'+life;
   const obs=window.armyObserver={
@@ -36,7 +76,7 @@ export function attachObserver() {
       if(hp || sh) events.push({...ctx(),id,action:'out',target:kind,hp,shield:sh});
     },
     heal(u,life,amount) {const id=key(u.id,life);units[id].healed+=amount; events.push({...ctx(),id,action:'heal',hp:amount});},
-    snapshot() {return {units:Object.values(units),events,notes,orderLog,totals:{army:legion.count,dead:legion.dead,recruited:legion.recruited},clock:ctx()};},
+    snapshot() {return {units:Object.values(units),events,notes,orderLog,playerBullets,totals:{army:legion.count,dead:legion.dead,recruited:legion.recruited},clock:ctx()};},
   };
   const register=(u,cost,origin)=>{
     const id=key(u.id,u.lifeId);
@@ -79,8 +119,15 @@ export function attachObserver() {
       ev.cause==='ordinary'?(obs.source??'ordinary-unclassified'):ev.cause;
     units[id].received+=hurt;
     const event={...ctx(),id,action:'in',cause,before:ev.before,after:ev.after,hp:hurt};
+    if(window.qaImpact)event.impact={...window.qaImpact};
     events.push(event);
-    if(ev.after<=0)units[id].death={...ctx(),cause};
+    if(ev.after<=0)units[id].death={...ctx(),cause,...(event.impact?{impact:event.impact}:{})};
+  };
+  const takeDamage=s.player.takeDamage;
+  s.player.takeDamage=function(...args){
+    const before=this.hp,hit=takeDamage.apply(this,args);
+    if(window.qaImpact?.texture)playerBullets.push({...ctx(),...window.qaImpact,hp:Math.max(0,before-this.hp),hit:!!hit});
+    return hit;
   };
   for(const [obj,method,cause] of [[s,'updateBullets','projectile'],[s.supplies,'update','supply'],[s.supplies,'resolveBodies','supply-body']]){
     if(typeof obj?.[method]!=='function')continue;

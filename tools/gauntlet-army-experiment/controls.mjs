@@ -11,7 +11,7 @@ export async function attachDriver(){
     const now=()=>r(s.elapsed);
     const state=()=>({time:now(),wave:s.gWave,tier:s.gTier,phase:s.gPhase,boss:s.gCur?.name??null,bossHp:s.boss?.active?r(s.boss.hp):null,
       hp:r(p.hp),maxHp:p.maxHp,level:p.level,xp:r(p.xp),armor:r(p.stats.armor),speed:r(p.speed),damage:r(s.damageDealt),kills:s.kills,
-      hero:p.growth.character,weapon:p.weapons.map(w=>[w.id,w.level,w.branch??null]),stars:[...p.growth.stars],attributes:{...p.growth.attributes},
+      hero:p.growth.character,weapon:p.weapons.map(w=>[w.id,w.level,w.branch??null]),overlevels:Object.fromEntries(p.weapons.map(w=>[w.id,w.over??0])),stars:[...p.growth.stars],attributes:{...p.growth.attributes},
       army:s.legion.count,fallen:s.legion.dead,food:s.legion.food,recruits:s.gRecruits.men,followers:s.gFollowers.length,
       position:[r(p.x),r(p.y)],cleared:s.gKills.length,milestones:s.gMilestones,revivalUsed:p.growth.revivalUsed===true,
       gameOver:s.over,alive:p.alive,mode:s.mode,timescale:s.time.timeScale});
@@ -26,10 +26,13 @@ export async function attachDriver(){
       held.clear();for(const k of next)held.add(k);
     }
     const safeOption=o=>!String(o.id).includes('reviv')&&!/复活|死而复生/.test(o.name+' '+o.desc);
+    const armyOption=o=>o.id==='mythic_soldier_purse'||o.id.startsWith('gauntlet_star_command.')||/部曲|军阵|统御|招兵|援军|亲兵/.test(o.name+' '+o.desc);
     function choose(){
       const options=s.upgradeOptions.filter((o,i)=>safeOption(o)&&s.upgradeCardShown(i));
       if(!options.length)return;
       const score=o=>{
+        if(s.gPhase!=='choice'&&cfg.build==='army'&&armyOption(o))return 320;
+        if(s.gPhase!=='choice'&&cfg.build==='personal'&&armyOption(o))return -20;
         const id=o.id,description=o.name+' '+o.desc; if(s.gPhase!=='choice'&&window.armyConfig.build==='command'&&/部曲|军阵|统御/.test(description)&&id!=='mythic_soldier_purse')return 215; if(s.gPhase!=='choice'&&window.armyConfig.build==='agility'&&/移动速度|移速|冷却|攻速|追风/.test(description))return 211;
         if(s.gPhase==='choice')return id===(s.gTier==='mortal'?'gauntlet_ghost':s.gTier==='ghost'?'gauntlet_divine':'gauntlet_settle')?1e5:0;
         if(id==='gauntlet_spoils')return p.hp/p.maxHp<.57?300:25;
@@ -45,7 +48,7 @@ export async function attachDriver(){
         return 40;
       };
       const best=options.reduce((a,b)=>score(a)>=score(b)?a:b);
-      picks.push({time:now(),wave:s.gWave,choice:best.id,name:best.name,offered:options.map(o=>o.id)});
+      picks.push({time:now(),wave:s.gWave,choice:best.id,name:best.name,offered:options.map(o=>o.id),armyOffered:options.filter(armyOption).map(o=>o.id),armyChosen:armyOption(best)});
       s.chooseUpgrade(s.upgradeOptions.indexOf(best));
     }
     function threatened(h,q){
@@ -112,7 +115,9 @@ export async function attachDriver(){
         const panel=s.starPanel;
         if(!panel?.root?.visible)throw Error('Expected visible star map');
         const choices=[...panel.nodes.values()].filter(n=>n.hit.input?.enabled&&!panel.block(n.n.id));
-        const rank=n=> n.kind==='keystone'?70:n.kind==='notable'?50:n.region===(window.armyConfig.build==='weapon'?'strength':window.armyConfig.build)?35:n.region==='strength'?32:10;
+        const focus=cfg.build==='army'?'command':cfg.build==='personal'?'strength':null;
+        const rank=n=>focus?(n.region===focus?100:0)+(n.kind==='keystone'?7:n.kind==='notable'?5:1):
+          n.kind==='keystone'?70:n.kind==='notable'?50:n.region===(cfg.build==='weapon'?'strength':cfg.build)?35:n.region==='strength'?32:10;
         const best=choices.sort((a,b)=>rank(b.n)-rank(a.n))[0];
         if(best){
           const before=p.growth.unallocated;
@@ -127,7 +132,7 @@ export async function attachDriver(){
       }
       if(s.mode!=='none')return; window.applyArmyOrder();
       if(p.growth.unallocated>0&&s.elapsed-lastAttribute>2){lastAttribute=s.elapsed;key('KeyC',true);key('KeyC',false);}
-      if(s.recruitOpen()&&s.legion.count<25){
+      if(cfg.build!=='personal'&&s.recruitOpen()&&s.legion.count<25){
         const before=s.legion.food;
         if(s.recruitTroops())recruits.push({time:now(),wave:s.gWave,before,after:s.legion.food,army:s.legion.count});
       }
@@ -139,5 +144,5 @@ export async function attachDriver(){
     let fault;
     const timer=setInterval(()=>{try{drive();}catch(err){fault=String(err.stack??err);clearInterval(timer);move(0,0);}},110);
     window.challengeState=()=>({beginning,current:state(),rows,transitions,hits,picks,recruits,medicine,attrs,ticks,steered,fault,
-      randomLineup:s.gOrder.map(b=>b.id)});
+      randomLineup:s.gOrder.map(b=>b.id),roster:{mortal:s.gOrder.map(b=>b.id),ghost:s.roster.ghost.map(b=>b.id??b),divine:s.roster.divine.map(b=>b.id??b)}});
 }

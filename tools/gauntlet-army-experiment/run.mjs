@@ -13,7 +13,7 @@ const [repo,hero='zhangfei',seedText='177',build='weapon',order='guard',name=her
 const seed=Number(seedText),limit=Number(limitText);
 assert.ok(Number.isInteger(seed)&&seed>0&&['localhost','127.0.0.1'].includes(new URL(base).hostname));
 assert.ok(['guard','sortie','alternate','reverse'].includes(order));
-assert.ok(['weapon','command','agility'].includes(build));
+assert.ok(['weapon','command','agility','army','personal'].includes(build));
 const dir=resolve(evidenceDir,name);await mkdir(dir,{recursive:true});
 assert.ok(['historical','cohort'].includes(rosterProfile));
 const route=process.env.GAUNTLET_ARMY_ROUTE??'standard';
@@ -37,7 +37,7 @@ const save=async(file,obj)=>{
   }
 };
 try{
-  const sourceFiles=['src/systems/Legion.ts','src/systems/LegionProjectiles.ts','src/systems/LegionTactics.ts','src/scenes/GauntletGameScene.ts','src/data/gauntletRecruit.ts','src/data/gauntletCards.ts','src/data/mythicGauntlet.ts'];
+  const sourceFiles=['src/scenes/GameScene.ts','src/systems/EnemyTraits.ts','src/systems/MythicBossController.ts','src/systems/BeifaSystems.ts','src/systems/Legion.ts','src/systems/LegionProjectiles.ts','src/systems/LegionTactics.ts','src/scenes/GauntletGameScene.ts','src/data/gauntletRecruit.ts','src/data/gauntletCards.ts','src/data/mythicGauntlet.ts'];
   meta.sourceSHA256=Object.fromEntries(await Promise.all(sourceFiles.map(async rel=>[rel,createHash('sha256').update(await readFile(join(repo,rel))).digest('hex')])));
   const p=await browser.newPage({viewport:{width:960,height:540}});
   p.on('pageerror',e=>errors.push(String(e.stack??e)));

@@ -18,7 +18,10 @@ for (const cast of [0,1]) test('ghost Guan Yu locks the original trace, cast '+c
   const run={boss:{general:boss,hp:100},mythicQueue:[back],warning:null},hits=[];
   for(const t of [back.startsAt,back.scar.lightsAt-.01,back.scar.lightsAt+.10,back.endsAt-.01]){
     resolveBossWarning(run,[inside,escaped],t,p=>hits.push(p));assert.equal(hits.length,0);
-    assert.deepEqual(JSON.parse(JSON.stringify(run.warning)).scar,back.scar);
+    const wire = JSON.parse(JSON.stringify(run.warning));
+    assert.deepEqual(wire.scar,JSON.parse(JSON.stringify(back.scar)));
+    assert.equal(mythicHit(wire,inside),true);
+    assert.equal(mythicHit(wire,escaped),false);
   }
   for(const t of [back.endsAt+.06,back.endsAt+.12,back.endsAt+.4])resolveBossWarning(run,[inside,escaped],t,p=>hits.push(p));
   assert.deepEqual(hits,[inside]);clearBossAttack(run);assert.equal(run.warning,null);assert.deepEqual(run.mythicQueue,[]);

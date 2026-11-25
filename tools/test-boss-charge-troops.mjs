@@ -22,6 +22,10 @@ try {
   const charge = (n, setup) => p.evaluate(async ([S0, n, setup]) => {
     const s = eval(S0), pl = s.player, bo = s.boss, mv = s.moveset, prep = eval('(' + setup + ')');
     const calm = () => { s.spawnTimer = s.eliteTimer = 1e9; if (s.mode === 'levelup' || s.mode === 'recruit') s.__DEV_ACTIONS?.closePopup?.(); };
+    // Keep all three independent cases in Zhang Liang's first phase, even while
+    // the real AI attacks him during the wind-up. Phase transitions interrupt skills.
+    bo.maxHp = bo.hp = Math.max(100000, bo.maxHp);
+    if (mv.phase !== 1) throw new Error('Expected first-phase Zhang Liang');
     const ci = mv.phaseDef.moves.findIndex(m => m.kind === 'charge'); // 张梁一阶段的「人公冲阵」
     for (const u of s.allies) if (u.active) { u.hp = 0; u.active = false; u.release?.(); }
     s.legion.units.length = 0;

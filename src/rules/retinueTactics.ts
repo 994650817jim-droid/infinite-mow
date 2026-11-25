@@ -39,22 +39,58 @@ export type ArmyExit=Point & {threat:ArmyThreat};
 export function armyExit(threats:readonly ArmyThreat[],p:Point,pad:number,clear:Walkable,slot:number,previous?:ArmyExit):ArmyExit|undefined {
   const threat=threats.find(w=>insideArmyThreat(w,p,pad));
   if(!threat)return;
-  const reachable=(end:Point)=>{
-    if(threatened(threats,end,pad+6)||!clear(p,end))return false;
+  // A blocked segment also blocks every longer segment along that same ray.
+  const reachable=(end:Point):'unsafe'|'blocked'|'safe'=>{
+    if(threatened(threats,end,pad+6))return 'unsafe';
+    if(!clear(p,end))return 'blocked';
     if(threats.length>1){
       const n=Math.ceil(Math.hypot(end.x-p.x,end.y-p.y)/12);
       for(const other of threats)if(other!==threat && !insideArmyThreat(other,p,pad)){
-        for(let j=1;j<n;j++)if(insideArmyThreat(other,{x:p.x+(end.x-p.x)*j/n,y:p.y+(end.y-p.y)*j/n},pad))return false;
+        for(let j=1;j<n;j++)if(insideArmyThreat(other,{x:p.x+(end.x-p.x)*j/n,y:p.y+(end.y-p.y)*j/n},pad))return 'blocked';
       }
     }
-    return true;
+    return 'safe';
   };
-  if(previous?.threat===threat && reachable(previous))return previous;
+  if(previous?.threat===threat && reachable(previous)==='safe')return previous;
+  let blocked=0;
   for(const distance of [25,44,68,96,130,174,225,300,400]){
     for(let i=0;i<rays.length;i++){
+      const bit=1<<i;
+      if(blocked&bit)continue;
       const ray=rays[(i+slot)%rays.length],end={x:p.x+ray.x*distance,y:p.y+ray.y*distance};
-      if(reachable(end))return {...end,threat};
+      const state=reachable(end);
+      if(state==='safe')return {...end,threat};
+      if(state==='blocked')blocked|=bit;
     }
+  }
+}
+
+/** Cache blocked ground briefly per soldier. A new or moving telegraph invalidates the whole frame immediately. */
+export class ArmyEvasion {
+  private threats:readonly ArmyThreat[]=[];
+  private previous:(ArmyThreat & {source:ArmyThreat})[]=[];
+  private version=0;
+  private readonly memory=new WeakMap<Point,{version:number;x:number;y:number;retry:number;goal?:ArmyExit}>();
+  begin(threats:readonly ArmyThreat[]):void {
+    this.threats=threats;
+    if(threats.length===this.previous.length && threats.every((w,i)=>{
+      const old=this.previous[i];
+      return old.source===w && old.x===w.x && old.y===w.y && old.radius===w.radius && old.kind===w.kind &&
+        old.angle===w.angle && old.arc===w.arc && old.innerRadius===w.innerRadius &&
+        old.halfWidth===w.halfWidth && old.lanes===w.lanes && old.spread===w.spread;
+    }))return;
+    this.version++;
+    this.previous=threats.map(w=>({source:w,x:w.x,y:w.y,kind:w.kind,radius:w.radius,angle:w.angle,arc:w.arc,
+      innerRadius:w.innerRadius,halfWidth:w.halfWidth,lanes:w.lanes,spread:w.spread}));
+  }
+  exit(unit:Point,pad:number,clear:Walkable,slot:number,seconds:number):ArmyExit|undefined {
+    const memo=this.memory.get(unit),current=memo?.version===this.version;
+    if(current && !memo.goal && seconds<memo.retry && Math.hypot(unit.x-memo.x,unit.y-memo.y)<9)return;
+    const goal=armyExit(this.threats,unit,pad,clear,slot,current?memo.goal:undefined);
+    if(goal||threatened(this.threats,unit,pad)){
+      this.memory.set(unit,{version:this.version,x:unit.x,y:unit.y,goal,retry:seconds+.10+(slot*53%73)/1000});
+    }else if(memo)this.memory.delete(unit);
+    return goal;
   }
 }
 

@@ -1,4 +1,4 @@
-import {armyExit,threatened,ordinaryWarning,rangedStandOff,sortieFlank,COMPANY_LEASH} from '../src/rules/retinueTactics.ts';
+import {ArmyEvasion,threatened,ordinaryWarning,rangedStandOff,sortieFlank,COMPANY_LEASH} from '../src/rules/retinueTactics.ts';
 import {dualWarnings} from './coop-dual.mjs';
 import {shadowExit} from '../src/data/ghostZhangxiu.ts';
 import {weiAdvance,weiBowExit} from '../src/data/divineCaocao.ts';
@@ -64,6 +64,8 @@ export function strikeRetainer(room,u,raw,boss=false,deathFloor=0){
 }
 export function updateRetinue(room,dt){
   const threats=dualWarnings(room.run).filter(ordinaryWarning);
+  const evasion=room.retinueEvasion??=new ArmyEvasion();
+  evasion.begin(threats);
   const clear=(_,point)=>point.x>=16&&point.y>=16&&point.x<=arena.width-16&&point.y<=arena.height-16;
   for(const p of room.players.values()){
     const c=p.company;if(!c)continue;
@@ -72,8 +74,8 @@ export function updateRetinue(room,dt){
       const def=TROOPS[u.kind],sortie=c.order==='sortie'&&p.hp>0;
       const fx=p.x+((i%4)-1.5)*26,fy=p.y+30+Math.floor(i/4)*24;
       if(threats.length){
-        const exit=armyExit(threats,u,6,clear,u.id,u.escapeGoal);
-        if(exit){u.escapeGoal=exit;advance(u,exit.x,exit.y,def.speed,dt);continue;}
+        const exit=evasion.exit(u,6,clear,u.id,room.seconds);
+        if(exit){advance(u,exit.x,exit.y,def.speed,dt);continue;}
       }
       const wei=room.run.warning;
       if(wei?.shadow){

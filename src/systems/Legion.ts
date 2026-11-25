@@ -1,4 +1,4 @@
-import {armyExit,threatened,insideArmyThreat,type ArmyThreat,type ArmyExit} from '../rules/retinueTactics';
+import {ArmyEvasion,threatened,insideArmyThreat,type ArmyThreat} from '../rules/retinueTactics';
 import {shadowExit} from '../data/ghostZhangxiu';
 import {weiAdvance,weiBowExit} from '../data/divineCaocao';
 import {STAR_OUTER_TUNING as SO} from '../data/starOuter';
@@ -76,7 +76,7 @@ export class Legion {
   readonly formation:LegionFormation;
   readonly navigation=new LegionNavigation();
   readonly warnings=new Map<object,ArmyThreat>();
-  private escapeGoals=new WeakMap<Ally,ArmyExit>();
+  private readonly evasion=new ArmyEvasion();
   insideField?: (x:number,y:number,r:number)=>boolean;
   /**
    * 我方绕障（2026-11-21 用户试玩「关于我自己的兵也会被围栏卡住」）：GameScene 接到敌兵绕障导航（EnemyFlowField，以主将为终点）。
@@ -311,6 +311,7 @@ export class Legion {
   update(dt: number, now: number, enemies: Enemy[], enemyGrid: SpatialGrid<Enemy>, damage: (e: Enemy, n: number) => void): void {
     this.corpses.update(now);
     const threats=this.warnings.size?[...this.warnings.values()]:null;
+    this.evasion.begin(threats??[]);
     if (this.stopped) return;
     this.formation.setNarrow(this.navigation.nearWall(this.player.x,this.player.y,this.formation.narrow));this.formation.update(dt);const signature=JSON.stringify(this.groups);if(signature!==this.groupSignature){this.groupSignature=signature;this.regroup();for(const u of this.units)u.ai.nextThink=now+(u.id*53)%240;}
     this.command.update(now,(x,y,r)=>enemyGrid.query(x,y,r));
@@ -335,8 +336,8 @@ export class Legion {
       if (!nearPlayer && u.simDebt < LEGION.farStep) continue;
       const step = nearPlayer ? dt : u.simDebt; u.simDebt = 0;
       if(threats){
-        const goal=armyExit(threats,u,u.radius*.5,(a,b)=>(this.insideField?.(b.x,b.y,u.radius)??true) && this.navigation.clearSegment(a.x,a.y,b.x,b.y,u.radius),u.id,this.escapeGoals.get(u));
-        if(goal){this.escapeGoals.set(u,goal);u.moveTo(goal.x,goal.y,step,u.def.speed,now);continue;}
+        const goal=this.evasion.exit(u,u.radius*.5,(a,b)=>(this.insideField?.(b.x,b.y,u.radius)??true) && this.navigation.clearSegment(a.x,a.y,b.x,b.y,u.radius),u.id,now/1000);
+        if(goal){u.moveTo(goal.x,goal.y,step,u.def.speed,now);continue;}
       }
       if(this.spearShadow){
         const exit=shadowExit(this.spearShadow,u,(a,b)=>(this.spearBounds?.(b.x,b.y,u.radius)??true) && this.navigation.clearSegment(a.x,a.y,b.x,b.y,u.radius));

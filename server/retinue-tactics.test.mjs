@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {updateRetinue} from './coop-retinue.mjs';
 import {hits} from './gauntlet.mjs';
-import {armyExit,insideArmyThreat} from '../src/rules/retinueTactics.ts';
+import {ArmyEvasion,armyExit,insideArmyThreat} from '../src/rules/retinueTactics.ts';
 
 const metrics={};
 function simulate(name,kind,order,enemy,where,warning,seconds=1){
@@ -42,3 +42,17 @@ for(let i=0;i<52;i++){updateRetinue(room,.05);room.seconds+=.05;}
 const spread=Math.max(...soldiers.map(u=>u.y))-Math.min(...soldiers.map(u=>u.y));
 console.log(JSON.stringify({flankSpread:spread,strikes:soldiers.map(u=>u.strike)}));
 assert.ok(spread>42 && soldiers.every(u=>u.strike>0));
+const planner=new ArmyEvasion(),trapped={x:410,y:300};let navCalls=0;
+const wall=()=>{navCalls++;return false;};
+planner.begin([lane,cross]);assert.equal(planner.exit(trapped,6,wall,3,0),undefined);
+assert.ok(navCalls>0 && navCalls<=12,'one obstruction check per direction');
+navCalls=0;
+planner.begin([lane,cross]);planner.exit(trapped,6,wall,3,.02);
+assert.equal(navCalls,0,'same trapped unit does not query the same walls every tick');
+lane.angle=.12;planner.begin([lane,cross]);assert.ok(planner.exit(trapped,6,()=>true,3,.03),'changed heading retries immediately');
+planner.begin([]);assert.equal(planner.exit(trapped,6,()=>true,3,.04),undefined,'retire ended warnings');
+planner.begin([cross]);planner.exit(trapped,6,wall,3,.05);trapped.y+=12;
+assert.ok(planner.exit(trapped,6,()=>true,3,.06),'movement invalidates a failed position');
+planner.begin([lane]);planner.exit(trapped,6,wall,3,.07);
+assert.ok(planner.exit(trapped,6,()=>true,3,.25),'a newly open gate gets tried within .173 seconds');
+console.log('PASS blocked rays, staggered retry, moving unit, changed / ended warning and reopening');

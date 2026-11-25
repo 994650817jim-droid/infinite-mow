@@ -2,8 +2,8 @@ import {once} from 'node:events';
 import {WebSocket} from 'ws';
 import {createCoopServer} from './coop.mjs';
 /** Isolated loopback server and two clients. Only encounter setup is accelerated. */
-export async function pairedBattle(version,run){
-  const rooms=new Map(),server=createCoopServer({rooms,gauntletWarmup:300,reconnectMs:8000});
+export async function pairedBattle(version,run,options={}){
+  const rooms=new Map(),server=createCoopServer({...options,rooms,gauntletWarmup:300,reconnectMs:8000});
   server.http.listen(0,'127.0.0.1');await once(server.http,'listening');
   const host='127.0.0.1:'+server.http.address().port,clients=[];
   async function connect(){

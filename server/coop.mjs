@@ -1,3 +1,4 @@
+import {tryIgnite,tickBurns,fireWire} from './coop-burning.mjs';
 import {paySpoils,companyStatus,companyWire,recruitCompany,updateRetinue,strikeRetainer} from './coop-retinue.mjs';
 import {BOSS_VS_TROOPS,BOSS_VS_ALLY} from '../src/data/legion.ts';
 import {strikeSpellMark, visibleSpellMarks} from './coop-marks.mjs';
@@ -35,7 +36,7 @@ const INPUT_TTL = 450;
 const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const playersIn = room => [...room.players.values()];
 
-export function createCoopServer({ origins = [], allowLocal = true, gauntletWarmup, gauntletLineup, reconnectMs = 30_000, troopRandom = Math.random, rooms = new Map() } = {}) {
+export function createCoopServer({ origins = [], allowLocal = true, gauntletWarmup, gauntletLineup, reconnectMs = 30_000, emberRandom = Math.random, troopRandom = Math.random, rooms = new Map() } = {}) {
   const http = createServer((_request, response) => {
     response.writeHead(404).end();
   });
@@ -108,7 +109,7 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
       type: 'state', seconds: Math.floor(room.seconds), battleMs: Math.round(room.seconds*1000), kills: room.kills,
       players: playersIn(room).map(({ slot, hero, x, y, hp, maxHp, rescue, dir, moving, strike, stars, company }) => ({ slot, hero, x, y, hp, maxHp, rescue, dir, moving, strike, stars,order:company?.order })),
       enemies: room.enemies.map(({ id, x, y, hp, maxHp, boss, general, troop, cue, face, speedBuff, enraged }) => ({ id, x, y, hp, maxHp, boss, troop, cue, face, enraged: !!enraged, boosted: speedBuff > 1, general: general && { id: general.id, name: general.name } })),
-      retainers:companyWire(room),
+      burning:fireWire(room),retainers:companyWire(room),
       spellMarks: visibleSpellMarks(room),
       shots: (room.shots ?? []).map(({x,y,angle,slow})=>({x,y,angle,net:!!slow})), troopEffects: room.troopEffects ?? [],
       gauntlet: room.run && { wave: room.run.wave, cleared: room.run.cleared, total: TOTAL_WAVES,
@@ -127,7 +128,7 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
     const ready = playersIn(room).filter(player => !player.choices?.length).length;
     for (const player of room.players.values()) {
       send(player.socket, { type: 'draft', wave: room.run.wave, total: TOTAL_WAVES, general: room.run.history.at(-1).dual ? '河北双雄 · 颜良 / 文丑' : room.run.history.at(-1).name,
-      party: playersIn(room).map(({ slot, hero, hp, maxHp, choices, stars }) => ({ slot, hero, hp, maxHp, ready: !choices?.length, company:companyStatus(room.players.get(slot),room.run.wave), stars })),
+      party: playersIn(room).map(({ slot, hero, hp, maxHp, choices, stars, upgrades }) => ({ slot, hero, hp, maxHp, ember:upgrades.ember, ready: !choices?.length, company:companyStatus(room.players.get(slot),room.run.wave), stars })),
         choices: player.choices ?? [], ready, checkpoint: room.phase === 'checkpoint', tier: room.run.tier,
         continuation: room.phase==='checkpoint'?challengeChoices(room.run.tier,room.run.wave,TOTAL_WAVES):[] });
     }
@@ -151,7 +152,7 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
     snapshot(room);
   }
   function bossDefeated(room) {
-    for(const player of room.players.values()) delete player.casting;
+    for(const player of room.players.values()){delete player.casting;delete player.burns;}
     clearTroops(room);
     const run = room.run;
     run.cleared++;paySpoils(room);
@@ -219,6 +220,7 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
       player.fireIn/=vanguardSpeed(vanguard);
       player.strike = { n: player.strike.n + 1, x: nearest.x, y: nearest.y };
       troopHit(room, nearest, player, power);
+      tryIgnite(player,nearest,power,room.seconds*1000,emberRandom);
       if(player.stars?.includes('intellect.NX1')) strikeSpellMark(room,player,nearest,power);
     }
     updateRetinue(room,dt);
@@ -253,6 +255,7 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
       }
     }
     strikePlayers(room, now);
+    tickBurns(room);
     const beaten = room.run.dual ? dualDeaths(room.run,room.seconds) : room.enemies.some(enemy => enemy.boss && enemy.hp <= 0);
     const oldCount = room.enemies.filter(e=>!e.escaped).length;
     room.enemies = room.enemies.filter(enemy => enemy.hp > 0);
@@ -337,7 +340,7 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
         const slot = room.players.size === 0 ? 0 : 1;
         player = { socket, token: randomBytes(24).toString('hex'), disconnectedAt: null, slot, available, hero: null, x: world.width / 2 + (slot ? 48 : -48), y: world.height / 2, hp: 100, maxHp: 100, rescue: 0, upgrades: {}, dir: 0, moving: false,
           fireIn: 0, dx: 0, dy: 0, inputAt: 0, hurtUntil: 0, strike: { n: 0, x: 0, y: 0 } };
-        if([1,2,3].includes(command.starDraft)){player.starDraft=command.starDraft;player.stars=[];}
+        if([1,2,3,4].includes(command.starDraft)){player.starDraft=command.starDraft;player.stars=[];}
         room.players.set(slot, player);
         session(room, player);
         lobby(room);

@@ -1,3 +1,4 @@
+import {CINDERS,EMBER} from '../rules/burning';
 import {CoopRetinueView,preloadCompany} from '../coop/CoopRetinueView';
 import { loadSurvivorBossFx, playSurvivorBossFx, updateSurvivorBossFx, clearSurvivorBossFx } from '../systems/SurvivorBossFx';
 import Phaser from 'phaser';
@@ -15,12 +16,12 @@ import roster from '../coop/roster.json';
 import { buildRecolor } from '../systems/IffOverlay';
 import { ART_V2_FILES } from '../systems/ArtStyle';
 import { FIELD_STARS, MARK_STAR, COMPANY_STARS } from '../data/coopStars';
-const networkStars=[...FIELD_STARS,MARK_STAR,...COMPANY_STARS];
+const networkStars=[...FIELD_STARS,MARK_STAR,...COMPANY_STARS,CINDERS];
 
 type ActorView = { body: Phaser.GameObjects.Image; label: Phaser.GameObjects.Text; tx: number; ty: number; strike: number; mythicFacing?: number };
 const TROOPS: Record<string, {name:string;art:{walk:string;attack:string;cell:number}}> = roster.types;
 const BOSS_SHEETS: Record<string, string[]> = gauntlet.bosses;
-const REWARDS = new Map([...gauntlet.rewards, ...networkStars.map(s=>({...s,name:'将星 · '+s.name})), { id: 'heal', name: '整备', detail: '回复 45% 最大生命' }].map(reward => [reward.id, reward]));
+const REWARDS = new Map([...gauntlet.rewards, ...networkStars.map(s=>({...s,name:'将星 · '+s.name})), {id:EMBER.id,name:'火种',detail:'本命命中点燃敌军，每半秒结算一次。'}, { id: 'heal', name: '整备', detail: '回复 45% 最大生命' }].map(reward => [reward.id, reward]));
 
 export class CoopScene extends Phaser.Scene {
   private panel!: HTMLElement;
@@ -256,7 +257,7 @@ export class CoopScene extends Phaser.Scene {
     const socket = new WebSocket(url); this.socket = socket;
     const fail = (text: string, terminal = false) => { if (this.socket === socket) this.connectionFailed(text, terminal); };
     this.connectionTimer = window.setTimeout(() => fail('连接超时，请重试'), Math.min(8000, this.retryUntil ? this.retryUntil - Date.now() : 8000));
-    socket.onopen = () => { if (this.socket === socket) socket.send(JSON.stringify(command.type === 'resume' ? command : { ...command, heroes: this.availableHeroes, starDraft:3 })); };
+    socket.onopen = () => { if (this.socket === socket) socket.send(JSON.stringify(command.type === 'resume' ? command : { ...command, heroes: this.availableHeroes, starDraft:4 })); };
     socket.onerror = () => fail('无法连接联机服务，请检查网络');
     socket.onclose = () => fail('连接中断，请重试');
     socket.onmessage = event => {
@@ -594,6 +595,11 @@ export class CoopScene extends Phaser.Scene {
   private drawTroops(state:Extract<ServerMessage,{type:'state'}>):void {
     const g=this.troopFx?.clear();if(!g)return;
     for(const e of state.enemies){
+      if(state.burning?.includes(e.id)){
+        const flicker=Math.floor(this.mythicClock*9+e.id)%3;
+        g.fillStyle(0xba4828,.95).fillTriangle(e.x-5,e.y+1,e.x+5,e.y+1,e.x+2,e.y-10-flicker);
+        g.fillStyle(0xffcb69,.95).fillTriangle(e.x-2,e.y,e.x+3,e.y,e.x,e.y-5-flicker);
+      }
       if(state.spellMarks?.includes(e.id)) g.lineStyle(2,0xa4d9ed,.9).strokeTriangle(e.x-4,e.y-39,e.x+4,e.y-39,e.x,e.y-33);
       const c=e.cue;
       if(c){
@@ -747,7 +753,7 @@ export class CoopScene extends Phaser.Scene {
           this.send({ type: 'reward', id });
         });
         const name = document.createElement('strong');
-        name.textContent = reward.name;
+        name.textContent = id===EMBER.id?'火种 · Lv.'+((members.find(m=>m.slot===this.slot)?.ember??0)+1):reward.name;
         const detail = document.createElement('span');
         detail.textContent = reward.detail;
         choice.classList.add('coop-reward');

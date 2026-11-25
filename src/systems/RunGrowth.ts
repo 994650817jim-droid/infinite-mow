@@ -1,3 +1,4 @@
+import {burnBonus} from '../rules/burning';
 import {retinueStarHp,retinueBossTaken,nearOrderBonus} from '../rules/retinue';
 import {ironHpBonus,ironIncoming,backwaterActive,backwaterDamage,vanguardDamage,vanguardSpeed} from '../data/coopStars';
 import { statEffective, statSource } from '../data/heroStats';
@@ -231,7 +232,7 @@ export class RunGrowth {
   /** 拾取范围倍率：兵装词条 ×（追风 +20%）。 */
   pickupMultiplier(): number { return (1 + this.gear.pickup) * (this.starOn('agility.NR2') ? 1 + STAR_EFFECT['agility.NR2'].pickup : 1); }
   /** 余烬：灼烧 / 地火等持续伤害倍率与多烧的毫秒数（BuildCombat 的灼烧与地火读这里）。 */
-  dotBonus(): { mul: number; extraMs: number } { const E = STAR_EFFECT['intellect.NR1']; return this.starOn('intellect.NR1') ? { mul: 1 + E.dot, extraMs: E.extraMs } : { mul: 1, extraMs: 0 }; }
+  dotBonus(): { mul: number; extraMs: number } { return burnBonus(this.starOn('intellect.NR1')); }
   /** 妙算：锦囊效果倍率（数值或持续时间 ×1.15，见 GameScene.useJinnang）。 */
   jinnangMultiplier(): number { return this.starOn('intellect.NR2') ? 1 + STAR_EFFECT['intellect.NR2'].jinnang : 1; }
   /** 严阵：部曲受首领伤害倍率。 */

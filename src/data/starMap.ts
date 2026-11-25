@@ -1,3 +1,4 @@
+import {CINDERS} from '../rules/burning';
 import {RETINUE_STARS} from '../rules/retinue';
 import { STAR_OUTER_NAMES, STAR_OUTER_DESCS, STAR_OUTER_TUNING } from './starOuter';
 import { FIELD_STAR_EFFECT } from './coopStars';
@@ -67,7 +68,7 @@ export const STAR_EFFECT = {
   /** 追风：移动中攻速 +8%，拾取范围 +20%。 */
   'agility.NR2': { moveHaste: .08, pickup: .2 },
   /** 余烬：灼烧、地火等持续伤害 +20%，持续时间 +1 秒。 */
-  'intellect.NR1': { dot: .2, extraMs: 1000 },
+  'intellect.NR1': CINDERS,
   /** 妙算：锦囊效果 +15%。 */
   'intellect.NR2': { jinnang: .15 },
   /** 严阵：部曲生命 +15%，部曲受首领伤害 −15%。 */

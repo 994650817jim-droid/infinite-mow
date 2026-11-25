@@ -1,3 +1,4 @@
+import {EMBER,ignites,renewBurn} from '../rules/burning';
 import type {Enemy} from '../entities/Enemy';
 import type {BuildState,TacticId} from '../data/builds';
 import {SCHOOL_TIER as T} from '../data/schools';
@@ -106,10 +107,10 @@ export class BuildCombat {
   return raw*(1+Math.min(1.5,bonus));
  }
  private targets(e:{x:number;y:number},r:number,except?:Enemy):Enemy[]{return this.nearby(e.x,e.y,r).filter(t=>t.active&&!(t.isSupplySlot && !t.lockTarget)&&t!==except&&Math.hypot(t.x-e.x,t.y-e.y)<=r);}
- private burnMs():number{return 3000+(this.tier('fire')>=2?T.fire.burnExtraMs:0);}
+ private burnMs():number{return EMBER.duration+(this.tier('fire')>=2?T.fire.burnExtraMs:0);}
  private burn(e:Enemy,damage:number,now:number,spread=false,ms=this.burnMs()):void{
-  if(!e.active||(e.isSupplySlot && !e.lockTarget))return;const old=this.burns.get(e.spawnId);if(!old&&this.burns.size>=160)return;if(!old)this.onFx?.('ember',e.x,e.y-6,56);
-  this.burns.set(e.spawnId,{enemy:e,spawn:e.spawnId,until:Math.max(old?.until??0,now+ms+(this.dot?.().extraMs??0)),next:old?.next??now+500,damage:Math.max(old?.damage??0,damage),spread:old?old.spread&&spread:spread});
+  if(!e.active||(e.isSupplySlot && !e.lockTarget))return;const old=this.burns.get(e.spawnId);if(!old&&this.burns.size>=EMBER.cap)return;if(!old)this.onFx?.('ember',e.x,e.y-6,56);
+  this.burns.set(e.spawnId,{enemy:e,spawn:e.spawnId,...renewBurn(old,damage,now,ms+(this.dot?.().extraMs??0),spread)});
  }
  /** 震退（不对首领、免控、城头的）：0.25 秒滑开 push 像素（不瞬移），update 里逐帧推。 */
  private shoves=new Map<Enemy,{spawn:number;vx:number;vy:number;until:number}>();
@@ -155,7 +156,7 @@ export class BuildCombat {
    // 合击「火箭」：暴击点燃
    if(this.combo('fire_arrow')){this.burn(e,raw*.1,now);this.noteCombo('fire_arrow');}}
   // 火种 / 燎原灯：点燃
-  const em=this.lv('ember');if(em&&Math.random()<[.2,.3,.4][em-1]||this.has('wildfire_lamp'))this.burn(e,raw*(em?.1:.06*this.state.power('wildfire_lamp')),now);
+  const em=this.lv('ember');if(ignites(em,Math.random)||this.has('wildfire_lamp'))this.burn(e,raw*(em?EMBER.ratio:.06*this.state.power('wildfire_lamp')),now);
   const level=this.lv('pursuit'),pursuit=level&&this.hits%[6,5,4][level-1]===0,bell=this.has('soul_bell')&&this.hits%8===0;
   const flank=this.lv('flank')&&this.distances.flank>=[200,170,140][this.lv('flank')-1],horse=this.has('horse_order')&&this.distances.horse>=150,jade=this.has('breaker_jade')&&this.hits%10===0;
   if(now>=this.procAt&&(pursuit||bell||flank||horse||jade)){
@@ -198,7 +199,7 @@ export class BuildCombat {
  update(now:number):void{const dt=Math.max(0,Math.min(100,now-this.clock));this.clock=now;this.still=Math.max(0,Math.min(1500,this.still+dt*(this.moving?-2:1)));
   const echo=this.pendingEcho;if(echo&&now>=echo.at){this.pendingEcho=null;for(const t of this.targets(echo,75).slice(0,3)){this.fx(t,false);this.deal(t,echo.damage,false);}}
   const boosted=now<this.burnBoost.until,fireMul=(1+(this.tier('fire')>=2?T.fire.fireDmg:0))*(boosted?this.burnBoost.mul:1),windFire=this.combo('fire_wind');
-  for(const [id,b]of this.burns){if(!b.enemy.active||b.enemy.spawnId!==b.spawn||now>b.until){this.burns.delete(id);continue;}if(now>=b.next){b.next=now+500;this.stats.burnTicks++;
+  for(const [id,b]of this.burns){if(!b.enemy.active||b.enemy.spawnId!==b.spawn||now>b.until){this.burns.delete(id);continue;}if(now>=b.next){b.next=now+EMBER.period;this.stats.burnTicks++;
    // 合击「火借风势」：被控制的燃烧敌人灼烧 ×2
    const ctl=windFire&&!!this.controlled?.(b.enemy,now);if(ctl)this.noteCombo('fire_wind');
    this.fx(b.enemy,true);this.deal(b.enemy,b.damage*(this.dot?.().mul??1)*fireMul*(boosted&&b.enemy.kind==='boss'?this.burnBoost.bossMul/this.burnBoost.mul:1)*(ctl?CV.fireWindBurnMul:1),true);}}

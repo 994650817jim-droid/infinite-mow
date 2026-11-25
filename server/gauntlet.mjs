@@ -1,3 +1,4 @@
+import {EMBER,CINDERS} from '../src/rules/burning.ts';
 import {refreshRetinueHp} from './coop-retinue.mjs';
 import {canDraftMark} from './coop-marks.mjs';
 import { GAUNTLET, GAUNTLET_POOL, endlessBoss, pickBosses } from '../src/data/gauntlet.ts';
@@ -159,12 +160,17 @@ export function rewardsFor(player, wave=1) {
   if (player.stars && (wave%3===0 || choices.length<3)) {
     const pool=canDraftMark(player)?[...FIELD_STARS,MARK_STAR]:FIELD_STARS;
     const supported=player.company?[...pool,...COMPANY_STARS]:pool;
-    const availableStars=supported.filter(star=>!player.stars.includes(star.id));
+    const eligible=player.starDraft>=4 && player.upgrades.ember>0?[...supported,CINDERS]:supported;
+    const availableStars=eligible.filter(star=>!player.stars.includes(star.id));
     if(availableStars.length) {
       const star=availableStars[Math.floor(Math.random()*availableStars.length)];
       if(choices.length===3) choices.pop();
       choices.push(star.id);
     }
+  }
+  if(player.starDraft>=4 && (player.upgrades.ember??0)<3 && (wave%3===1 || choices.length<3)){
+    if(choices.length===3)choices.splice(choices.findIndex(id=>Object.hasOwn(REWARD_LIMIT,id)),1);
+    choices.push(EMBER.id);
   }
   if (choices.length < 3 && player.hp < player.maxHp) choices.push('heal');
   return choices;
@@ -172,9 +178,12 @@ export function rewardsFor(player, wave=1) {
 
 export function grantReward(player, id) {
   if(id===MARK_STAR.id && !canDraftMark(player))return;
+  if(id===EMBER.id){if(player.starDraft>=4 && (player.upgrades.ember??0)<3)player.upgrades.ember=(player.upgrades.ember??0)+1;return;}
+  const cinders=id===CINDERS.id;
+  if(cinders && !(player.starDraft>=4 && player.upgrades.ember>0))return;
   const companyStar=COMPANY_STARS.some(s=>s.id===id);
   if(companyStar&&!player.company)return;
-  if(companyStar || id===MARK_STAR.id || FIELD_STARS.some(s=>s.id===id)) {
+  if(cinders || companyStar || id===MARK_STAR.id || FIELD_STARS.some(s=>s.id===id)) {
     if(!player.stars || player.stars.includes(id))return;
     player.stars.push(id);
     if(id==='command.NR1')refreshRetinueHp(player);

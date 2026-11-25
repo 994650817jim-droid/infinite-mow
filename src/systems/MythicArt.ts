@@ -115,6 +115,10 @@ export function poseMythic(sprite: Phaser.GameObjects.Image, id: string, now: nu
       frame=!warning.resolved?0:age<.17?1:2;
     }
   }
+  if(warning?.shadow && !warning.shadow.folded && now<warning.shadow.plantAt && stepSheet){
+    action=walkAction;
+    frame=Math.min(3,Math.floor(4*Math.max(0,now-warning.startsAt)/(warning.shadow.plantAt-warning.startsAt)));
+  }
   const poseDirection = row;
   if (!sprite.scene.textures.exists(mythicArtKey(id,action))) {
     action = walkAction;
@@ -164,7 +168,7 @@ export function paintMythicSignature(sprite: Phaser.GameObjects.Image, id: strin
     }
   }
   // Parallel arrow lanes have their own releases; keep the open shield gap readable.
-  if (w?.wei) return;
+  if (w?.wei || w?.shadow?.folded) return;
   if (boss.art === 'actions') {
     if (w?.resolved) paintMythicRelease(sprite, key, w, now - w.endsAt);
     return;

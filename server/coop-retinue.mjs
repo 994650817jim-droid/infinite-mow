@@ -1,3 +1,4 @@
+import {shadowExit} from '../src/data/ghostZhangxiu.ts';
 import {weiAdvance,weiBowExit} from '../src/data/divineCaocao.ts';
 import {GAUNTLET} from '../src/data/gauntlet.ts';
 import {GAUNTLET_RECRUIT,recruitCost,recruitTier} from '../src/data/gauntletRecruit.ts';
@@ -67,6 +68,10 @@ export function updateRetinue(room,dt){
       const def=TROOPS[u.kind],sortie=c.order==='sortie'&&p.hp>0;
       const fx=p.x+((i%4)-1.5)*26,fy=p.y+30+Math.floor(i/4)*24;
       const wei=room.run.warning;
+      if(wei?.shadow){
+        const exit=shadowExit(wei,u,(_,p)=>p.x>=16&&p.y>=16&&p.x<=arena.width-16&&p.y<=arena.height-16);
+        if(exit){advance(u,exit.x,exit.y,def.speed,dt);continue;}
+      }
       if(wei?.wind){
         const exit=windExit(wei,u,room.seconds,(_,to)=>to.x>=16 && to.y>=16 && to.x<=arena.width-16 && to.y<=arena.height-16);
         if(exit){advance(u,exit.x,exit.y,def.speed,dt);continue;}
@@ -108,6 +113,7 @@ export function updateRetinue(room,dt){
   // Use each attacker's own contact timer. A regular attacker chooses only one nearby soldier.
   for(const e of room.enemies){
     if(e.hp<=0||room.seconds<(e.retinueAt??0))continue;
+    if(e===room.run.boss&&room.run.warning?.shadow)continue;
     if(e===room.run.boss&&room.run.warning?.charge&&room.run.warning.resolved)continue;
     let hits=0,kills=0;
     for(const p of room.players.values())for(const u of p.company?.units??[]){

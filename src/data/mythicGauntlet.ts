@@ -1,3 +1,4 @@
+import {shadowSequence,shadowPosition,type SpearShadow} from './ghostZhangxiu.ts';
 import {weiHits, weiSequence, type WeiOrder} from './divineCaocao.ts';
 import {windSequence,type ZhouWind} from './divineZhouyu.ts';
 import {halberdSequence, type Halberd} from './ghostLubu.ts';
@@ -31,6 +32,7 @@ export type BladeScar = Point & {
 };
 
 export interface MythicWarning extends Point {
+  shadow?: SpearShadow;
   wind?: ZhouWind;
   wei?: WeiOrder;
   spirit?: 'guanyu' | 'zhangfei';
@@ -225,6 +227,7 @@ function spearRoute(origin: Point, target: Point, cast: number, phase2: boolean,
 }
 
 export function mythicTransit(w: MythicWarning, now: number): Point | undefined {
+  if(w.shadow)return shadowPosition(w,now,false);
   const m = w.transit;
   if (!m || now < m.start) return;
   const t = Math.min(1,(now-m.start)/(w.endsAt-m.start));
@@ -232,6 +235,7 @@ export function mythicTransit(w: MythicWarning, now: number): Point | undefined 
 }
 
 export function mythicSequence(boss: MythicBoss, origin: Point, target: Point, cast: number, phase2: boolean, now: number, clear: CanTravel = () => true) {
+  if (boss.id === 'ghost_zhangxiu') return shadowSequence(origin,target,cast,phase2,now,clear);
   if (boss.id === 'divine_zhouyu') return windSequence(origin,target,cast,phase2,now,clear);
   if (boss.id === 'divine_caocao') return weiSequence(origin,target,cast,phase2,now,clear);
   if (boss.id === 'ghost_lubu' && cast%2===0) return halberdSequence(origin,target,phase2,now,clear);
@@ -293,6 +297,7 @@ export function mythicSequence(boss: MythicBoss, origin: Point, target: Point, c
 }
 
 export function mythicHit(w: MythicWarning, p: Point): boolean {
+  if (w.shadow?.folded) return false;
   if (w.wei) return weiHits(w,p);
   if (w.wind || (w.charge && !w.halberd?.locked) || w.transit?.harmless || (w.closing && w.constellation?.broken)) return false;
   const x=p.x-w.x, y=p.y-w.y, distance=Math.hypot(x,y);

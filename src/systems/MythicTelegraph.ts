@@ -1,3 +1,4 @@
+import {drawSpearShadow,hideSpearDouble} from './SpearShadowArt';
 import {drawZhouyuWind} from './ZhouyuWindArt';
 import type Phaser from 'phaser';
 import {drawWeiRanks,hideWeiRanks} from './WeiFormationArt';
@@ -22,6 +23,7 @@ export function preloadMythicTelegraph(scene: Phaser.Scene): void {
 }
 
 export function clearMythicWarning(graphics: Phaser.GameObjects.Graphics): void {
+  hideSpearDouble(graphics);
   hideWeiRanks(graphics);
   spiritActors.get(graphics)?.setVisible(false);
   warningAccents.get(graphics)?.clear();
@@ -232,6 +234,11 @@ function drawSpirit(g:Phaser.GameObjects.Graphics,w:MythicWarning,now:number) {
     .setTint(ink).setDepth(g.depth+1).setAlpha(w.resolved?.84:.54).setVisible(true);
 }
 export function drawMythicWarning(g: Phaser.GameObjects.Graphics,w: MythicWarning,id: string,now: number): void {
+  if(w.shadow){
+    if(w.shadow.folded)return;
+    drawSpearShadow(g,accentLayer(g),w,now);
+    if(now<w.shadow.plantAt)return;
+  }
   if(w.wind){drawZhouyuWind(g,w,now);return;}
   if(w.wei){
     drawWeiRanks(g,w,now);

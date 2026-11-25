@@ -254,7 +254,7 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
         const run = dualState(room.run,enemy)??room.run;
         if(room.run.dual?.gather || room.seconds<(room.run.dual?.soloUntil??0))continue;
         updateBossPhase(run, room.seconds);
-        if (run.warning?.transit || (run.warning && !run.warning.resolved) || (mythicBoss(enemy.general.id) && room.seconds<run.attackAt-.8 && run.mythicQueue.length)) continue;
+        if (run.warning?.shadow || run.warning?.transit || (run.warning && !run.warning.resolved) || (mythicBoss(enemy.general.id) && room.seconds<run.attackAt-.8 && run.mythicQueue.length)) continue;
         if (!room.run.dual && nearest < 245 && room.seconds >= run.attackAt && beginBossWarning(run, target, room.seconds)) continue;
       }
       enemy.hitIn -= dt;

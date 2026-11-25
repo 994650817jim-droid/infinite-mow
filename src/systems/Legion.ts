@@ -1,3 +1,4 @@
+import {shadowExit} from '../data/ghostZhangxiu';
 import {weiAdvance,weiBowExit} from '../data/divineCaocao';
 import {STAR_OUTER_TUNING as SO} from '../data/starOuter';
 import {windExit} from '../data/divineZhouyu';
@@ -135,6 +136,8 @@ export class Legion {
   }
   /** 在编兵力（城防弓手是城里的守军，不算）。 */
   weiBounds?: (x:number,y:number,r:number)=>boolean;
+  spearShadow?: MythicWarning;
+  spearBounds?: (x:number,y:number,r:number)=>boolean;
   weiWarning?: MythicWarning;
   windWarning?: MythicWarning;
   windBounds?: (x:number,y:number,r:number)=>boolean;
@@ -319,6 +322,10 @@ export class Legion {
       u.simDebt += dt; const nearPlayer = Math.hypot(u.x - this.player.x, u.y - this.player.y) < 900;
       if (!nearPlayer && u.simDebt < LEGION.farStep) continue;
       const step = nearPlayer ? dt : u.simDebt; u.simDebt = 0;
+      if(this.spearShadow){
+        const exit=shadowExit(this.spearShadow,u,(a,b)=>(this.spearBounds?.(b.x,b.y,u.radius)??true) && this.navigation.clearSegment(a.x,a.y,b.x,b.y,u.radius));
+        if(exit){u.moveTo(exit.x,exit.y,step,u.def.speed,now);continue;}
+      }
       if(this.windWarning){
         const exit=windExit(this.windWarning,u,now/1000,(a,b)=>(this.windBounds?.(b.x,b.y,u.radius)??true)&&this.navigation.clearSegment(a.x,a.y,b.x,b.y,u.radius));
         if(exit){u.moveTo(exit.x,exit.y,step,u.def.speed,now);continue;}

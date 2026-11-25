@@ -45,6 +45,7 @@ export class MythicBossController {
     this.definition = definition;
     if(id==='ghost_lubu')host.army.halberdBounds=this.inArena;
     if(id==='divine_caocao')host.army.weiBounds=this.inArena;
+    if(id==='ghost_zhangxiu')host.army.spearBounds=this.inArena;
     if(id==='divine_zhouyu')host.army.windBounds=this.inArena;
     this.groundWalk = new BossWalk(host);
     this.next = now/1000+2;
@@ -74,7 +75,7 @@ export class MythicBossController {
       this.queue=mythicSequence(this.definition,boss,player,this.casts++,this.phase2,now,
         (a,b)=>{
           const r=boss.radius+3;
-          if((id==='divine_caocao'||id==='divine_zhouyu') && (!this.inArena(a.x,a.y,r)||!this.inArena(b.x,b.y,r)))return false;
+          if((id==='divine_caocao'||id==='divine_zhouyu'||id==='ghost_zhangxiu') && (!this.inArena(a.x,a.y,r)||!this.inArena(b.x,b.y,r)))return false;
           return (id!=='ghost_lubu'||this.inArena(b.x,b.y,r)) && army.navigation.clearSegment(a.x,a.y,b.x,b.y,r);
         });
       const phasePower=this.phase2?1.1:1;
@@ -82,6 +83,10 @@ export class MythicBossController {
       this.next=this.queue.at(-1)!.endsAt+(this.phase2?1.55:2);
     }
     const warning=this.queue[0];
+    if(id==='ghost_zhangxiu'){
+      army.spearShadow=warning?.shadow && now>=warning.startsAt && !warning.resolved ? warning : undefined;
+      if(warning?.shadow)boss.contactCd=Math.max(boss.contactCd,.25);
+    }
     if(id==='divine_zhouyu')army.windWarning=warning?.wind && !warning.wind.calm && now>=warning.startsAt ? warning : undefined;
     if (warning?.charge) {
       const locked=warning.halberd!.locked;
@@ -112,7 +117,7 @@ export class MythicBossController {
     const moving = this.groundWalk.moving;
     this.state=active?(active.resolved?(active.charge?'recover':'attack'):'warn'):moving?'approach':'recover';
     if(active) {
-      if (active.transit) {
+      if (active.transit || active.shadow) {
         const position = mythicTransit(active,now);
         if (position) boss.sprite.setPosition(position.x,position.y);
         dir = mythicFacing(active.face);
@@ -141,7 +146,7 @@ export class MythicBossController {
         for(const unit of army.grid.query(active.x,active.y,active.radius+80)){
           if(unit.active&&mythicHit(active,unit)) army.hurtByBoss(unit,power*.6,ms);
         }
-        if (!active.wind && !active.transit?.harmless && active.wei?.stance!=='standDown') this.host.sfx('hitHeavy');
+        if (!active.shadow?.folded && !active.wind && !active.transit?.harmless && active.wei?.stance!=='standDown') this.host.sfx('hitHeavy');
       }
       drawMythicWarning(this.graphics,active,id,now);
     }
@@ -154,7 +159,7 @@ export class MythicBossController {
   defeat(): void {
     this.clearEye();
     if(this.definition.id==='ghost_lubu'){this.host.army.halberdWarning=undefined;this.host.army.halberdBounds=undefined;}
-    this.clearWei(); this.clearWind();
+    this.clearSpear(); this.clearWei(); this.clearWind();
     this.state='dead';
     this.queue=[];
     clearMythicWarning(this.graphics);
@@ -171,6 +176,9 @@ export class MythicBossController {
     else this.corpse.setRotation(Math.min(.16,this.fallMs/2200));
     this.corpse.setAlpha(Math.max(0,Math.min(1,(1550-this.fallMs)/650)));
   }
+  private clearSpear():void {
+    if(this.definition.id==='ghost_zhangxiu'){this.host.army.spearShadow=undefined;this.host.army.spearBounds=undefined;}
+  }
   private clearWind():void {
     if(this.definition.id==='divine_zhouyu'){this.host.army.windWarning=undefined;this.host.army.windBounds=undefined;}
   }
@@ -180,5 +188,5 @@ export class MythicBossController {
       this.host.army.weiBounds=undefined;
     }
   }
-  clear(): void { this.clearWind(); this.clearWei(); if(this.definition.id==='ghost_lubu'){this.host.army.halberdWarning=undefined;this.host.army.halberdBounds=undefined;} this.clearEye(); this.groundWalk.clear(); this.queue=[]; this.graphics.destroy(); this.signature.destroy(); this.corpse?.destroy(); }
+  clear(): void { this.clearSpear(); this.clearWind(); this.clearWei(); if(this.definition.id==='ghost_lubu'){this.host.army.halberdWarning=undefined;this.host.army.halberdBounds=undefined;} this.clearEye(); this.groundWalk.clear(); this.queue=[]; this.graphics.destroy(); this.signature.destroy(); this.corpse?.destroy(); }
 }

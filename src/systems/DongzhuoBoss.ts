@@ -1,5 +1,6 @@
 import { fixedBossDamage } from '../data/survivorBossBalance';
 import Phaser from 'phaser';
+import { FIRE_DEPTH_SCALE, insideDongzhuoFire } from '../data/dongzhuoFire';
 import { DEPTH } from '../config';
 import type {Enemy} from '../entities/Enemy';
 import type {Player} from '../entities/Player';
@@ -81,8 +82,8 @@ export class DongzhuoBoss {
     if (now >= this.nextRaid) { this.nextRaid = now + D.raidEvery * 1000; this.h.raid(now); this.fx('raid', this.boss.x, this.boss.y, 280); }
     for (const f of [...this.fires]) {
       f.g.clear();
-      if (now < f.warnUntil) { warnCircle(f.g, f.x, f.y, D.fireRadius, 1 - (f.warnUntil - now) / D.fireWarnMs, 0xd2573a, 0xf2c27a, false, now, 'fire'); continue; }
-      if (!f.lit) { f.lit = true; this.fx('ignite', f.x, f.y, D.fireRadius * 3); }
+      if (now < f.warnUntil) { f.g.setPosition(f.x, f.y).setScale(1, FIRE_DEPTH_SCALE); warnCircle(f.g, 0, 0, D.fireRadius, 1 - (f.warnUntil - now) / D.fireWarnMs, 0xd2573a, 0xf2c27a, false, now, 'fire'); continue; }
+      if (!f.lit) { f.g.setPosition(0, 0).setScale(1); f.lit = true; this.fx('ignite', f.x, f.y, D.fireRadius * 3); }
       if (now >= f.burnUntil) { f.g.destroy(); for (const im of f.flames ?? []) im.destroy(); this.fires.splice(this.fires.indexOf(f), 1); continue; }
       // 燃烧：用现成的地火序列帧（ground_fire，3 簇小火错开帧），代替原来程序画的橙色实心椭圆（用户「首领的攻击特效也需要兼容适应」）
       if (this.h.scene.textures.exists('ground_fire')) {
@@ -95,8 +96,13 @@ export class DongzhuoBoss {
       }
       if (now >= f.tickAt) {
         f.tickAt = now + D.fireTickMs;
-        if (Math.hypot((p.x - f.x) / 1, (p.y - f.y) / .6) <= D.fireRadius) p.takeDamage(fixedBossDamage(this.boss.def, D.fireDamage), now);
-        this.h.army.hurtArea(f.x, f.y, D.fireRadius, fixedBossDamage(this.boss.def, D.fireDamage), now);
+        const damage = fixedBossDamage(this.boss.def, D.fireDamage);
+        if (insideDongzhuoFire(p.x, p.y, f.x, f.y, D.fireRadius)) p.takeDamage(damage, now);
+        for (const unit of this.h.army.grid.query(f.x, f.y, D.fireRadius)) {
+          if (unit.active && insideDongzhuoFire(unit.x, unit.y, f.x, f.y, D.fireRadius)) {
+            this.h.army.hurtByBoss(unit, damage, now);
+          }
+        }
       }
     }
   }

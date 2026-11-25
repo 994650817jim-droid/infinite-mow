@@ -110,7 +110,7 @@ export const tierTitle: Record<GauntletRunTier,string> = {mortal:'凡将十阵',
 
 /** A roster is drawn once per battle. Legacy 30-wave runs retain catalog order. */
 export function mythicRoster(extreme = false, random = Math.random) {
-  function tier(pool: MythicBoss[], gateId: string) {
+  function tier(pool: readonly MythicBoss[], gateId: string) {
     if (extreme) return pool.slice();
     const options = pool.filter(b => b.id !== gateId);
     for (let i=0; i<4; i++) {

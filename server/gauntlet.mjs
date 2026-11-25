@@ -71,7 +71,7 @@ export function beginBossWarning(run, target, time, followup = false, nextPatter
     if (run.mythicQueue?.length) return false;
     const sequence = mythicSequence(mythic,b,target,b.attacks??0,phase2,time);
     b.attacks=(b.attacks??0)+1;
-    const power=bossStats(run.wave,mythic.id).power*(phase2?1.1:1);
+    const power=bossStats(run.wave,mythic.id,run.roster?.ghost.length).power*(phase2?1.1:1);
     run.mythicQueue=sequence.map(w => ({...w,power:w.power*power}));
     run.warning=run.mythicQueue[0];
     run.attackAt=sequence.at(-1).endsAt+(phase2?1.55:2);

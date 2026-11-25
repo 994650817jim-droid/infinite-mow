@@ -251,7 +251,7 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
         enemy.x += (target.x - enemy.x) * step / nearest;
         enemy.y += (target.y - enemy.y) * step / nearest;
       } else if (enemy.hitIn <= 0) {
-        const damage = enemy.general ? bossStats(room.run.wave,enemy.general.id).touch * (room.run.dual ? .8*(enemy.dualRage?1.25:1) : 1) : Math.min(11, 5 + Math.floor(room.run.wave / 2));
+        const damage = enemy.general ? bossStats(room.run.wave,enemy.general.id,room.run.roster.ghost.length).touch * (room.run.dual ? .8*(enemy.dualRage?1.25:1) : 1) : Math.min(11, 5 + Math.floor(room.run.wave / 2));
         if (hurt(target, damage * (TYPES[enemy.troop]?.mul.damage ?? 1) * (enemy.damageBuff ?? 1), now)) enemy.hitIn = .85;
       }
     }

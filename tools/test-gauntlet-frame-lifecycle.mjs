@@ -76,10 +76,12 @@ try {
     const cb=()=>{let t=performance.now();if(s.mode==='levelup')s.chooseUpgrade(0);if(prev!==undefined&&s.mode==='none'){let d=t-prev;deltas.push(d);if(d>50)spikes.push({ms:d,at:s.elapsed,textures:s.textures.getTextureKeys().length,loading:s.load.isLoading()});}prev=t;};
     s.game.events.on('postrender',cb);await new Promise(r=>setTimeout(r,6500));s.game.events.off('postrender',cb);
     const times=deltas.sort((a,b)=>a-b),n=times.length,sum=times.reduce((a,b)=>a+b,0),tail=times.slice(-Math.ceil(n*.01));
-    return {frames:n,ms:sum,fps:n*1000/sum,p99:times[Math.ceil(n*.99)-1],onePctLow:tail.length*1000/tail.reduce((a,b)=>a+b,0),spikes};
+    if(window.mowFrames)window.bossFrames=deltas;
+    return {frames:n,ms:sum,fps:n*1000/sum,p99:times[Math.ceil(n*.99)-1],maxMs:times.at(-1),onePctLow:tail.length*1000/tail.reduce((a,b)=>a+b,0),spikes};
   });
   const row={i:i+1,frames,battle:await snap()};rows.push(row);
-  if(normalEntry)row.mow=await p.evaluate(()=>window.mowFrames.map(arr=>{const sorted=arr.sort((a,b)=>a-b),n=sorted.length,sum=sorted.reduce((a,b)=>a+b,0),tail=sorted.slice(-Math.ceil(n*.01));return {frames:n,ms:sum,fps:1000*n/sum,p99:sorted[Math.ceil(n*.99)-1],onePctLow:1000*tail.length/tail.reduce((a,b)=>a+b,0)};}));
+  if(normalEntry)row.mow=await p.evaluate(()=>window.mowFrames.map(arr=>{const sorted=arr.sort((a,b)=>a-b),n=sorted.length,sum=sorted.reduce((a,b)=>a+b,0),tail=sorted.slice(-Math.ceil(n*.01));return {frames:n,ms:sum,fps:1000*n/sum,p99:sorted[Math.ceil(n*.99)-1],maxMs:sorted.at(-1),onePctLow:1000*tail.length/tail.reduce((a,b)=>a+b,0)};}));
+  if(normalEntry)row.whole=await p.evaluate(()=>{const all=window.mowFrames.flat().concat(window.bossFrames).sort((a,b)=>a-b),n=all.length,sum=all.reduce((a,b)=>a+b,0),tail=all.slice(-Math.ceil(n*.01));return {frames:n,ms:sum,fps:n*1000/sum,onePctLow:1000*tail.length/tail.reduce((a,b)=>a+b,0),maxMs:all.at(-1)};});
   save();
   if(mapCycle){
    await p.evaluate(async()=>{history.replaceState(null,'','/?dev=1&layout=desktop');const s=window.__game.scene.getScene('GauntletGameScene');s.gFrom='map';await s.finish(false,'death');});

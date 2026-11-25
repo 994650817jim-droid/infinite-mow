@@ -100,4 +100,3 @@
 .coop-layer .campaign-gate footer button { background: transparent; border-color: var(--edge); color: var(--paper); font-family: IMWarHeading, "Songti SC", "SimSun", serif; }
 .coop-layer .campaign-gate footer .coop-primary { background: var(--wash); color: #fff1d6; }
 .coop-layer .campaign-gate > button:last-child { display: block; min-height: 44px; padding: 0 4px; margin: -10px clamp(18px,4vw,34px) 6px auto; border: 0; color: var(--muted); font-size: 14px; background: transparent; }
-

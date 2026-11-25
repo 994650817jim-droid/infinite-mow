@@ -132,4 +132,3 @@ export function campaignPanel(owner: Phaser.Scene, data: CampaignReport): () => 
   owner.events.once('shutdown', close);
   return close;
 }
-

@@ -207,4 +207,3 @@ try {
   writeFileSync(join(out,requested.length?requested.join('-')+'-audit.json':'screens-audit.json'),JSON.stringify({captures,errors},null,2));
   await browser.close();
 }
-

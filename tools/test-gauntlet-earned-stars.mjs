@@ -92,4 +92,3 @@ try {
   console.log('Reward survives gate and adjacent paid purchases; deduplication, zero points, restart and regular campaign validation passed');
   if (process.argv[2]) writeFileSync(process.argv[2],JSON.stringify({award,result,fresh,errors},null,2));
 } finally { await browser.close(); }
-

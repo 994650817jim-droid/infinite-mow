@@ -180,6 +180,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     constructor() { super('GauntletGameScene'); }
     /** 本局：第几阵（1 起）、阶段与进入时刻（关内秒）、十阵名单、当前名将、斩过的名将、是否已通关十阵 / 进了无尽。 */
     gWave = 1; gPhase: 'mow' | 'boss' | 'clear' | 'choice' | 'done' = 'mow'; gAt = 0; gOrder: GauntletBoss[] = []; gCur: GauntletBoss | null = null;
+    private checkpointRecordKills = 0;
     gKills: GauntletBoss[] = []; gCleared = false; gEndless = false; private gPool: GauntletBoss[] = [];
     gTier: GauntletRunTier = 'mortal';
     private roster!: ReturnType<typeof mythicRoster>;
@@ -249,6 +250,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       this.registry.remove('campaignTransfer'); this.registry.remove('worldCampaign'); // 无行营 / 无整军：不带部曲、不读征程构筑
       this.registry.set('runConfig', { ...saved, character: saved?.character ?? 'zhaoyun', chapter: 'hulao', westStage: 3, encounter: 'qunxiong' }); // encounter：不建剧情、不记战役进度、不建西凉专属机制（同篇章场景）
       this.gTier = 'mortal'; this.gMilestones = 0;
+      this.checkpointRecordKills = 0;
       this.gWave = 1; this.gPhase = 'mow'; this.gAt = 0; this.gKills = []; this.gCleared = false; this.gEndless = false; this.gCtrl = null; this.gLootShown = false; this.gFollowers = []; this.gPendingReplace = null; this.gResult = null; this.gPortrait.clear();
       this.gStats = { lootPicks: [], spawned: 0, cleared: 0 };
       const test = isChapterTestRun();
@@ -1117,7 +1119,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       const choices = challengeChoices(this.gTier,this.gWave,GAUNTLET.waves,this.mythicSize);
       if (!choices.length) return;
       this.gPhase = 'choice';
-      writeGauntletBest(this.gKills.length,this.gWave,Math.round(this.elapsed*1000),isChapterTestRun());
+      if (writeGauntletBest(this.gKills.length,this.gWave,Math.round(this.elapsed*1000),isChapterTestRun())) this.checkpointRecordKills = this.gKills.length;
       let advance = false;
       const opts: UpgradeOption[] = choices.map(choice => ({
         id:'gauntlet_'+choice,
@@ -1168,7 +1170,9 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       if(this.gCtrl instanceof MythicBossController) { this.gCtrl.clear(); this.gCtrl=null; }
       super.finish(victory, reason);
       const kills = this.gKills.length, debug = this.debugRun(), test = isChapterTestRun(), before = readGauntletBest(test);
-      const record = writeGauntletBest(kills, this.gWave, Math.round(this.elapsed * 1000), test), best = Math.max(before.kills, kills);
+      const best = Math.max(before.kills, kills);
+      const record = writeGauntletBest(kills, this.gWave, Math.round(this.elapsed * 1000), test) ||
+        (kills > 0 && kills === this.checkpointRecordKills && kills === before.kills);
       let first = false; try { first = this.gCleared && !debug && localStorage.getItem(GAUNTLET.firstClearKey) !== '1'; if (first) localStorage.setItem(GAUNTLET.firstClearKey, '1'); } catch { first = false; }
       const rw = gauntletReward(kills, first); if (!debug) { if (rw.provisions) addProvisions(rw.provisions); if (rw.scrolls) addScrolls(rw.scrolls); }
       const keep = this.resultTexts.body.text.split('\n').filter(l => /^武将等级|^经验已满|^属性点|^星图/.test(l));

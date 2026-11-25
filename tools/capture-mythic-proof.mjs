@@ -10,10 +10,10 @@ const browser=await chromium.launch({channel:'chrome',args:['--mute-audio']});
 try{
 for(const id of requested){
  const dir=join(out,id);mkdirSync(dir,{recursive:true});
- const p=await browser.newPage({viewport:{width:960,height:600}});
+ const mobile=process.env.PROOF_MOBILE==='1';const p=await browser.newPage({viewport:mobile?{width:390,height:844}:{width:960,height:600},isMobile:mobile,hasTouch:mobile});
  try{
  await p.addInitScript(()=>{let v=39021;Math.random=()=>((v=(Math.imul(v,1664525)+1013904223)>>>0)/4294967296);});
- await p.goto(base+'/?gauntlet=1&dev=1&layout=desktop&mythic='+id,{waitUntil:'domcontentloaded'});
+ await p.goto(base+'/?gauntlet=1&dev=1&layout='+(mobile?'mobile':'desktop')+'&mythic='+id,{waitUntil:'domcontentloaded'});
  await p.waitForFunction(id=>{const s=window.__game?.scene.getScene('GauntletGameScene');if(s?.mode==='levelup')s.chooseUpgrade(0);return s?.gCur?.id===id&&s.boss?.active&&s.textures.exists('mythic_'+id+'_fx')&&s.mode==='none'&&!s.levelPanel?.visible},id,{timeout:90000});
  const result=await p.evaluate(async({id,video})=>{
  const s=window.__game.scene.getScene('GauntletGameScene'),g=s.game,c=s.gCtrl,b=s.boss;
@@ -22,7 +22,7 @@ for(const id of requested){
  const take=s.player.takeDamage.bind(s.player);s.player.takeDamage=(...args)=>{const hp=s.player.hp;const val=take(...args);damage.push({at:s.combatNow,hpBefore:hp,hpAfter:s.player.hp});return val};
  const x=s.player.x,y=s.player.y;
  b.sprite.setPosition(x-96,y);c.casts=0;c.queue=[];c.next=s.combatNow/1000+.6;
- const snap=()=>new Promise(resolve=>{g.renderer.snapshot(image=>resolve(image.src.split(',')[1]),'image/jpeg',.8);step();});
+ const snap=()=>new Promise(resolve=>{g.renderer.snapshot(image=>resolve(image.src.split(',')[1]),'image/jpeg',.8);g.renderer.preRender();g.scene.render(g.renderer);g.renderer.postRender();});
  function step(){if(s.mode==='levelup')s.chooseUpgrade(0);else if(s.mode==='recruit')s.__DEV_ACTIONS?.closePopup?.();g.step(clock+=25,25)}
  const recorded=(w,part)=>w.name+'-'+part;
  const expected=new Set([...defs.moves.flat(),defs.phaseMove].map(v=>v.name));
@@ -40,7 +40,7 @@ for(const id of requested){
    const phase=active?(!w.resolved?(now>w.endsAt-.19?'windup':'warning'):now>=w.endsAt+.075?'impact':null):null;
    const record=async(w,part)=>{const k=recorded(w,part);if(counts.has(k))return;
      if(s.mode!=='none'||s.levelPanel?.visible||!b.sprite.visible||!s.player.sprite.visible)throw Error('occluded frame');
-     const cam=s.cameras.main;if(!cam.worldView.contains(b.x,b.y)||!cam.worldView.contains(s.player.x,s.player.y))throw Error('actor outside viewport');
+     const cam=s.cameras.main;if(!(cam.worldView.contains(b.x,b.y)&&cam.worldView.contains(s.player.x,s.player.y))){cam.centerOn((b.x+s.player.x)/2,(b.y+s.player.y)/2);cam.preRender();}if(!cam.worldView.contains(b.x,b.y)||!cam.worldView.contains(s.player.x,s.player.y))throw Error('actor outside viewport');
      const frame={name:w.name,part,clock:s.combatNow,kind:w.kind,cast:c.casts,bossHp:b.hp,mode:s.mode,texture:b.sprite.texture.key,frame:b.sprite.frame.name,fx:c.signature.visible,damageCalls:damage.length};
      const img=await snap();if(s.mode!=='none'||s.levelPanel?.visible)throw Error('modal on render');
      screens.push({...frame,img});counts.add(k)};

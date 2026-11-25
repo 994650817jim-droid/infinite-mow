@@ -132,19 +132,17 @@ try {
   // ⑤ 宁死不降（袁术）：本存档第一次弹窗，劝降必拒后只能斩杀；第二次不弹窗、倒下播临终台词
   if (want('yuanshu')) {
     let ev = await open('ThirdGameScene', { thirdStage: 3 }, { thirdStage: 3 });
-    await hurtTo(ev, .12); const first = await waitPanel(ev);
-    await p.waitForTimeout(900); await p.screenshot({ path: `${OUT}/seal-never.png` });
-    const bt0 = await buttons(ev), why = await ev(s => { const pn = s.children.getByName('parley-panel'); return { reason: pn.getByName('parley-reason')?.text, honor: pn.getByName('parley-honor')?.text, grey: pn.list.filter(o => o.type === 'Text').map(o => o.text).includes('宁死不降') }; });
-    await ev(s => s.choose('persuade')); await p.waitForTimeout(250);
-    const bt1 = await buttons(ev), st = await ev(s => s.parley.snapshot());
-    ck('宁死不降（袁术）首次：弹窗就写「宁死不降 · 依据」与厚葬奖励，劝降置灰（按钮写「宁死不降」）、点了没反应，只能斩杀', first && bt0.length === 1 && bt0[0] === 'parley-execute' && /^宁死不降 · 僭号称帝/.test(why.reason ?? '') && /厚葬/.test(why.honor ?? '') && why.grey && st.state === 'open' && st.log.rolls.length === 0 && bt1.length === 1, { first, bt0, bt1, why, st });
+    await hurtTo(ev,.12);await p.waitForTimeout(400);
+    await ev(s=>s.choose('persuade'));
+    const st=await ev(s=>({state:s.parley.state,rolls:s.parley.log.rolls.length,mode:s.mode,panel:!!s.children.getByName('parley-panel'),hp:s.boss.hp}));
+    ck('袁术首次残血照常战斗，劝降指令无效，没有弹窗、锁血或掷骰',st.state==='skip'&&st.rolls===0&&st.mode==='none'&&!st.panel&&st.hp>0,st);
     const food0 = await p.evaluate(async () => (await import('/src/world/WorldStore.ts')).loadWorld().provisions ?? 0);
-    await ev(s => s.choose('execute')); await p.waitForTimeout(700);
+    await ev(s => s.hitEnemy(s.boss,1e7,s.combatNow,'melee',false,false)); await p.waitForTimeout(700);
     const k = await ev(s => ({ boss: !!s.boss?.active, chests: s.bossChests.length }));
     ck('斩杀袁术：倒地掉宝箱', !k.boss && k.chests >= 1, k);
     const hon = await ev(s => { const out = []; s.parleyExecuteRewards(out); return { names: out.map(o => o.name), flags: JSON.parse(localStorage.getItem('im_story_v1') ?? '{}').flags ?? {} }; });
     const food1 = await p.evaluate(async () => (await import('/src/world/WorldStore.ts')).loadWorld().provisions ?? 0);
-    ck('宁死不降的替代奖励：本存档首次厚葬袁术 · 钱币 +60 · 仁名 +1（记入 honored）', hon.names.some(n => /^厚葬袁术 · 军粮 \+60 · 仁名 \+1/.test(n)) && String(hon.flags.honored).includes('yuanshu') && food1 - food0 >= 60, { hon, food0, food1 });
+    ck('宁死不降的替代奖励：本存档首次厚葬袁术 · 钱币 +60 · 仁名 +1（记入 honored）', hon.names.some(n => /^厚葬袁术 · 钱币 \+60 · 仁名 \+1/.test(n)) && String(hon.flags.honored).includes('yuanshu') && food1 - food0 >= 60, { hon, food0, food1 });
     ev = await open('ThirdGameScene', { thirdStage: 3 }, { thirdStage: 3 });
     const r = await ev(s => ({ state: s.parley?.state }));
     await hurtTo(ev, .1); await p.waitForTimeout(300);

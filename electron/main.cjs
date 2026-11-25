@@ -51,20 +51,25 @@ protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { standard: t
 let store = null;
 function loadStore() {
   if (store) return store;
-  try { store = JSON.parse(fs.readFileSync(SAVE_FILE(), 'utf8')); if (!store || typeof store !== 'object' || Array.isArray(store)) store = {}; }
-  catch { store = null; }
+  let raw;
+  try { raw=fs.readFileSync(SAVE_FILE(), 'utf8'); } catch(error) { if(error.code==='ENOENT') return null; throw error; }
+  const parsed=JSON.parse(raw);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('存档文件格式错误');
+  store=parsed;
   return store;
 }
-function writeStore() {
+function writeStore(next) {
   const file = SAVE_FILE(), tmp = file + '.tmp';
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(tmp, JSON.stringify(store ?? {}), 'utf8');
+  fs.writeFileSync(tmp, JSON.stringify(next), 'utf8');
   fs.renameSync(tmp, file);
+  store = next;
 }
-ipcMain.on('store:load', e => { e.returnValue = loadStore(); });           // null = 还没有存档文件（首次启动，由渲染进程迁移旧存档）
-ipcMain.on('store:set', (e, key, value) => { if (!store) store = {}; store[String(key)] = String(value); try { writeStore(); e.returnValue = true; } catch { e.returnValue = false; } });
-ipcMain.on('store:remove', (e, key) => { if (!store) store = {}; delete store[String(key)]; try { writeStore(); e.returnValue = true; } catch { e.returnValue = false; } });
-ipcMain.on('store:replace', (e, all) => { store = all && typeof all === 'object' ? Object.fromEntries(Object.entries(all).map(([k, v]) => [String(k), String(v)])) : {}; try { writeStore(); e.returnValue = true; } catch { e.returnValue = false; } });
+ipcMain.on('store:load', e => { try { e.returnValue=loadStore(); } catch { e.returnValue=false; } }); // null = first launch; false = unreadable, preserve file
+function persist(e,next) { try { writeStore(next); e.returnValue=true; } catch { e.returnValue=false; } }
+ipcMain.on('store:set', (e,key,value) => persist(e,{...store,[String(key)]:String(value)}));
+ipcMain.on('store:remove', (e,key) => { const next={...store}; delete next[String(key)]; persist(e,next); });
+ipcMain.on('store:replace', (e,all) => persist(e,all && typeof all==='object' ? Object.fromEntries(Object.entries(all).map(([k,v])=>[String(k),String(v)])) : {}));
 ipcMain.on('store:path', e => { e.returnValue = SAVE_FILE(); });
 
 let win = null;

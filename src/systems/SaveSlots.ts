@@ -36,7 +36,43 @@ const del = (k: string): void => { try { localStorage.removeItem(k); } catch { /
 export function activeSlot(): number {
   try { const m = JSON.parse(get(META_KEY) ?? '{}') as { active?: number }; return Number.isInteger(m.active) && m.active! >= 0 && m.active! < SLOT_COUNT ? m.active! : 0; } catch { return 0; }
 }
-function setActive(i: number): void { set(META_KEY, JSON.stringify({ active: i })); }
+const TRANSFER_KEY = 'im_slot_transfer';
+const validSlot = (i: number) => Number.isInteger(i) && i >= 0 && i < SLOT_COUNT;
+function readStoredSlot(i: number): Record<string, string> {
+  const raw = localStorage.getItem(slotKey(i));
+  if (raw === null) return {};
+  const data = JSON.parse(raw);
+  if (!data || typeof data !== 'object' || Array.isArray(data) ||
+      Object.values(data).some(v => typeof v !== 'string')) throw new Error('存档位数据损坏');
+  return data;
+}
+function replaceLive(data: Record<string, string>): void {
+  // Release obsolete values first so restoring the previous (known to fit) slot can succeed at quota.
+  for (const k of PROGRESS_KEYS) if (localStorage.getItem(k) !== null && data[k] === undefined) localStorage.removeItem(k);
+  for (const k of PROGRESS_KEYS) if (data[k] !== undefined && localStorage.getItem(k) !== data[k]) localStorage.setItem(k, data[k]);
+}
+function readActiveStrict(): number {
+  const raw=localStorage.getItem(META_KEY);
+  if(raw===null) return 0;
+  const i=JSON.parse(raw)?.active;
+  if(!validSlot(i)) throw new Error('当前存档编号损坏');
+  return i;
+}
+/** Recover an interrupted switch before any progress is cached. The active pointer is the commit point. */
+export function recoverSlotTransfer(): void {
+  const raw=localStorage.getItem(TRANSFER_KEY);
+  if(raw===null) return;
+  const {from,to}=JSON.parse(raw);
+  const active=readActiveStrict();
+  if(!validSlot(from)||!validSlot(to)||from===to||(active!==from&&active!==to)) throw new Error('存档切换记录损坏');
+  if(active===from) {
+    if(localStorage.getItem(slotKey(from))===null) throw new Error('找不到切档备份');
+    replaceLive(readStoredSlot(from));
+  }
+  localStorage.removeItem(TRANSFER_KEY);
+  // Live data is authoritative again. A leftover redundant copy is harmless.
+  try { localStorage.removeItem(slotKey(active)); } catch { /* keep backup */ }
+}
 
 /** 进度写入后调用：记下保存时间（WorldStore.commit、选将等）。 */
 export function touchSave(): void { set(SLOT_TOUCH_KEY, String(Date.now())); }
@@ -59,7 +95,7 @@ export function summarize(i: number): SlotSummary {
   const d = slotData(i), active = i === activeSlot();
   if (isEmpty(d)) return { index: i, active, empty: true };
   let w: Partial<WorldSave> = {};
-  try { w = JSON.parse(d![WORLD_KEY] ?? '{}') as Partial<WorldSave>; } catch { /* 损坏时只显示武将 */ }
+  try { const parsed = JSON.parse(d![WORLD_KEY] ?? '{}'); if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) w = parsed; } catch { /* 损坏时只显示武将 */ }
   const progress: TimelineProgress = {
     ...w, yellowStages: w.yellowStages ?? (d![CHAPTER_CLEAR_KEY] === 'true' ? 3 : 0),
     dongzhuoStages: w.dongzhuoStages ?? 0, warlordStages: w.warlordStages ?? 0, guanduStages: w.guanduStages ?? 0,
@@ -86,16 +122,24 @@ export function summarize(i: number): SlotSummary {
 export function listSlots(): SlotSummary[] { return Array.from({ length: SLOT_COUNT }, (_, i) => summarize(i)); }
 
 /** 切换到存档位 i（空位即开始新征途）。调用后需要重新加载游戏。 */
-export function switchSlot(i: number): void {
-  const cur = activeSlot();
-  if (i === cur || i < 0 || i >= SLOT_COUNT) return;
-  const live = liveData();
-  if (isEmpty(live)) del(slotKey(cur)); else set(slotKey(cur), JSON.stringify(live));
-  const target = slotData(i);
-  for (const k of PROGRESS_KEYS) del(k);
-  if (target) for (const [k, v] of Object.entries(target)) if (PROGRESS_KEYS.includes(k)) set(k, v);
-  del(slotKey(i));
-  setActive(i);
+export function switchSlot(i: number): boolean {
+  if(!validSlot(i)) return false;
+  try {
+    recoverSlotTransfer();
+    const from=readActiveStrict();
+    if(i===from) return true;
+    const target=readStoredSlot(i), source: Record<string,string>={};
+    for(const k of PROGRESS_KEYS) { const v=localStorage.getItem(k); if(v!==null) source[k]=v; }
+    localStorage.setItem(slotKey(from), JSON.stringify(source));
+    localStorage.setItem(TRANSFER_KEY, JSON.stringify({from,to:i}));
+    replaceLive(target);
+    localStorage.setItem(META_KEY, JSON.stringify({active:i}));
+  } catch {
+    try { recoverSlotTransfer(); } catch { /* durable backup remains for the next boot */ }
+    return false;
+  }
+  try { recoverSlotTransfer(); } catch { /* transfer already committed; boot retries cleanup */ }
+  return true;
 }
 
 /** 删除存档位 i（当前存档位则清空当前进度）。调用当前存档位后需要重新加载游戏。 */

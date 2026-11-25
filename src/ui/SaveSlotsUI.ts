@@ -81,7 +81,11 @@ export class SaveSlotsUI {
     }
   }
 
-  private load(i: number): void { switchSlot(i); this.loading('载入存档…'); }
+  private load(i: number): void {
+    if (switchSlot(i)) { this.loading('载入存档…'); return; }
+    const note=this.root.getByName('save-switch-error');
+    if(!note) this.root.add(this.scene.add.text(GAME_WIDTH/2, IS_DESKTOP ? 96 : 151, '切换失败，请检查存储空间和目标存档后重试。', {fontFamily:FONT,fontSize:'15px',color:'#ffc4a6'}).setOrigin(.5).setName('save-switch-error'));
+  }
 
   private loading(msg: string): void {
     const W = GAME_WIDTH, H = GAME_HEIGHT;

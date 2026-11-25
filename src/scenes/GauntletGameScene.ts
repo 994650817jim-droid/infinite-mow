@@ -795,7 +795,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       if (GAUNTLET.stallOff) this.bossStallCfg = { quotaSec: 1e9, enrageSec: 1e9 }; // 首领防拖关掉（阵数节奏已经限住每阵长度）
       const art = bossArt(b), now = this.combatNow;
       const host: ArcHost = { scene: this, boss, player: this.player, army: this.legion, spawn: (k, x, y, def) => this.spawnEnemy(k, x, y, 1, true, def), def: k => this.chapter.enemies[k], banner: (t, c) => this.gBanner(t, c), sfx: k => this.sfx.play(k) };
-      if (mythicBoss(b.id)) this.gCtrl = new MythicBossController(host,b.id,now);
+      if (mythicBoss(b.id)) this.gCtrl = new MythicBossController(host,b.id,now,(x,y,r)=>this.arena?.inside(x,y,r) ?? true);
       else if (b.dual === 'hebei') { this.spawnHebeiDual(boss,now); }
       else if (b.ctrl === 'moveset') { this.moveset?.clear(); this.moveset = null; const mv = BOSS_MOVES[b.arc + '.' + b.id] ?? BOSS_MOVES[b.id] ?? GAUNTLET_MOVES[b.id]; if (mv) this.gCtrl = new BossMoveset(host, art.layout === 'walk' ? boss.sprite.texture.key : art.tex, now, adaptMoves(mv, b), art.layout); }
       else if (b.ctrl === 'yuanshu') this.gCtrl = new YuanshuBoss(host, art.tex, now, { endlessHoney: !!b.endlessHoney });

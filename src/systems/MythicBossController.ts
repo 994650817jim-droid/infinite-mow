@@ -1,3 +1,4 @@
+import {lockHalberdCharge} from '../data/ghostLubu';
 import type { Enemy } from '../entities/Enemy';
 import type Phaser from 'phaser';
 import { DEPTH } from '../config';
@@ -37,10 +38,11 @@ export class MythicBossController {
   state = 'approach';
   get label(): string { return this.queue[0]?.name ?? (this.state==='recover'?'收势 · 反击机会':this.definition.title); }
 
-  constructor(private host: ArcHost, id: string, now: number) {
+  constructor(private host: ArcHost, id: string, now: number, private inArena=(x:number,y:number,r:number)=>true) {
     const definition = mythicBoss(id);
     if (!definition) throw new Error('Unknown mythic boss: '+id);
     this.definition = definition;
+    if(id==='ghost_lubu')host.army.halberdBounds=this.inArena;
     this.groundWalk = new BossWalk(host);
     this.next = now/1000+2;
     this.graphics = host.scene.add.graphics().setDepth(DEPTH.ground+3);
@@ -64,15 +66,25 @@ export class MythicBossController {
     }
     const dx=player.x-boss.x, dy=player.y-boss.y, distance=Math.hypot(dx,dy);
     let dir=mythicFacing(Math.atan2(dy,dx));
-    while(this.queue[0]?.resolved&&now>=this.queue[0].endsAt+.32) this.queue.shift();
+    while(this.queue[0]?.resolved&&now>=(this.queue[0].charge ? this.queue[0].halberd!.recoverUntil : this.queue[0].endsAt+.32)) this.queue.shift();
     if (!this.queue.length&&now>=this.next&&distance<260) {
       this.queue=mythicSequence(this.definition,boss,player,this.casts++,this.phase2,now,
-        (a,b)=>army.navigation.clearSegment(a.x,a.y,b.x,b.y,boss.radius+3));
+        (a,b)=>(id!=='ghost_lubu'||this.inArena(b.x,b.y,boss.radius+3)) && army.navigation.clearSegment(a.x,a.y,b.x,b.y,boss.radius+3));
       const phasePower=this.phase2?1.1:1;
       for (const warning of this.queue) warning.power*=phasePower;
       this.next=this.queue.at(-1)!.endsAt+(this.phase2?1.55:2);
     }
     const warning=this.queue[0];
+    if (warning?.charge) {
+      const locked=warning.halberd!.locked;
+      lockHalberdCharge(warning,player,now,(a,b)=>(id!=='ghost_lubu'||this.inArena(b.x,b.y,boss.radius+3)) && army.navigation.clearSegment(a.x,a.y,b.x,b.y,boss.radius+3));
+      if(warning.halberd?.locked){
+        this.next=warning.halberd.recoverUntil;
+        if(!locked)this.announcedAt=-1;
+      }
+      if(warning.resolved)boss.contactCd=Math.max(boss.contactCd,.18);
+    }
+    if(id==='ghost_lubu')army.halberdWarning=warning?.charge && !warning.resolved ? warning : undefined;
     const field=warning?.constellation;
     if(field && starEyeOpen(field,now) && !this.eye) {
       const base=this.host.def('infantry');
@@ -86,7 +98,7 @@ export class MythicBossController {
       dir = this.groundWalk.row;
     } else this.groundWalk.idle();
     const moving = this.groundWalk.moving;
-    this.state=active?(active.resolved?'attack':'warn'):moving?'approach':'recover';
+    this.state=active?(active.resolved?(active.charge?'recover':'attack'):'warn'):moving?'approach':'recover';
     if(active) {
       if (active.transit) {
         const position = mythicTransit(active,now);
@@ -100,6 +112,11 @@ export class MythicBossController {
       }
       if(!active.resolved&&now>=active.endsAt){
         active.resolved=true;
+        if(active.charge && active.halberd?.collision){
+          active.halberd.broken=true; active.name='残戟已断 · 反击';
+          boss.contactCd=Math.max(boss.contactCd,active.halberd.recoverUntil-now);
+          this.host.banner(active.name,'赤兔失势');
+        }
         const power=boss.def.damage*active.power;
         if(player.alive&&mythicHit(active,player)) player.takeDamage(power,ms);
         for(const unit of army.grid.query(active.x,active.y,active.radius+80)){
@@ -117,6 +134,7 @@ export class MythicBossController {
 
   defeat(): void {
     this.clearEye();
+    if(this.definition.id==='ghost_lubu'){this.host.army.halberdWarning=undefined;this.host.army.halberdBounds=undefined;}
     this.state='dead';
     this.queue=[];
     clearMythicWarning(this.graphics);
@@ -133,5 +151,5 @@ export class MythicBossController {
     else this.corpse.setRotation(Math.min(.16,this.fallMs/2200));
     this.corpse.setAlpha(Math.max(0,Math.min(1,(1550-this.fallMs)/650)));
   }
-  clear(): void { this.clearEye(); this.groundWalk.clear(); this.queue=[]; this.graphics.destroy(); this.signature.destroy(); this.corpse?.destroy(); }
+  clear(): void { if(this.definition.id==='ghost_lubu'){this.host.army.halberdWarning=undefined;this.host.army.halberdBounds=undefined;} this.clearEye(); this.groundWalk.clear(); this.queue=[]; this.graphics.destroy(); this.signature.destroy(); this.corpse?.destroy(); }
 }

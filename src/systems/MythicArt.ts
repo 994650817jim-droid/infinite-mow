@@ -148,7 +148,7 @@ export function poseMythic(sprite: Phaser.GameObjects.Image, id: string, now: nu
 export function paintMythicSignature(sprite: Phaser.GameObjects.Image, id: string, w: MythicWarning | null, now: number, owner?: {x:number;y:number}): void {
   const boss = mythicBoss(id), key = mythicArtKey(id,'fx');
   clearMythicSignature(sprite);
-  if (!boss || w?.transit?.harmless || (w?.closing && w.constellation?.broken) || !sprite.scene.textures.exists(key)) return;
+  if (!boss || (w?.charge && (!w.halberd?.locked || w.resolved)) || w?.transit?.harmless || (w?.closing && w.constellation?.broken) || !sprite.scene.textures.exists(key)) return;
   if (w?.resolved && w.kind === 'sweep' && (id === 'ghost_guanyu' || id === 'divine_guanyu')) {
     const sweepKey = mythicArtKey(id, 'sweep');
     if (sprite.scene.textures.exists(sweepKey)) {

@@ -2,6 +2,7 @@ import {GAUNTLET} from '../src/data/gauntlet.ts';
 import {GAUNTLET_RECRUIT,recruitCost,recruitTier} from '../src/data/gauntletRecruit.ts';
 import {TROOPS,LEGION,BOSS_VS_TROOPS,BOSS_VS_ALLY} from '../src/data/legion.ts';
 import {allyHp,allyAttack,retinueStarHp,retinueBossTaken,nearOrderBonus} from '../src/rules/retinue.ts';
+import {halberdExit} from '../src/data/ghostLubu.ts';
 import {troopHit,TYPES} from './coop-roster.mjs';
 import arena from '../src/coop/arena.json' with {type:'json'};
 
@@ -63,6 +64,10 @@ export function updateRetinue(room,dt){
     for(const [i,u] of c.units.entries()){
       const def=TROOPS[u.kind],sortie=c.order==='sortie'&&p.hp>0;
       const fx=p.x+((i%4)-1.5)*26,fy=p.y+30+Math.floor(i/4)*24;
+      if(room.run.warning?.charge){
+        const exit=halberdExit(room.run.warning,u,(_,to)=>to.x>=12&&to.y>=12&&to.x<=arena.width-12&&to.y<=arena.height-12);
+        if(exit){advance(u,exit.x,exit.y,def.speed,dt);continue;}
+      }
       let target,dist=Infinity;
       for(const e of room.enemies){
         if(e.hp<=0 || Math.hypot(e.x-p.x,e.y-p.y)>(sortie?320:150))continue;
@@ -89,6 +94,7 @@ export function updateRetinue(room,dt){
   // Use each attacker's own contact timer. A regular attacker chooses only one nearby soldier.
   for(const e of room.enemies){
     if(e.hp<=0||room.seconds<(e.retinueAt??0))continue;
+    if(e===room.run.boss&&room.run.warning?.charge&&room.run.warning.resolved)continue;
     let hits=0,kills=0;
     for(const p of room.players.values())for(const u of p.company?.units??[]){
       if((!e.boss&&hits)||u.hp<=0||Math.hypot(e.x-u.x,e.y-u.y)>(e.boss?BOSS_VS_TROOPS.sweepReach:23))continue;

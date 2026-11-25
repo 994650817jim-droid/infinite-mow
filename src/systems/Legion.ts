@@ -1,4 +1,6 @@
 import {STAR_OUTER_TUNING as SO} from '../data/starOuter';
+import {halberdExit} from '../data/ghostLubu';
+import type {MythicWarning} from '../data/mythicGauntlet';
 import {LegionNavigation} from './LegionNavigation';
 import {LegionFormation} from './LegionFormation';
 import {CAMP_TRAINING,freshTraining,type CampTraining,type CampTrainingId,type CampGroup} from '../data/camp';
@@ -130,6 +132,8 @@ export class Legion {
     this.tactics.relocate=(u,x,y)=>this.place(u,x,y); // 收回兜底也走统一换位（屏外直接换、屏内淡出淡入）
   }
   /** 在编兵力（城防弓手是城里的守军，不算）。 */
+  halberdWarning?: MythicWarning;
+  halberdBounds?: (x:number,y:number,r:number)=>boolean;
   get count(): number { let n = 0; for (const u of this.units) if (u.active && !u.garrison) n++; return n; }
   recover(): void { for (const u of this.units) if (u.active) u.hp = u.maxHp; }
   exportState(): LegionState { return { training:{...this.training},groups:{...this.groups},food: this.food, dead: this.dead, recruited: this.recruited, levels: { ...this.levels }, soldiers: this.units.filter(u => u.active && !u.garrison).map(u => ({ kind: u.kind, hp: u.hp,reserveSoldier:u.reserveSoldier||undefined,max:u.maxHp })) }; }
@@ -309,6 +313,10 @@ export class Legion {
       u.simDebt += dt; const nearPlayer = Math.hypot(u.x - this.player.x, u.y - this.player.y) < 900;
       if (!nearPlayer && u.simDebt < LEGION.farStep) continue;
       const step = nearPlayer ? dt : u.simDebt; u.simDebt = 0;
+      if(this.halberdWarning){
+        const exit=halberdExit(this.halberdWarning,u,(a,b)=>(this.halberdBounds?.(b.x,b.y,u.radius) ?? true) && this.navigation.clearSegment(a.x,a.y,b.x,b.y,u.radius));
+        if(exit){u.moveTo(exit.x,exit.y,step,u.def.speed,now);continue;}
+      }
       this.tactics.postOf = this.postOf;
       this.tactics.think(u, now, this.order, enemyGrid, this.grid);
       this.tactics.move(u, step, now, this.grid);

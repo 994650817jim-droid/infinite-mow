@@ -1,3 +1,4 @@
+import {halberdSequence, type Halberd} from './ghostLubu.ts';
 import type { GauntletBoss } from './gauntlet';
 
 export type MythicTier = 'ghost' | 'divine';
@@ -35,6 +36,8 @@ export interface MythicWarning extends Point {
   transit?: { start: number; to: Point; cast: number; harmless: boolean };
   scar?: BladeScar;
   retracesScar?: boolean;
+  halberd?: Halberd;
+  charge?: boolean;
   kind: MythicShape;
   name: string;
   radius: number;
@@ -225,6 +228,7 @@ export function mythicTransit(w: MythicWarning, now: number): Point | undefined 
 }
 
 export function mythicSequence(boss: MythicBoss, origin: Point, target: Point, cast: number, phase2: boolean, now: number, clear: CanTravel = () => true) {
+  if (boss.id === 'ghost_lubu' && cast%2===0) return halberdSequence(origin,target,phase2,now,clear);
   if (boss.id === 'divine_liubei') {
     const face=Math.atan2(target.y-origin.y,target.x-origin.x);
     const flag=(side:number):Point=>({x:origin.x-Math.sin(face)*side,y:origin.y+Math.cos(face)*side});
@@ -283,7 +287,7 @@ export function mythicSequence(boss: MythicBoss, origin: Point, target: Point, c
 }
 
 export function mythicHit(w: MythicWarning, p: Point): boolean {
-  if (w.transit?.harmless || (w.closing && w.constellation?.broken)) return false;
+  if ((w.charge && !w.halberd?.locked) || w.transit?.harmless || (w.closing && w.constellation?.broken)) return false;
   const x=p.x-w.x, y=p.y-w.y, distance=Math.hypot(x,y);
   if(w.kind==='circle'||w.kind==='ring') return distance<=w.radius&&distance>=(w.innerRadius??0);
   if(w.kind==='sweep') return distance<=w.radius&&Math.abs(Math.atan2(y*Math.cos(w.angle)-x*Math.sin(w.angle),x*Math.cos(w.angle)+y*Math.sin(w.angle)))<=Math.PI/3;

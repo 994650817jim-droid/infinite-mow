@@ -229,6 +229,20 @@ function drawSpirit(g:Phaser.GameObjects.Graphics,w:MythicWarning,now:number) {
 }
 export function drawMythicWarning(g: Phaser.GameObjects.Graphics,w: MythicWarning,id: string,now: number): void {
   const progress=Math.max(0,Math.min(1,(now-w.startsAt)/Math.max(.01,w.endsAt-w.startsAt)));
+  const h=w.halberd;
+  if(h && now>=h.appears){
+    const x=h.x,y=h.y,solid=now>=h.solid;
+    if(h.broken){
+      const left=Math.max(0,(h.recoverUntil-now)/3.2);
+      g.lineStyle(3,0xb4eedc,.85).lineBetween(x-11,y+2,x-4,y-4).lineBetween(x+3,y,x+12,y-7);
+      g.lineStyle(3,0xaaffd7,.85).beginPath().arc(x,y,22,-Math.PI/2,-Math.PI/2+Math.PI*2*left).strokePath();
+      return;
+    }
+    g.lineStyle(solid?3:2,solid?0xffe9ac:0xacb3bb,solid?.95:.5)
+      .strokeEllipse(x,y,34,12).lineBetween(x-4,y+1,x+5,y-30)
+      .lineBetween(x+5,y-30,x+8,y-39).lineBetween(x+5,y-26,x+17,y-32).lineBetween(x+17,y-32,x+16,y-37);
+    if(w.charge && (!h.locked || w.resolved))return;
+  }
   drawSpirit(g,w,now);
   const field=w.constellation;
   if (field) {

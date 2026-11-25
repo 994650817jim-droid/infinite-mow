@@ -2,6 +2,7 @@ import {EMBER,CINDERS} from '../src/rules/burning.ts';
 import {refreshRetinueHp} from './coop-retinue.mjs';
 import {canDraftMark} from './coop-marks.mjs';
 import { GAUNTLET, GAUNTLET_POOL, endlessBoss, pickBosses } from '../src/data/gauntlet.ts';
+import {lockHalberdCharge} from '../src/data/ghostLubu.ts';
 import { mythicRoster, challengeBoss, mythicBoss, mythicSequence, mythicHit, mythicTransit } from '../src/data/mythicGauntlet.ts';
 import arena from '../src/coop/arena.json' with {type:'json'};
 import content from '../src/coop/gauntlet.json' with { type: 'json' };
@@ -63,6 +64,7 @@ export function bossPattern(id, cast, phase2) {
   return null;
 }
 
+const arenaClear=(_,to)=>to.x>=20 && to.y>=20 && to.x<=arena.width-20 && to.y<=arena.height-20;
 export function beginBossWarning(run, target, time, followup = false, nextPattern = null) {
   const b = run.boss;
   if (!b || b.hp <= 0 || !target || target.hp <= 0 || run.warning || (!followup && run.followup)) return false;
@@ -71,7 +73,8 @@ export function beginBossWarning(run, target, time, followup = false, nextPatter
   if (mythic) {
     if (run.mythicQueue?.length) return false;
     const sequence = mythicSequence(mythic,b,target,b.attacks??0,phase2,time,
-      (_,to)=>to.x>=20 && to.y>=20 && to.x<=arena.width-20 && to.y<=arena.height-20);
+      arenaClear);
+    for(const w of sequence)if(w.charge)w.targetSlot=target.slot;
     b.attacks=(b.attacks??0)+1;
     const power=bossStats(run.wave,mythic.id,run.roster?.ghost.length).power*(phase2?1.1:1);
     run.mythicQueue=sequence.map(w => ({...w,power:w.power*power}));
@@ -101,9 +104,15 @@ export function resolveBossWarning(run, players, time, onHit) {
   if (!run.boss || run.boss.hp <= 0) { clearBossAttack(run); return; }
   if (mythicBoss(run.boss.general.id)) {
     const queue=run.mythicQueue;
-    if(queue[0]?.resolved&&time>=queue[0].endsAt+.32) queue.shift();
+    if(queue[0]?.resolved&&time>=(queue[0].charge?queue[0].halberd.recoverUntil:queue[0].endsAt+.32)) queue.shift();
     const warning=queue[0];
     run.warning=warning&&time>=warning.startsAt?warning:null;
+    if(run.warning?.charge){
+      const target=players.find(p=>p.owner===undefined&&p.slot===warning.targetSlot&&p.hp>0) ??
+        players.find(p=>p.owner===undefined&&p.hp>0);
+      if(target)lockHalberdCharge(warning,target,time,arenaClear);
+      if(warning.halberd.locked)run.attackAt=warning.halberd.recoverUntil;
+    }
     if(warning?.closing && warning.constellation.broken) {
       run.mythicQueue=[];run.warning=null;run.attackAt=time+1.4;return;
     }
@@ -113,6 +122,7 @@ export function resolveBossWarning(run, players, time, onHit) {
     }
     if(run.warning&&!warning.resolved&&time>=warning.endsAt){
       warning.resolved=true;
+      if(warning.charge&&warning.halberd.collision){warning.halberd.broken=true;warning.name='残戟已断 · 反击';}
       for(const player of players) if(player.hp>0&&mythicHit(warning,player)) onHit(player,warning.power);
     }
     return;

@@ -18,7 +18,7 @@ const page = async (layout, save) => {
   return p;
 };
 const start = async (p, key, cfg) => {
-  await p.evaluate(([key, cfg]) => { const g = window.__game; g.registry.set('runConfig', { character: 'zhaoyun', ...cfg }); for (const s of g.scene.getScenes(true)) s.scene.stop(); if (g.registry.get('battleReady')) g.scene.start(key); else { g.registry.set('pendingWarlord', key === 'GameScene' ? undefined : key); g.registry.set('loadBattle', true); g.scene.start('BootScene'); } }, [key, cfg]);
+  await p.evaluate(([key, cfg]) => { const g = window.__game; g.registry.set('runConfig', { character: 'zhaoyun', ...cfg }); for (const s of g.scene.getScenes(true)) s.scene.stop(); if (g.registry.get('battleReady')) g.scene.start(key); else { g.registry.set('pendingWarlord', key); g.registry.set('loadBattle', true); g.scene.start('BootScene'); } }, [key, cfg]);
   await p.waitForFunction(key => window.__game.scene.isActive(key) && window.__game.scene.getScene(key).player, key, { timeout: 90000 }); await p.waitForTimeout(1200);
 };
 const quiet = (p, S) => p.evaluate(S0 => { const s = eval(S0); s.spawnTimer = s.eliteTimer = 1e9; for (const e of s.enemies) if (e.active && e.kind !== 'boss' && !e.isSupplySlot) e.deactivate(); for (let i = 0; i <= s.chapter.waves.length; i++) s.recruitedWaves.add(i); s.pendingRecruit = false; }, S);

@@ -132,7 +132,7 @@ export function makeWarning(boss, target, wave, time, pattern = null) {
   const angle = Math.atan2(target.y - boss.y, target.x - boss.x);
   const facing = Math.hypot(target.x - boss.x, target.y - boss.y) > 0 ? angle : 0;
   return {
-    kind, name, fx: pattern?.fx, x: origin.x, y: origin.y, angle: facing,
+    ownerId: boss.id, startsAt: time, kind, name, fx: pattern?.fx, x: origin.x, y: origin.y, angle: facing,
     radius: pattern?.radius ?? (kind === 'circle' ? 70 + Math.min(wave, 10) * 2 : kind === 'sweep' ? 119 : 235),
     innerRadius: pattern?.innerRadius ?? 0,
     endsAt: time + (kind === 'line' ? .85 : .95), resolved: false,

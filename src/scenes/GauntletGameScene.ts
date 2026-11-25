@@ -16,7 +16,7 @@ import type { EnemyDef } from '../data/enemies';
 import { GAUNTLET, GAUNTLET_MOVES, GAUNTLET_POOL, GAUNTLET_TROOPS, type GauntletArc, type GauntletProps, endlessBoss, gauntletReward, pickBosses, readGauntletBest, gauntletPool, GAUNTLET_NAME, waveScale, writeGauntletBest, type GauntletBoss } from '../data/gauntlet';
 import { GAUNTLET_RECRUIT, recruitCost, recruitTier } from '../data/gauntletCards';
 import { TROOPS } from '../data/legion';
-import { lqButton, lqPanel, lqLabelColor, type LqState } from '../ui/LacquerKit';
+import { drawRecruitCard, preloadRecruitPortraits } from '../ui/GauntletRecruitCard';
 import { GAUNTLET_BUILD, RARITY, STAR_CARD_IDS, cardCategory, cardRarity, pickByRarity, rollRarity, starCardPool, type GCategory, type GRarity, type StarCard } from '../data/gauntletCards';
 import { STAR_BY_ID, STAR_REGIONS } from '../data/starMap';
 import { starIconKey, starIconUrl } from '../data/starFx';
@@ -201,6 +201,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     gStats = { lootPicks: [] as string[], spawned: 0, cleared: 0 };
 
     preload() {
+      preloadRecruitPortraits(this, GAUNTLET_RECRUIT.tiers.flatMap(t => t.kinds));
       loadSurvivorBossFx(this);
       (Base.prototype as unknown as { preload?: () => void }).preload?.call(this); // 基类（开发构建的 DevGameScene）有 preload 就先跑
       // 名将池的首领图都先载好（第一 / 二章的张梁、张宝、张角、华雄、徐荣、吕布开机就有）
@@ -502,50 +503,18 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
         this.gRecruitBtn?.setVisible(false);
         return;
       }
-
-      const cost = recruitCost(this.gWave);
       const tier = recruitTier(this.gWave);
-      const funds = this.legion.food;
-      const state = [this.gWave, funds, this.legion.count].join(':');
-      if (this.gRecruitBtn?.scene && state === this.gRecruitCardState) {
-        this.gRecruitBtn.setVisible(true);
-        return;
-      }
-
-      const width = Math.min(414, GAME_WIDTH - 32);
-      const height = 98;
-      const root = this.gRecruitBtn?.scene ? this.gRecruitBtn : this.add.container()
-        .setScrollFactor(0).setDepth(DEPTH.hud + 5).setName('gauntlet-recruit');
-      this.gRecruitBtn = root;
+      const state = [this.gWave, this.legion.food, this.legion.count].join(':');
+      const enter = !this.gRecruitBtn?.visible;
+      if (!enter && this.gRecruitBtn?.scene && state === this.gRecruitCardState) return;
+      const root = this.gRecruitBtn ??= this.add.container().setScrollFactor(0).setDepth(DEPTH.hud + 5).setName('gauntlet-recruit');
       this.gRecruitCardState = state;
-      root.removeAll(true);
-      root.setPosition((GAME_WIDTH - width) / 2, GAME_HEIGHT - (GAME_WIDTH < 600 ? 245 : 132) - height / 2).setVisible(true);
-
-      const panel = this.add.graphics();
-      lqPanel(panel, 0, 0, width, height, { alpha: .94, glow: false });
-      const textStyle = { fontFamily: HEADING_FONT, resolution: 2 };
-      const heading = this.add.text(22, 15, `招募 ×${GAUNTLET_RECRUIT.per} · ${tier.level}阶`, { ...textStyle, fontSize: '21px', color: '#f6dc9a' });
-      const kinds = tier.kinds.map(kind => TROOPS[kind].name);
-      const split = Math.min(3, kinds.length);
-      const pool = [kinds.slice(0, split), kinds.slice(split)].filter(line => line.length).map(line => line.join(' · '));
-      const detail = this.add.text(22, 43, pool.join('\n'), { ...textStyle, fontSize: '15px', color: '#e5d3b3', lineSpacing: 3 });
-      const commandX = width - 91;
-      const ok = funds >= cost;
-      const command = this.add.graphics();
-      const label = this.add.text(commandX, 41, ok ? `招募 · ${cost}钱` : `差 ${cost - funds} 钱`, { ...textStyle, fontSize: '16px' }).setOrigin(.5);
-      const balance = this.add.text(commandX, 76, `钱币 ${funds} · 兵力 ${this.legion.count}`, { ...textStyle, fontSize: '13px', color: '#cbb996' }).setOrigin(.5);
-      const hit = this.add.zone(commandX, 41, 136, 44).setScrollFactor(0).setName('gauntlet-recruit-buy');
-      const paint = (buttonState: LqState) => {
-        const offset = lqButton(command.clear(), commandX, 41, 136, 44, buttonState, 'gold');
-        label.setColor(lqLabelColor(buttonState)).setY(41 + offset);
-      };
-      paint(ok ? 'idle' : 'off');
-      if (ok) hit.setInteractive({ useHandCursor: true })
-        .on('pointerover', () => paint('hover'))
-        .on('pointerout', () => paint('idle'))
-        .on('pointerdown', () => paint('down'))
-        .on('pointerup', () => { if (this.recruitOpen()) this.recruitTroops(); });
-      root.add([panel, heading, detail, command, label, balance, hit]);
+      drawRecruitCard(this, root, { kinds: tier.kinds, level: tier.level, count: GAUNTLET_RECRUIT.per,
+        price: recruitCost(this.gWave), funds: this.legion.food, army: this.legion.count }, enter, () => {
+        if (this.recruitOpen() && this.recruitTroops()) {
+          this.tweens.add({ targets: root, alpha: { from: .76, to: 1 }, duration: 140 });
+        }
+      });
     }
     // ———— 结算「本局打法」（局内 build 第 6 条；界面上不写英文）：斩将头像那一块加两个页签，「本局打法」按类列出这一局拿到的东西 ————
     /**

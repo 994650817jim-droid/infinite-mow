@@ -19,7 +19,7 @@ import roster from '../coop/roster.json';
 import { buildRecolor } from '../systems/IffOverlay';
 import { ART_V2_FILES } from '../systems/ArtStyle';
 import { FIELD_STARS, MARK_STAR, COMPANY_STARS } from '../data/coopStars';
-import { modeKey, saveModeBest } from '../systems/GauntletHistory';
+import { modeKey, saveModeBest, scoreRun } from '../systems/GauntletHistory';
 import { isChapterTestRun } from '../systems/ChapterProgress';
 import { activeSlot } from '../systems/SaveSlots';
 const networkStars=[...FIELD_STARS,MARK_STAR,...COMPANY_STARS,CINDERS];
@@ -311,7 +311,7 @@ export class CoopScene extends Phaser.Scene {
       else if (message.type === 'result') {
         if(message.mythicSize && message.tier && message.wave!=null) {
           void saveModeBest(modeKey(true,message.mythicSize,message.tier==='endless'),
-            {kills:message.generals,wave:message.wave,ms:(message.seconds??0)*1000},isChapterTestRun(),this.recordSlot)
+            scoreRun(message.generals,message.wave,(message.seconds??0)*1000,message.mythicSize,message.milestones??0,message.tier==='endless'),isChapterTestRun(),this.recordSlot)
             .catch(e=>console.warn('双人战绩保存失败',e));
         }
         this.disconnect();

@@ -69,7 +69,7 @@ import type { ArcHost } from '../systems/ArcBossV2';
 import { ART_V2_FILES, isV2Texture, loadBossSheet, loadV2TroopSheets } from '../systems/ArtStyle';
 import { isChapterTestRun } from '../systems/ChapterProgress';
 import { activeSlot } from '../systems/SaveSlots';
-import { modeHistory, modeKey, modeLabel, saveModeBest } from '../systems/GauntletHistory';
+import { modeHistory, modeKey, modeLabel, saveModeBest, scoreRun } from '../systems/GauntletHistory';
 import { settleGauntlet } from '../systems/GauntletSettlement';
 import { FollowerSquad, type Follower } from '../systems/FollowerSquad';
 import { GauntletTrack } from '../ui/GauntletTrack';
@@ -1194,14 +1194,14 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       if(this.gCtrl instanceof MythicBossController) { this.gCtrl.clear(); this.gCtrl=null; }
       super.finish(victory, reason);
       const kills=this.gKills.length, debug=this.debugRun(), key=this.recordKey, runId=this.claimId;
-      const score={kills,wave:this.gWave,ms:Math.round(this.elapsed*1000)};
+      const score=scoreRun(kills,this.gWave,Math.round(this.elapsed*1000),this.mythicSize,this.gMilestones,this.gEndless);
       let best=0,record=false,first=false,pending=false,rw={provisions:0,scrolls:0};
       this.resultPanel.setVisible(false);
       try {
         const receipt=debug ? await saveModeBest(key,score,true,this.claimSlot) :
           await settleGauntlet(runId,kills,this.gCleared,key,score,this.claimSlot);
         best=receipt.best?.kills??0;
-        record=!!receipt.record || (kills>0 && kills===this.checkpointRecordKills && kills===best);
+        record=!!receipt.record || (!this.gEndless && kills>0 && kills===this.checkpointRecordKills && kills===best);
         if ('provisions' in receipt) {rw=receipt;first=receipt.first;}
       } catch(error) {pending=true;console.warn('战报写入未完成',error);}
       if(this.claimId!==runId || !this.sys.isActive())return;

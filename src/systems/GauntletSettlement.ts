@@ -3,7 +3,7 @@ import { creditGauntletGrain } from '../world/WorldStore';
 import { creditGauntletScrolls } from './MasteryStore';
 import { activeSlot } from './SaveSlots';
 import { withGauntletLock } from './GauntletSaveLock';
-import { updateModeBest, type Best, type ModeKey } from './GauntletHistory';
+import { drainScoreRequests, updateModeBest, type Best, type ModeKey } from './GauntletHistory';
 
 export const CLAIM_KEY = 'im_gauntlet_claim_v1';
 const LEDGER = 'im_gauntlet_paid_v2';
@@ -65,7 +65,11 @@ function drain(slot:number, requested?:string) {
 }
 export async function recoverGauntletSettlement() {
   const slot=activeSlot();
-  if(hasPendingSettlement())await withGauntletLock(()=>drain(slot));
+  await withGauntletLock(()=>{
+    if(slot!==activeSlot())return;
+    if(hasPendingSettlement())drain(slot);
+    drainScoreRequests(slot);
+  });
 }
 export async function settleGauntlet(id:string,kills:number,cleared:boolean,mode?:ModeKey,score?:Best,slot=activeSlot()):Promise<Receipt> {
   const intent={id,kills,cleared,mode,score};

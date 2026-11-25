@@ -146,7 +146,7 @@ export function switchSlot(i: number): boolean {
 export function deleteSlot(i: number): void {
   if (!validSlot(i)) return;
   const pendingPrefix='im_gauntlet_pending:'+i+':';
-  for(let n=localStorage.length-1;n>=0;n--){const k=localStorage.key(n);if(k?.startsWith(pendingPrefix))del(k);}
+  for(let n=localStorage.length-1;n>=0;n--){const k=localStorage.key(n);if(k && (k.startsWith(pendingPrefix)||k.startsWith('im_gauntlet_score_pending:'+i+':')))del(k);}
   if (i === activeSlot()) { for (const k of PROGRESS_KEYS) del(k); }
   else del(slotKey(i));
 }

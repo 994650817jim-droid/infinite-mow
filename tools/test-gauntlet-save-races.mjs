@@ -68,5 +68,22 @@ try {
  });
  assert.ok(!slotCheck.clean['solo-standard'] && slotCheck.clean.legacy.kills===41 && slotCheck.deferred && slotCheck.cleanLedger===null && slotCheck.score===18 && slotCheck.paid && slotCheck.first==='1');
  checks.push('switch slots while reward queued; preserve old global first clear and legacy best');
+ await pages[0].evaluate(()=>delete navigator.locks);
+ await pages[0].evaluate(async()=>{await new Promise(resolve=>navigator.locks.request('im-gauntlet-save',async()=>{resolve();await new Promise(release=>window.releaseLock=release)}))});
+ const closing=await ctx.newPage();await closing.goto(base+'/__receipt-check');
+ await closing.evaluate(async()=>{const h=await import('/src/systems/GauntletHistory.ts');void h.saveModeBest('coop-standard',{kills:88,wave:89,ms:7800});});
+ await closing.close();await pages[0].evaluate(()=>window.releaseLock());
+ const recovered=await pages[0].evaluate(async()=>{await (await import('/src/systems/GauntletSettlement.ts')).recoverGauntletSettlement();return (await import('/src/systems/GauntletHistory.ts')).modeHistory()['coop-standard']});
+ assert.equal(recovered.kills,88,'a server result already delivered to a closing tab survives a lock queue');checks.push('closed co-op client with an uncommitted server result');
+ await pages[0].evaluate(async()=>{
+  const h=await import('/src/systems/GauntletHistory.ts');
+  for(const size of [5,10])for(const milestones of [1,2,3]){
+    const gate=10+(milestones-1)*size;
+    for(const bonus of [0,1,7]){
+      const v=h.scoreRun(gate+bonus,gate+bonus+1,123456,size,milestones,true);
+      if(v.kills!==bonus||v.wave!==bonus+1||v.ms!==123456)throw Error('Endless score included generals from the previous gate');
+    }
+  }
+ });checks.push('early and late endless entry score only additional wins');
  console.log(JSON.stringify({checks},null,2));if(process.env.PROOF)writeFileSync(process.env.PROOF,JSON.stringify({checks},null,2));
 }finally{await browser.close()}

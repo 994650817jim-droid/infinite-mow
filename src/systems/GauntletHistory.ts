@@ -9,6 +9,12 @@ const blank = (): Best => ({ kills: 0, wave: 0, ms: 0 });
 export function modeKey(coop: boolean, size: number, endless: boolean): ModeKey {
   return `${coop?'coop':'solo'}-${size===10?'extreme':'standard'}${endless?'-endless':''}`;
 }
+// Endless can start at any gate. Keep elapsed time for the entire run, but rank only
+// generals actually defeated after entering endless on this route.
+export function scoreRun(kills:number,wave:number,ms:number,size:number,milestones:number,endless:boolean): Best {
+  const prior=endless ? 10+Math.max(0,milestones-1)*size : 0;
+  return {kills:Math.max(0,kills-prior),wave:Math.max(1,wave-prior),ms};
+}
 export function modeLabel(key: ModeKey): string {
   return (key.startsWith('coop')?'双人':'单人')+(key.includes('extreme')?'极限':'标准')+(key.endsWith('endless')?' · 无尽':'');
 }
@@ -31,9 +37,31 @@ export function updateModeBest(key: ModeKey, candidate: Best, test: boolean) {
   localStorage.setItem(storageKey,JSON.stringify(modes));
   return { best:candidate, record:candidate.kills>previous.kills };
 }
-export function saveModeBest(key: ModeKey, value: Best, test = false, slot = activeSlot()) {
+const recordPrefix = (slot:number) => 'im_gauntlet_score_pending:'+slot+':';
+type ScoreRequest = { key:ModeKey; value:Best; test:boolean };
+
+/** A host or guest can close their tab while the other writer holds the save lock. */
+export function drainScoreRequests(slot:number) {
+  const prefix=recordPrefix(slot), keys:string[]=[];
+  for(let i=0;i<localStorage.length;i++){
+    const k=localStorage.key(i);
+    if(k?.startsWith(prefix))keys.push(k);
+  }
+  for(const k of keys) {
+    const raw=localStorage.getItem(k);
+    if(raw===null)continue;
+    const req:ScoreRequest=JSON.parse(raw);
+    updateModeBest(req.key,req.value,req.test);
+    localStorage.removeItem(k);
+  }
+}
+export async function saveModeBest(key: ModeKey, value: Best, test = false, slot = activeSlot()) {
+  const intent=recordPrefix(slot)+[key,test?1:0,value.kills,value.wave,value.ms].join(':');
+  localStorage.setItem(intent,JSON.stringify({key,value,test} satisfies ScoreRequest));
   return withGauntletLock(() => {
     if (activeSlot() !== slot) throw new Error('战报所属存档位已切换');
-    return updateModeBest(key,value,test);
+    const result=updateModeBest(key,value,test);
+    localStorage.removeItem(intent);
+    return result;
   });
 }

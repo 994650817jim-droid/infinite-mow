@@ -6,6 +6,7 @@ export type Side = 0 | 1;
 export type CoopMode = 'gauntlet';
 export interface General { id: string; name: string }
 export interface BossWarning {
+  ownerId?: number;
   mythic?: MythicTier; face?: number; startsAt?: number; power?: number;
   action?: MythicWarning['action'];
   fx?: 'thunder' | 'quake' | 'spear' | 'arrow';

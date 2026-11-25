@@ -1,13 +1,16 @@
 import {CINDERS,EMBER} from '../rules/burning';
 import {CoopRetinueView,preloadCompany} from '../coop/CoopRetinueView';
+import { drawMortalWarning } from '../systems/MythicTelegraph';
 import { loadSurvivorBossFx, playSurvivorBossFx, updateSurvivorBossFx, clearSurvivorBossFx } from '../systems/SurvivorBossFx';
 import Phaser from 'phaser';
+import { SnapshotTimeline, type BattleSnapshot } from '../coop/SnapshotTimeline';
 import { GAME_WIDTH, GAME_HEIGHT, IS_DESKTOP } from '../config';
 import { Joystick } from '../ui/Joystick';
 import { coopSocketUrl, type Fighter, type Foe, type ServerMessage, type Side, type CoopMode, type BossWarning, type PartyMember } from '../coop/protocol';
 import world from '../coop/arena.json';
 import gauntlet from '../coop/gauntlet.json';
 import { challengeWave, mythicArtKey, mythicBoss, tierTitle, type MythicWarning } from '../data/mythicGauntlet';
+import { walkRow } from '../systems/GroundMotion';
 import { preloadMythic, prepareMythicActions, mythicFacing, poseMythic, clearMythicSignature, clearMythicWarning, drawMythicWarning, paintMythicSignature } from '../systems/MythicArt';
 import { GAUNTLET_NAME } from '../data/gauntlet';
 import { CHARACTERS, getCharacter, type CharacterId } from '../data/characters';
@@ -18,9 +21,12 @@ import { ART_V2_FILES } from '../systems/ArtStyle';
 import { FIELD_STARS, MARK_STAR, COMPANY_STARS } from '../data/coopStars';
 const networkStars=[...FIELD_STARS,MARK_STAR,...COMPANY_STARS,CINDERS];
 
-type ActorView = { body: Phaser.GameObjects.Image; label: Phaser.GameObjects.Text; tx: number; ty: number; strike: number; mythicFacing?: number };
+type ActorView = { body: Phaser.GameObjects.Image; label: Phaser.GameObjects.Text; tx: number; ty: number; strike: number; walkFacing?: number; walkPhase?: number; walkStride?: number };
 const TROOPS: Record<string, {name:string;art:{walk:string;attack:string;cell:number}}> = roster.types;
 const BOSS_SHEETS: Record<string, string[]> = gauntlet.bosses;
+const ATTACK_SHEETS: Readonly<Record<string, string>> = {
+  zhangliang: 'yellow_zhangliang_attack', zhangbao: 'yellow_zhangbao_cast', zhangjiao: 'zhangjiao_cast', huaxiong: 'huaxiong_attack', lubu: 'lubu_attack',
+};
 const REWARDS = new Map([...gauntlet.rewards, ...networkStars.map(s=>({...s,name:'将星 · '+s.name})), {id:EMBER.id,name:'火种',detail:'本命命中点燃敌军，每半秒结算一次。'}, { id: 'heal', name: '整备', detail: '回复 45% 最大生命' }].map(reward => [reward.id, reward]));
 
 export class CoopScene extends Phaser.Scene {
@@ -40,6 +46,8 @@ export class CoopScene extends Phaser.Scene {
   private score?: Phaser.GameObjects.Text;
   private partyBars?: Phaser.GameObjects.Graphics;
   private movementAt = 0;
+  private timeline = new SnapshotTimeline();
+  private displayed?: BattleSnapshot;
   private slot: Side = 0;
   private phase: 'setup' | 'lobby' | 'battle' | 'draft' | 'result' = 'setup';
   private readonly companyView=new CoopRetinueView();
@@ -76,6 +84,7 @@ export class CoopScene extends Phaser.Scene {
 
   create(): void {
     this.lastBossFx = '';
+    this.timeline.clear(); this.displayed=undefined;
     this.phase = 'setup';
     this.movementAt = 0;
     this.fighters.clear();
@@ -236,6 +245,9 @@ export class CoopScene extends Phaser.Scene {
       const left = Math.ceil((this.retryUntil - Date.now()) / 1000);
       if (left > 0) {
         this.connectionBlocked = true;
+        this.timeline.clear();
+        this.displayed=undefined;
+        this.stick?.reset();
         this.showConnection('连接中断 · 战局暂停 · 自动重连 ' + left + '秒');
         window.clearTimeout(this.retryTimer);
         this.retryTimer = window.setTimeout(() => {
@@ -270,12 +282,17 @@ export class CoopScene extends Phaser.Scene {
         this.slot = message.slot; this.retryUntil = 0; this.connectionBlocked = false; this.showConnection('');
       } else if (message.type === 'connection') {
         this.connectionBlocked = message.paused;
+        if (message.paused) { this.timeline.clear(); this.displayed=undefined; }
         this.showConnection(message.paused ? '队友掉线 · 战局暂停 · 等待重连 ' + message.remaining + '秒' : '');
       } else if (message.type === 'error') fail(message.message, true);
       else if (message.type === 'closed') fail(message.reason === 'reconnect-timeout' ? '队友重连超时，战局已结束' : message.reason === 'expired' ? '房间已到期' : '好友已离开房间', true);
       else if (message.type === 'lobby') this.renderLobby(message);
-      else if (message.type === 'state') this.renderState(message);
-      else if (message.type === 'draft') this.renderDraft(message);
+      else if (message.type === 'state') {
+        if (this.phase==='lobby') this.enterBattle();
+        if (this.phase==='draft') this.showBattleControls();
+        if (this.phase==='battle') this.timeline.push(message,performance.now());
+      }
+      else if (message.type === 'draft') { this.timeline.clear(); this.displayed=undefined; this.renderDraft(message); }
       else if (message.type === 'result') {
         this.disconnect();
         this.renderResult(message.milestones===3?'神将十阵告捷':message.milestones===2?'鬼将十阵告捷':message.victory?'凡将十阵告捷':'连战败退', '合力斩将 ' + message.generals + ' 位 · 击破 ' + message.kills + ' 名敌军');
@@ -387,11 +404,13 @@ export class CoopScene extends Phaser.Scene {
     if (focused) Array.from(card.querySelectorAll('button')).find(button => button.dataset.focus === focused)?.focus({ preventScroll: true });
   }
 
-  private send(message: object): void {
-    if (this.connectionBlocked) return;
+  private send(message: object): boolean {
+    if (this.connectionBlocked) return false;
     if (this.socket?.readyState === WebSocket.OPEN && this.socket.bufferedAmount < 16_384) {
       this.socket.send(JSON.stringify(message));
+      return true;
     }
+    return false;
   }
 
   private showBattleControls(): void {
@@ -423,12 +442,13 @@ export class CoopScene extends Phaser.Scene {
       this.input.on('pointerup', this.stick.handleUp, this.stick);
       this.input.on('pointerupoutside', this.stick.handleUp, this.stick);
       const blur = () => this.stick?.reset();
+      const stick = this.stick;
       window.addEventListener('blur', blur);
       this.events.once('shutdown', () => {
-        this.input.off('pointerdown', this.stick?.handleDown, this.stick);
-        this.input.off('pointermove', this.stick?.handleMove, this.stick);
-        this.input.off('pointerup', this.stick?.handleUp, this.stick);
-        this.input.off('pointerupoutside', this.stick?.handleUp, this.stick);
+        this.input.off('pointerdown', stick.handleDown, stick);
+        this.input.off('pointermove', stick.handleMove, stick);
+        this.input.off('pointerup', stick.handleUp, stick);
+        this.input.off('pointerupoutside', stick.handleUp, stick);
         window.removeEventListener('blur', blur);
       });
     }
@@ -441,12 +461,12 @@ export class CoopScene extends Phaser.Scene {
     return { body, label, tx: x, ty: y, strike: 0 };
   }
 
-  private renderState(state: Extract<ServerMessage, { type: 'state' }>): void {
+  private renderState(state: BattleSnapshot, immediate=true): void {
     if (this.phase === 'lobby') this.enterBattle();
     if (this.phase === 'draft') this.showBattleControls();
     if (this.phase !== 'battle') return;
     const fxNow=state.battleMs??state.seconds*1000;
-    updateSurvivorBossFx(this,fxNow);
+
     const cue=state.gauntlet?.warning, key=cue?.fx+':'+cue?.endsAt;
     if (cue?.resolved && cue.fx && this.lastBossFx!==key) {
       this.lastBossFx=key;const arrow=cue.fx==='arrow';
@@ -455,11 +475,7 @@ export class CoopScene extends Phaser.Scene {
     this.mythicClock=(state.battleMs??state.seconds*1000)/1000;
     this.mythicId=state.gauntlet.general?.id??'';
     this.mythicCue=cue?.mythic?cue as MythicWarning:null;
-    const mythicOwner=state.enemies.find(enemy=>enemy.general?.id===this.mythicId);
-    if(mythicOwner&&mythicBoss(this.mythicId)&&!this.mythicSignature) this.mythicSignature=this.add.image(0,0,mythicArtKey(this.mythicId)).setDepth(75);
-    if(this.mythicSignature) paintMythicSignature(this.mythicSignature,this.mythicId,mythicOwner ? this.mythicCue : null,this.mythicClock,mythicOwner);
-    this.drawWarning(null);
-    for(const warning of state.gauntlet?.warnings??(state.gauntlet?.warning?[state.gauntlet.warning]:[]))this.drawWarning(warning,false);
+    if(mythicBoss(this.mythicId)&&!this.mythicSignature) this.mythicSignature=this.add.image(0,0,mythicArtKey(this.mythicId)).setDepth(75);
     this.companyView.sync(this,state.retainers??[],performance.now());
     if(state.players.some(p=>p.slot===this.slot) && state.retainers?.some(u=>u[1]===this.slot) && !this.panel.contains(this.companyOrder??null)){
       const button=this.button('部曲 · 出击',()=>{const order=button.dataset.next==='guard'?'guard':'sortie';this.send({type:'order',order});});
@@ -468,13 +484,16 @@ export class CoopScene extends Phaser.Scene {
     const own=state.players.find(p=>p.slot===this.slot);
     if(this.companyOrder&&own?.order){this.companyOrder.dataset.next=own.order==='guard'?'sortie':'guard';this.companyOrder.textContent=own.order==='guard'?'护阵中 · 出击':'出击中 · 归阵';}
     this.drawTroops(state);
+    if(immediate){updateSurvivorBossFx(this,fxNow);this.presentCues(state);}
     const nextIds=roster.waves[state.gauntlet.wave<=10?state.gauntlet.wave-1:7+(state.gauntlet.wave-11)%3]??[];
     for(const id of nextIds)this.loadTroop(id);
     for (const fighter of state.players) this.updateFighter(fighter);
     const liveIds = new Set<number>();
     for (const enemy of state.enemies) {
       liveIds.add(enemy.id);
-      this.updateFoe(enemy);
+      const attack = enemy.general && !mythicBoss(enemy.general.id)
+        ? (state.gauntlet.warnings ?? (cue ? [cue] : [])).find(w => w.ownerId === enemy.id || (w.ownerId === undefined && !state.gauntlet.dual && enemy.general?.id === this.mythicId)) : undefined;
+      this.updateFoe(enemy, attack);
     }
     for (const [id, view] of this.foes) {
       if (liveIds.has(id)) continue;
@@ -487,7 +506,7 @@ export class CoopScene extends Phaser.Scene {
       this.preparedMythic=state.gauntlet.upcoming.id;
       prepareMythicActions(this,this.preparedMythic);
     }
-    const needed=new Set([state.gauntlet.upcoming.id,...state.enemies.flatMap(e=>e.general?[e.general.id]:[])].map(id=>'coop_general_'+id));
+    const needed=new Set([state.gauntlet.upcoming.id,...state.enemies.flatMap(e=>e.general?[e.general.id]:[])].flatMap(id => ['coop_general_'+id, 'coop_general_'+id+'_action']));
     for(const key of this.generalTextures)if(!needed.has(key)){if(this.textures.exists(key))this.textures.remove(key);this.generalTextures.delete(key);}
     const self = state.players.find(f => f.slot === this.slot);
     const partner = state.players.find(f => f.slot !== this.slot);
@@ -542,7 +561,7 @@ export class CoopScene extends Phaser.Scene {
     }
   }
 
-  private updateFoe(enemy: Foe): void {
+  private updateFoe(enemy: Foe, attack?: BossWarning): void {
     if(enemy.general)this.loadGeneral(enemy.general.id);
     const challenge = enemy.general && mythicBoss(enemy.general.id);
     const bossKey = enemy.general && (challenge?mythicArtKey(challenge.id):'coop_general_'+enemy.general.id);
@@ -562,35 +581,46 @@ export class CoopScene extends Phaser.Scene {
     if (enemy.boss && texture === 'coop_foe') view.body.setTint(0xffba75);
     else view.body.clearTint();
     const dx = enemy.x - view.tx, dy = enemy.y - view.ty;
-    const dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 1 : 2) : dy < 0 ? 3 : 0;
-    const frame = Math.abs(dx) + Math.abs(dy) > .01 ? Math.floor(this.time.now / 100) % 4 : 0;
+    const moving = Math.hypot(dx, dy) > .01;
+    if (moving) view.walkFacing = walkRow(dx, dy, view.walkFacing ?? 0);
+    const dir = view.walkFacing ?? 0;
+    const frame = moving ? Math.floor(view.walkPhase ?? 0) % 4 : 0;
     view.tx = enemy.x;
     view.ty = enemy.y;
     const face=enemy.cue&&enemy.face!==undefined?(Math.abs(Math.cos(enemy.face))>Math.abs(Math.sin(enemy.face))?(Math.cos(enemy.face)<0?1:2):(Math.sin(enemy.face)<0?3:0)):dir;
-    if (challenge && texture!=='coop_foe') {
-      const moving = Math.abs(dx) + Math.abs(dy) > .01;
-      const cue = this.mythicId === challenge.id ? this.mythicCue : null;
-      if (cue) {
-        const heading = cue.kind === 'line' || cue.kind === 'sweep' ? cue.angle : cue.face;
-        view.mythicFacing = mythicFacing(heading);
-      } else if (moving) {
-        view.mythicFacing = dir;
-      }
-      poseMythic(view.body,challenge.id,this.mythicClock,view.mythicFacing ?? 0,moving,cue);
-    } else view.body.setFrame(face * 4 + (enemy.cue?Math.floor(this.time.now/150)%4:frame));
+    const cue = challenge && this.mythicId === challenge.id ? this.mythicCue : null;
+    view.walkStride = moving && !cue && !attack && !enemy.cue ? (enemy.boss ? 10 : 9) : undefined;
+    if (challenge && texture !== 'coop_foe') {
+      if (cue) view.walkFacing = mythicFacing(cue.kind === 'line' || cue.kind === 'sweep' ? cue.angle : cue.face);
+      poseMythic(view.body, challenge.id, this.mythicClock, view.walkFacing ?? 0, moving, cue, frame);
+    } else if (attack && bossKey && texture === bossKey) {
+      const dir = mythicFacing(attack.angle);
+      view.walkFacing = dir;
+      const wind = Math.max(.1, attack.endsAt - (attack.startsAt ?? attack.endsAt - .9));
+      const progress = Phaser.Math.Clamp(1 - (attack.endsAt - this.mythicClock) / wind, 0, 1);
+      const phase = attack.resolved ? (this.mythicClock - attack.endsAt < .16 ? 2 : 3) : (progress < .55 ? 0 : 1);
+      const actionKey = bossKey + '_action';
+      if (this.textures.exists(actionKey)) view.body.setTexture(actionKey, dir * 4 + phase).setFlipX(false);
+      else if (view.body.texture.has('23')) {
+        const cast = attack.kind === 'circle' || attack.kind === 'ring';
+        view.body.setFrame(cast ? [24, 25, 26, 27][phase] : [16, 17, 19, 23][phase]).setFlipX(Math.cos(attack.angle) < 0);
+      } else view.body.setFrame(dir * 4).setFlipX(false);
+    } else view.body.setFlipX(false).setFrame(face * 4 + (enemy.cue ? Math.floor(this.time.now / 150) % 4 : frame));
     if(!enemy.boss)view.label.setText(troop?(enemy.cue?.kind==='heal'?'施药':enemy.cue?.kind==='signal'?'鸣号':troop.name):'').setFontSize(11);
-    if (enemy.boss) view.label.setText(`${enemy.general?.name ?? '敌将'}${enemy.enraged ? ' · 奋威' : ''} ${enemy.hp}/${enemy.maxHp}`);
+    if (enemy.boss) view.label.setText(`${enemy.general?.name ?? '敌将'}${enemy.enraged ? ' · 奋威' : ''} ${Math.ceil(enemy.hp)}/${enemy.maxHp}`);
   }
 
   private loadTroop(id:string):void {
     const t=TROOPS[id];if(!t)return;
+    let added=false;
     for(const key of [t.art.walk,t.art.attack]){
       if(this.textures.exists(key)||this.troopTextures.has(key))continue;
       const file=ART_V2_FILES[key];if(!file)continue;this.troopTextures.add(key);
       this.load.once('filecomplete-spritesheet-'+key,()=>{this.textures.get(key).setFilter(Phaser.Textures.FilterMode.NEAREST);buildRecolor(this.game,key,'enemy',false,true);});
       this.load.spritesheet(key,file,{frameWidth:t.art.cell,frameHeight:t.art.cell});
+      added=true;
     }
-    if(!this.load.isLoading())this.load.start();
+    if(added&&!this.load.isLoading())this.load.start();
   }
   private drawTroops(state:Extract<ServerMessage,{type:'state'}>):void {
     const g=this.troopFx?.clear();if(!g)return;
@@ -641,15 +671,19 @@ export class CoopScene extends Phaser.Scene {
     const key = 'coop_general_' + id;
     const file = BOSS_SHEETS[id]?.[0];
     if (!file || this.generalTextures.has(key)) return;
-    this.generalTextures.add(key);this.generalTexture = key;
-    if (!this.textures.exists(key)) {
-      this.load.once('filecomplete-spritesheet-' + key, () => {
-        if (!this.generalTextures.has(key)) this.textures.remove(key);
-        else this.textures.get(key).setFilter(Phaser.Textures.FilterMode.NEAREST);
+    this.generalTexture = key;
+    const sheets = [[key, file]];
+    if (ATTACK_SHEETS[id]) sheets.push([key+'_action', ATTACK_SHEETS[id]]);
+    for (const [texture, sheet] of sheets) {
+      this.generalTextures.add(texture);
+      if (this.textures.exists(texture)) continue;
+      this.load.once('filecomplete-spritesheet-' + texture, () => {
+        if (!this.generalTextures.has(texture)) this.textures.remove(texture);
+        else this.textures.get(texture).setFilter(Phaser.Textures.FilterMode.NEAREST);
       });
-      this.load.spritesheet(key, 'assets/bosses-v2/' + file + '.png', { frameWidth: 288, frameHeight: 288 });
-      if (!this.load.isLoading()) this.load.start();
+      this.load.spritesheet(texture, 'assets/bosses-v2/' + sheet + '.png', { frameWidth: 288, frameHeight: 288 });
     }
+    if (!this.load.isLoading()) this.load.start();
   }
 
   private drawWarning(cue: BossWarning | null, clear=true): void {
@@ -657,31 +691,7 @@ export class CoopScene extends Phaser.Scene {
     if(clear&&g) clearMythicWarning(g);
     if (!g || !cue) return;
     if(cue.mythic) { drawMythicWarning(g,cue as MythicWarning,this.mythicId,this.mythicClock); return; }
-    const { x, y, radius, angle } = cue;
-    const ink = cue.resolved ? 0xffba73 : 0xfa7057;
-    g.fillStyle(ink, cue.resolved ? .28 : .15).lineStyle(2, ink, .88);
-    if (cue.kind === 'ring') {
-      const inner = cue.innerRadius ?? 0;
-      g.lineStyle(radius - inner, ink, cue.resolved ? .3 : .13).strokeCircle(x, y, (radius + inner) / 2);
-      g.lineStyle(2, ink, .9).strokeCircle(x, y, radius);
-      g.lineStyle(2, 0xc4cda6, .9).strokeCircle(x, y, inner);
-    } else if (cue.kind === 'circle') {
-      g.fillCircle(x, y, radius).strokeCircle(x, y, radius);
-    } else if (cue.kind === 'line') {
-      for(let lane=0;lane<(cue.lanes??1);lane++){
-      const a=angle+(lane-((cue.lanes??1)-1)/2)*(cue.spread??0),w=cue.halfWidth??25;
-      const dx = Math.cos(a), dy = Math.sin(a);
-      const corners = [
-        new Phaser.Math.Vector2(x - dy * w, y + dx * w),
-        new Phaser.Math.Vector2(x + dy * w, y - dx * w),
-        new Phaser.Math.Vector2(x + dx * radius + dy * w, y + dy * radius - dx * w),
-        new Phaser.Math.Vector2(x + dx * radius - dy * w, y + dy * radius + dx * w),
-      ];
-      g.fillPoints(corners, true).strokePoints(corners, true);
-      }
-    } else {
-      g.beginPath().moveTo(x, y).arc(x, y, radius, angle - Math.PI / 3, angle + Math.PI / 3).closePath().fillPath().strokePath();
-    }
+    drawMortalWarning(g,cue,this.mythicClock);
   }
 
   private partyMember(p: PartyMember, checkpoint: boolean): HTMLElement {
@@ -749,8 +759,11 @@ export class CoopScene extends Phaser.Scene {
         const reward = REWARDS.get(id);
         if (!reward) continue;
         const choice = this.button('', () => {
+          if (!this.send({ type: 'reward', id })) {
+            this.status.textContent='等待连接恢复后再选择奖励';
+            return;
+          }
           for (const option of card.querySelectorAll<HTMLButtonElement>('.coop-reward')) option.disabled = true;
-          this.send({ type: 'reward', id });
         });
         const name = document.createElement('strong');
         name.textContent = id===EMBER.id?'火种 · Lv.'+((members.find(m=>m.slot===this.slot)?.ember??0)+1):reward.name;
@@ -767,6 +780,13 @@ export class CoopScene extends Phaser.Scene {
   update(time: number, delta: number): void {
     if(this.phase==='battle'&&!this.connectionBlocked)this.companyView.draw(performance.now(),delta);
     if (this.phase !== 'battle') return;
+    if (this.connectionBlocked) return;
+    const frame=this.timeline.sample(performance.now());
+    if (!frame) return;
+    const state=frame.a.state;
+    if (this.displayed!==state) { this.displayed=state; this.renderState(state,false); }
+    this.mythicClock=frame.ms/1000;
+    updateSurvivorBossFx(this,frame.ms);
     if (time >= this.movementAt) {
       this.movementAt = time + 65;
       const keys = this.keyset;
@@ -775,20 +795,42 @@ export class CoopScene extends Phaser.Scene {
       this.send({ type: 'input', dx: this.stick?.active ? this.stick.vector.x : dx, dy: this.stick?.active ? this.stick.vector.y : dy });
     }
     const t = 1 - Math.exp(-Math.min(delta, 90) / 65);
-    const smooth = ({ body, label, tx, ty }: ActorView) => {
-      body.x += (tx - body.x) * t;
-      body.y += (ty - body.y) * t;
+    const smooth = (view: ActorView, next?: {x:number;y:number}, local=false) => {
+      const { body, label, tx, ty, walkStride } = view;
+      const mix=next && Math.hypot(next.x-tx,next.y-ty)<320 ? frame.mix : 0;
+      const x=next ? (local?next.x:tx+(next.x-tx)*mix) : tx;
+      const y=next ? (local?next.y:ty+(next.y-ty)*mix) : ty;
+      const dx=(x-body.x)*(local?t:1), dy=(y-body.y)*(local?t:1);
+      body.x += dx;
+      body.y += dy;
+      if (walkStride) {
+        view.walkPhase = ((view.walkPhase ?? 0) + Math.hypot(dx, dy) / walkStride) % 4;
+        const frame = (view.walkFacing ?? 0) * 4 + Math.floor(view.walkPhase);
+        if (Number(body.frame.name) !== frame && body.texture.has(String(frame))) body.setFrame(frame);
+      }
       body.setDepth(body.y / 10);
       label.setPosition(body.x, body.y - body.displayHeight * .78 - 8).setDepth(81);
     };
-    this.fighters.forEach(smooth);
-    this.foes.forEach(smooth);
+    this.fighters.forEach((v,id)=>smooth(v,(id===this.slot?frame.latest:frame.b).party.get(id),id===this.slot));
+    this.foes.forEach((v,id)=>smooth(v,frame.b.foes.get(id)));
+    this.presentCues(state);
     const self = this.fighters.get(this.slot)?.body;
     if (self) {
       this.cameras.main.setScroll(
         Math.max(0, Math.min(world.width - GAME_WIDTH, self.x - GAME_WIDTH / 2)),
         GAME_HEIGHT > world.height ? -(GAME_HEIGHT - world.height) / 2 : Math.max(0, Math.min(world.height - GAME_HEIGHT, self.y - GAME_HEIGHT / 2)),
       );
+    }
+  }
+
+  private presentCues(state: BattleSnapshot): void {
+    this.drawWarning(null);
+    for(const cue of state.gauntlet.warnings??(state.gauntlet.warning?[state.gauntlet.warning]:[])) this.drawWarning(cue,false);
+    if(this.mythicSignature){
+      const enemy=state.enemies.find(e=>e.general?.id===this.mythicId);
+      const body=enemy && this.foes.get(enemy.id)?.body;
+      paintMythicSignature(this.mythicSignature,this.mythicId,body?this.mythicCue:null,this.mythicClock,body);
+      if(body && this.mythicCue) poseMythic(body,this.mythicId,this.mythicClock,0,false,this.mythicCue);
     }
   }
 

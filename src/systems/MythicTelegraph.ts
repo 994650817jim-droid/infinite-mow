@@ -19,7 +19,7 @@ export function preloadMythicTelegraph(scene: Phaser.Scene): void {
 }
 
 export function clearMythicWarning(graphics: Phaser.GameObjects.Graphics): void {
-  warningAccents.get(g)?.clear();
+  warningAccents.get(graphics)?.clear();
   graphics.clear();
   const art = fieldArt.get(graphics);
   if (!art) return;

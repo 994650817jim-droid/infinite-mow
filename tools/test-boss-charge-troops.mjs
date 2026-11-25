@@ -28,6 +28,10 @@ try {
     s.legion.recruit('swordsman', n, true);
     const us = s.allies.filter(u => u.active).slice(-n);
     const pin = () => us.forEach((u, i) => { if (u.active) u.setPosition(pl.x + 95 + (i % 6) * 28, pl.y + (i < 6 ? 0 : 14)); });
+    // This case measures an uninterrupted charge. Stagger has its own tests.
+    // Hold its meter below the break threshold while real soldiers fight.
+    s.bossStagger.track(bo.spawnId, bo.hp / bo.maxHp);
+    s.bossStagger.value = 0; s.bossStagger.gainMul = 0;
     bo.sprite.x = pl.x + 320; bo.sprite.y = pl.y; bo.stunUntil = 0;
     for (const e of s.enemies) if (e.active && e !== bo && !e.isSupplySlot) e.deactivate();
     pin(); us.forEach((u, i) => { u.bossImmuneUntil = 0; prep(u, i, s.combatNow); });

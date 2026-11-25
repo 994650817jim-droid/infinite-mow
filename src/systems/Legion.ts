@@ -261,13 +261,13 @@ export class Legion {
   stop(): void { this.starOrders.clear();this.command.clear(); this.stopped = true; this.player.armyDamageTakenMul = 1; this.effects.length = 0; this.artEffects.clear(); this.heals.length = 0; this.strikes.length=0; this.projectiles.clear(); this.gfx.clear(); }
   clear(): void { this.starOrders.clear();this.corpses.clear(); this.command.clear();this.projectiles.clear(); this.heals.length = 0;this.strikes.length=0; for (const u of this.units) { const v = u.release(); if (v) this.views.push(v); } this.units.length = 0;this.navigation.clear();this.formation.clear(); this.squads.clear(); this.grid.clear(); }
   /** 援兵从场外跑向自己的阵位：到了（或 3 秒到点）才入列。 */
-  private stepArrival(u: Ally, dt: number): void {
+  private stepArrival(u: Ally, dt: number, now: number): void {
     const a = this.arriving.get(u)!; if (!u.active || u.lifeId !== a.life) { this.arriving.delete(u); return; }
     const p = this.formation.position(u); a.left -= dt; a.dust -= dt;
     // 超时没到：先冲刺（移速 ×sprintMul、再给 sprintSeconds 秒，被挡时沿绕障导航），还到不了才兜底换位（不再直接瞬移到阵位）
     if (a.left <= 0 && !a.sprint) { a.sprint = true; a.left = ARRIVAL.sprintSeconds; }
     const w = this.flowRoute?.(u.x, u.y, p.x, p.y), gx = w?.x ?? p.x, gy = w?.y ?? p.y;
-    u.moveTo(gx, gy, dt, u.def.speed * (a.sprint ? ARRIVAL.sprintMul : ARRIVAL.speedMul));
+    u.moveTo(gx, gy, dt, u.def.speed * (a.sprint ? ARRIVAL.sprintMul : ARRIVAL.speedMul), now);
     if (a.dust <= 0) { a.dust = ARRIVAL.dustEvery; playSheet(this.scene, 'fx_collapse_dust', u.x, u.y + 8, { size: 46, depth: DEPTH.ground + 4, ms: 420, alpha: .42 }); }
     if (Math.hypot(p.x - u.x, p.y - u.y) <= ARRIVAL.joinDist || a.left <= 0) { if (a.left <= 0) { const q = this.freeAt?.(p.x, p.y) ?? p; this.place(u, q.x, q.y); } u.ai.x = p.x; u.ai.y = p.y; u.ai.nextThink = 0; this.arriving.delete(u); }
   }
@@ -300,7 +300,7 @@ export class Legion {
     for (const u of this.units) {
       if (!u.active) continue;
       u.beginStep();
-      if (this.arriving.size && this.arriving.has(u)) { this.stepArrival(u, dt); continue; }
+      if (this.arriving.size && this.arriving.has(u)) { this.stepArrival(u, dt, now); continue; }
       if (this.busy?.(u)) continue;
       u.simDebt += dt; const nearPlayer = Math.hypot(u.x - this.player.x, u.y - this.player.y) < 900;
       if (!nearPlayer && u.simDebt < LEGION.farStep) continue;

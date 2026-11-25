@@ -101,6 +101,10 @@ export class BossMoveset extends ArcBossV2<string> {
       return;
     }
     if (B.phase === 'windup') { this.state = 'warn'; this.pose(this.cur?.kind === 'summon' || this.cur?.kind === 'flags' ? 24 : 17, now); this.kit.pose(this.cur?.kind === 'charge' ? 'crouch' : 'cast', B.progress(now)); if (B.done(now)) this.release(now); return; }
+    if (B.phase === 'release' && this.cur?.kind === 'vanish' && this.hideUntil && now >= this.hideUntil) {
+      this.hideUntil = 0;
+      this.reappear(this.cur);
+    }
     if (B.phase === 'release') { this.state = 'attack'; this.pose([18, 19, 20, 22, 23][Math.min(4, Math.floor(B.age(now) / 120))], now); if (B.done(now)) this.toRecover(now, 650); return; }
     this.pose(23, now); if (B.done(now)) { this.cur = null; this.toIdle(now, this.phaseDef.gapMs * this.gapMul); }
   }
@@ -153,7 +157,7 @@ export class BossMoveset extends ArcBossV2<string> {
       case 'charge': playThemeFx(this.h.scene, this.theme, { kind: 'lane', x: b.x, y: b.y, angle: this.angle, len: m.len, width: m.width }, { ms: m.dashMs + 120, alpha: .8 });   // 主题冲击带：冲锋一开始铺在冲锋道上，跟着首领冲过去
         this.dash = { ax: Math.cos(this.angle), ay: Math.sin(this.angle), t0: now, ms: m.dashMs, hitPlayer: false, back: !!m.back, len: m.len, fireAt: now, hitTroops: new Set() }; return;
       case 'ride': { const a0 = Math.atan2(b.y - p.y, b.x - p.x); this.ride = { a0, t0: now, ms: m.ms, dropAt: now, drops: 0, cx: p.x, cy: p.y, dir: Math.random() < .5 ? 1 : -1 }; return; }
-      case 'vanish': { playThemeFx(this.h.scene, this.theme, { kind: 'puff', x: b.x, y: b.y, size: 150 }); this.hideUntil = now + m.hideMs; this.beat.set(m.name, 'release', now, m.hideMs); this.h.scene.time.delayedCall(m.hideMs, () => this.reappear(m)); return; }
+      case 'vanish': { playThemeFx(this.h.scene, this.theme, { kind: 'puff', x: b.x, y: b.y, size: 150 }); this.hideUntil = now + m.hideMs; this.beat.set(m.name, 'release', now, m.hideMs); return; }
       case 'summon': for (let k = 0, n = this.summonCount(m.count); k < n; k++) { const c = m.around === 'player' ? p : b, ang = k / n * Math.PI * 2; this.h.spawn(m.troop, c.x + Math.cos(ang) * m.radius, c.y + Math.sin(ang) * m.radius * .8); } break;
       case 'flags': this.plantFlags(m); break;
       default: break;
@@ -237,8 +241,9 @@ export class BossMoveset extends ArcBossV2<string> {
   private updateRide(now: number): void {
     const r = this.ride!, b = this.h.boss, m = this.cur as Extract<MoveDef, { kind: 'ride' }>, t = Math.min(1, (now - r.t0) / r.ms), a = r.a0 + r.dir * Math.PI * t;
     const x = r.cx + Math.cos(a) * m.radius, y = r.cy + Math.sin(a) * m.radius * .75; this.angle = a + r.dir * Math.PI / 2;
-    const dx = x - b.x; b.sprite.x = x; b.sprite.y = y; this.state = 'attack';
-    this.pose((Math.abs(dx) > .5 ? (dx < 0 ? 1 : 2) : 0) * 4 + Math.floor(now / 70) % 4, now);
+    const dx = -Math.sin(a) * r.dir, dy = Math.cos(a) * r.dir * .75;
+    b.sprite.x = x; b.sprite.y = y; this.state = 'attack';
+    this.pose((Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 1 : 2) : (dy < 0 ? 3 : 0)) * 4 + Math.floor(now / 70) % 4, now);
     if (now >= r.dropAt && r.drops < m.drops) { r.dropAt = now + r.ms / m.drops; r.drops++; const p = this.h.player; this.add({ kind: 'circle', x: p.x + (Math.random() - .5) * 120, y: p.y + (Math.random() - .5) * 90, r: m.r, fx: 'arrows' }, now, now + 1000, m.dmg); }
     if (t >= 1) { this.ride = null; this.toRecover(now, 700); }
   }
@@ -339,7 +344,7 @@ export class BossMoveset extends ArcBossV2<string> {
       if (hollow && s.kind === 'circle') { playSurvivorBossFx(this.h.scene,'spear',s.x,s.y,s.r*2.2,now); this.ringImpacts.push({x:s.x,y:s.y,r:s.r,inner:s.inner!,until:now+300}); warnRing(this.gfx,s.x,s.y,s.r,s.inner!,1,true); }
       const themed = hollow || (s.kind === 'circle' ? playThemeFx(this.h.scene, this.theme, { kind: 'circle', x: s.x, y: s.y, r: s.r })
         : s.kind === 'lane' ? playThemeFx(this.h.scene, this.theme, { kind: 'lane', x: s.x, y: s.y, angle: s.angle, len: s.len, width: s.width })
-        : playThemeFx(this.h.scene, this.theme, { kind: 'sector', x: s.x, y: s.y, r: s.r, angle: s.angle }));
+        : playThemeFx(this.h.scene, this.theme, { kind: 'sector', x: s.x, y: s.y, r: s.r, angle: s.angle, arc: s.arc }));
       if (!themed) { if (s.kind === 'circle') wf.shapeImpact(z.id, s.fx, s.x, s.y, s.r * 2, 0, now); else if (s.kind === 'lane') wf.shapeImpact(z.id, 'charge', s.x, s.y, s.len, s.angle, now, s.width); else wf.shapeImpact(z.id, 'sweep', s.x, s.y, s.r, s.angle, now); }
       const inside = (x: number, y: number, pad: number): boolean => {
         if (s.kind === 'circle') { const d = Math.hypot(x - s.x, y - s.y); return d <= s.r + pad && d >= (s.inner ?? 0) - pad; }

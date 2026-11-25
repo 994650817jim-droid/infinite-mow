@@ -358,8 +358,9 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     }
     /** 将星卡：点亮这颗星（不走连线 / 点数；开关关着也生效），生命上限涨了补上这一截。 */
     lightCardStar(id: string): void {
-      const pl = this.player, g = pl.growth; if (g.stars.includes(id)) return;
-      g.cardStars = true; const oldMax = pl.maxHp; g.stars = [...g.stars, id]; pl.passive.areaMul = g.areaMultiplier();
+      const pl = this.player, g = pl.growth, oldMax = pl.maxHp;
+      if (!STAR_CARD_IDS.includes(id) || !g.grantCardStar(id)) return;
+      pl.passive.areaMul = g.areaMultiplier();
       if (pl.maxHp > oldMax) pl.heal(pl.maxHp - oldMax);
     }
     /** 按本阵稀有度表抽一张本模式专有卡（不和已在面板上的重复）。 */

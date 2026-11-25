@@ -284,8 +284,11 @@ export function perkLit(lit: Iterable<string>, attr: AttributeId, tier: number):
  * 把一组星整理成「按规则能依次点亮」的顺序（读档、setHeroStars、预设都走这里）：从入口出发反复点亮能点的，
  * 点不到的（不相连、主星不够门槛或超过 2 颗、不认识的编号）丢掉。尽量保持传入的先后；返回值不含自己的入口。
  */
-export function orderStars(ids: Iterable<string>, gate: string): string[] {
-  const want = [...new Set(ids)].filter(id => id !== gate && STAR_BY_ID.has(id)), out: string[] = [], lit = new Set<string>([gate]);
+export function orderStars(ids: Iterable<string>, gate: string, awarded: Iterable<string> = []): string[] {
+  const want = [...new Set(ids)].filter(id => id !== gate && STAR_BY_ID.has(id));
+  // Only the current gauntlet supplies earned cards. Saved and campaign stars start at the gate.
+  const lit = litSet(awarded, gate);
+  const out = [...lit].filter(id => id !== gate);
   for (let moved = true; moved;) {
     moved = false;
     for (const id of want) if (!lit.has(id) && canLight(lit, id, gate)) { lit.add(id); out.push(id); moved = true; }

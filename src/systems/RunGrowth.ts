@@ -166,11 +166,20 @@ export class RunGrowth {
    * 四维点数与加点方式照旧（setStars 不改 attributes、lightStar 不可用）。
    */
   cardStars = false;
+  private readonly awardedStars = new Set<string>();
+
+  /** Called only for a selected, eligible gauntlet reward. Fresh growth starts with no awards. */
+  grantCardStar(id: string): boolean {
+    if (!this.cardStars || this.stars.includes(id)) return false;
+    this.awardedStars.add(id);
+    this.stars = [...this.stars, id];
+    return true;
+  }
   /** 星的效果算不算：星图开着，或本局的星来自将星卡。 */
   get starsLive(): boolean { return starMapOn() || this.cardStars; }
   get starGate(): string { return heroGate(this.character); }
   /** 读入一组已点亮的星（按规则整理过）；星图开着时同时把四维点数改成小星汇总。 */
-  setStars(ids: Iterable<string>): void { this.stars = orderStars(ids, this.starGate); if (starMapOn()) Object.assign(this.attributes, starPoints(this.stars, this.starGate)); }
+  setStars(ids: Iterable<string>): void { this.stars = orderStars(ids, this.starGate, this.awardedStars); if (starMapOn()) Object.assign(this.attributes, starPoints(this.stars, this.starGate)); }
   /** 开局 / 换关：从存档读入已点亮的星；carried = 同章连打，保留上一关在本局里点的（测试战斗不写存档）。 */
   syncStars(saved: readonly string[], carried: boolean): void { this.setStars(carried ? [...saved, ...this.stars] : saved); }
   /** 战斗内点亮一颗星（花 1 个 unallocated）；写存档由调用方做（HeroProgress.lightHeroStar）。 */

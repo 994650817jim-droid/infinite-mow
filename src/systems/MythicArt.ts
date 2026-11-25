@@ -3,7 +3,7 @@ import { DIVINE_GENERALS, GHOST_GENERALS, mythicArtKey, mythicArtUrl, mythicBoss
 
 export { clearMythicWarning, drawMythicWarning } from './MythicTelegraph';
 import { preloadMythicTelegraph } from './MythicTelegraph';
-import { MYTHIC_RELEASE_CELL, clearMythicSignature, paintMythicRelease } from './MythicSkillFx';
+import { MYTHIC_RELEASE_CELL, clearMythicSignature, mythicLaneSprite, paintMythicRelease } from './MythicSkillFx';
 
 export { clearMythicSignature } from './MythicSkillFx';
 
@@ -67,6 +67,11 @@ function pruneMythicActions(scene: Phaser.Scene,id: string): void {
 
 export function preloadMythic(scene: Phaser.Scene, includeActions=false): void {
   preloadMythicTelegraph(scene);
+  for (const id of ['ghost_guanyu', 'divine_guanyu']) {
+    const key = mythicArtKey(id, 'sweep');
+    if (!scene.textures.exists(key)) scene.load.spritesheet(key,
+      'assets/mythic-gauntlet/' + id + '-sweep-v2.webp', { frameWidth: 256, frameHeight: 256 });
+  }
   for (const boss of [...GHOST_GENERALS,...DIVINE_GENERALS]) {
     const actions = boss.art === 'animated' ? ['walk','attack','cast','fall','fx'] :
       includeActions&&boss.art==='actions' ? ['walk',...DEFERRED_ART] : ['walk'];
@@ -84,12 +89,12 @@ export function mythicFacing(angle: number): number {
 }
 
 export function poseMythic(sprite: Phaser.GameObjects.Image, id: string, now: number,
-  direction: number, moving: boolean, warning?: MythicWarning | null): void {
+  direction: number, moving: boolean, warning?: MythicWarning | null, stepFrame?: number): void {
   const boss = mythicBoss(id);
   if (!boss) return;
   const stepSheet = boss.art === 'actions' && sprite.scene.textures.exists(mythicArtKey(id, 'stride'));
   const walkAction = stepSheet ? 'stride' : 'walk';
-  const walkFrame = moving ? Math.floor(now * 9) % 4 : 0;
+  const walkFrame = moving ? (stepFrame ?? Math.floor(now * 9) % 4) : 0;
   let action = walkAction, row = direction, frame = walkFrame;
   if (warning) {
     const aimed = warning.kind==='line'||warning.kind==='sweep';
@@ -144,6 +149,20 @@ export function paintMythicSignature(sprite: Phaser.GameObjects.Image, id: strin
   const boss = mythicBoss(id), key = mythicArtKey(id,'fx');
   clearMythicSignature(sprite);
   if (!boss || !sprite.scene.textures.exists(key)) return;
+  if (w?.resolved && w.kind === 'sweep' && (id === 'ghost_guanyu' || id === 'divine_guanyu')) {
+    const sweepKey = mythicArtKey(id, 'sweep');
+    if (sprite.scene.textures.exists(sweepKey)) {
+      const age = now - w.endsAt;
+      if (age >= 0 && age < .32) {
+        const frame = Math.min(7, Math.floor(age / .04));
+        // The baked fan pivots at (42,128). Its outer ellipse maps to the attack radius.
+        sprite.setTexture(sweepKey, frame).setVisible(true).setOrigin(42 / 256, .5)
+          .setPosition(w.x, w.y)
+          .setDisplaySize(w.radius * 256 / 174, w.radius * 256 / 139).setRotation(w.angle).setAlpha(Math.min(1, (.32-age)/.045)).setDepth(75);
+      }
+      return;
+    }
+  }
   if (boss.art === 'actions') {
     if (w?.resolved) paintMythicRelease(sprite, key, w, now - w.endsAt);
     return;
@@ -154,11 +173,12 @@ export function paintMythicSignature(sprite: Phaser.GameObjects.Image, id: strin
       .setPosition(owner.x,owner.y-96).setDisplaySize(120,120).setRotation(0).setAlpha(.65).setDepth(10);
     return;
   }
-  const age=Math.max(0,now-w.endsAt);
+  const age=now-w.endsAt;
+  if (age < 0 || age >= .32) return;
   const visual=w.visual ?? (boss.tierName==='ghost'?'blade':'cross');
   // Sample a drawn impact immediately. Frame zero is the tiny pre-release glint.
   const frame=age<.065?1:age<.22?2:3;
-  const alpha=age<.22 ? .87 : Math.max(.25,.87-(age-.22)*6);
+  const alpha=age<.23 ? 1 : Math.max(0,1-(age-.23)/.09);
   if(visual==='seal'){
     const anchor=owner??w;
     sprite.setTexture(key,age<.11?2:3).setVisible(true).setOrigin(.5)
@@ -167,10 +187,14 @@ export function paintMythicSignature(sprite: Phaser.GameObjects.Image, id: strin
   }
   const isDragon=visual==='dragon';
   const split=(w.lanes??1)>1;
-  const range=isDragon ? Math.min(118,w.radius*.42) : split ? 32 : Math.min(73,w.radius*.42);
-  const size=isDragon ? Math.min(175,w.radius*.68) : split ? 85 : Math.min(153,w.radius*.94);
+  const range=isDragon ? Math.min(118,w.radius*.42) : split ? w.radius * .56 : Math.min(73,w.radius*.42);
+  const size=isDragon ? Math.min(212,w.radius*.76) : split ? 108 : Math.min(176,w.radius*1.09);
   const frameOffset=isDragon?0:4;
-  sprite.setTexture(key,frameOffset+frame).setVisible(true).setOrigin(.5)
-    .setPosition(w.x+Math.cos(w.angle)*range,w.y+Math.sin(w.angle)*range-20)
-    .setDisplaySize(size,size).setDepth(75).setRotation(w.angle).setAlpha(alpha);
+  const lanes = w.lanes ?? 1;
+  for (let i = 0; i < lanes; i++) {
+    const heading = w.angle + (i - (lanes - 1) / 2) * (w.spread ?? 0);
+    mythicLaneSprite(sprite, key, i).setTexture(key,frameOffset+frame).setVisible(true).setOrigin(.5)
+      .setPosition(w.x + Math.cos(heading)*range, w.y + Math.sin(heading)*range - (split ? 0 : 20))
+      .setDisplaySize(size,size).setDepth(75).setRotation(heading).setAlpha(alpha);
+  }
 }

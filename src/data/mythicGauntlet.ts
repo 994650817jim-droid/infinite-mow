@@ -73,7 +73,7 @@ export const GHOST_GENERALS: readonly MythicBoss[] = [
   ghost('yanliang','鬼颜良','断阵凶锋',0xffab65,[line('断阵重刃',300,34)],[sweep('正面压阵',162)],sweep('回身崩甲',160,Math.PI)),
   ghost('wenchou','鬼文丑','索魂奔袭',0x9ac87a,[line('索魂锁道',265,17,1,0,-62),line('链尾折袭',265,21,1,0,49,-.48)],[ring('锁阵收紧',176,122),ring('锁阵压入',117,66)],line('断链穿刺',248,25)),
   ghost('guanyu','鬼关羽','麦城怨刃',0x50deca,[
-    {...sweep('麦城拖刀',167),visual:'blade'}, {...line('残刃交错',250,23,2,.72),visual:'blade'},
+    {...sweep('麦城拖刀',224),visual:'blade'}, {...line('残刃交错',250,23,2,.72),visual:'blade'},
   ],[{...line('鬼龙循痕',290,26),visual:'dragon'}],{...line('龙魂追斩',280,20,1,0,-65),visual:'dragon'},'animated'),
   ghost('huangzhong','鬼黄忠','落日冥弓',0x83dbd7,[line('落日冥矢',320,12,4,.26),line('冥箭回阵',320,12,3,.34,0,.18)],[spot('钉魂箭阵',68),spot('箭阵余响',62,-78)],line('穿隙鬼矢',330,16,2,.28)),
   ghost('dianwei','鬼典韦','死守孤门',0xea8496,[sweep('双戟封门',124),sweep('反手断戟',126,.55)],[ring('孤门震地',185,96)],sweep('死守重劈',159)),
@@ -88,7 +88,7 @@ export const DIVINE_GENERALS: readonly MythicBoss[] = [
   divine('zhangfei','神张飞','长坂天威',0xd4c4f5,[ring('长坂喝阵',142,67),ring('天威外震',225,165)],[sweep('蛇矛横江',168)],line('一夫当关',248,35)),
   divine('sunshangxiang','神孙尚香','烈弓破晓',0xf2a5a5,[line('双翼侧射',286,15,1,0,66),line('飞羽返射',286,15,1,0,-66)],[spot('破晓爆矢',74)],line('赤羽流星',315,14,3,.22)),
   divine('zhouyu','神周瑜','赤壁天火',0xffaf69,[line('东风起旗',325,23,2,.76),line('东风扫浦',305,21,1,0,68)],[spot('赤壁落火',68,-61),spot('天火渡江',68,65)],line('江火合阵',305,27)),
-  divine('guanyu','神关羽','武圣裁阵',0xb3edd0,[sweep('武圣裁锋',174),line('十字裁阵',218,23,2,Math.PI/2)],[ring('龙甲镇地',165,97)],sweep('回锋封阵',164,-.66)),
+  divine('guanyu','神关羽','武圣裁阵',0xb3edd0,[sweep('武圣裁锋',234),line('十字裁阵',218,23,2,Math.PI/2)],[ring('龙甲镇地',165,97)],sweep('回锋封阵',164,-.66)),
   divine('caocao','神曹操','魏武军势',0xffcc77,[line('虎豹分道',320,21,1,0,-65),line('军势并进',320,21,1,0,65)],[sweep('魏武盾势',132),line('魏武弓势',305,13,4,.24)],ring('军令肃阵',187,119)),
   divine('sunquan','神孙权','江东镇海',0x7ddbeb,[line('江东盾墙',222,34,1,0,-72),line('吴弓乘隙',298,16,1,0,68)],[ring('镇海潮阵',188,122)],sweep('虎踞回潮',157)),
   divine('zhugeliang','神诸葛亮','七星天枢',0xd4c1fa,[spot('天枢落星',54,-90),spot('玉衡落星',54,90)],[line('七星连芒',305,13,5,.31)],spot('归星阵眼',74)),

@@ -2,12 +2,14 @@ import type Phaser from 'phaser';
 import { DEPTH } from '../config';
 import { mythicArtKey, mythicHit, mythicSequence, type MythicWarning, mythicBoss } from '../data/mythicGauntlet';
 import type { ArcHost } from './ArcBossV2';
+import { BossWalk } from './BossWalk';
 import { mythicFacing, clearMythicSignature, clearMythicWarning, drawMythicWarning, paintMythicSignature, poseMythic } from './MythicArt';
 
 export class MythicBossController {
   private readonly graphics: Phaser.GameObjects.Graphics;
   private readonly signature: Phaser.GameObjects.Image;
   private readonly definition: NonNullable<ReturnType<typeof mythicBoss>>;
+  private readonly groundWalk: BossWalk;
   private queue: MythicWarning[] = [];
   private casts = 0;
   private phase2 = false;
@@ -23,6 +25,7 @@ export class MythicBossController {
     const definition = mythicBoss(id);
     if (!definition) throw new Error('Unknown mythic boss: '+id);
     this.definition = definition;
+    this.groundWalk = new BossWalk(host);
     this.next = now/1000+2;
     this.graphics = host.scene.add.graphics().setDepth(DEPTH.ground+3);
     this.signature = host.scene.add.image(0,0,mythicArtKey(id)).setDepth(DEPTH.fx).setVisible(false);
@@ -54,19 +57,11 @@ export class MythicBossController {
     }
     const warning=this.queue[0];
     const active=warning&&now>=warning.startsAt?warning:null;
-    let moving=false;
-    if(!warning&&now>=this.next-.8&&distance>116) {
-      // Enemy uids use negative route keys to share Legion's obstacle grid without sharing a soldier's waypoint.
-      const waypoint=army.navigation.steer(-boss.uid,boss.x,boss.y,player.x,player.y,boss.radius,ms);
-      const vx=waypoint.x-boss.x, vy=waypoint.y-boss.y, toWaypoint=Math.hypot(vx,vy);
-      const step=Math.min(distance-116,boss.def.speed*dt,toWaypoint);
-      if(step>0) {
-        boss.sprite.x+=vx/toWaypoint*step;
-        boss.sprite.y+=vy/toWaypoint*step;
-        dir=mythicFacing(Math.atan2(vy,vx));
-        moving=true;
-      }
-    }
+    if (!warning && now >= this.next - .8) {
+      this.groundWalk.advance(dt, ms, 116);
+      dir = this.groundWalk.row;
+    } else this.groundWalk.idle();
+    const moving = this.groundWalk.moving;
     this.state=active?(active.resolved?'attack':'warn'):moving?'approach':'recover';
     if(active) {
       if(this.announcedAt!==active.startsAt){
@@ -85,7 +80,7 @@ export class MythicBossController {
       }
       drawMythicWarning(this.graphics,active,id,now);
     }
-    poseMythic(boss.sprite,id,now,dir,moving,active);
+    poseMythic(boss.sprite,id,now,dir,moving,active,this.groundWalk.frame);
     if(ms<this.flashUntil) boss.sprite.setTint(0xffb6a0);
     else boss.sprite.clearTint();
     paintMythicSignature(this.signature,id,active,now,boss);
@@ -108,5 +103,5 @@ export class MythicBossController {
     else this.corpse.setRotation(Math.min(.16,this.fallMs/2200));
     this.corpse.setAlpha(Math.max(0,Math.min(1,(1550-this.fallMs)/650)));
   }
-  clear(): void { this.host.army.navigation.forget(-this.host.boss.uid); this.queue=[]; this.graphics.destroy(); this.signature.destroy(); this.corpse?.destroy(); }
+  clear(): void { this.groundWalk.clear(); this.queue=[]; this.graphics.destroy(); this.signature.destroy(); this.corpse?.destroy(); }
 }

@@ -895,6 +895,8 @@ export class GameScene extends Phaser.Scene {
   readonly stable = { ownedHorses, grantHorse };
   create(): void {
     // 中途退出不算：进关先记下存档，告捷 / 战败才丢掉（systems/BattleSnapshot.ts）
+    // Keep ground telegraphs readable even on the first frame of a hit flash.
+    this.cameras.main.flashEffect.alpha = 0.20;
     beginBattle(this.scene.key);
     stopMenuMusic();
     startCityAmbient(this, k => this.sfx?.play(k), ['amb_wind', 'amb_wind', 'amb_flag'], [9000, 16000]); // 战斗环境声：很稀的风 / 旗声（音效审计第二批）

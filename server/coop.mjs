@@ -1,3 +1,4 @@
+import {strikeSpellMark, visibleSpellMarks} from './coop-marks.mjs';
 import { startHebei, stepHebei, resolveHebei, dualDeaths, dualState, dualWarnings } from './coop-dual.mjs';
 import { GAUNTLET_POOL } from '../src/data/gauntlet.ts';
 import { challengeChoices, mythicBoss } from '../src/data/mythicGauntlet.ts';
@@ -105,6 +106,7 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
       type: 'state', seconds: Math.floor(room.seconds), battleMs: Math.round(room.seconds*1000), kills: room.kills,
       players: playersIn(room).map(({ slot, hero, x, y, hp, maxHp, rescue, dir, moving, strike, stars }) => ({ slot, hero, x, y, hp, maxHp, rescue, dir, moving, strike, stars })),
       enemies: room.enemies.map(({ id, x, y, hp, maxHp, boss, general, troop, cue, face, speedBuff, enraged }) => ({ id, x, y, hp, maxHp, boss, troop, cue, face, enraged: !!enraged, boosted: speedBuff > 1, general: general && { id: general.id, name: general.name } })),
+      spellMarks: visibleSpellMarks(room),
       shots: (room.shots ?? []).map(({x,y,angle,slow})=>({x,y,angle,net:!!slow})), troopEffects: room.troopEffects ?? [],
       gauntlet: room.run && { wave: room.run.wave, cleared: room.run.cleared, total: TOTAL_WAVES,
         tier: room.run.tier, milestones: room.run.milestones, remaining: room.run.stage === 'field' ? Math.max(0, Math.ceil(waveWarmup(room.run) - room.seconds + room.run.started)) : 0,
@@ -146,6 +148,7 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
     snapshot(room);
   }
   function bossDefeated(room) {
+    for(const player of room.players.values()) delete player.casting;
     clearTroops(room);
     const run = room.run;
     run.cleared++;
@@ -207,6 +210,7 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
       player.fireIn/=vanguardSpeed(vanguard);
       player.strike = { n: player.strike.n + 1, x: nearest.x, y: nearest.y };
       troopHit(room, nearest, player, power);
+      if(player.stars?.includes('intellect.NX1')) strikeSpellMark(room,player,nearest,power);
     }
     if(room.run.dual)stepHebei(room.run,live,room.seconds,dt);
     for (const enemy of room.enemies) {
@@ -323,7 +327,7 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
         const slot = room.players.size === 0 ? 0 : 1;
         player = { socket, token: randomBytes(24).toString('hex'), disconnectedAt: null, slot, available, hero: null, x: world.width / 2 + (slot ? 48 : -48), y: world.height / 2, hp: 100, maxHp: 100, rescue: 0, upgrades: {}, dir: 0, moving: false,
           fireIn: 0, dx: 0, dy: 0, inputAt: 0, hurtUntil: 0, strike: { n: 0, x: 0, y: 0 } };
-        if(command.starDraft===1) player.stars=[];
+        if(command.starDraft===1 || command.starDraft===2){player.starDraft=command.starDraft;player.stars=[];}
         room.players.set(slot, player);
         session(room, player);
         lobby(room);

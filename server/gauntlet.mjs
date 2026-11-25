@@ -1,7 +1,8 @@
+import {canDraftMark} from './coop-marks.mjs';
 import { GAUNTLET, GAUNTLET_POOL, endlessBoss, pickBosses } from '../src/data/gauntlet.ts';
 import { challengeBoss, mythicBoss, mythicSequence, mythicHit } from '../src/data/mythicGauntlet.ts';
 import content from '../src/coop/gauntlet.json' with { type: 'json' };
-import {FIELD_STARS, ironHpBonus} from '../src/data/coopStars.ts';
+import {FIELD_STARS, MARK_STAR, ironHpBonus} from '../src/data/coopStars.ts';
 
 const pool = GAUNTLET_POOL.filter(boss => Object.hasOwn(content.bosses, boss.id));
 export const TOTAL_WAVES = GAUNTLET.waves;
@@ -155,7 +156,8 @@ export function rewardsFor(player, wave=1) {
     choices.push(available.splice(Math.floor(Math.random() * available.length), 1)[0].id);
   }
   if (player.stars && (wave%3===0 || choices.length<3)) {
-    const availableStars=FIELD_STARS.filter(star=>!player.stars.includes(star.id));
+    const pool=canDraftMark(player)?[...FIELD_STARS,MARK_STAR]:FIELD_STARS;
+    const availableStars=pool.filter(star=>!player.stars.includes(star.id));
     if(availableStars.length) {
       const star=availableStars[Math.floor(Math.random()*availableStars.length)];
       if(choices.length===3) choices.pop();
@@ -167,7 +169,8 @@ export function rewardsFor(player, wave=1) {
 }
 
 export function grantReward(player, id) {
-  if(FIELD_STARS.some(s=>s.id===id)) {
+  if(id===MARK_STAR.id && !canDraftMark(player))return;
+  if(id===MARK_STAR.id || FIELD_STARS.some(s=>s.id===id)) {
     if(!player.stars || player.stars.includes(id))return;
     player.stars.push(id);
     if(id==='strength.NR1') {

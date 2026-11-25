@@ -17,3 +17,5 @@ export const backwaterActive=(ratio:number):boolean=>ratio<FIELD_STAR_EFFECT['st
 export const backwaterDamage=(owned:boolean,ratio:number):number=>owned && backwaterActive(ratio) ? 1+FIELD_STAR_EFFECT['strength.NR2'].damage : 1;
 export const vanguardDamage=(owned:boolean,weaponHit:boolean):number=>owned && weaponHit ? 1+FIELD_STAR_EFFECT['bridge0.h'].weapon : 1;
 export const vanguardSpeed=(owned:boolean):number=>owned ? 1+FIELD_STAR_EFFECT['bridge0.h'].attackSpeed : 1;
+
+export const MARK_STAR={id:'intellect.NX1',name:'牵印',detail:'本命法术留下两枚印记，命中可向附近另一枚传导10%伤害'} as const;

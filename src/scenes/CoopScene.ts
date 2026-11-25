@@ -13,12 +13,13 @@ import { heroUnlocked } from '../systems/HeroUnlocks';
 import roster from '../coop/roster.json';
 import { buildRecolor } from '../systems/IffOverlay';
 import { ART_V2_FILES } from '../systems/ArtStyle';
-import { FIELD_STARS } from '../data/coopStars';
+import { FIELD_STARS, MARK_STAR } from '../data/coopStars';
+const networkStars=[...FIELD_STARS,MARK_STAR];
 
 type ActorView = { body: Phaser.GameObjects.Image; label: Phaser.GameObjects.Text; tx: number; ty: number; strike: number; mythicFacing?: number };
 const TROOPS: Record<string, {name:string;art:{walk:string;attack:string;cell:number}}> = roster.types;
 const BOSS_SHEETS: Record<string, string[]> = gauntlet.bosses;
-const REWARDS = new Map([...gauntlet.rewards, ...FIELD_STARS.map(s=>({...s,name:'将星 · '+s.name})), { id: 'heal', name: '整备', detail: '回复 45% 最大生命' }].map(reward => [reward.id, reward]));
+const REWARDS = new Map([...gauntlet.rewards, ...networkStars.map(s=>({...s,name:'将星 · '+s.name})), { id: 'heal', name: '整备', detail: '回复 45% 最大生命' }].map(reward => [reward.id, reward]));
 
 export class CoopScene extends Phaser.Scene {
   private panel!: HTMLElement;
@@ -251,7 +252,7 @@ export class CoopScene extends Phaser.Scene {
     const socket = new WebSocket(url); this.socket = socket;
     const fail = (text: string, terminal = false) => { if (this.socket === socket) this.connectionFailed(text, terminal); };
     this.connectionTimer = window.setTimeout(() => fail('连接超时，请重试'), Math.min(8000, this.retryUntil ? this.retryUntil - Date.now() : 8000));
-    socket.onopen = () => { if (this.socket === socket) socket.send(JSON.stringify(command.type === 'resume' ? command : { ...command, heroes: this.availableHeroes, starDraft:1 })); };
+    socket.onopen = () => { if (this.socket === socket) socket.send(JSON.stringify(command.type === 'resume' ? command : { ...command, heroes: this.availableHeroes, starDraft:2 })); };
     socket.onerror = () => fail('无法连接联机服务，请检查网络');
     socket.onclose = () => fail('连接中断，请重试');
     socket.onmessage = event => {
@@ -582,6 +583,7 @@ export class CoopScene extends Phaser.Scene {
   private drawTroops(state:Extract<ServerMessage,{type:'state'}>):void {
     const g=this.troopFx?.clear();if(!g)return;
     for(const e of state.enemies){
+      if(state.spellMarks?.includes(e.id)) g.lineStyle(2,0xa4d9ed,.9).strokeTriangle(e.x-4,e.y-39,e.x+4,e.y-39,e.x,e.y-33);
       const c=e.cue;
       if(c){
         g.lineStyle(2,0xe6aa79,.85);
@@ -596,7 +598,9 @@ export class CoopScene extends Phaser.Scene {
       if(e.boosted)g.lineStyle(2,0xe2ad75,.7).lineBetween(e.x-7,e.y+3,e.x,e.y-2).lineBetween(e.x,e.y-2,e.x+7,e.y+3);
     }
     for(const s of state.shots??[]){const dx=Math.cos(s.angle),dy=Math.sin(s.angle);g.lineStyle(2,0xe9d4ad,.95).lineBetween(s.x-dx*14,s.y-dy*14,s.x+dx*4,s.y+dy*4);if(s.net)g.strokeRect(s.x-7,s.y-7,14,14);}
-    for(const f of state.troopEffects??[]){g.lineStyle(2,f.kind==='heal'?0x9fc59c:0xf3ce9c,.9);if(f.kind==='heal')g.lineBetween(f.x-6,f.y-22,f.x+6,f.y-22).lineBetween(f.x,f.y-28,f.x,f.y-16);else g.strokeRect(f.x-13,f.y-20,26,18);}
+    for(const f of state.troopEffects??[]){
+      if(f.kind==='spell-chain' && f.fromX!==undefined && f.fromY!==undefined){g.lineStyle(2,0xa4d9ed,.85).lineBetween(f.fromX,f.fromY-16,f.x,f.y-16);continue;}
+      g.lineStyle(2,f.kind==='heal'?0x9fc59c:0xf3ce9c,.9);if(f.kind==='heal')g.lineBetween(f.x-6,f.y-22,f.x+6,f.y-22).lineBetween(f.x,f.y-28,f.x,f.y-16);else g.strokeRect(f.x-13,f.y-20,26,18);}
   }
 
   private loadHero(id: CharacterId): string {
@@ -682,7 +686,7 @@ export class CoopScene extends Phaser.Scene {
     row.append(portrait, title, hp, bar, status);
     if(p.stars?.length) {
       const stars=document.createElement('small');
-      stars.textContent=p.stars.map(k=>FIELD_STARS.find(s=>s.id===k)?.name).filter(Boolean).join(' · ');
+      stars.textContent=p.stars.map(k=>networkStars.find(s=>s.id===k)?.name).filter(Boolean).join(' · ');
       row.append(stars);
     }
     return row;

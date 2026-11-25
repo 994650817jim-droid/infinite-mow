@@ -98,16 +98,18 @@ try{
       equal(draftA.continuation,options);equal(draftB.continuation,options);
       equal(room.run.mythicQueue.length,0);checkpoints.push(tier);
       if(wave===30){
-        a.send({type:'finish'});
+        a.send({type:'finish',wave});
         equal((await a.until(m=>m.type==='result')).milestones,3);
         equal((await b.until(m=>m.type==='result')).generals,30);
         break;
       }
-      b.send({type:'challenge',tier:options[0]});
-      a.send({type:'challenge',tier:wave===10?'divine':'ghost'});
+      b.send({type:'challenge',tier:options[0],wave});
+      b.send({type:'challenge',tier:options[0],wave});
+      a.send({type:'challenge',tier:wave===10?'divine':'ghost',wave});
+      a.send({type:'challenge',tier:options[0],wave:wave-1});
       await delay(110);
       equal(room.phase,'checkpoint');
-      a.send({type:'challenge',tier:options[0]});
+      a.send({type:'challenge',tier:options[0],wave});
       draftA=await a.until(m=>m.type==='draft'&&m.wave===wave&&!m.checkpoint);
       draftB=await b.until(m=>m.type==='draft'&&m.wave===wave&&!m.checkpoint);
     }

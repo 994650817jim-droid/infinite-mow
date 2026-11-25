@@ -709,7 +709,7 @@ export class CoopScene extends Phaser.Scene {
     bar.value = p.hp;
     bar.setAttribute('aria-label', title.textContent + '生命');
     const status = document.createElement('small');
-    status.textContent = checkpoint ? '已过十阵' : p.ready ? '已选定' : '选择中';
+    status.textContent = checkpoint ? '阶段告捷' : p.ready ? '已选定' : '选择中';
     row.append(portrait, title, hp, bar, status);
     if(p.stars?.length) {
       const stars=document.createElement('small');
@@ -726,7 +726,7 @@ export class CoopScene extends Phaser.Scene {
     this.stick?.reset();
     this.stick?.setEnabled(false);
     const tier = message.tier??'mortal';
-    const card = this.card(message.checkpoint ? tierTitle[tier]+'告捷' : '斩将强化',
+    const card = this.card(message.checkpoint ? (tier==='mortal'?'鬼门已开':tier==='ghost'?'天门将启':'封神告捷') : '斩将强化',
       `第 ${challengeWave(tier,message.wave,message.total)} 阵 · 已击败${message.general}`);
     if (this.mythicSignature) clearMythicSignature(this.mythicSignature);
     this.panel.classList.add('coop-draft');
@@ -743,15 +743,19 @@ export class CoopScene extends Phaser.Scene {
     for (const member of members) party.append(this.partyMember(member, message.checkpoint));
     card.insertBefore(party, this.status);
     if (message.checkpoint) {
-      this.status.textContent = this.slot ? '等待房主选择' : '选择下一场挑战';
-      if (!this.slot) {
+      const votes = message.votes ?? [];
+      const mine = votes[this.slot], other = votes[1-this.slot];
+      this.status.textContent = mine && other && mine!==other ? '两人选择不同，可改选或收兵结算' :
+        mine ? '已确认，等待战友' : other ? '战友已选择，请确认去向' : '两人选择相同后继续，一人收兵即可结算';
+      {
         for (const choice of message.continuation??['endless']) {
           const label = choice==='ghost'?'挑战鬼将十阵':choice==='divine'?'挑战神将十阵':'进入无尽';
-          const proceed=this.button(label,() => this.send(choice==='endless'?{type:'endless'}:{type:'challenge',tier:choice}));
+          const proceed=this.button(label,() => this.send(choice==='endless'?{type:'endless',wave:message.wave}:{type:'challenge',tier:choice,wave:message.wave}));
           if(choice!=='endless') proceed.classList.add('coop-primary');
+          proceed.disabled = choice === mine;
           card.append(proceed);
         }
-        card.append(this.button('结束并结算',() => this.send({type:'finish'})));
+        card.append(this.button('结束并结算',() => this.send({type:'finish',wave:message.wave})));
       }
     } else {
       this.status.textContent = message.choices.length ? '选择本阵奖励，两人选定后进入下一阵' : `已就绪 ${message.ready}/2 · 等待队友`;

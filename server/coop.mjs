@@ -120,6 +120,7 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
   }
   function draft(room, checkpoint = false) {
     room.phase = checkpoint ? 'checkpoint' : 'draft';
+    room.votes = [null, null];
     room.idleSince = Date.now();
     for (const player of room.players.values()) player.choices = checkpoint ? [] : rewardsFor(player,room.run.wave);
     updateDraft(room);
@@ -129,7 +130,7 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
     for (const player of room.players.values()) {
       send(player.socket, { type: 'draft', wave: room.run.wave, total: TOTAL_WAVES, general: room.run.history.at(-1).dual ? '河北双雄 · 颜良 / 文丑' : room.run.history.at(-1).name,
       party: playersIn(room).map(({ slot, hero, hp, maxHp, choices, stars, upgrades }) => ({ slot, hero, hp, maxHp, ember:upgrades.ember, ready: !choices?.length, company:companyStatus(room.players.get(slot),room.run.wave), stars })),
-        choices: player.choices ?? [], ready, checkpoint: room.phase === 'checkpoint', tier: room.run.tier,
+        votes: room.votes, choices: player.choices ?? [], ready, checkpoint: room.phase === 'checkpoint', tier: room.run.tier,
         continuation: room.phase==='checkpoint'?challengeChoices(room.run.tier,room.run.wave,TOTAL_WAVES):[] });
     }
     if (room.phase === 'draft' && !missing(room).length && ready === room.players.size) beginNextWave(room);
@@ -360,13 +361,19 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
         grantReward(player, command.id);
         player.choices = [];
         updateDraft(room);
-      } else if (room?.phase === 'checkpoint' && player.slot === 0) {
-        const choice = command.type === 'endless' ? 'endless' : command.type === 'challenge' ? command.tier : null;
-        if (choice && challengeChoices(room.run.tier,room.run.wave,TOTAL_WAVES).includes(choice) && !missing(room).length) {
-          room.run.nextTier=choice;
-          draft(room);
+      } else if (room?.phase === 'checkpoint' && command.wave === room.run.wave) {
+        if (command.type === 'finish') {
+          finish(room, true);
+        } else {
+          const choice = command.type === 'endless' ? 'endless' : command.type === 'challenge' ? command.tier : null;
+          if (!challengeChoices(room.run.tier,room.run.wave,TOTAL_WAVES).includes(choice)) return;
+          if (room.votes[player.slot] === choice) return;
+          room.votes[player.slot] = choice;
+          if (room.votes.every(vote => vote === choice)) {
+            room.run.nextTier = choice;
+            draft(room);
+          } else updateDraft(room);
         }
-        if (command.type === 'finish') finish(room, true);
       } else if (room?.phase === 'battle' && command.type === 'input' && Number.isFinite(command.dx) && Number.isFinite(command.dy)) {
         const limit = Math.max(1, Math.hypot(command.dx, command.dy));
         player.dx = command.dx / limit;

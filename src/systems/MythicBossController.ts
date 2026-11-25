@@ -1,6 +1,7 @@
+import type { Enemy } from '../entities/Enemy';
 import type Phaser from 'phaser';
 import { DEPTH } from '../config';
-import { mythicArtKey, mythicHit, mythicTransit, mythicSequence, type MythicWarning, mythicBoss } from '../data/mythicGauntlet';
+import { mythicArtKey, mythicHit, mythicTransit, starEyeOpen, hitStarEye, mythicSequence, type MythicWarning, mythicBoss } from '../data/mythicGauntlet';
 import type { ArcHost } from './ArcBossV2';
 import { BossWalk } from './BossWalk';
 import { mythicFacing, clearMythicSignature, clearMythicWarning, drawMythicWarning, paintMythicSignature, poseMythic } from './MythicArt';
@@ -11,6 +12,21 @@ export class MythicBossController {
   private readonly definition: NonNullable<ReturnType<typeof mythicBoss>>;
   private readonly groundWalk: BossWalk;
   private queue: MythicWarning[] = [];
+  private eye?: {actor: Enemy; life:number};
+  private clearEye() {
+    const eye=this.eye;
+    if(eye?.actor.active && eye.actor.spawnId===eye.life) eye.actor.deactivate();
+    this.eye=undefined;
+  }
+  strikeEye(e:Enemy,nowMs:number):boolean {
+    if(e!==this.eye?.actor || e.spawnId!==this.eye.life)return false;
+    const f=this.queue[0]?.constellation;
+    if(f && hitStarEye(f,nowMs/1000)) {
+      e.hp=f.hp;
+      if(f.broken){this.clearEye();this.host.banner('阵眼已破','合阵中断 · 趁势反击');}
+    }
+    return true;
+  }
   private casts = 0;
   private phase2 = false;
   private next: number;
@@ -57,6 +73,13 @@ export class MythicBossController {
       this.next=this.queue.at(-1)!.endsAt+(this.phase2?1.55:2);
     }
     const warning=this.queue[0];
+    const field=warning?.constellation;
+    if(field && starEyeOpen(field,now) && !this.eye) {
+      const base=this.host.def('infantry');
+      const e=this.host.spawn('infantry',field.eye.x,field.eye.y,{...base,hp:2,damage:0,speed:0,xp:0,radius:12,behavior:'wall',attackVisual:undefined});
+      if(e){e.controlImmune=true;e.ward=true;e.sprite.setAlpha(0);e.shadow.setVisible(false);this.eye={actor:e,life:e.spawnId};}
+    } else if (!field || !starEyeOpen(field,now)) this.clearEye();
+    if(warning?.closing && field?.broken){this.queue=[];this.next=now+1.4;clearMythicSignature(this.signature);return;}
     const active=warning&&now>=warning.startsAt?warning:null;
     if (!warning && now >= this.next - .8) {
       this.groundWalk.advance(dt, ms, 116);
@@ -93,6 +116,7 @@ export class MythicBossController {
   }
 
   defeat(): void {
+    this.clearEye();
     this.state='dead';
     this.queue=[];
     clearMythicWarning(this.graphics);
@@ -109,5 +133,5 @@ export class MythicBossController {
     else this.corpse.setRotation(Math.min(.16,this.fallMs/2200));
     this.corpse.setAlpha(Math.max(0,Math.min(1,(1550-this.fallMs)/650)));
   }
-  clear(): void { this.groundWalk.clear(); this.queue=[]; this.graphics.destroy(); this.signature.destroy(); this.corpse?.destroy(); }
+  clear(): void { this.clearEye(); this.groundWalk.clear(); this.queue=[]; this.graphics.destroy(); this.signature.destroy(); this.corpse?.destroy(); }
 }

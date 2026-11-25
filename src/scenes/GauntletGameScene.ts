@@ -826,6 +826,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       return super.customBossStep(enemy, dt, now);
     }
     protected hitEnemy(enemy: Enemy, raw: number, now: number, source: 'melee' | 'arrow' | 'fire' = 'melee', ally = false, weaponHit = true) {
+      if (raw>0 && this.gCtrl instanceof MythicBossController && this.gCtrl.strikeEye(enemy,now)) return 0;
       if (!ally && this.hillHasPlayer()) raw *= this.gCur?.hill?.playerDmg ?? 1; // 高地圈：主将站在里面伤害加成
       const E = this.gEscort;
       if (E && enemy === E.e) { // 随行护卫：打到 leaveAt 血线退场（不算斩将）

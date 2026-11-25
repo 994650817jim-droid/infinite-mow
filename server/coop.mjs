@@ -10,6 +10,7 @@ import { randomInt, randomBytes } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { WebSocket, WebSocketServer } from 'ws';
 import { TYPES, chooseTroop, initTroop, troopHit, prepareTroops, stepTroop, clearTroops } from './coop-roster.mjs';
+import { starEyeOpen, hitStarEye } from '../src/data/mythicGauntlet.ts';
 import world from '../src/coop/arena.json' with { type: 'json' };
 
 import { bossForWave, bossStats, advanceRescue, grantReward, beginBossWarning, clearBossAttack, resolveBossWarning, updateBossPhase, newGauntlet, nextWave, rewardsFor, TOTAL_WAVES } from './gauntlet.mjs';
@@ -214,11 +215,18 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
         const distance = Math.hypot(enemy.x - x, enemy.y - y);
         if (distance < best) { nearest = enemy; best = distance; }
       }
-      if (!nearest) continue;
+      const starField=room.run.mythicQueue?.[0]?.constellation;
+      const aimEye=starField && starEyeOpen(starField,room.seconds) && Math.hypot(x-starField.eye.x,y-starField.eye.y)<=attack.range;
+      if (!nearest && !aimEye) continue;
       player.fireIn = attack.interval * .91 ** (player.upgrades.haste ?? 0);
       const vanguard=player.stars?.includes('bridge0.h');
       const power=(3+(player.upgrades.damage??0))*vanguardDamage(vanguard,true)*backwaterDamage(player.stars?.includes('strength.NR2'),player.hp/player.maxHp);
       player.fireIn/=vanguardSpeed(vanguard);
+      if (aimEye) {
+        player.strike={n:player.strike.n+1,x:starField.eye.x,y:starField.eye.y};
+        hitStarEye(starField,room.seconds);
+        continue;
+      }
       player.strike = { n: player.strike.n + 1, x: nearest.x, y: nearest.y };
       troopHit(room, nearest, player, power);
       tryIgnite(player,nearest,power,room.seconds*1000,emberRandom);

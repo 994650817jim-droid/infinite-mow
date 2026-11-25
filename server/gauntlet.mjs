@@ -104,6 +104,9 @@ export function resolveBossWarning(run, players, time, onHit) {
     if(queue[0]?.resolved&&time>=queue[0].endsAt+.32) queue.shift();
     const warning=queue[0];
     run.warning=warning&&time>=warning.startsAt?warning:null;
+    if(warning?.closing && warning.constellation.broken) {
+      run.mythicQueue=[];run.warning=null;run.attackAt=time+1.4;return;
+    }
     if (run.warning?.transit) {
       const pos=mythicTransit(warning,time);
       if (pos) Object.assign(run.boss,pos);

@@ -28,6 +28,8 @@ export type BladeScar = Point & {
 };
 
 export interface MythicWarning extends Point {
+  constellation?: StarField;
+  closing?: boolean;
   transit?: { start: number; to: Point; cast: number; harmless: boolean };
   scar?: BladeScar;
   retracesScar?: boolean;
@@ -141,6 +143,45 @@ export function challengeWave(tier: GauntletRunTier, wave: number, size: number,
 }
 
 /** Lock both origin and aim for the complete sequence. Each strike has its own warning. */
+export interface StarField {
+  id: number; center: Point; eye: Point; rotation: number; radius:number;
+  opens: number; closes: number; hp: number; broken: boolean;
+}
+export function starEyeOpen(field: StarField, now: number) {
+  return !field.broken && field.hp>0 && now>=field.opens && now<field.closes;
+}
+export function hitStarEye(field: StarField, now: number) {
+  if (!starEyeOpen(field,now)) return false;
+  field.hp--;
+  field.broken = field.hp === 0;
+  return true;
+}
+
+function sevenStars(origin: Point,target: Point,cast:number,phase2:boolean,now:number,clear:CanTravel): MythicWarning[] {
+  const facing=Math.atan2(target.y-origin.y,target.x-origin.x);
+  const center={x:target.x,y:target.y};
+  let r=56, angle=facing+Math.PI*.5;
+  const position=(a:number,dist:number)=>({x:center.x+Math.cos(a)*dist,y:center.y+Math.sin(a)*dist});
+  let placed=false;
+  for (const radius of [56,40,24]) {
+    for(let i=0;i<7;i++){
+      const a=angle+i*2*Math.PI/7;
+      if(clear(center,position(a,radius)) && clear(center,position(a+Math.PI,100))){
+        r=radius;angle=a;placed=true;break;
+      }
+    }
+    if(placed)break;
+  }
+  const eye=position(angle,r);
+  const field:StarField={id:cast,center,eye,rotation:angle,radius:r,opens:now+1,closes:now+2.96,hp:phase2&&placed?2:0,broken:false};
+  const line=(tilt:number,start:number,name:string):MythicWarning=>({kind:'line',name,x:eye.x,y:eye.y,angle:angle+Math.PI+tilt,face:facing,radius:144,halfWidth:13,
+    startsAt:start,endsAt:start+1.1,power:.83,resolved:false,mythic:'divine',visual:'seal',action:'cast',constellation:field});
+  const warnings=[line(-.41,now,'七星显阵 · 天枢'),line(.41,now+1.5,'玉衡引线')];
+  if(phase2 && placed) warnings.push({kind:'ring',name:'七星合阵',x:center.x,y:center.y,radius:105,innerRadius:46,angle,face:facing,
+    startsAt:now+3.02,endsAt:now+4.15,power:.84,resolved:false,mythic:'divine',visual:'seal',action:'cast',constellation:field,closing:true});
+  return warnings;
+}
+
 type CanTravel = (from: Point, to: Point) => boolean;
 
 function spearRoute(origin: Point, target: Point, cast: number, phase2: boolean, now: number, clear: CanTravel): MythicWarning[] {
@@ -182,6 +223,7 @@ export function mythicTransit(w: MythicWarning, now: number): Point | undefined 
 }
 
 export function mythicSequence(boss: MythicBoss, origin: Point, target: Point, cast: number, phase2: boolean, now: number, clear: CanTravel = () => true) {
+  if (boss.id === 'divine_zhugeliang') return sevenStars(origin,target,cast,phase2,now,clear);
   if (boss.id === 'divine_zhaoyun') return spearRoute(origin,target,cast,phase2,now,clear);
   const face = Math.atan2(target.y-origin.y,target.x-origin.x);
   const moves = boss.moves[cast%2];
@@ -216,7 +258,7 @@ export function mythicSequence(boss: MythicBoss, origin: Point, target: Point, c
 }
 
 export function mythicHit(w: MythicWarning, p: Point): boolean {
-  if (w.transit?.harmless) return false;
+  if (w.transit?.harmless || (w.closing && w.constellation?.broken)) return false;
   const x=p.x-w.x, y=p.y-w.y, distance=Math.hypot(x,y);
   if(w.kind==='circle'||w.kind==='ring') return distance<=w.radius&&distance>=(w.innerRadius??0);
   if(w.kind==='sweep') return distance<=w.radius&&Math.abs(Math.atan2(y*Math.cos(w.angle)-x*Math.sin(w.angle),x*Math.cos(w.angle)+y*Math.sin(w.angle)))<=Math.PI/3;

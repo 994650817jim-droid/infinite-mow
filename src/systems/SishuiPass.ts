@@ -54,6 +54,8 @@ export interface PassOpts {
   /** 名字前缀（截图 / 测试用，默认 sishui）。 */ tag?: string;
   /** 营寨木栅（势力道具图集键，帧 3 = 木栅段）代替城墙、辕门（城墙图集帧 7）代替关门；辕门一直可通行，首领出阵时扬尘杀出。 */ palisade?: string;
   /** 营帐：位置（相对开局点）、出什么兵、哪个势力的帐、第几波（0 起）开始出兵。 */
+  routes?: readonly (readonly {x:number;y:number}[])[];
+  musterSpots?: readonly (readonly [number,number])[];
   tentSpots?: readonly (readonly [number, number])[]; tentRider?: EnemyKind; tentFaction?: number; tentFromWave?: number;
   /** 每次出几个兵（默认 2）。 */ tentCount?: number;
   /** 营帐 / 营寨叫什么（横幅用；默认 西凉营帐 / 西凉营寨）。 */ tentName?: string; campName?: string;
@@ -69,6 +71,21 @@ export class SishuiPass {
   towers: { e: Enemy | null; x: number; y: number; at: number; down: boolean }[] = [];
   tents: { e: Enemy | null; x: number; y: number; at: number; down: boolean; warned?: boolean; members: Array<{ e: Enemy; life: number }> }[] = [];
   private unregister: () => void = () => {};
+  private lanes=new WeakMap<Enemy,{life:number;route:readonly {x:number;y:number}[];index:number;until:number}>();
+  sortieWaypoint(e: Enemy, now: number): {x:number;y:number}|null {
+    const lane=this.lanes.get(e);
+    if(!lane)return null;
+    if(lane.life!==e.spawnId || now>=lane.until || e.hp<e.maxHp || Math.hypot(e.x-this.h.player.x,e.y-this.h.player.y)<230 ||
+       this.h.legion.grid.query(e.x,e.y,130).some(u=>u.active&&Math.hypot(u.x-e.x,u.y-e.y)<130)){
+      this.lanes.delete(e);return null;
+    }
+    while(lane.index<lane.route.length){
+      const p=lane.route[lane.index], x=this.start.x+p.x,y=this.start.y+p.y;
+      if(Math.hypot(x-e.x,y-e.y)>20)return {x,y};
+      lane.index++;
+    }
+    this.lanes.delete(e);return null;
+  }
   private tentsPlaced = false; private allTentsDown = false;
   private strikes: Strikes; private buffUntil = 0; private buffed = false;
   gateOpen = false; bossAt = -1; wenjiu = false;
@@ -171,7 +188,7 @@ export class SishuiPass {
         if (full || (this.h.tent?.crowd() ?? 0) >= SPAWN_TENT.crowdCap) { if (now >= t.at - SPAWN_TENT.musterMs) t.at = now + 1000; continue; } // 本帐兵满 / 同屏太多：先不出，被杀了再补
         if (!warn && !t.warned && now >= t.at - SPAWN_TENT.musterMs) { t.warned = true; tentMuster(this.h.scene, t.x, t.y + 40, SPAWN_TENT.musterMs); } // 帐篷口扬尘：要出兵了
         if (warn && !t.warned && now >= t.at - warn) { t.warned = true; this.metrics.warns++; playSheet(this.h.scene, 'fx_collapse_dust', t.x, t.y + 10, { size: 170, ms: warn, depth: actorDepth(t.y) + .3, originY: .8, name: this.tag + '-tent-warn' }); this.h.sfx('chargeWarn'); if (this.metrics.warns === 1) this.h.banner('营中有伏兵', true, '看到营帐扬尘就是伏兵要冲出 · 烧掉营帐断其伏兵'); }
-        if (now >= t.at) { t.at = now + tentIntervalMs(ch, t.e ? t.e.hp / Math.max(1, t.e.maxHp) : 1, this.gateOpen || (this.h.tent?.bossOn() ?? false)) * (this.h.tent?.campMul?.(t.e) ?? 1); t.warned = false; const n = this.o.tentCount ?? P.tentRiders, p0 = this.h.player, a = Math.atan2(p0.y - t.y, p0.x - t.x); for (let k = 0; k < n && t.members.length < cap; k++) { const o = (k - (n - 1) / 2) * 44, u = this.h.spawn(this.o.tentRider ?? 'cavalry', t.x + Math.cos(a) * 60 - Math.sin(a) * o, t.y + 30 + Math.sin(a) * 60 + Math.cos(a) * o); if (u) { this.metrics.rides++; t.members.push({ e: u, life: u.spawnId }); } } } }
+        if (now >= t.at) { t.at = now + tentIntervalMs(ch, t.e ? t.e.hp / Math.max(1, t.e.maxHp) : 1, this.gateOpen || (this.h.tent?.bossOn() ?? false)) * (this.h.tent?.campMul?.(t.e) ?? 1); t.warned = false; const n = this.o.tentCount ?? P.tentRiders, p0 = this.h.player, a = Math.atan2(p0.y - t.y, p0.x - t.x), muster=this.o.musterSpots?.[this.tents.indexOf(t)], mx=muster?this.start.x+muster[0]:t.x+Math.cos(a)*60, my=muster?this.start.y+muster[1]:t.y+30+Math.sin(a)*60; for (let k = 0; k < n && t.members.length < cap; k++) { const o = (k - (n - 1) / 2) * 44, u = this.h.spawn(this.o.tentRider ?? 'cavalry', mx - Math.sin(a) * o, my + Math.cos(a) * o); if (u) { const route=this.o.routes?.[this.tents.indexOf(t)];if(route?.length)this.lanes.set(u,{life:u.spawnId,route,index:1,until:now+5000}); this.metrics.rides++; t.members.push({ e: u, life: u.spawnId }); } } } }
     }
     if (!this.allTentsDown && this.tents.length && this.tents.every(t => t.down)) { this.allTentsDown = true; this.h.banner((this.o.campName ?? '西凉营寨') + '尽毁', true, '敌军后继乏力 · 余下来兵变稀'); }
     if (this.buffed && now >= this.buffUntil) { this.buffed = false; p.stats.damageMul /= P.buffMul; }

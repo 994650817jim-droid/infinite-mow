@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { DEPTH } from '../config';
 import { bossCastSfx, bossHitSfx, sceneSfx } from './ContentSfx';
+import { borrowBossImpact, drawBossImpact, releaseBossImpact, type ImpactShape } from './BossImpactMarks';
 
 /**
  * 首领「主题特效组」（2026-11-19 用户：「强化 boss 攻击技能特效，主要是那些看起来比较简单普通的 boss」）：
@@ -29,7 +30,7 @@ export const BOSS_THEME_OF: Readonly<Record<string, BossTheme>> = {
 };
 export const BOSS_THEME_FX = {
   /** 每段播放时长（毫秒）；各形状在贴图里的内容占比（用来把图里的内容对到真实判定范围）。 */
-  ms: 440, fade: 160, alpha: .92, sliceCx: .39, sliceSpan: .78, ringFrac: .9, puffFrac: .74, laneFrac: .35, cap: 40,
+  ms: 440, fade: 120, alpha: 1, sliceCx: .39, sliceSpan: .78, ringFrac: .9, puffFrac: .74, laneFrac: .35, cap: 40,
 } as const;
 const texKey = (t: BossTheme): string => 'bossfxtheme_' + t;
 
@@ -43,12 +44,16 @@ export function ensureBossTheme(scene: Phaser.Scene, t: BossTheme | null): void 
 }
 
 export type ThemeShape =
-  | { kind: 'sector'; x: number; y: number; r: number; angle: number }
+  | { kind: 'sector'; x: number; y: number; r: number; angle: number; arc?: number }
   | { kind: 'lane'; x: number; y: number; angle: number; len: number; width: number }
   | { kind: 'circle'; x: number; y: number; r: number }
   | { kind: 'puff'; x: number; y: number; size: number };
 const ROW: Record<ThemeShape['kind'], number> = { sector: 0, lane: 1, circle: 2, puff: 3 };
 
+const IMPACT_TINT: Readonly<Record<BossTheme, number>> = {
+  blood:0xee7051, yellow:0xefbd68, dust:0xf0b47b, quake:0xe8a577,
+  wall:0xcfb581, lance:0xafdbf1, ink:0xb7a0e7, wei:0xf3c383,
+};
 let live = 0;
 /** 在真实判定范围上播一段主题特效（4 帧），播完淡出销毁；没图返回 false（调用方退回原来的画法）。 */
 export function playThemeFx(scene: Phaser.Scene, t: BossTheme | null, s: ThemeShape, o: { ms?: number; alpha?: number; flip?: boolean } = {}): boolean {
@@ -60,9 +65,26 @@ export function playThemeFx(scene: Phaser.Scene, t: BossTheme | null, s: ThemeSh
   else if (s.kind === 'circle') { const d = s.r * 2 / K.ringFrac; img.setOrigin(.5, .5).setDisplaySize(d, d).setDepth(DEPTH.ground + 6); }
   else { img.setOrigin(.5, .62).setDisplaySize(s.size / K.puffFrac, s.size / K.puffFrac).setDepth(DEPTH.fx); }
   if (o.flip) img.setFlipY(true);
-  live++; sceneSfx(scene, bossHitSfx(t)); // 主题命中音（ContentSfx，按主题分音色、自带节流）
-  scene.tweens.addCounter({ from: 0, to: 3.99, duration: o.ms ?? K.ms, onUpdate: tw => img.setFrame(first + Math.floor(tw.getValue() ?? 0)),
-    onComplete: () => scene.tweens.add({ targets: img, alpha: 0, duration: K.fade, onComplete: () => { live--; img.destroy(); } }) });
+  const shape: ImpactShape | undefined = s.kind === 'puff' ? undefined :
+    s.kind === 'sector' ? { ...s, arc:s.arc ?? Math.PI*2/3 } : s;
+  const accent = shape && borrowBossImpact(scene);
+  const duration = o.ms ?? K.ms;
+  const paint = (age: number) => {
+    if (!accent || !shape) return;
+    accent.clear();
+    drawBossImpact(accent, shape, IMPACT_TINT[t], 0xffefd2, age / Math.min(330,duration));
+  };
+  paint(0);
+  live++; sceneSfx(scene, bossHitSfx(t));
+  img.once('destroy', () => {
+    live--;
+    if (accent?.scene) releaseBossImpact(accent);
+  });
+  scene.tweens.addCounter({ from: 0, to: 3.99, duration, onUpdate: tw => {
+    const value = tw.getValue() ?? 0;
+    img.setFrame(first + Math.floor(value));
+    paint(value/3.99*duration);
+  }, onComplete: () => scene.tweens.add({ targets: img, alpha: 0, duration: K.fade, onComplete: () => img.destroy() }) });
   return true;
 }
 /** 命中震屏（沿用 HitFeel；重击才中等，不叠加过多）。场景没有 hitFeel（章节场景以外）时什么都不做。 */

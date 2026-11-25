@@ -2,6 +2,7 @@ import {visualTextureKey} from '../systems/ReadableTextures';
 import {figureCorrection,sheetFigureHeight} from '../systems/SpriteMetrics';
 import {isV2Texture, V2_TROOP_SCALE, v2TroopGround} from '../systems/ArtStyle';
 import Phaser from 'phaser';
+import { WALK_DIRECTIONS, walkRow } from '../systems/GroundMotion';
 import { DEPTH } from '../config';
 import { ENEMY_DEFS, type EnemyDef } from '../data/enemies';
 import type { Ally } from './Ally';
@@ -105,6 +106,7 @@ export class Enemy {
   controlImmune = false;
   /** Special controllers may keep physical prop collision while immune to crowd control. */
   collidesWithPropsWhileImmune = false;
+  ownsBossWalk = false;
   stunUntil = 0;
   /** 张辽「震慑」层数 / 最后叠层时间、「溃逃」到期时间、溃兵踩踏冷却（weapons/zhangliaoWeapon.ts）。 */
   zhenshe = 0; zhensheAt = 0; routUntil = 0; trampleAt = 0;
@@ -169,7 +171,7 @@ export class Enemy {
     this.active = true;
     this.invulnerable = false;
     this.controlImmune = false;
-    this.collidesWithPropsWhileImmune = false;
+    this.collidesWithPropsWhileImmune = this.ownsBossWalk = false;
     this.stunUntil = 0;
     this.zhenshe = 0; this.zhensheAt = 0; this.routUntil = 0; this.trampleAt = 0; this.withdrawUntil = 0; this.withdrawVx = 0; this.withdrawVy = 0; this.junlingUntil = 0; this.hookedUntil = 0; this.p3BurnUntil = 0;
     this.targetAlly = null; this.targetLife = 0;
@@ -453,11 +455,9 @@ export class Enemy {
         this.facingVx += (fx / Math.max(dt, .0001) - this.facingVx) * blend;
         this.facingVy += (fy / Math.max(dt, .0001) - this.facingVy) * blend;
       }
-      const ax = Math.abs(this.facingVx);
-      const ay = Math.abs(this.facingVy);
-      let next = this.direction;
-      if (ax > ay * 1.35) next = this.facingVx < 0 ? 'left' : 'right';
-      else if (ay > ax * 1.35) next = this.facingVy < 0 ? 'up' : 'down';
+      const next = intended && Math.hypot(this.facingVx, this.facingVy) > stopSpeed
+        ? WALK_DIRECTIONS[walkRow(this.facingVx, this.facingVy, WALK_DIRECTIONS.indexOf(this.direction))]
+        : this.direction;
       if (next !== this.direction && this.frameElapsed > 0.16) {
         this.direction = next;
         this.frameElapsed = 0;
@@ -482,7 +482,9 @@ export class Enemy {
     // 以前按“每帧一次”起伏（一循环跳 4 下）、整个人抬离地面 2.5px、摆 0.06 弧度，看起来一跳一跳（v1 / v2 都一样）。
     // 现在锚点在脚底不动（脚踏实地），只让上身随步伐伸缩约 2.5%（头顶约 1.2px）、摆约 0.015 弧度。
     const step = this.walking ? Math.sin(Math.PI * this.stepPhase / 2) : 0;
-    this.stepStretch = Math.abs(step);
+    // At a shuffle the four animation cels carry the motion; keep the body at its native proportions.
+    const strideWeight = Math.min(1, Math.max(0, (actualSpeed - 14) / 16));
+    this.stepStretch = Math.abs(step) * strideWeight;
     this.sprite.setRotation(step * .015);
     this.applyScale();
   }

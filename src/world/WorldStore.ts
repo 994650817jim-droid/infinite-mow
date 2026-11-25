@@ -380,6 +380,17 @@ export function loseProvisionsPct(pct:number,cap:number):number{const s=loadWorl
 export function gainProvisions(n:number):void{if(!(n>0))return;const s=loadWorld();s.provisions+=Math.floor(n);commit(s);}
 export function spendWorld(c:{provisions?:number;merits?:number;money?:number}):boolean{const need=Math.max(0,Math.floor(c.provisions??0))+grainOf(Math.max(0,Math.floor(c.merits??0)),Math.max(0,Math.floor(c.money??0)));const s=loadWorld();if(s.provisions<need)return false;s.provisions-=need;commit(s);return true;}
 /** 直接发军粮（如武将经验满级折军粮）。返回发放数。 */
+export function creditGauntletGrain(id:string, amount:number):number {
+ const s=loadWorld(), paid=s.receipts.find(r=>r.id===id);
+ if(paid)return paid.provisions;
+ if(storageUnavailable)throw new Error('天下存档暂不可写');
+ const before=s.provisions;
+ bank(s,0,amount);
+ const credited=s.provisions-before;
+ s.receipts.push({id,merits:0,provisions:credited});s.receipts=s.receipts.slice(-32);
+ if(!commit(s))throw new Error('天下存档写入失败');
+ return credited;
+}
 export function addProvisions(amount:number):number{const n=Math.floor(amount);if(!(n>0))return 0;const s=loadWorld();bank(s,0,n);commit(s);return n;}
 export function addTownMoney(amount:number):void{const n=Math.floor(amount);if(!(n>0))return;const s=loadWorld();bank(s,0,0,n);commit(s);}
 

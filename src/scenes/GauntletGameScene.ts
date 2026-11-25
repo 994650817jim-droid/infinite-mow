@@ -68,8 +68,7 @@ import { GuanduBoss } from '../systems/GuanduBoss';
 import type { ArcHost } from '../systems/ArcBossV2';
 import { ART_V2_FILES, isV2Texture, loadBossSheet, loadV2TroopSheets } from '../systems/ArtStyle';
 import { isChapterTestRun } from '../systems/ChapterProgress';
-import { addScrolls } from '../systems/MasteryStore';
-import { addProvisions } from '../world/WorldStore';
+import { settleGauntlet } from '../systems/GauntletSettlement';
 import { FollowerSquad, type Follower } from '../systems/FollowerSquad';
 import { GauntletTrack } from '../ui/GauntletTrack';
 import { FOLLOWER_ATTACK_SFX } from '../systems/HeroSfx';
@@ -182,6 +181,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
     /** 本局：第几阵（1 起）、阶段与进入时刻（关内秒）、十阵名单、当前名将、斩过的名将、是否已通关十阵 / 进了无尽。 */
     gWave = 1; gPhase: 'mow' | 'boss' | 'clear' | 'choice' | 'done' = 'mow'; gAt = 0; gOrder: GauntletBoss[] = []; gCur: GauntletBoss | null = null;
     private closeGate?:()=>void;
+    private claimId='';
     private checkpointRecordKills = 0;
     gKills: GauntletBoss[] = []; gCleared = false; gEndless = false; private gPool: GauntletBoss[] = [];
     gTier: GauntletRunTier = 'mortal';
@@ -253,6 +253,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       this.registry.set('runConfig', { ...saved, character: saved?.character ?? 'zhaoyun', chapter: 'hulao', westStage: 3, encounter: 'qunxiong' }); // encounter：不建剧情、不记战役进度、不建西凉专属机制（同篇章场景）
       this.gTier = 'mortal'; this.gMilestones = 0;
       this.closeGate?.();this.closeGate=undefined;
+      this.claimId='gauntlet:'+(globalThis.crypto?.randomUUID?.() ?? Date.now().toString(36)+'-'+Math.random().toString(36).slice(2));
       this.checkpointRecordKills = 0;
       this.gWave = 1; this.gPhase = 'mow'; this.gAt = 0; this.gKills = []; this.gCleared = false; this.gEndless = false; this.gCtrl = null; this.gLootShown = false; this.gFollowers = []; this.gPendingReplace = null; this.gResult = null; this.gPortrait.clear();
       this.gStats = { lootPicks: [], spawned: 0, cleared: 0 };
@@ -1187,8 +1188,11 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
       const best = Math.max(before.kills, kills);
       const record = writeGauntletBest(kills, this.gWave, Math.round(this.elapsed * 1000), test) ||
         (kills > 0 && kills === this.checkpointRecordKills && kills === before.kills);
-      let first = false; try { first = this.gCleared && !debug && localStorage.getItem(GAUNTLET.firstClearKey) !== '1'; if (first) localStorage.setItem(GAUNTLET.firstClearKey, '1'); } catch { first = false; }
-      const rw = gauntletReward(kills, first); if (!debug) { if (rw.provisions) addProvisions(rw.provisions); if (rw.scrolls) addScrolls(rw.scrolls); }
+      let first=false, pending=false, rw={provisions:0,scrolls:0};
+      if(!debug){
+        try {const paid=settleGauntlet(this.claimId,kills,this.gCleared);rw=paid;first=paid.first;}
+        catch(error){pending=true;console.warn('战报奖励写入未完成',error);}
+      }
       const keep = this.resultTexts.body.text.split('\n').filter(l => /^武将等级|^经验已满|^属性点|^星图/.test(l));
       const reached = this.gEndless ? `第 ${this.gWave} 阵（无尽）` :
         tierTitle[this.gTier]+' · '+challengeWave(this.gTier,this.gWave,GAUNTLET.waves,this.mythicSize)+'/'+this.stageSize;
@@ -1218,7 +1222,7 @@ export function gauntletGameSceneClass(Base: typeof GameScene) {
         chapterArt:'assets/epic-home/dongzhuo-'+(IS_DESKTOP?'desktop':'mobile')+'.webp',
         stats:['用时 '+this.formatTime(this.elapsed)+' · 击破 '+this.kills+' · 总伤害 '+Math.round(this.damageDealt),
           '本局钱币 '+this.legion.food+' · 部曲 '+this.legion.count+' · 战损 '+this.legion.dead,
-          debug?'演练场 · 奖励不入库':'本局所得　钱币 +'+rw.provisions+' · 残卷 +'+rw.scrolls,
+          debug?'演练场 · 奖励不入库':pending?'奖励写入未完成 · 下次进入时核对':'本局所得　钱币 +'+rw.provisions+' · 残卷 +'+rw.scrolls,
           '最高连斩 '+best+' 位'+(record?' · 新纪录':'')],
         details:this.gauntletBuild().filter(group=>group.items.length).map(group=>({label:group.cat,body:group.items.map(i=>i.name+(i.lv?' '+i.lv:'')).join('、')})),
         bosses:this.gKills.map(b=>({name:b.name,image:this.textures.getBase64(this.portrait(b))})),

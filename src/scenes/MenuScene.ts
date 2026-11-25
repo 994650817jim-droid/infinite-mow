@@ -76,7 +76,11 @@ export class MenuScene extends Phaser.Scene {
   private startButton!: Phaser.GameObjects.Rectangle;
   private startLabel!: Phaser.GameObjects.Text;
   constructor() { super('MenuScene'); }
-  create(): void {playMenuMusic(this); /* 武将来投（systems/HeroUnlocks）：按进度补查、弹没看过的揭幕 */this.time.delayedCall(500,()=>checkHeroJoins(this));
+  create(): void {
+    if(!isChapterTestRun() && localStorage.getItem('im_gauntlet_claim_v1')) {
+      void import('../systems/GauntletSettlement').then(m=>m.recoverGauntletSettlement()).catch(e=>console.warn('战报待恢复',e));
+    }
+    playMenuMusic(this); /* 武将来投（systems/HeroUnlocks）：按进度补查、弹没看过的揭幕 */this.time.delayedCall(500,()=>checkHeroJoins(this));
     ensureWarTextures(this);
     this.cameras.main.fadeIn(180,0,0,0);
     // 2026-11-15 用户要求：开局每次从本章第 1 关打起（原为“下一个未通关”）。

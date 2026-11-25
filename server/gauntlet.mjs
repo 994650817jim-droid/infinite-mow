@@ -73,7 +73,7 @@ export function beginBossWarning(run, target, time, followup = false, nextPatter
   if (mythic) {
     if (run.mythicQueue?.length) return false;
     const sequence = mythicSequence(mythic,b,target,b.attacks??0,phase2,time,
-      arenaClear);
+      mythic.id==='divine_caocao'?(a,b)=>arenaClear(a,a) && arenaClear(a,b):arenaClear);
     for(const w of sequence)if(w.charge)w.targetSlot=target.slot;
     b.attacks=(b.attacks??0)+1;
     const power=bossStats(run.wave,mythic.id,run.roster?.ghost.length).power*(phase2?1.1:1);

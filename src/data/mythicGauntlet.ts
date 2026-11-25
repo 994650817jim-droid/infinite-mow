@@ -1,3 +1,4 @@
+import {weiHits, weiSequence, type WeiOrder} from './divineCaocao.ts';
 import {halberdSequence, type Halberd} from './ghostLubu.ts';
 import type { GauntletBoss } from './gauntlet';
 
@@ -29,6 +30,7 @@ export type BladeScar = Point & {
 };
 
 export interface MythicWarning extends Point {
+  wei?: WeiOrder;
   spirit?: 'guanyu' | 'zhangfei';
   nextFlag?: Point;
   constellation?: StarField;
@@ -228,6 +230,7 @@ export function mythicTransit(w: MythicWarning, now: number): Point | undefined 
 }
 
 export function mythicSequence(boss: MythicBoss, origin: Point, target: Point, cast: number, phase2: boolean, now: number, clear: CanTravel = () => true) {
+  if (boss.id === 'divine_caocao') return weiSequence(origin,target,cast,phase2,now,clear);
   if (boss.id === 'ghost_lubu' && cast%2===0) return halberdSequence(origin,target,phase2,now,clear);
   if (boss.id === 'divine_liubei') {
     const face=Math.atan2(target.y-origin.y,target.x-origin.x);
@@ -287,6 +290,7 @@ export function mythicSequence(boss: MythicBoss, origin: Point, target: Point, c
 }
 
 export function mythicHit(w: MythicWarning, p: Point): boolean {
+  if (w.wei) return weiHits(w,p);
   if ((w.charge && !w.halberd?.locked) || w.transit?.harmless || (w.closing && w.constellation?.broken)) return false;
   const x=p.x-w.x, y=p.y-w.y, distance=Math.hypot(x,y);
   if(w.kind==='circle'||w.kind==='ring') return distance<=w.radius&&distance>=(w.innerRadius??0);

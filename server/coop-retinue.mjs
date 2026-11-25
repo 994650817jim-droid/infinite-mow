@@ -1,3 +1,4 @@
+import {weiAdvance,weiBowExit} from '../src/data/divineCaocao.ts';
 import {GAUNTLET} from '../src/data/gauntlet.ts';
 import {GAUNTLET_RECRUIT,recruitCost,recruitTier} from '../src/data/gauntletRecruit.ts';
 import {TROOPS,LEGION,BOSS_VS_TROOPS,BOSS_VS_ALLY} from '../src/data/legion.ts';
@@ -64,6 +65,12 @@ export function updateRetinue(room,dt){
     for(const [i,u] of c.units.entries()){
       const def=TROOPS[u.kind],sortie=c.order==='sortie'&&p.hp>0;
       const fx=p.x+((i%4)-1.5)*26,fy=p.y+30+Math.floor(i/4)*24;
+      const wei=room.run.warning;
+      if(wei?.wei?.stance==='bow'){
+        const exit=weiBowExit(wei,u,(_,to)=>to.x>=16 && to.y>=16 && to.x<=arena.width-16 && to.y<=arena.height-16);
+        if(exit){advance(u,exit.x,exit.y,def.speed,dt);continue;}
+      }
+      const before=wei?.wei?.stance==='shield'?{x:u.x,y:u.y}:undefined;
       if(room.run.warning?.charge){
         const exit=halberdExit(room.run.warning,u,(_,to)=>to.x>=12&&to.y>=12&&to.x<=arena.width-12&&to.y<=arena.height-12);
         if(exit){advance(u,exit.x,exit.y,def.speed,dt);continue;}
@@ -89,6 +96,8 @@ export function updateRetinue(room,dt){
         }
       }else if(sortie&&target)advance(u,target.x,target.y,def.speed,dt);
       else advance(u,fx,fy,def.speed,dt);
+      const held=before && weiAdvance(wei,before,u,room.seconds);
+      if(held){u.x=Math.max(16,Math.min(arena.width-16,held.x));u.y=Math.max(16,Math.min(arena.height-16,held.y));}
     }
   }
   // Use each attacker's own contact timer. A regular attacker chooses only one nearby soldier.

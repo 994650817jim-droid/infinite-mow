@@ -1,3 +1,4 @@
+import {weiAdvance,weiBowExit} from '../data/divineCaocao';
 import {STAR_OUTER_TUNING as SO} from '../data/starOuter';
 import {halberdExit} from '../data/ghostLubu';
 import type {MythicWarning} from '../data/mythicGauntlet';
@@ -132,6 +133,8 @@ export class Legion {
     this.tactics.relocate=(u,x,y)=>this.place(u,x,y); // 收回兜底也走统一换位（屏外直接换、屏内淡出淡入）
   }
   /** 在编兵力（城防弓手是城里的守军，不算）。 */
+  weiBounds?: (x:number,y:number,r:number)=>boolean;
+  weiWarning?: MythicWarning;
   halberdWarning?: MythicWarning;
   halberdBounds?: (x:number,y:number,r:number)=>boolean;
   get count(): number { let n = 0; for (const u of this.units) if (u.active && !u.garrison) n++; return n; }
@@ -317,9 +320,17 @@ export class Legion {
         const exit=halberdExit(this.halberdWarning,u,(a,b)=>(this.halberdBounds?.(b.x,b.y,u.radius) ?? true) && this.navigation.clearSegment(a.x,a.y,b.x,b.y,u.radius));
         if(exit){u.moveTo(exit.x,exit.y,step,u.def.speed,now);continue;}
       }
+      const wei=this.weiWarning;
+      if(wei?.wei?.stance==='bow'){
+        const exit=weiBowExit(wei,u,(a,b)=>(this.weiBounds?.(b.x,b.y,u.radius)??true) && this.navigation.clearSegment(a.x,a.y,b.x,b.y,u.radius));
+        if(exit){u.moveTo(exit.x,exit.y,step,u.def.speed,now);continue;}
+      }
+      const before=wei?.wei?.stance==='shield'?{x:u.x,y:u.y}:undefined;
       this.tactics.postOf = this.postOf;
       this.tactics.think(u, now, this.order, enemyGrid, this.grid);
       this.tactics.move(u, step, now, this.grid);
+      const held=before && weiAdvance(wei,before,u,now/1000);
+      if(held)u.setPosition(held.x,held.y);
       u.cooldown = Math.max(0, u.cooldown - step);
       if (this.freeAt) this.rejoinIfStuck(u, now);
     }

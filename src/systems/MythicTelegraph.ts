@@ -1,4 +1,6 @@
 import type Phaser from 'phaser';
+import {drawWeiRanks,hideWeiRanks} from './WeiFormationArt';
+import {weiPoint} from '../data/divineCaocao';
 import { drawBossImpact } from './BossImpactMarks';
 import { mythicBoss, type MythicTier, type MythicWarning } from '../data/mythicGauntlet';
 
@@ -19,6 +21,7 @@ export function preloadMythicTelegraph(scene: Phaser.Scene): void {
 }
 
 export function clearMythicWarning(graphics: Phaser.GameObjects.Graphics): void {
+  hideWeiRanks(graphics);
   spiritActors.get(graphics)?.setVisible(false);
   warningAccents.get(graphics)?.clear();
   graphics.clear();
@@ -228,6 +231,14 @@ function drawSpirit(g:Phaser.GameObjects.Graphics,w:MythicWarning,now:number) {
     .setTint(ink).setDepth(g.depth+1).setAlpha(w.resolved?.84:.54).setVisible(true);
 }
 export function drawMythicWarning(g: Phaser.GameObjects.Graphics,w: MythicWarning,id: string,now: number): void {
+  if(w.wei){
+    drawWeiRanks(g,w,now);
+    if(w.wei.stance==='bow')for(const side of w.wei.lanes){
+      const lane={...w,...weiPoint(w,0,side),wei:undefined,lanes:1};
+      drawMythicWarning(g,lane,id,now);
+    }
+    return;
+  }
   const progress=Math.max(0,Math.min(1,(now-w.startsAt)/Math.max(.01,w.endsAt-w.startsAt)));
   const h=w.halberd;
   if(h && now>=h.appears){

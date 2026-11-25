@@ -1,3 +1,4 @@
+import {weiAdvance} from '../src/data/divineCaocao.ts';
 import {tryIgnite,tickBurns,fireWire} from './coop-burning.mjs';
 import {paySpoils,companyStatus,companyWire,recruitCompany,updateRetinue,strikeRetainer} from './coop-retinue.mjs';
 import {BOSS_VS_TROOPS,BOSS_VS_ALLY} from '../src/data/legion.ts';
@@ -199,8 +200,10 @@ export function createCoopServer({ origins = [], allowLocal = true, gauntletWarm
       const vx = now - player.inputAt <= INPUT_TTL ? player.dx : 0;
       const vy = now - player.inputAt <= INPUT_TTL ? player.dy : 0;
       const speed = 174 * (1 + .07 * (player.upgrades.speed ?? 0)) * (room.seconds < (player.slowUntil ?? 0) ? 1 - player.slow : 1);
-      const x = Math.max(24, Math.min(world.width - 24, player.x + vx * speed * dt));
-      const y = Math.max(24, Math.min(world.height - 24, player.y + vy * speed * dt));
+      const nextX=player.x+vx*speed*dt,nextY=player.y+vy*speed*dt;
+      const held=room.run.warning?.wei && weiAdvance(room.run.warning,player,{x:nextX,y:nextY},room.seconds);
+      const x=Math.max(24,Math.min(world.width-24,held?.x??nextX));
+      const y=Math.max(24,Math.min(world.height-24,held?.y??nextY));
       player.moving = x !== player.x || y !== player.y;
       if (player.moving) player.dir = Math.abs(vx) > Math.abs(vy) ? (vx < 0 ? 1 : 2) : (vy < 0 ? 3 : 0);
       player.x = x;

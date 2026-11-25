@@ -163,6 +163,8 @@ export function paintMythicSignature(sprite: Phaser.GameObjects.Image, id: strin
       return;
     }
   }
+  // Parallel arrow lanes have their own releases; keep the open shield gap readable.
+  if (w?.wei) return;
   if (boss.art === 'actions') {
     if (w?.resolved) paintMythicRelease(sprite, key, w, now - w.endsAt);
     return;

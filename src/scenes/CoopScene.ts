@@ -1,3 +1,4 @@
+import {uiSfx} from '../systems/Sfx';
 import {CINDERS,EMBER} from '../rules/burning';
 import {CoopRetinueView,preloadCompany} from '../coop/CoopRetinueView';
 import { drawMortalWarning } from '../systems/MythicTelegraph';
@@ -497,6 +498,7 @@ export class CoopScene extends Phaser.Scene {
     }
     this.mythicClock=(state.battleMs??state.seconds*1000)/1000;
     this.mythicId=state.gauntlet.general?.id??'';
+    if(cue?.wei?.stance==='bow' && !cue.resolved && this.mythicCue?.startsAt!==cue.startsAt) uiSfx().play('amb_horn');
     this.mythicCue=cue?.mythic?cue as MythicWarning:null;
     if(mythicBoss(this.mythicId)&&!this.mythicSignature) this.mythicSignature=this.add.image(0,0,mythicArtKey(this.mythicId)).setDepth(75);
     this.companyView.sync(this,state.retainers??[],performance.now());
